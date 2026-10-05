@@ -1,5 +1,15 @@
 create schema if not exists private;
 
+create table if not exists public.website_accounts (
+  id uuid primary key default gen_random_uuid(),
+  display_name text not null,
+  username text not null unique check (username ~ '^MM-[0-9]{4}$'),
+  email text not null unique,
+  phone text,
+  password_hash text not null,
+  created_at timestamptz default now() not null
+);
+
 alter table public.profiles
   add column if not exists email text,
   add column if not exists role text not null default 'user';
@@ -16,6 +26,8 @@ alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles add constraint profiles_role_check check (role in ('user', 'admin'));
 
 alter table public.listings
+  alter column user_id drop not null,
+  add column if not exists website_user_id uuid references public.website_accounts (id) on delete cascade,
   add column if not exists image_path text,
   add column if not exists status text not null default 'pending',
   add column if not exists review_message text,
@@ -25,6 +37,8 @@ alter table public.listings drop constraint if exists listings_status_check;
 alter table public.listings add constraint listings_status_check check (status in ('pending', 'approved', 'rejected'));
 
 alter table public.buy_requests
+  alter column user_id drop not null,
+  add column if not exists website_user_id uuid references public.website_accounts (id) on delete cascade,
   add column if not exists status text not null default 'pending',
   add column if not exists review_message text,
   add column if not exists reviewed_by uuid references public.profiles (id),
@@ -124,8 +138,13 @@ grant execute on function public.review_listing(bigint, boolean, text) to authen
 grant execute on function public.review_buy_request(bigint, boolean, text) to authenticated;
 
 alter table public.profiles enable row level security;
+alter table public.website_accounts enable row level security;
 alter table public.listings enable row level security;
 alter table public.buy_requests enable row level security;
+revoke all on public.website_accounts from anon, authenticated;
+grant all on public.website_accounts to service_role;
+create index if not exists listings_website_user_id_idx on public.listings (website_user_id);
+create index if not exists buy_requests_website_user_id_idx on public.buy_requests (website_user_id);
 revoke all on public.profiles from anon, authenticated;
 grant select on public.profiles to authenticated;
 revoke all on public.listings from anon, authenticated;

@@ -66,14 +66,30 @@ async function loadMarketplaceListings() {
   if (sellerResult.error) throw sellerResult.error;
   if (buyerResult.error) throw buyerResult.error;
 
-  const sellers = await Promise.all((sellerResult.data ?? []).map(async (row) => {
+  let sellerRows = sellerResult.data ?? [];
+  let buyerRows = buyerResult.data ?? [];
+  try {
+    const response = await fetch("/api/website-submissions", { cache: "no-store" });
+    if (response.ok) {
+      const ownSubmissions = await response.json();
+      sellerRows = [...sellerRows, ...(ownSubmissions.sellers ?? [])];
+      buyerRows = [...buyerRows, ...(ownSubmissions.buyers ?? [])];
+    }
+  } catch {
+    // Public listings remain available if a website account session has expired.
+  }
+
+  const sellers = await Promise.all(sellerRows.map(async (row) => {
     let image = "";
     if (row.image_path) {
-      const { data } = await supabase.storage.from("mineral-images").createSignedUrl(row.image_path, 3600);
-      image = data?.signedUrl ?? "";
+      if (row.signed_image_url) image = row.signed_image_url;
+      else {
+        const { data } = await supabase.storage.from("mineral-images").createSignedUrl(row.image_path, 3600);
+        image = data?.signedUrl ?? "";
+      }
     }
     return {
-      id: Number(row.id), user_id: row.user_id, mineral: row.mineral_name, weight: String(row.weight),
+      id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
       unit: row.unit as Unit, price: String(row.price), currency: row.currency as Currency,
       seller: row.seller_name, country: row.country, region: row.region, district: row.district, street: row.street,
       location: [row.district, row.region, row.country].filter(Boolean).join(", "), email: row.email, phone: row.phone,
@@ -81,8 +97,8 @@ async function loadMarketplaceListings() {
       review_message: row.review_message,
     } satisfies Seller;
   }));
-  const buyers = (buyerResult.data ?? []).map((row) => ({
-    id: Number(row.id), user_id: row.user_id, mineral: row.mineral_name, weight: String(row.weight),
+  const buyers = buyerRows.map((row) => ({
+    id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
     unit: row.unit as Unit, color: row.color, shape: row.shape as Buyer["shape"], quality: row.quality,
     offer: String(row.offer), currency: row.currency as Currency, buyer: row.buyer_name, location: row.location,
     email: row.email, phone: row.phone, status: row.status as SubmissionStatus, review_message: row.review_message,
@@ -122,6 +138,7 @@ export default function Marketplace() {
       const supabase = getSupabaseBrowserClient();
       const hydrate = async (session: Session | null) => {
         try {
+          let isAdmin = false;
           if (session) {
             const { data: profile, error: profileError } = await supabase
               .from("profiles")
@@ -129,15 +146,22 @@ export default function Marketplace() {
               .eq("id", session.user.id)
               .maybeSingle();
             if (profileError) throw profileError;
-            if (active) {
+            isAdmin = profile?.role === "admin";
+            if (isAdmin && active) {
               setUser(profile?.username ?? "");
               setUserId(session.user.id);
-              setRole(profile?.role === "admin" ? "admin" : "user");
+              setRole("admin");
             }
-          } else if (active) {
-            setUser("");
-            setUserId("");
-            setRole(null);
+            if (!isAdmin) await supabase.auth.signOut({ scope: "local" });
+          }
+          if (!isAdmin) {
+            const response = await fetch("/api/auth/website-session", { cache: "no-store" });
+            const result = response.ok ? await response.json() : null;
+            if (active) {
+              setUser(result?.account?.username ?? "");
+              setUserId(result?.account?.id ?? "");
+              setRole(result?.account ? "user" : null);
+            }
           }
           const listings = await loadMarketplaceListings();
           if (active) {
@@ -235,12 +259,21 @@ export default function Marketplace() {
       ? await supabase.rpc("review_listing", { p_id: id, p_approved: approved, p_message: message || null })
       : await supabase.rpc("review_buy_request", { p_id: id, p_approved: approved, p_message: message || null });
     if (error) { setNotice(error.message); return; }
-    try { await refreshRemoteListings(); } catch { setNotice("Review saved, but the queue could not be refreshed."); }
+    void refreshRemoteListings().catch(() => setNotice("Review saved, but the queue could not be refreshed."));
     updateReviewMessage(key, "");
     setNotice(approved ? "Submission approved and published." : "Submission rejected and returned to its owner.");
   };
   const deleteSubmission = async (kind: "seller" | "buyer", item: Seller | Buyer) => {
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && role === "user") {
+      const response = await fetch("/api/website-submissions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, id: item.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) { setNotice(result.error ?? "The submission could not be deleted."); return; }
+      void refreshRemoteListings().catch(() => setNotice("Deleted, but the list could not be refreshed."));
+    } else if (isSupabaseConfigured) {
       const supabase = getSupabaseBrowserClient();
       const table = kind === "seller" ? "listings" : "buy_requests";
       const { error } = await supabase.from(table).delete().eq("id", item.id);
@@ -248,7 +281,7 @@ export default function Marketplace() {
       if (kind === "seller" && "image_path" in item && item.image_path) {
         await supabase.storage.from("mineral-images").remove([item.image_path]);
       }
-      try { await refreshRemoteListings(); } catch { setNotice("Deleted, but the list could not be refreshed."); }
+      void refreshRemoteListings().catch(() => setNotice("Deleted, but the list could not be refreshed."));
     } else if (kind === "seller") {
       setSellers((current) => current.filter((listing) => listing.id !== item.id));
     } else {
@@ -269,24 +302,31 @@ export default function Marketplace() {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const username = `MM-${Math.floor(1000 + Math.random() * 9000)}`;
     if (isSupabaseConfigured) {
-      const { error } = await getSupabaseBrowserClient().auth.signUp({
-        email: String(form.get("email")),
-        password: String(form.get("password")),
-        options: {
-          data: {
-            username,
-            display_name: `${form.get("firstName")} ${form.get("surname")}`.trim(),
-            phone: String(form.get("phone")),
-          },
-        },
+      const response = await fetch("/api/auth/website-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: form.get("firstName"), surname: form.get("surname"), email: form.get("email"),
+          phone: form.get("phone"), password: form.get("password"),
+        }),
       });
-      if (error) {
-        setNotice(error.message.includes("profiles_username_key") ? "That username was taken. Please try creating the account again." : error.message);
+      const result = await response.json();
+      if (!response.ok) {
+        setNotice(result.error ?? "Account creation failed.");
         return;
       }
+      setUser(result.username);
+      setUserId(result.id);
+      setRole("user");
+      setGenerated({ username: result.username, expiresAt: Date.now() + 60_000 });
+      setSecondsLeft(60);
+      formElement.reset();
+      setDialog(null);
+      setNotice(`Account created. You are signed in as ${result.username}.`);
+      return;
     }
+    const username = `MM-${Math.floor(1000 + Math.random() * 9000)}`;
     setGenerated({ username, expiresAt: Date.now() + 60_000 });
     setSecondsLeft(60);
     formElement.reset();
@@ -297,18 +337,37 @@ export default function Marketplace() {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const username = String(form.get("username") ?? "").trim().toUpperCase();
+    const username = String(form.get("username") ?? "").trim();
     const password = String(form.get("password") ?? "");
     let signedInRole: "user" | "admin" = "user";
     if (isSupabaseConfigured) {
       try {
+        let websiteAccount: { id: string; username: string } | null = null;
+        if (/^MM-\d{4}$/i.test(username)) {
+          const websiteResponse = await fetch("/api/auth/website-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          if (websiteResponse.ok) websiteAccount = await websiteResponse.json();
+        }
+        if (websiteAccount) {
+          setUser(websiteAccount.username);
+          setUserId(websiteAccount.id);
+          setRole("user");
+          await refreshRemoteListings();
+          setNotice(`Signed in as ${websiteAccount.username}.`);
+          formElement.reset();
+          setDialog(null);
+          return;
+        }
         const response = await fetch("/api/auth/username-login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password }),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error ?? "Sign-in failed.");
+        if (!response.ok) throw new Error(result.error ?? "Username or password is incorrect.");
         const supabase = getSupabaseBrowserClient();
         const { data, error } = await supabase.auth.setSession({ access_token: result.accessToken, refresh_token: result.refreshToken });
         if (error || !data.session) throw error ?? new Error("Sign-in failed.");
@@ -320,7 +379,8 @@ export default function Marketplace() {
         if (profileError) throw profileError;
         setUser(profile.username);
         setUserId(profile.id);
-        signedInRole = profile.role === "admin" ? "admin" : "user";
+        if (profile.role !== "admin") throw new Error("Username or password is incorrect.");
+        signedInRole = "admin";
         setRole(signedInRole);
         await refreshRemoteListings();
       } catch (error) {
@@ -338,7 +398,10 @@ export default function Marketplace() {
     setDialog(null);
   };
   const signOut = async () => {
-    if (isSupabaseConfigured) await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
+    if (isSupabaseConfigured) {
+      if (role === "admin") await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
+      else await fetch("/api/auth/website-session", { method: "DELETE" });
+    }
     setUser("");
     setUserId("");
     setRole(null);
@@ -357,9 +420,11 @@ export default function Marketplace() {
     const existing = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
     let image = existing?.image ?? "";
     let imagePath = existing?.image_path ?? null;
+    let imageData = "";
     if (file instanceof File && file.size) {
       try {
         image = await storeMineralPhoto(file);
+        imageData = image;
       } catch {
         setNotice("That image could not be processed. Please try another PNG or JPG.");
         return;
@@ -373,7 +438,26 @@ export default function Marketplace() {
       email: String(form.get("email")), phone: String(form.get("phone")), image, image_path: null, accent: "#448363",
       user_id: userId, status: "pending", review_message: null,
     };
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && role === "user") {
+      if (!userId) { setNotice("Sign in again before submitting this listing."); return; }
+      const response = await fetch("/api/website-submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "seller", id: existing?.id,
+          imageData,
+          values: {
+            mineral_name: listing.mineral, weight: listing.weight, unit: listing.unit, price: listing.price,
+            currency: listing.currency, seller_name: listing.seller, country: listing.country, region: listing.region,
+            district: listing.district, street: listing.street, email: listing.email, phone: listing.phone,
+          },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) { setNotice(result.error ?? "The listing could not be saved."); return; }
+      void refreshRemoteListings().catch(() => setNotice("Submitted, but the listings could not be refreshed."));
+      setNotice(existing ? "Listing updated and resubmitted for admin approval." : "Seller listing submitted for admin approval.");
+    } else if (isSupabaseConfigured) {
       if (!userId) { setNotice("Sign in again before submitting this listing."); return; }
       const supabase = getSupabaseBrowserClient();
       if (file instanceof File && file.size) {
@@ -398,7 +482,7 @@ export default function Marketplace() {
       if (existing?.image_path && existing.image_path !== imagePath) {
         await supabase.storage.from("mineral-images").remove([existing.image_path]);
       }
-      try { await refreshRemoteListings(); } catch { setNotice("Submitted, but the listings could not be refreshed."); }
+      void refreshRemoteListings().catch(() => setNotice("Submitted, but the listings could not be refreshed."));
       setNotice(existing ? "Listing updated and resubmitted for admin approval." : "Seller listing submitted for admin approval.");
     } else {
       setSellers((current) => existing ? current.map((item) => item.id === existing.id ? listing : item) : [listing, ...current]);
@@ -421,7 +505,25 @@ export default function Marketplace() {
       location: String(form.get("location")), email: String(form.get("email")), phone: String(form.get("phone")),
       user_id: userId, status: "pending", review_message: null,
     };
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && role === "user") {
+      if (!userId) { setNotice("Sign in again before submitting this request."); return; }
+      const response = await fetch("/api/website-submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "buyer", id: existing?.id,
+          values: {
+            mineral_name: listing.mineral, weight: listing.weight, unit: listing.unit, color: listing.color,
+            shape: listing.shape, quality: listing.quality, offer: listing.offer, currency: listing.currency,
+            buyer_name: listing.buyer, location: listing.location, email: listing.email, phone: listing.phone,
+          },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) { setNotice(result.error ?? "The request could not be saved."); return; }
+      void refreshRemoteListings().catch(() => setNotice("Submitted, but the listings could not be refreshed."));
+      setNotice(existing ? "Request updated and resubmitted for admin approval." : "Buying request submitted for admin approval.");
+    } else if (isSupabaseConfigured) {
       if (!userId) { setNotice("Sign in again before submitting this request."); return; }
       const supabase = getSupabaseBrowserClient();
       const values = {
@@ -436,7 +538,7 @@ export default function Marketplace() {
         : await supabase.from("buy_requests").insert(values);
       const error = result.error;
       if (error) { setNotice(error.message); return; }
-      try { await refreshRemoteListings(); } catch { setNotice("Submitted, but the listings could not be refreshed."); }
+      void refreshRemoteListings().catch(() => setNotice("Submitted, but the listings could not be refreshed."));
       setNotice(existing ? "Request updated and resubmitted for admin approval." : "Buying request submitted for admin approval.");
     } else {
       setBuyers((current) => existing ? current.map((item) => item.id === existing.id ? listing : item) : [listing, ...current]);
@@ -481,7 +583,7 @@ export default function Marketplace() {
     {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
     {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button><div className="dialog-brand"><Gem size={19} /> MADINIMARKET</div>
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit">Create account <ArrowUpRight size={16} /></button></form><p className="form-footnote">Your username appears here for one minute after account creation.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
-      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required pattern="MM-[0-9]{4}" autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit">Sign in <ArrowUpRight size={16} /></button></form><p className="form-footnote">{isSupabaseConfigured ? "Sign-in is verified by Supabase Auth." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("create")}>New to the market? <strong>Create account</strong></button></>}
+      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254 or admin username" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit">Sign in <ArrowUpRight size={16} /></button></form><p className="form-footnote">{isSupabaseConfigured ? "Buyer and seller accounts use website sign-in. Admin access is verified by Supabase Auth." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("create")}>New to the market? <strong>Create account</strong></button></>}
       {dialog === "sell" && <><div className="dialog-kicker">SELL A MINERAL</div><h2 id="dialog-title">{editingSeller ? "Edit your listing." : "Submit a listing."}</h2><p className="dialog-copy">An admin must approve the listing before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addSeller}><Field label="Mineral name" name="mineral" placeholder="e.g. Tanzanite" defaultValue={editingSeller?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Weight" name="weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingSeller?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row field-row-weight"><Field label="Price" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.price ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingSeller?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div><label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label><Field label="Seller name" name="seller" defaultValue={editingSeller?.seller ?? ""} required /><div className="field-row"><Field label="Country" name="country" defaultValue={editingSeller?.country ?? ""} required /><Field label="Region" name="region" defaultValue={editingSeller?.region ?? ""} required /></div><div className="field-row"><Field label="District" name="district" defaultValue={editingSeller?.district ?? ""} required /><Field label="Street" name="street" defaultValue={editingSeller?.street ?? ""} required /></div><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingSeller?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingSeller ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
       {dialog === "buy" && <><div className="dialog-kicker">POST A BUYING REQUEST</div><h2 id="dialog-title">{editingBuyer ? "Edit your request." : "Submit a request."}</h2><p className="dialog-copy">An admin must approve the request before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addBuyer}><Field label="Mineral name" name="mineral" placeholder="e.g. Blue sapphire" defaultValue={editingBuyer?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Desired weight" name="weight" placeholder="e.g. 25–50" defaultValue={editingBuyer?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingBuyer?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row"><Field label="Colour" name="color" placeholder="e.g. Deep blue" defaultValue={editingBuyer?.color ?? ""} required /><SelectField label="Shape" name="shape" defaultValue={editingBuyer?.shape ?? ""} options={[["Cut", "Cut"], ["Uncut", "Uncut"]]} /></div><Field label="Quality" name="quality" placeholder="e.g. Eye-clean, AAA" defaultValue={editingBuyer?.quality ?? ""} required /><div className="field-row field-row-weight"><Field label="Offer price" name="offer" type="number" min="0.01" step="any" defaultValue={editingBuyer?.offer ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingBuyer?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div><Field label="Buyer name" name="buyer" defaultValue={editingBuyer?.buyer ?? ""} required /><Field label="Location" name="location" placeholder="City, region" defaultValue={editingBuyer?.location ?? ""} required /><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingBuyer?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingBuyer?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingBuyer ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
       {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list">{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}<div className="submission-actions"><button className="button button-outline" type="button" onClick={() => editSubmission("seller", item)}>Edit</button><button className="text-button" type="button" onClick={() => void deleteSubmission("seller", item)}>Delete</button></div></article>)}{myBuyers.map((item) => <article className="submission-item" key={`buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}<div className="submission-actions"><button className="button button-outline" type="button" onClick={() => editSubmission("buyer", item)}>Edit</button><button className="text-button" type="button" onClick={() => void deleteSubmission("buyer", item)}>Delete</button></div></article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
