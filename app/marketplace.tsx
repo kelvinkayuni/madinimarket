@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Clipboard, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import Image from "next/image";
 import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
@@ -18,6 +19,7 @@ type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | 
 const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
 const USER_STORAGE_KEY = "madinimarket:user:v1";
+const signedMineralImageUrls = new Map<string, { url: string; expiresAt: number }>();
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
 const isAdminRole = (role: "user" | "admin" | null): boolean => role === "admin";
@@ -59,6 +61,18 @@ async function storeMineralPhoto(file: File): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
+async function getSignedMineralImageUrl(
+  supabase: ReturnType<typeof getSupabaseBrowserClient>,
+  imagePath: string,
+  refreshedUrl?: string,
+) {
+  const cached = signedMineralImageUrls.get(imagePath);
+  if (cached && cached.expiresAt > Date.now() + 30_000) return cached.url;
+  const url = refreshedUrl ?? (await supabase.storage.from("mineral-images").createSignedUrl(imagePath, 3600)).data?.signedUrl ?? "";
+  if (url) signedMineralImageUrls.set(imagePath, { url, expiresAt: Date.now() + 50 * 60 * 1000 });
+  return url;
+}
+
 async function loadMarketplaceListings(includeOwnSubmissions = false) {
   const supabase = getSupabaseBrowserClient();
   const [sellerResult, buyerResult] = await Promise.all([
@@ -86,11 +100,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false) {
   const sellers = await Promise.all(sellerRows.map(async (row) => {
     let image = "";
     if (row.image_path) {
-      if (row.signed_image_url) image = row.signed_image_url;
-      else {
-        const { data } = await supabase.storage.from("mineral-images").createSignedUrl(row.image_path, 3600);
-        image = data?.signedUrl ?? "";
-      }
+      image = await getSignedMineralImageUrl(supabase, row.image_path, row.signed_image_url);
     }
     return {
       id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
@@ -124,6 +134,7 @@ export default function Marketplace() {
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
+  const [sellerImagePreview, setSellerImagePreview] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
   const [websiteDrafts, setWebsiteDrafts] = useState<{ seller: WebsiteDraft | null; buyer: WebsiteDraft | null }>({ seller: null, buyer: null });
@@ -133,6 +144,10 @@ export default function Marketplace() {
   const sellerRail = useRef<HTMLDivElement>(null);
   const buyerRail = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!sellerImagePreview?.startsWith("blob:")) return;
+    return () => URL.revokeObjectURL(sellerImagePreview);
+  }, [sellerImagePreview]);
   useEffect(() => {
     const updateTime = () => setLastUpdated(new Date());
     updateTime();
@@ -247,6 +262,7 @@ export default function Marketplace() {
   const openListing = async (type: "sell" | "buy") => {
     if (!user) { setNotice("Sign in first to post."); openDialog("signin"); return; }
     if (isSupabaseConfigured && role === "user") await refreshWebsiteDrafts().catch(() => {});
+    setSellerImagePreview(null);
     setEditingSubmission(null);
     openDialog(type);
   };
@@ -322,6 +338,10 @@ export default function Marketplace() {
       const kind = form.elements.namedItem("seller") ? "seller" : form.elements.namedItem("buyer") ? "buyer" : null;
       if (!kind) return;
       const saveImage = event.type === "change" && target instanceof HTMLInputElement && target.type === "file";
+      if (saveImage && target instanceof HTMLInputElement) {
+        const file = target.files?.[0];
+        setSellerImagePreview(file ? URL.createObjectURL(file) : null);
+      }
       queueWebsiteDraftSaveEvent(kind, form, saveImage);
     };
     const flushOpenDraft = () => {
@@ -431,6 +451,7 @@ export default function Marketplace() {
     setNotice("Submission deleted.");
   };
   const editSubmission = (kind: "seller" | "buyer", item: Seller | Buyer) => {
+    setSellerImagePreview(null);
     setEditingSubmission(kind === "seller" ? { kind, item: item as Seller } : { kind, item: item as Buyer });
     setDialog(kind === "seller" ? "sell" : "buy");
   };
@@ -632,6 +653,7 @@ export default function Marketplace() {
       setNotice(existing ? "Listing updated in this browser." : "Saved in this browser as pending. Connect Supabase to enable real admin review.");
     }
     formElement.reset();
+    setSellerImagePreview(null);
     setEditingSubmission(null);
     setDialog(null);
   };
@@ -694,6 +716,7 @@ export default function Marketplace() {
   };
   const editingSeller = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
   const editingBuyer = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
+  const sellerImagePreviewUrl = sellerImagePreview ?? editingSeller?.image ?? websiteDrafts.seller?.image_url ?? "";
 
   if (isAdminRole(role)) {
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
@@ -770,7 +793,7 @@ export default function Marketplace() {
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></>}
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit">Create account <ArrowUpRight size={16} /></button></form><p className="form-footnote">Your username appears here for one minute after account creation.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
       {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit">Sign in <ArrowUpRight size={16} /></button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("create")}>New to the market? <strong>Create account</strong></button></>}
-      {dialog === "sell" && <><div className="dialog-kicker">SELL A MINERAL</div><h2 id="dialog-title">{editingSeller ? "Edit your listing." : "Submit a listing."}</h2><p className="dialog-copy">An admin must approve the listing before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addSeller}><Field label="Mineral name" name="mineral" placeholder="e.g. Tanzanite" defaultValue={editingSeller?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Weight" name="weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingSeller?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row field-row-weight"><Field label="Price" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.price ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingSeller?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div><label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label><Field label="Seller name" name="seller" defaultValue={editingSeller?.seller ?? ""} required /><div className="field-row"><Field label="Country" name="country" defaultValue={editingSeller?.country ?? ""} required /><Field label="Region" name="region" defaultValue={editingSeller?.region ?? ""} required /></div><div className="field-row"><Field label="District" name="district" defaultValue={editingSeller?.district ?? ""} required /><Field label="Street" name="street" defaultValue={editingSeller?.street ?? ""} required /></div><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingSeller?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingSeller ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
+      {dialog === "sell" && <><div className="dialog-kicker">SELL A MINERAL</div><h2 id="dialog-title">{editingSeller ? "Edit your listing." : "Submit a listing."}</h2><p className="dialog-copy">An admin must approve the listing before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addSeller}><Field label="Mineral name" name="mineral" placeholder="e.g. Tanzanite" defaultValue={editingSeller?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Weight" name="weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingSeller?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row field-row-weight"><Field label="Price" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.price ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingSeller?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div>{sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}<label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label><Field label="Seller name" name="seller" defaultValue={editingSeller?.seller ?? ""} required /><div className="field-row"><Field label="Country" name="country" defaultValue={editingSeller?.country ?? ""} required /><Field label="Region" name="region" defaultValue={editingSeller?.region ?? ""} required /></div><div className="field-row"><Field label="District" name="district" defaultValue={editingSeller?.district ?? ""} required /><Field label="Street" name="street" defaultValue={editingSeller?.street ?? ""} required /></div><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingSeller?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingSeller ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
       {dialog === "buy" && <><div className="dialog-kicker">POST A BUYING REQUEST</div><h2 id="dialog-title">{editingBuyer ? "Edit your request." : "Submit a request."}</h2><p className="dialog-copy">An admin must approve the request before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addBuyer}><Field label="Mineral name" name="mineral" placeholder="e.g. Blue sapphire" defaultValue={editingBuyer?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Desired weight" name="weight" placeholder="e.g. 25–50" defaultValue={editingBuyer?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingBuyer?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row"><Field label="Colour" name="color" placeholder="e.g. Deep blue" defaultValue={editingBuyer?.color ?? ""} required /><SelectField label="Shape" name="shape" defaultValue={editingBuyer?.shape ?? ""} options={[["Cut", "Cut"], ["Uncut", "Uncut"]]} /></div><Field label="Quality" name="quality" placeholder="e.g. Eye-clean, AAA" defaultValue={editingBuyer?.quality ?? ""} required /><div className="field-row field-row-weight"><Field label="Offer price" name="offer" type="number" min="0.01" step="any" defaultValue={editingBuyer?.offer ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingBuyer?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div><Field label="Buyer name" name="buyer" defaultValue={editingBuyer?.buyer ?? ""} required /><Field label="Location" name="location" placeholder="City, region" defaultValue={editingBuyer?.location ?? ""} required /><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingBuyer?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingBuyer?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingBuyer ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
       {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list">{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}<div className="submission-actions"><button className="button button-outline" type="button" onClick={() => editSubmission("seller", item)}>Edit</button><button className="text-button" type="button" onClick={() => void deleteSubmission("seller", item)}>Delete</button></div></article>)}{myBuyers.map((item) => <article className="submission-item" key={`buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}<div className="submission-actions"><button className="button button-outline" type="button" onClick={() => editSubmission("buyer", item)}>Edit</button><button className="text-button" type="button" onClick={() => void deleteSubmission("buyer", item)}>Delete</button></div></article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
