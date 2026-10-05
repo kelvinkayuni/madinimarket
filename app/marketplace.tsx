@@ -233,6 +233,7 @@ export default function Marketplace() {
 
   const openDialog = (next: Exclude<Dialog, null>) => { setMenuOpen(false); setDialog(next); };
   const openListing = (type: "sell" | "buy") => {
+    if (role === "admin") { openDialog("review"); return; }
     if (!user) { setNotice("Sign in first to post a listing."); openDialog("signin"); return; }
     setEditingSubmission(null);
     openDialog(type);
@@ -395,7 +396,7 @@ export default function Marketplace() {
       setNotice(`Local demo session started as ${username}.`);
     }
     formElement.reset();
-    setDialog(null);
+    setDialog(signedInRole === "admin" ? "review" : null);
   };
   const signOut = async () => {
     if (isSupabaseConfigured) {
@@ -414,6 +415,7 @@ export default function Marketplace() {
   };
   const addSeller = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (role === "admin") { setNotice("Admin accounts manage submissions through the review queue."); setDialog("review"); return; }
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const file = form.get("image");
@@ -495,6 +497,7 @@ export default function Marketplace() {
   };
   const addBuyer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (role === "admin") { setNotice("Admin accounts manage submissions through the review queue."); setDialog("review"); return; }
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const existing = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
@@ -552,7 +555,7 @@ export default function Marketplace() {
   const editingSeller = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
   const editingBuyer = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
 
-  return <main className="market-shell">
+  return <main className={`market-shell${role === "admin" ? " admin-view" : ""}`}>
     <div className="prototype-bar" style={{ display: 'none' }} aria-hidden="true" />
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">

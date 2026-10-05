@@ -25,6 +25,7 @@ button, input, select { font: inherit; }
 button { color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #58805e; outline-offset: 3px; }
 .market-shell { min-height: 100vh; overflow: hidden; }
+.market-shell.admin-view .header-list, .market-shell.admin-view .section-post, .market-shell.admin-view .buyer-rail-hint button { display: none; }
 .prototype-bar { min-height: 32px; padding: 7px max(24px, calc((100vw - 1320px) / 2)); display: flex; align-items: center; gap: 8px; color: #dce7df; background: var(--forest-deep); font-size: 10px; }
 .prototype-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 3px #d2ee7722; }
 .prototype-divider { color: #769084; }
