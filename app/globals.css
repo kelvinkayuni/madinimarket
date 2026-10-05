@@ -119,7 +119,7 @@ h1, h2, h3, p { margin-top: 0; }
 .section-controls { display: flex; align-items: center; gap: 8px; }
 .section-post { margin-right: 7px; }
 .round-control { width: 34px; height: 34px; border-radius: 50%; color: #687268; }
-.seller-rail, .buyer-rail { display: grid; grid-auto-columns: minmax(215px, 1fr); grid-auto-flow: column; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
+.seller-rail, .buyer-rail { display: grid; grid-auto-columns: minmax(215px, 320px); grid-auto-flow: column; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
 .seller-rail::-webkit-scrollbar, .buyer-rail::-webkit-scrollbar { display: none; }
 .seller-card { min-width: 0; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; animation: rise-in .45s both; }
 .seller-photo { position: relative; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
