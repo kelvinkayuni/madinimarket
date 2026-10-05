@@ -72,6 +72,23 @@ as $is_admin$
   );
 $is_admin$;
 
+create or replace function private.is_website_account_active(p_website_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $is_account_active$
+  select p_website_user_id is null or exists (
+    select 1 from public.website_accounts
+    where id = p_website_user_id and is_active = true
+  );
+$is_account_active$;
+
+revoke all on function private.is_website_account_active(uuid) from public, anon;
+grant usage on schema private to anon, authenticated;
+grant execute on function private.is_website_account_active(uuid) to anon, authenticated;
+
 revoke all on function private.is_admin() from public, anon;
 grant usage on schema private to authenticated;
 grant execute on function private.is_admin() to authenticated;
@@ -186,7 +203,7 @@ drop policy if exists "Owners can submit listings" on public.listings;
 drop policy if exists "Owners can edit returned listings" on public.listings;
 drop policy if exists "Owners can delete returned listings" on public.listings;
 create policy "Public can read approved listings" on public.listings for select to anon, authenticated
-using (status = 'approved' and is_active = true);
+using (status = 'approved' and is_active = true and (select private.is_website_account_active(website_user_id)));
 create policy "Owners can read their listings" on public.listings for select to authenticated
 using ((select auth.uid()) = user_id);
 create policy "Admins can read all listings" on public.listings for select to authenticated
@@ -208,7 +225,7 @@ drop policy if exists "Owners can submit buy requests" on public.buy_requests;
 drop policy if exists "Owners can edit returned buy requests" on public.buy_requests;
 drop policy if exists "Owners can delete returned buy requests" on public.buy_requests;
 create policy "Public can read approved buy requests" on public.buy_requests for select to anon, authenticated
-using (status = 'approved' and is_active = true);
+using (status = 'approved' and is_active = true and (select private.is_website_account_active(website_user_id)));
 create policy "Owners can read their buy requests" on public.buy_requests for select to authenticated
 using ((select auth.uid()) = user_id);
 create policy "Admins can read all buy requests" on public.buy_requests for select to authenticated
@@ -242,5 +259,9 @@ using (
 create policy "Public can read approved mineral images" on storage.objects for select to anon
 using (
   bucket_id = 'mineral-images'
-  and exists (select 1 from public.listings where image_path = name and status = 'approved' and is_active = true)
+  and exists (
+    select 1 from public.listings
+    where image_path = name and status = 'approved' and is_active = true
+      and private.is_website_account_active(website_user_id)
+  )
 );
