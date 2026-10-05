@@ -24,7 +24,7 @@ body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(
 button, input, select { font: inherit; }
 button { color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #58805e; outline-offset: 3px; }
-.market-shell { min-height: 100vh; overflow: hidden; }
+.market-shell { min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 .admin-shell { min-height: 100vh; background: var(--paper); color: var(--ink); }
 .admin-header { min-height: 68px; padding: 0 clamp(18px, 3vw, 48px); display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); background: #fcfcf9; }
 .admin-brand { display: flex; align-items: center; gap: 9px; color: var(--forest); font-size: 11px; font-weight: 750; text-decoration: none; }
@@ -111,8 +111,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .menu-foot { display: flex; align-items: center; gap: 8px; padding-top: 14px; color: #808980; font-size: 10px; }
 .user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; }
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
-.market-content { width: 100%; padding: 0 clamp(18px, 3vw, 48px); }
-.market-intro { min-height: 171px; padding: 34px 0 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.market-content { width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0 clamp(18px, 3vw, 48px); }
+.market-intro { min-height: 171px; flex: 0 0 auto; padding: 34px 0 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .eyebrow { display: flex; align-items: center; gap: 9px; color: #667267; font-size: 9px; font-weight: 700; }
 .eyebrow-line { width: 20px; height: 1px; background: var(--red); }
 .eyebrow-year { margin-left: 3px; color: #a1a79e; font-size: 8px; }
@@ -127,7 +127,7 @@ h1, h2, h3, p { margin-top: 0; }
 .status-orbit { width: 9px; height: 9px; display: grid; place-items: center; border: 1px solid #8ca38c; border-radius: 50%; }
 .status-orbit span { width: 4px; height: 4px; border-radius: 50%; background: #679267; }
 .refresh-icon { margin-left: 8px; color: #a5ada3; }
-.listing-section { padding: 22px 0 20px; border-top: 1px solid var(--line); }
+.listing-section { min-height: 0; flex: 1 1 0; display: flex; flex-direction: column; padding: 22px 0 20px; border-top: 1px solid var(--line); }
 .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 17px; }
 .section-title-wrap { display: flex; align-items: flex-start; gap: 15px; }
 .section-index { padding-top: 4px; color: var(--red); font-family: var(--font-display), Georgia, serif; font-size: 13px; }
@@ -137,7 +137,7 @@ h1, h2, h3, p { margin-top: 0; }
 .section-controls { display: flex; align-items: center; gap: 8px; }
 .section-post { margin-right: 7px; }
 .round-control { width: 34px; height: 34px; border-radius: 50%; color: #687268; }
-.seller-rail, .buyer-rail { display: grid; grid-auto-columns: minmax(215px, 320px); grid-auto-flow: column; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
+.seller-rail, .buyer-rail { min-height: 104px; flex: 1; display: grid; grid-auto-columns: minmax(215px, 320px); grid-auto-flow: column; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
 .seller-rail::-webkit-scrollbar, .buyer-rail::-webkit-scrollbar { display: none; }
 .seller-card { min-width: 0; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; animation: rise-in .45s both; }
 .seller-photo { position: relative; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
@@ -155,7 +155,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rail-hint { display: flex; align-items: center; gap: 9px; margin: 14px 2px 0; color: #91998f; font-size: 8px; font-weight: 700; }
 .rail-line { width: 46px; height: 1px; background: #c8d0c5; }
-.empty-search { padding: 42px 20px; border: 1px dashed #d8ded5; color: #788277; font-size: 12px; text-align: center; }
+.empty-search { min-height: 104px; flex: 1; display: grid; place-items: center; padding: 24px 20px; border: 1px dashed #d8ded5; color: #788277; font-size: 12px; text-align: center; }
 .buyer-section { margin: 10px calc(0px - clamp(18px, 3vw, 48px)) 0; padding: 25px clamp(18px, 3vw, 48px) 21px; border-top: 0; background: var(--forest); color: #f5f6ef; }
 .buyer-index { color: var(--lime); }
 .buyer-section .section-kicker { color: #a2b4a7; }
@@ -248,6 +248,10 @@ h1, h2, h3, p { margin-top: 0; }
   .username-banner { margin-right: 24px; margin-left: 24px; }
 }
 @media (max-width: 650px) {
+  .market-shell, .market-content { display: block; }
+  .market-content { min-height: 0; }
+  .listing-section { min-height: auto; display: block; flex: none; }
+  .seller-rail, .buyer-rail, .empty-search { min-height: auto; flex: initial; }
   .admin-header { min-height: 60px; padding-right: 14px; padding-left: 14px; }
   .admin-content { padding: 26px 14px 42px; }
   .admin-page-heading { align-items: flex-start; flex-direction: column; }
