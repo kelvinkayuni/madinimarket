@@ -23,10 +23,10 @@ export async function POST(request: Request) {
   try {
     const admin = createSupabaseAdminClient();
     const { data: account, error } = await admin.from("website_accounts")
-      .select("id, username, password_hash")
+      .select("id, username, password_hash, is_active")
       .eq("username", username)
       .maybeSingle();
-    if (error || !account || !(await verifyWebsitePassword(password, account.password_hash))) {
+    if (error || !account || !account.is_active || !(await verifyWebsitePassword(password, account.password_hash))) {
       return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
     }
 

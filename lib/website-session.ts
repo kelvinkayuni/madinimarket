@@ -3,6 +3,8 @@ import { promisify } from "node:util";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+
 const scrypt = promisify(scryptCallback);
 const COOKIE_NAME = "madinimarket_website_session";
 const SESSION_SECONDS = 60 * 60 * 24 * 30;
@@ -65,7 +67,15 @@ export async function getWebsiteAccountId() {
   const accountId = decoded.slice(0, separator);
   const expiresAt = Number(decoded.slice(separator + 1));
   if (separator < 1 || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
-  return accountId;
+  try {
+    const { data } = await createSupabaseAdminClient().from("website_accounts")
+      .select("is_active")
+      .eq("id", accountId)
+      .maybeSingle();
+    return data?.is_active ? accountId : null;
+  } catch {
+    return null;
+  }
 }
 
 export function clearWebsiteSession(response: NextResponse) {

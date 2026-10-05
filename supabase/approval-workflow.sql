@@ -7,8 +7,12 @@ create table if not exists public.website_accounts (
   email text not null unique,
   phone text,
   password_hash text not null,
+  is_active boolean not null default true,
   created_at timestamptz default now() not null
 );
+
+alter table public.website_accounts
+  add column if not exists is_active boolean not null default true;
 
 create table if not exists public.website_account_drafts (
   website_user_id uuid not null references public.website_accounts (id) on delete cascade,

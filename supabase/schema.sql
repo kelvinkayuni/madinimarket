@@ -16,6 +16,7 @@ create table if not exists public.website_accounts (
   email text not null unique,
   phone text,
   password_hash text not null,
+  is_active boolean not null default true,
   created_at timestamptz default now() not null
 );
 

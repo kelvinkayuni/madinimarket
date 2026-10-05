@@ -12,6 +12,8 @@ type Currency = "TZS" | "USD";
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type Seller = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
+type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts };
+type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
 type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "signout" | null;
@@ -120,9 +122,21 @@ async function loadMarketplaceListings(includeOwnSubmissions = false) {
   return { sellers, buyers };
 }
 
+async function loadAdminAccounts(accessToken: string): Promise<WebsiteAccount[]> {
+  const response = await fetch("/api/admin/website-accounts", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not load website accounts.");
+  return result.accounts as WebsiteAccount[];
+}
+
 export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
+  const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
+  const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [user, setUser] = useState("");
@@ -193,6 +207,13 @@ export default function Marketplace() {
             setBuyers(listings.buyers);
             setLastUpdated(new Date());
             setStorageReady(true);
+          }
+          if (active && isAdmin && session) {
+            try {
+              setWebsiteAccounts(await loadAdminAccounts(session.access_token));
+            } catch {
+              setNotice("Could not load website accounts.");
+            }
           }
         } catch {
           if (active) {
@@ -423,6 +444,54 @@ export default function Marketplace() {
     void refreshRemoteListings().catch(() => setNotice("Review saved, but the queue could not be refreshed."));
     updateReviewMessage(key, "");
     setNotice(approved ? "Submission approved and published." : "Submission rejected and returned to its owner.");
+  };
+  const refreshAdminAccounts = async () => {
+    const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+    if (!session) throw new Error("Admin session expired.");
+    setWebsiteAccounts(await loadAdminAccounts(session.access_token));
+  };
+  const updateWebsiteAccount = async (account: WebsiteAccount, isActive: boolean) => {
+    const action = isActive ? "activate" : "deactivate";
+    if (!window.confirm(`Are you sure you want to ${action} ${account.username}?`)) return;
+    setBusyAccountId(account.id);
+    try {
+      const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+      if (!session) throw new Error("Admin session expired.");
+      const response = await fetch("/api/admin/website-accounts", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ id: account.id, is_active: isActive }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not update account.");
+      await refreshAdminAccounts();
+      setNotice(`Account ${account.username} ${isActive ? "activated" : "deactivated"}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not update account.");
+    } finally {
+      setBusyAccountId(null);
+    }
+  };
+  const deleteWebsiteAccount = async (account: WebsiteAccount) => {
+    if (!window.confirm(`Permanently delete ${account.username} and all of its submissions and drafts? This cannot be undone.`)) return;
+    setBusyAccountId(account.id);
+    try {
+      const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+      if (!session) throw new Error("Admin session expired.");
+      const response = await fetch("/api/admin/website-accounts", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ id: account.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not delete account.");
+      setWebsiteAccounts((current) => current.filter((item) => item.id !== account.id));
+      setNotice(`Account ${account.username} deleted.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not delete account.");
+    } finally {
+      setBusyAccountId(null);
+    }
   };
   const deleteSubmission = async (kind: "seller" | "buyer", item: Seller | Buyer) => {
     if (isSupabaseConfigured && role === "user") {
@@ -727,12 +796,33 @@ export default function Marketplace() {
       </header>
       <div className="admin-content" id="admin-home">
         <section className="admin-overview">
-          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve listings and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" onClick={() => void refreshRemoteListings().catch(() => setNotice("Could not refresh submissions."))}><RefreshCw size={15} /> Refresh</button></div>
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve listings and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" onClick={() => void Promise.all([refreshRemoteListings(), refreshAdminAccounts()]).catch(() => setNotice("Could not refresh admin data."))}><RefreshCw size={15} /> Refresh</button></div>
           <div className="admin-summary">
             <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
             <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>
           </div>
+        </section>
+        <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
+          <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
+          {websiteAccounts.length ? <div className="admin-account-list">{websiteAccounts.map((account) => {
+            const totalPosts = account.listings.total + account.buying_requests.total;
+            const busy = busyAccountId === account.id;
+            return <article className="admin-account-row" key={account.id}>
+              <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username} · {account.email}</span><small>{account.phone || "No phone number"}</small></div>
+              <div className="admin-account-counts">
+                <span><strong>{totalPosts}</strong> total posted</span>
+                <span>Selling: <strong>{account.listings.total}</strong> ({account.listings.pending} pending · {account.listings.approved} approved · {account.listings.rejected} rejected)</span>
+                <span>Buying: <strong>{account.buying_requests.total}</strong> ({account.buying_requests.pending} pending · {account.buying_requests.approved} approved · {account.buying_requests.rejected} rejected)</span>
+              </div>
+              <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Inactive"}</span>
+              <div className="admin-account-actions">
+                <button className="button button-outline" type="button" disabled={busy || account.is_active} onClick={() => void updateWebsiteAccount(account, true)}>Activate</button>
+                <button className="button button-outline" type="button" disabled={busy || !account.is_active} onClick={() => void updateWebsiteAccount(account, false)}>Deactivate</button>
+                <button className="button button-danger" type="button" disabled={busy} onClick={() => void deleteWebsiteAccount(account)}>Delete</button>
+              </div>
+            </article>;
+          })}</div> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>
         <div className="admin-queues">
           <section className="admin-queue" aria-labelledby="admin-sellers-heading">
@@ -740,6 +830,7 @@ export default function Marketplace() {
             {pendingSellers.length ? pendingSellers.map((item) => <article className="admin-review-item" key={`admin-seller-${item.id}`}>
               <div className="admin-review-title"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3></div><strong>{money(item.price, item.currency)}</strong></div>
               <p>{item.weight} {item.unit} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p>
+              {item.image ? <div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div> : <p className="admin-image-missing">No mineral photo attached.</p>}
               <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
               <div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div>
             </article>) : <p className="admin-empty">No seller listings are waiting for review.</p>}
