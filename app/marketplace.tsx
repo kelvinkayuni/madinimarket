@@ -19,6 +19,7 @@ const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
 const USER_STORAGE_KEY = "madinimarket:user:v1";
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
+const isAdminRole = (role: "user" | "admin" | null): boolean => role === "admin";
 
 function readStoredArray<T>(key: string): T[] {
   try {
@@ -233,7 +234,6 @@ export default function Marketplace() {
 
   const openDialog = (next: Exclude<Dialog, null>) => { setMenuOpen(false); setDialog(next); };
   const openListing = (type: "sell" | "buy") => {
-    if (role === "admin") { openDialog("review"); return; }
     if (!user) { setNotice("Sign in first to post a listing."); openDialog("signin"); return; }
     setEditingSubmission(null);
     openDialog(type);
@@ -396,7 +396,7 @@ export default function Marketplace() {
       setNotice(`Local demo session started as ${username}.`);
     }
     formElement.reset();
-    setDialog(signedInRole === "admin" ? "review" : null);
+    setDialog(null);
   };
   const signOut = async () => {
     if (isSupabaseConfigured) {
@@ -415,7 +415,6 @@ export default function Marketplace() {
   };
   const addSeller = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (role === "admin") { setNotice("Admin accounts manage submissions through the review queue."); setDialog("review"); return; }
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const file = form.get("image");
@@ -497,7 +496,6 @@ export default function Marketplace() {
   };
   const addBuyer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (role === "admin") { setNotice("Admin accounts manage submissions through the review queue."); setDialog("review"); return; }
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const existing = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
@@ -555,15 +553,57 @@ export default function Marketplace() {
   const editingSeller = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
   const editingBuyer = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
 
-  return <main className={`market-shell${role === "admin" ? " admin-view" : ""}`}>
+  if (isAdminRole(role)) {
+    const pendingTotal = pendingSellers.length + pendingBuyers.length;
+    return <main className="admin-shell">
+      <header className="admin-header">
+        <a className="admin-brand" href="#admin-home"><Gem size={20} /> MADINIMARKET <span>ADMIN</span></a>
+        <div className="admin-header-actions"><span className="admin-account">{user}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
+      </header>
+      <div className="admin-content" id="admin-home">
+        <section className="admin-overview">
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve listings and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" onClick={() => void refreshRemoteListings().catch(() => setNotice("Could not refresh submissions."))}><RefreshCw size={15} /> Refresh</button></div>
+          <div className="admin-summary">
+            <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
+            <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
+            <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>
+          </div>
+        </section>
+        <div className="admin-queues">
+          <section className="admin-queue" aria-labelledby="admin-sellers-heading">
+            <div className="admin-queue-heading"><div><span>SELLERS</span><h2 id="admin-sellers-heading">Mineral listings</h2></div><strong>{pendingSellers.length}</strong></div>
+            {pendingSellers.length ? pendingSellers.map((item) => <article className="admin-review-item" key={`admin-seller-${item.id}`}>
+              <div className="admin-review-title"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3></div><strong>{money(item.price, item.currency)}</strong></div>
+              <p>{item.weight} {item.unit} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p>
+              <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
+              <div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div>
+            </article>) : <p className="admin-empty">No seller listings are waiting for review.</p>}
+          </section>
+          <section className="admin-queue" aria-labelledby="admin-buyers-heading">
+            <div className="admin-queue-heading"><div><span>BUYERS</span><h2 id="admin-buyers-heading">Buying requests</h2></div><strong>{pendingBuyers.length}</strong></div>
+            {pendingBuyers.length ? pendingBuyers.map((item) => <article className="admin-review-item" key={`admin-buyer-${item.id}`}>
+              <div className="admin-review-title"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3></div><strong>{money(item.offer, item.currency)}</strong></div>
+              <p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{item.location} · {item.buyer} · {item.phone} · {item.email}</p>
+              <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} />
+              <div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div>
+            </article>) : <p className="admin-empty">No buyer requests are waiting for review.</p>}
+          </section>
+        </div>
+      </div>
+      {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
+      {dialog === "signout" && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => setDialog(null)}><X size={19} /></button><div className="dialog-brand"><Gem size={19} /> MADINIMARKET</div><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></section></div>}
+    </main>;
+  }
+
+  return <main className="market-shell">
     <div className="prototype-bar" style={{ display: 'none' }} aria-hidden="true" />
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "admin" && <button type="button" onClick={() => openDialog("review")}>Review queue <span className="queue-count">{pendingSellers.length + pendingBuyers.length}</span></button>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><span className="wordmark-symbol"><Gem size={21} strokeWidth={1.8} /></span><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals, people, places" /><kbd>/</kbd></div>
-      <div className="header-actions">{user ? <><div className="user-chip" title={user}><span className="user-avatar">{user.slice(-2)}</span><span>{role === "admin" ? "ADMIN" : user}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" onClick={() => openListing("sell")}><Plus size={16} /> List a mineral</button></div>
+      <div className="header-actions">{user ? <><div className="user-chip" title={user}><span className="user-avatar">{user.slice(-2)}</span><span>{user}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" onClick={() => openListing("sell")}><Plus size={16} /> List a mineral</button></div>
     </header>
 
     {generated && <section className="username-banner" aria-live="polite"><div className="username-copy"><span className="username-icon"><Check size={17} /></span><span><strong>Your username is ready</strong><small>Use it with your password to sign in. Expires in {secondsLeft}s.</small></span></div><code>{generated.username}</code><button className="copy-button" type="button" onClick={copyUsername}>{copied ? <Check size={15} /> : <Clipboard size={15} />}{copied ? "Copied" : "Copy"}</button><button className="dismiss-username" aria-label="Dismiss username" onClick={() => setGenerated(null)}><X size={17} /></button></section>}
