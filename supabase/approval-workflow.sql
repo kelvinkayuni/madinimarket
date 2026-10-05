@@ -237,18 +237,33 @@ using ((select auth.uid()) = user_id and status in ('pending', 'rejected'));
 create or replace view public.marketplace_listings
 with (security_barrier = true)
 as
-select id, mineral_name, weight, unit, price, currency, country, region, district, image_path, status, created_at, is_active
-from public.listings
-where status = 'approved' and is_active = true
-  and private.is_website_account_active(website_user_id);
+select listing.id, listing.mineral_name, listing.weight, listing.unit, listing.price, listing.currency,
+  listing.country, listing.region, listing.district, listing.image_path, listing.status, listing.created_at, listing.is_active
+from public.listings as listing
+where listing.status = 'approved' and listing.is_active = true
+  and (
+    listing.website_user_id is null
+    or exists (
+      select 1 from public.website_accounts as account
+      where account.id = listing.website_user_id and account.is_active = true
+    )
+  );
 
 create or replace view public.marketplace_buy_requests
 with (security_barrier = true)
 as
-select id, mineral_name, weight, unit, color, shape, quality, offer, currency, location, status, created_at, is_active
-from public.buy_requests
-where status = 'approved' and is_active = true
-  and private.is_website_account_active(website_user_id);
+select request.id, request.mineral_name, request.weight, request.unit, request.color,
+  request.shape, request.quality, request.offer, request.currency, request.location,
+  request.status, request.created_at, request.is_active
+from public.buy_requests as request
+where request.status = 'approved' and request.is_active = true
+  and (
+    request.website_user_id is null
+    or exists (
+      select 1 from public.website_accounts as account
+      where account.id = request.website_user_id and account.is_active = true
+    )
+  );
 
 grant select on public.marketplace_listings, public.marketplace_buy_requests to anon, authenticated;
 
