@@ -66,6 +66,12 @@ export async function POST(request: Request) {
   const id = Number(body.id);
   const editing = Number.isSafeInteger(id) && id > 0;
   const admin = createSupabaseAdminClient();
+  const { data: draft, error: draftError } = await admin.from("website_account_drafts")
+    .select("image_path")
+    .eq("website_user_id", accountId)
+    .eq("kind", kind)
+    .maybeSingle();
+  if (draftError) return NextResponse.json({ error: "Could not load your saved draft." }, { status: 503 });
   let existing: { id: number; image_path: string | null } | null = null;
 
   if (editing) {
@@ -116,7 +122,7 @@ export async function POST(request: Request) {
       const { error } = await admin.storage.from("mineral-images").upload(uploadedPath, image, { contentType: "image/jpeg" });
       if (error) return NextResponse.json({ error: "The photo could not be uploaded." }, { status: 503 });
       imagePath = uploadedPath;
-    }
+    } else if (draft?.image_path) imagePath = draft.image_path;
     if (!imagePath) return NextResponse.json({ error: "Choose a mineral photo before submitting." }, { status: 400 });
     rowValues = {
       ...common, mineral_name: mineralName, weight, unit, price, currency, seller_name: sellerName,
@@ -151,7 +157,15 @@ export async function POST(request: Request) {
     if (uploadedPath) await admin.storage.from("mineral-images").remove([uploadedPath]);
     return NextResponse.json({ error: "The submission could not be saved." }, { status: 503 });
   }
-  if (uploadedPath && existing?.image_path) await admin.storage.from("mineral-images").remove([existing.image_path]);
+  if (kind === "seller" && existing?.image_path && existing.image_path !== imagePath) {
+    await admin.storage.from("mineral-images").remove([existing.image_path]);
+  }
+  if (kind === "seller" && draft?.image_path && draft.image_path !== imagePath) {
+    await admin.storage.from("mineral-images").remove([draft.image_path]);
+  }
+  await admin.from("website_account_drafts").delete()
+    .eq("website_user_id", accountId)
+    .eq("kind", kind);
   return NextResponse.json({ id: result.data.id }, { status: editing ? 200 : 201 });
 }
 

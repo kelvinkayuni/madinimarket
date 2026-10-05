@@ -10,6 +10,15 @@ create table if not exists public.website_accounts (
   created_at timestamptz default now() not null
 );
 
+create table if not exists public.website_account_drafts (
+  website_user_id uuid not null references public.website_accounts (id) on delete cascade,
+  kind text not null check (kind in ('seller', 'buyer')),
+  payload jsonb not null default '{}'::jsonb,
+  image_path text,
+  updated_at timestamptz not null default now(),
+  primary key (website_user_id, kind)
+);
+
 alter table public.profiles
   add column if not exists email text,
   add column if not exists role text not null default 'user';
@@ -139,10 +148,13 @@ grant execute on function public.review_buy_request(bigint, boolean, text) to au
 
 alter table public.profiles enable row level security;
 alter table public.website_accounts enable row level security;
+alter table public.website_account_drafts enable row level security;
 alter table public.listings enable row level security;
 alter table public.buy_requests enable row level security;
 revoke all on public.website_accounts from anon, authenticated;
 grant all on public.website_accounts to service_role;
+revoke all on public.website_account_drafts from anon, authenticated;
+grant all on public.website_account_drafts to service_role;
 create index if not exists listings_website_user_id_idx on public.listings (website_user_id);
 create index if not exists buy_requests_website_user_id_idx on public.buy_requests (website_user_id);
 revoke all on public.profiles from anon, authenticated;

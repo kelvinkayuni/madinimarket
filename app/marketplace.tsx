@@ -11,6 +11,7 @@ type Currency = "TZS" | "USD";
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type Seller = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
+type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
 type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "signout" | null;
 
@@ -123,7 +124,10 @@ export default function Marketplace() {
   const [copied, setCopied] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
+  const [websiteDrafts, setWebsiteDrafts] = useState<{ seller: WebsiteDraft | null; buyer: WebsiteDraft | null }>({ seller: null, buyer: null });
   const [editingSubmission, setEditingSubmission] = useState<EditingSubmission>(null);
+  const draftSaveTimers = useRef<{ seller: number | null; buyer: number | null }>({ seller: null, buyer: null });
+  const draftRestoreDialog = useRef<Dialog>(null);
   const sellerRail = useRef<HTMLDivElement>(null);
   const buyerRail = useRef<HTMLDivElement>(null);
 
@@ -233,8 +237,9 @@ export default function Marketplace() {
   }, [notice]);
 
   const openDialog = (next: Exclude<Dialog, null>) => { setMenuOpen(false); setDialog(next); };
-  const openListing = (type: "sell" | "buy") => {
+  const openListing = async (type: "sell" | "buy") => {
     if (!user) { setNotice("Sign in first to post a listing."); openDialog("signin"); return; }
+    if (isSupabaseConfigured && role === "user") await refreshWebsiteDrafts().catch(() => {});
     setEditingSubmission(null);
     openDialog(type);
   };
@@ -247,6 +252,132 @@ export default function Marketplace() {
     setBuyers(listings.buyers);
     setLastUpdated(new Date());
   };
+  const refreshWebsiteDrafts = async () => {
+    const response = await fetch("/api/website-drafts", { cache: "no-store" });
+    if (!response.ok) return;
+    const result = await response.json();
+    const next = { seller: null, buyer: null } as { seller: WebsiteDraft | null; buyer: WebsiteDraft | null };
+    for (const draft of result.drafts as WebsiteDraft[]) next[draft.kind] = draft;
+    setWebsiteDrafts((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+  };
+  const persistWebsiteDraft = async (kind: "seller" | "buyer", formElement: HTMLFormElement, saveImage: boolean, keepalive = false) => {
+    if (!isSupabaseConfigured || role !== "user" || !userId) return;
+    const form = new FormData(formElement);
+    const payload: Record<string, string | number> = {};
+    for (const [key, value] of form.entries()) if (typeof value === "string") payload[key] = value;
+    if (editingSubmission?.kind === kind) payload.submissionId = editingSubmission.item.id;
+    const imageFile = form.get("image");
+    let imageData: string | undefined;
+    if (kind === "seller" && saveImage && imageFile instanceof File && imageFile.size) {
+      try {
+        imageData = await storeMineralPhoto(imageFile);
+      } catch {
+        setNotice("The photo could not be saved as a draft. Please try another PNG or JPG.");
+        return;
+      }
+    }
+    try {
+      const response = await fetch("/api/website-drafts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, payload, imageData }),
+        keepalive,
+      });
+      const result = await response.json();
+      if (!response.ok) { setNotice(result.error ?? "Your draft could not be saved."); return; }
+      setWebsiteDrafts((current) => ({ ...current, [kind]: result.draft as WebsiteDraft }));
+    } catch {
+      setNotice("Your draft could not be synchronized. Keep this page open and try again.");
+    }
+  };
+  const queueWebsiteDraftSave = (kind: "seller" | "buyer", formElement: HTMLFormElement, saveImage = false) => {
+    if (!isSupabaseConfigured || role !== "user") return;
+    const previousTimer = draftSaveTimers.current[kind];
+    if (previousTimer !== null) window.clearTimeout(previousTimer);
+    if (saveImage) {
+      draftSaveTimers.current[kind] = null;
+      void persistWebsiteDraft(kind, formElement, true);
+      return;
+    }
+    draftSaveTimers.current[kind] = window.setTimeout(() => {
+      draftSaveTimers.current[kind] = null;
+      void persistWebsiteDraft(kind, formElement, false);
+    }, 350);
+  };
+  useEffect(() => {
+    const saveFormChange = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
+      const form = target.closest<HTMLFormElement>("form.form-scroll");
+      if (!form) return;
+      const kind = form.elements.namedItem("seller") ? "seller" : form.elements.namedItem("buyer") ? "buyer" : null;
+      if (!kind) return;
+      const saveImage = event.type === "change" && target instanceof HTMLInputElement && target.type === "file";
+      queueWebsiteDraftSave(kind, form, saveImage);
+    };
+    const flushOpenDraft = () => {
+      const form = document.querySelector<HTMLFormElement>(".dialog-panel form.form-scroll");
+      if (!form) return;
+      const kind = form.elements.namedItem("seller") ? "seller" : form.elements.namedItem("buyer") ? "buyer" : null;
+      if (kind) void persistWebsiteDraft(kind, form, false, true);
+    };
+    document.addEventListener("input", saveFormChange);
+    document.addEventListener("change", saveFormChange);
+    window.addEventListener("pagehide", flushOpenDraft);
+    return () => {
+      document.removeEventListener("input", saveFormChange);
+      document.removeEventListener("change", saveFormChange);
+      window.removeEventListener("pagehide", flushOpenDraft);
+    };
+  }, [role, userId]);
+  useEffect(() => {
+    if (dialog !== "sell" && dialog !== "buy") {
+      draftRestoreDialog.current = null;
+      return;
+    }
+    if (draftRestoreDialog.current === dialog) return;
+    draftRestoreDialog.current = dialog;
+    if (editingSubmission) return;
+    const kind = dialog === "sell" ? "seller" : "buyer";
+    const draft = websiteDrafts[kind];
+    if (!draft) return;
+    const form = document.querySelector<HTMLFormElement>(".dialog-panel form.form-scroll");
+    if (!form) return;
+    for (const [name, value] of Object.entries(draft.payload)) {
+      if (name === "submissionId") continue;
+      const field = form.elements.namedItem(name);
+      if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.value = String(value);
+    }
+    if (kind === "seller" && draft.image_path) {
+      const imageInput = form.elements.namedItem("image");
+      if (imageInput instanceof HTMLInputElement) imageInput.required = false;
+      const imageLabel = form.querySelector<HTMLElement>(".file-drop > span");
+      if (imageLabel) imageLabel.textContent = "Saved draft photo will be used";
+    }
+  }, [dialog, editingSubmission, websiteDrafts]);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
+    let syncing = false;
+    const synchronize = async () => {
+      if (!active || syncing || document.visibilityState !== "visible") return;
+      syncing = true;
+      try {
+        const listings = await loadMarketplaceListings();
+        if (active) {
+          setSellers(listings.sellers);
+          setBuyers(listings.buyers);
+          setLastUpdated(new Date());
+        }
+      } catch {
+        // Keep the last successful Supabase snapshot when a poll fails.
+      }
+      if (active && role === "user") await refreshWebsiteDrafts().catch(() => {});
+      syncing = false;
+    };
+    const interval = window.setInterval(() => void synchronize(), 5000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [role, userId]);
   const updateReviewMessage = (key: string, message: string) => {
     setRejectionMessages((current) => ({ ...current, [key]: message }));
   };
@@ -456,6 +587,7 @@ export default function Marketplace() {
       });
       const result = await response.json();
       if (!response.ok) { setNotice(result.error ?? "The listing could not be saved."); return; }
+      setWebsiteDrafts((current) => ({ ...current, seller: null }));
       void refreshRemoteListings().catch(() => setNotice("Submitted, but the listings could not be refreshed."));
       setNotice(existing ? "Listing updated and resubmitted for admin approval." : "Seller listing submitted for admin approval.");
     } else if (isSupabaseConfigured) {
@@ -522,6 +654,7 @@ export default function Marketplace() {
       });
       const result = await response.json();
       if (!response.ok) { setNotice(result.error ?? "The request could not be saved."); return; }
+      setWebsiteDrafts((current) => ({ ...current, buyer: null }));
       void refreshRemoteListings().catch(() => setNotice("Submitted, but the listings could not be refreshed."));
       setNotice(existing ? "Request updated and resubmitted for admin approval." : "Buying request submitted for admin approval.");
     } else if (isSupabaseConfigured) {
