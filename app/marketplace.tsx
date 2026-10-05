@@ -211,12 +211,19 @@ export default function Marketplace() {
               setRole(result?.account ? "user" : null);
             }
           }
-          const listings = await loadMarketplaceListings(hasWebsiteAccount, isAdmin ? session?.access_token : undefined);
-          if (active) {
-            setSellers(listings.sellers);
-            setBuyers(listings.buyers);
-            setLastUpdated(new Date());
-            setStorageReady(true);
+          try {
+            const listings = await loadMarketplaceListings(hasWebsiteAccount, isAdmin ? session?.access_token : undefined);
+            if (active) {
+              setSellers(listings.sellers);
+              setBuyers(listings.buyers);
+              setLastUpdated(new Date());
+              setStorageReady(true);
+            }
+          } catch {
+            if (active) {
+              setNotice("Could not load marketplace data from Supabase.");
+              setStorageReady(true);
+            }
           }
           if (active && isAdmin && session) {
             try {
