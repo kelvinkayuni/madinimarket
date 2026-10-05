@@ -59,7 +59,7 @@ async function storeMineralPhoto(file: File): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
-async function loadMarketplaceListings() {
+async function loadMarketplaceListings(includeOwnSubmissions = false) {
   const supabase = getSupabaseBrowserClient();
   const [sellerResult, buyerResult] = await Promise.all([
     supabase.from("listings").select("*").order("created_at", { ascending: false }),
@@ -70,15 +70,17 @@ async function loadMarketplaceListings() {
 
   let sellerRows = sellerResult.data ?? [];
   let buyerRows = buyerResult.data ?? [];
-  try {
-    const response = await fetch("/api/website-submissions", { cache: "no-store" });
-    if (response.ok) {
-      const ownSubmissions = await response.json();
-      sellerRows = [...sellerRows, ...(ownSubmissions.sellers ?? [])];
-      buyerRows = [...buyerRows, ...(ownSubmissions.buyers ?? [])];
+  if (includeOwnSubmissions) {
+    try {
+      const response = await fetch("/api/website-submissions", { cache: "no-store" });
+      if (response.ok) {
+        const ownSubmissions = await response.json();
+        sellerRows = [...sellerRows, ...(ownSubmissions.sellers ?? [])];
+        buyerRows = [...buyerRows, ...(ownSubmissions.buyers ?? [])];
+      }
+    } catch {
+      // Public listings remain available if a website account session has expired.
     }
-  } catch {
-    // Public listings remain available if a website account session has expired.
   }
 
   const sellers = await Promise.all(sellerRows.map(async (row) => {
@@ -144,6 +146,7 @@ export default function Marketplace() {
       const hydrate = async (session: Session | null) => {
         try {
           let isAdmin = false;
+          let hasWebsiteAccount = false;
           if (session) {
             const { data: profile, error: profileError } = await supabase
               .from("profiles")
@@ -162,13 +165,14 @@ export default function Marketplace() {
           if (!isAdmin) {
             const response = await fetch("/api/auth/website-session", { cache: "no-store" });
             const result = response.ok ? await response.json() : null;
+            hasWebsiteAccount = Boolean(result?.account);
             if (active) {
               setUser(result?.account?.username ?? "");
               setUserId(result?.account?.id ?? "");
               setRole(result?.account ? "user" : null);
             }
           }
-          const listings = await loadMarketplaceListings();
+          const listings = await loadMarketplaceListings(hasWebsiteAccount);
           if (active) {
             setSellers(listings.sellers);
             setBuyers(listings.buyers);
@@ -241,7 +245,7 @@ export default function Marketplace() {
 
   const openDialog = (next: Exclude<Dialog, null>) => { setMenuOpen(false); setDialog(next); };
   const openListing = async (type: "sell" | "buy") => {
-    if (!user) { setNotice("Sign in first to post a listing."); openDialog("signin"); return; }
+    if (!user) { setNotice("Sign in first to post."); openDialog("signin"); return; }
     if (isSupabaseConfigured && role === "user") await refreshWebsiteDrafts().catch(() => {});
     setEditingSubmission(null);
     openDialog(type);
@@ -249,8 +253,8 @@ export default function Marketplace() {
   const scrollRail = (rail: HTMLDivElement | null, direction: number) => rail?.scrollBy({ left: direction * 360, behavior: "smooth" });
   const visibleSellers = sellers.filter((item) => item.status === "approved" && `${item.mineral} ${item.seller} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
   const visibleBuyers = buyers.filter((item) => item.status === "approved" && `${item.mineral} ${item.buyer} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
-  const refreshRemoteListings = async () => {
-    const listings = await loadMarketplaceListings();
+  const refreshRemoteListings = async (includeOwnSubmissions = role === "user") => {
+    const listings = await loadMarketplaceListings(includeOwnSubmissions);
     setSellers(listings.sellers);
     setBuyers(listings.buyers);
     setLastUpdated(new Date());
@@ -368,7 +372,7 @@ export default function Marketplace() {
       if (!active || syncing || document.visibilityState !== "visible") return;
       syncing = true;
       try {
-        const listings = await loadMarketplaceListings();
+        const listings = await loadMarketplaceListings(role === "user");
         if (active) {
           setSellers(listings.sellers);
           setBuyers(listings.buyers);
@@ -492,7 +496,7 @@ export default function Marketplace() {
           setUser(websiteAccount.username);
           setUserId(websiteAccount.id);
           setRole("user");
-          await refreshRemoteListings();
+          await refreshRemoteListings(true);
           setNotice(`Signed in as ${websiteAccount.username}.`);
           formElement.reset();
           setDialog(null);

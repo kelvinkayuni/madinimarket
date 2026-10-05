@@ -75,13 +75,23 @@ export async function POST(request: Request) {
   let existing: { id: number; image_path: string | null } | null = null;
 
   if (editing) {
-    const { data, error } = await admin.from(table).select("id, image_path, status")
-      .eq("id", id).eq("website_user_id", accountId).maybeSingle();
-    if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
-    if (!data || !["pending", "rejected"].includes(data.status)) {
-      return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
+    if (kind === "seller") {
+      const { data, error } = await admin.from("listings").select("id, image_path, status")
+        .eq("id", id).eq("website_user_id", accountId).maybeSingle();
+      if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
+      if (!data || !["pending", "rejected"].includes(data.status)) {
+        return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
+      }
+      existing = { id: data.id, image_path: data.image_path };
+    } else {
+      const { data, error } = await admin.from("buy_requests").select("id, status")
+        .eq("id", id).eq("website_user_id", accountId).maybeSingle();
+      if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
+      if (!data || !["pending", "rejected"].includes(data.status)) {
+        return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
+      }
+      existing = { id: data.id, image_path: null };
     }
-    existing = data;
   }
 
   const common = {
@@ -187,9 +197,18 @@ export async function DELETE(request: Request) {
 
   const admin = createSupabaseAdminClient();
   const table = kind === "seller" ? "listings" : "buy_requests";
-  const { data: existing, error: findError } = await admin.from(table).select("id, image_path, status")
-    .eq("id", id).eq("website_user_id", accountId).maybeSingle();
-  if (findError) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
+  let existing: { id: number; image_path: string | null; status: string } | null;
+  if (kind === "seller") {
+    const { data, error } = await admin.from("listings").select("id, image_path, status")
+      .eq("id", id).eq("website_user_id", accountId).maybeSingle();
+    if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
+    existing = data;
+  } else {
+    const { data, error } = await admin.from("buy_requests").select("id, status")
+      .eq("id", id).eq("website_user_id", accountId).maybeSingle();
+    if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
+    existing = data ? { id: data.id, image_path: null, status: data.status } : null;
+  }
   if (!existing || !["pending", "rejected"].includes(existing.status)) {
     return NextResponse.json({ error: "That submission can no longer be deleted." }, { status: 404 });
   }

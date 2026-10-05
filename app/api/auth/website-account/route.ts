@@ -42,6 +42,14 @@ export async function POST(request: Request) {
       if (error?.code !== "23505") {
         return NextResponse.json({ error: "Account creation is temporarily unavailable." }, { status: 503 });
       }
+      const { data: existingEmail, error: lookupError } = await admin.from("website_accounts")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      if (lookupError) return NextResponse.json({ error: "Account creation is temporarily unavailable." }, { status: 503 });
+      if (existingEmail) {
+        return NextResponse.json({ error: "An account with this email already exists. Sign in instead." }, { status: 409 });
+      }
     }
     return NextResponse.json({ error: "Could not generate a username. Please try again." }, { status: 503 });
   } catch {
