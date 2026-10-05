@@ -62,7 +62,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .menu-popover > button { width: 100%; padding: 13px 0; display: flex; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid #edf0eb; background: transparent; text-align: left; font-size: 13px; cursor: pointer; }
 .menu-popover > button:hover { color: #577962; }
 .menu-foot { display: flex; align-items: center; gap: 8px; padding-top: 14px; color: #808980; font-size: 10px; }
-.user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; cursor: pointer; }
+.user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; }
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
 .market-content { max-width: 1320px; margin: 0 auto; padding: 0 32px; }
 .market-intro { min-height: 171px; padding: 34px 0 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
