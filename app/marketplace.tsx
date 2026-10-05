@@ -75,17 +75,27 @@ async function getSignedMineralImageUrl(
   return url;
 }
 
-async function loadMarketplaceListings(includeOwnSubmissions = false) {
+async function loadMarketplaceListings(includeOwnSubmissions = false, adminAccessToken?: string) {
   const supabase = getSupabaseBrowserClient();
   const [sellerResult, buyerResult] = await Promise.all([
-    supabase.from("listings").select("*").order("created_at", { ascending: false }),
-    supabase.from("buy_requests").select("*").order("created_at", { ascending: false }),
+    supabase.from("marketplace_listings").select("*").order("created_at", { ascending: false }),
+    supabase.from("marketplace_buy_requests").select("*").order("created_at", { ascending: false }),
   ]);
   if (sellerResult.error) throw sellerResult.error;
   if (buyerResult.error) throw buyerResult.error;
 
   let sellerRows = sellerResult.data ?? [];
   let buyerRows = buyerResult.data ?? [];
+  if (adminAccessToken) {
+    const response = await fetch("/api/admin/review-queue", {
+      headers: { Authorization: `Bearer ${adminAccessToken}` },
+      cache: "no-store",
+    });
+    const reviewQueue = await response.json();
+    if (!response.ok) throw new Error(reviewQueue.error ?? "Could not load pending submissions.");
+    sellerRows = [...sellerRows, ...(reviewQueue.sellers ?? [])];
+    buyerRows = [...buyerRows, ...(reviewQueue.buyers ?? [])];
+  }
   if (includeOwnSubmissions) {
     try {
       const response = await fetch("/api/website-submissions", { cache: "no-store" });
@@ -107,8 +117,8 @@ async function loadMarketplaceListings(includeOwnSubmissions = false) {
     return {
       id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
       unit: row.unit as Unit, price: String(row.price), currency: row.currency as Currency,
-      seller: row.seller_name, country: row.country, region: row.region, district: row.district, street: row.street,
-      location: [row.district, row.region, row.country].filter(Boolean).join(", "), email: row.email, phone: row.phone,
+      seller: row.seller_name ?? "", country: row.country, region: row.region, district: row.district,
+      location: [row.district, row.region, row.country].filter(Boolean).join(", "), email: row.email ?? "", phone: row.phone ?? "",
       image, image_path: row.image_path, accent: "#43866b", status: row.status as SubmissionStatus,
       review_message: row.review_message,
     } satisfies Seller;
@@ -117,7 +127,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false) {
     id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
     unit: row.unit as Unit, color: row.color, shape: row.shape as Buyer["shape"], quality: row.quality,
     offer: String(row.offer), currency: row.currency as Currency, buyer: row.buyer_name, location: row.location,
-    email: row.email, phone: row.phone, status: row.status as SubmissionStatus, review_message: row.review_message,
+    email: row.email ?? "", phone: row.phone ?? "", status: row.status as SubmissionStatus, review_message: row.review_message,
   } satisfies Buyer));
   return { sellers, buyers };
 }
@@ -201,7 +211,7 @@ export default function Marketplace() {
               setRole(result?.account ? "user" : null);
             }
           }
-          const listings = await loadMarketplaceListings(hasWebsiteAccount);
+          const listings = await loadMarketplaceListings(hasWebsiteAccount, isAdmin ? session?.access_token : undefined);
           if (active) {
             setSellers(listings.sellers);
             setBuyers(listings.buyers);
@@ -288,10 +298,15 @@ export default function Marketplace() {
     openDialog(type);
   };
   const scrollRail = (rail: HTMLDivElement | null, direction: number) => rail?.scrollBy({ left: direction * 360, behavior: "smooth" });
-  const visibleSellers = sellers.filter((item) => item.status === "approved" && `${item.mineral} ${item.seller} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
-  const visibleBuyers = buyers.filter((item) => item.status === "approved" && `${item.mineral} ${item.buyer} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
+  const visibleSellers = sellers.filter((item) => item.status === "approved" && `${item.mineral} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
+  const visibleBuyers = buyers.filter((item) => item.status === "approved" && `${item.mineral} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
   const refreshRemoteListings = async (includeOwnSubmissions = role === "user") => {
-    const listings = await loadMarketplaceListings(includeOwnSubmissions);
+    let adminAccessToken: string | undefined;
+    if (role === "admin") {
+      const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+      adminAccessToken = session?.access_token;
+    }
+    const listings = await loadMarketplaceListings(includeOwnSubmissions, adminAccessToken);
     setSellers(listings.sellers);
     setBuyers(listings.buyers);
     setLastUpdated(new Date());
@@ -868,12 +883,12 @@ export default function Marketplace() {
       <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className="market-status"><div className="status-orbit"><span /></div><div><strong>Market open</strong><small>Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
 
       <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">AVAILABLE NOW</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" onClick={() => openListing("sell")}><Plus size={15} /> Sell a mineral</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}<span className="photo-tag"><span /> VERIFIED SELLER</span><button className="photo-action" type="button" aria-label={`Contact ${listing.seller}`} onClick={() => setNotice(`${listing.seller}: ${listing.phone} · ${listing.email}`)}><ArrowUpRight size={17} /></button></div><div className="seller-card-info"><div className="seller-name-row"><h3>{listing.mineral}</h3><span className="weight-tag">{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span>{listing.seller}</span><span>{listing.location}</span></div></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
+        {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}<span className="photo-tag"><span /> VERIFIED SELLER</span></div><div className="seller-card-info"><div className="seller-name-row"><h3>{listing.mineral}</h3><span className="weight-tag">{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span>{listing.location}</span></div></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
       <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" onClick={() => openListing("buy")}><Plus size={15} /> Post a request</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location">{request.location}</span></div><h3>{request.mineral}<span className="buyer-shape">{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong>{request.color}</strong></div><div><span>QUALITY</span><strong>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong>{money(request.offer, request.currency)}</strong></div><button type="button" aria-label={`Contact ${request.buyer}`} onClick={() => setNotice(`${request.buyer}: ${request.phone} · ${request.email}`)}><ArrowUpRight size={18} /></button></div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
+        {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location">{request.location}</span></div><h3>{request.mineral}<span className="buyer-shape">{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong>{request.color}</strong></div><div><span>QUALITY</span><strong>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong>{money(request.offer, request.currency)}</strong></div></div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
         <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" onClick={() => openListing("sell")}>List a mineral <ArrowUpRight size={14} /></button></div>
       </section>
       <footer className="site-footer"><span><Gem size={16} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span><span>PREVIEW MARKET · 2025—26</span></footer>

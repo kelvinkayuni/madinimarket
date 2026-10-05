@@ -85,9 +85,7 @@ as $is_account_active$
   );
 $is_account_active$;
 
-revoke all on function private.is_website_account_active(uuid) from public, anon;
-grant usage on schema private to anon, authenticated;
-grant execute on function private.is_website_account_active(uuid) to anon, authenticated;
+revoke all on function private.is_website_account_active(uuid) from public, anon, authenticated;
 
 revoke all on function private.is_admin() from public, anon;
 grant usage on schema private to authenticated;
@@ -181,10 +179,8 @@ create index if not exists buy_requests_website_user_id_idx on public.buy_reques
 revoke all on public.profiles from anon, authenticated;
 grant select on public.profiles to authenticated;
 revoke all on public.listings from anon, authenticated;
-grant select on public.listings to anon, authenticated;
 grant insert, update, delete on public.listings to authenticated;
 revoke all on public.buy_requests from anon, authenticated;
-grant select on public.buy_requests to anon, authenticated;
 grant insert, update, delete on public.buy_requests to authenticated;
 
 drop policy if exists "Users can view profiles" on public.profiles;
@@ -238,6 +234,24 @@ with check ((select auth.uid()) = user_id and status = 'pending' and review_mess
 create policy "Owners can delete returned buy requests" on public.buy_requests for delete to authenticated
 using ((select auth.uid()) = user_id and status in ('pending', 'rejected'));
 
+create or replace view public.marketplace_listings
+with (security_barrier = true)
+as
+select id, mineral_name, weight, unit, price, currency, country, region, district, image_path, status, created_at, is_active
+from public.listings
+where status = 'approved' and is_active = true
+  and private.is_website_account_active(website_user_id);
+
+create or replace view public.marketplace_buy_requests
+with (security_barrier = true)
+as
+select id, mineral_name, weight, unit, color, shape, quality, offer, currency, location, status, created_at, is_active
+from public.buy_requests
+where status = 'approved' and is_active = true
+  and private.is_website_account_active(website_user_id);
+
+grant select on public.marketplace_listings, public.marketplace_buy_requests to anon, authenticated;
+
 insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
 values ('mineral-images', 'mineral-images', false, array['image/png', 'image/jpeg'], 5242880)
 on conflict (id) do update set public = false, allowed_mime_types = excluded.allowed_mime_types, file_size_limit = excluded.file_size_limit;
@@ -253,15 +267,11 @@ using (
   and (
     (storage.foldername(name))[1] = (select auth.uid())::text
     or (select private.is_admin())
-    or exists (select 1 from public.listings where image_path = name and status = 'approved' and is_active = true)
+    or exists (select 1 from public.marketplace_listings where image_path = name)
   )
 );
 create policy "Public can read approved mineral images" on storage.objects for select to anon
 using (
   bucket_id = 'mineral-images'
-  and exists (
-    select 1 from public.listings
-    where image_path = name and status = 'approved' and is_active = true
-      and private.is_website_account_active(website_user_id)
-  )
+  and exists (select 1 from public.marketplace_listings where image_path = name)
 );
