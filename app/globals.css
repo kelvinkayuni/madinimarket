@@ -26,12 +26,12 @@ button { color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #58805e; outline-offset: 3px; }
 .market-shell { min-height: 100vh; overflow: hidden; }
 .admin-shell { min-height: 100vh; background: var(--paper); color: var(--ink); }
-.admin-header { min-height: 68px; padding: 0 max(24px, calc((100vw - 1240px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); background: #fcfcf9; }
+.admin-header { min-height: 68px; padding: 0 clamp(18px, 3vw, 48px); display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); background: #fcfcf9; }
 .admin-brand { display: flex; align-items: center; gap: 9px; color: var(--forest); font-size: 11px; font-weight: 750; text-decoration: none; }
 .admin-brand span { margin-left: 6px; padding: 5px 7px; background: #e9eee6; color: #667365; font-size: 8px; }
 .admin-header-actions { display: flex; align-items: center; gap: 18px; }
 .admin-account { color: #717b70; font-size: 11px; }
-.admin-content { max-width: 1240px; margin: 0 auto; padding: 38px 32px 64px; }
+.admin-content { width: 100%; padding: 38px clamp(18px, 3vw, 48px) 64px; }
 .admin-overview { padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .admin-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .admin-page-heading h1 { margin: 8px 0 5px; font-family: var(--font-display), Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1.1; }
@@ -77,7 +77,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .prototype-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 3px #d2ee7722; }
 .prototype-divider { color: #769084; }
 .prototype-note { margin-left: auto; color: #94a79b; }
-.site-header { position: relative; z-index: 5; height: 76px; padding: 0 max(24px, calc((100vw - 1320px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 32px; background: #fcfcf9; border-bottom: 1px solid var(--line); }
+.site-header { position: relative; z-index: 5; height: 76px; padding: 0 clamp(18px, 3vw, 48px); display: flex; align-items: center; justify-content: space-between; gap: 32px; background: #fcfcf9; border-bottom: 1px solid var(--line); }
 .header-left, .header-actions, .wordmark { display: flex; align-items: center; }
 .header-left { gap: 20px; flex-shrink: 0; }
 .menu-wrap { position: relative; }
@@ -111,7 +111,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .menu-foot { display: flex; align-items: center; gap: 8px; padding-top: 14px; color: #808980; font-size: 10px; }
 .user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; }
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
-.market-content { max-width: 1320px; margin: 0 auto; padding: 0 32px; }
+.market-content { width: 100%; padding: 0 clamp(18px, 3vw, 48px); }
 .market-intro { min-height: 171px; padding: 34px 0 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .eyebrow { display: flex; align-items: center; gap: 9px; color: #667267; font-size: 9px; font-weight: 700; }
 .eyebrow-line { width: 20px; height: 1px; background: var(--red); }
@@ -156,7 +156,7 @@ h1, h2, h3, p { margin-top: 0; }
 .rail-hint { display: flex; align-items: center; gap: 9px; margin: 14px 2px 0; color: #91998f; font-size: 8px; font-weight: 700; }
 .rail-line { width: 46px; height: 1px; background: #c8d0c5; }
 .empty-search { padding: 42px 20px; border: 1px dashed #d8ded5; color: #788277; font-size: 12px; text-align: center; }
-.buyer-section { margin: 10px -32px 0; padding: 25px 32px 21px; border-top: 0; background: var(--forest); color: #f5f6ef; }
+.buyer-section { margin: 10px calc(0px - clamp(18px, 3vw, 48px)) 0; padding: 25px clamp(18px, 3vw, 48px) 21px; border-top: 0; background: var(--forest); color: #f5f6ef; }
 .buyer-index { color: var(--lime); }
 .buyer-section .section-kicker { color: #a2b4a7; }
 .buyer-section .section-head h2 { color: #f5f6ef; }
