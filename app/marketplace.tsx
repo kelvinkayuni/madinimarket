@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Clipboard, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -196,17 +196,20 @@ export default function Marketplace() {
       };
     }
 
-    setSellers(readStoredArray<Seller>(SELLERS_STORAGE_KEY));
-    setBuyers(readStoredArray<Buyer>(BUYERS_STORAGE_KEY));
-    try {
-      const storedUser = localStorage.getItem(USER_STORAGE_KEY) ?? "";
-      setUser(storedUser);
-      setUserId(storedUser);
-      setRole(storedUser ? "user" : null);
-    } catch {
-      setUser("");
-    }
-    setStorageReady(true);
+    const hydrationTimer = window.setTimeout(() => {
+      setSellers(readStoredArray<Seller>(SELLERS_STORAGE_KEY));
+      setBuyers(readStoredArray<Buyer>(BUYERS_STORAGE_KEY));
+      try {
+        const storedUser = localStorage.getItem(USER_STORAGE_KEY) ?? "";
+        setUser(storedUser);
+        setUserId(storedUser);
+        setRole(storedUser ? "user" : null);
+      } catch {
+        setUser("");
+      }
+      setStorageReady(true);
+    }, 0);
+    return () => window.clearTimeout(hydrationTimer);
   }, []);
   useEffect(() => {
     if (!storageReady || isSupabaseConfigured) return;
@@ -216,7 +219,7 @@ export default function Marketplace() {
       if (user) localStorage.setItem(USER_STORAGE_KEY, user);
       else localStorage.removeItem(USER_STORAGE_KEY);
     } catch {
-      setNotice("This browser could not save your marketplace changes.");
+      window.setTimeout(() => setNotice("This browser could not save your marketplace changes."), 0);
     }
   }, [storageReady, sellers, buyers, user]);
   useEffect(() => {
@@ -304,6 +307,8 @@ export default function Marketplace() {
       void persistWebsiteDraft(kind, formElement, false);
     }, 350);
   };
+  const queueWebsiteDraftSaveEvent = useEffectEvent(queueWebsiteDraftSave);
+  const persistWebsiteDraftEvent = useEffectEvent(persistWebsiteDraft);
   useEffect(() => {
     const saveFormChange = (event: Event) => {
       const target = event.target;
@@ -313,13 +318,13 @@ export default function Marketplace() {
       const kind = form.elements.namedItem("seller") ? "seller" : form.elements.namedItem("buyer") ? "buyer" : null;
       if (!kind) return;
       const saveImage = event.type === "change" && target instanceof HTMLInputElement && target.type === "file";
-      queueWebsiteDraftSave(kind, form, saveImage);
+      queueWebsiteDraftSaveEvent(kind, form, saveImage);
     };
     const flushOpenDraft = () => {
       const form = document.querySelector<HTMLFormElement>(".dialog-panel form.form-scroll");
       if (!form) return;
       const kind = form.elements.namedItem("seller") ? "seller" : form.elements.namedItem("buyer") ? "buyer" : null;
-      if (kind) void persistWebsiteDraft(kind, form, false, true);
+      if (kind) void persistWebsiteDraftEvent(kind, form, false, true);
     };
     document.addEventListener("input", saveFormChange);
     document.addEventListener("change", saveFormChange);
