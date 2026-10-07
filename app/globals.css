@@ -211,6 +211,10 @@ h1, h2, h3, p { margin-top: 0; }
 .field-label { display: grid; gap: 6px; color: #465148; font-size: 10px; font-weight: 650; }
 .text-input { width: 100%; height: 40px; padding: 0 11px; border: 1px solid #d8ded5; border-radius: 2px; background: #fff; color: #263128; font-size: 11px; font-weight: 400; }
 .text-input::placeholder { color: #a0a79e; }
+.password-input-wrap { position: relative; display: block; }
+.password-input-wrap .text-input { padding-right: 42px; }
+.password-visibility { position: absolute; top: 0; right: 0; width: 40px; height: 40px; display: grid; place-items: center; border: 0; background: transparent; color: #69766a; cursor: pointer; }
+.password-visibility:hover { color: #314a35; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field-row-weight { grid-template-columns: 1.4fr .8fr; }
 .select-wrap { position: relative; }

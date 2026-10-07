@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
 import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -892,8 +892,13 @@ export default function Marketplace() {
 }
 
 function Field(props: { label: string; name: string; type?: string; required?: boolean; placeholder?: string; autoComplete?: string; min?: string; step?: string; minLength?: number; pattern?: string; defaultValue?: string }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const { label, ...inputProps } = props;
-  return <label className="field-label">{label}<input className="text-input" {...inputProps} /></label>;
+  if (inputProps.type !== "password") {
+    return <label className="field-label">{label}<input className="text-input" {...inputProps} /></label>;
+  }
+
+  return <label className="field-label">{label}<span className="password-input-wrap"><input className="text-input" {...inputProps} type={passwordVisible ? "text" : "password"} /><button className="password-visibility" type="button" aria-label={passwordVisible ? "Hide password" : "Show password"} aria-pressed={passwordVisible} onClick={() => setPasswordVisible((visible) => !visible)}>{passwordVisible ? <EyeOff size={16} /> : <Eye size={16} />}</button></span></label>;
 }
 function SelectField({ label, name, options, defaultValue = "" }: { label: string; name: string; options: [string, string][]; defaultValue?: string }) {
   return <label className="field-label">{label}<span className="select-wrap"><select className="text-input" name={name} defaultValue={defaultValue} required><option value="" disabled>Select {label.toLowerCase()}</option>{options.map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select><ChevronDown size={15} /></span></label>;
