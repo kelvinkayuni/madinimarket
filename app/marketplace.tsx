@@ -559,13 +559,9 @@ export default function Marketplace() {
         setNotice(result.error ?? "Account creation failed.");
         return;
       }
-      setUser(result.displayName);
-      setDisplayName(result.displayName);
-      setUserId(result.id);
-      setRole("user");
       formElement.reset();
-      setDialog(null);
-      setNotice(`Account created. Your username has been sent to ${result.email}.`);
+      setDialog("signin");
+      setNotice(`Account created. Your username has been sent to ${result.email}. Sign in to continue.`);
       return;
     }
     setNotice("Account creation is unavailable until the account service is connected.");

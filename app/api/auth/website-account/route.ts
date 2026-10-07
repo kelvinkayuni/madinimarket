@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { sendGmailEmail } from "@/lib/gmail";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
-import { hashWebsitePassword, setWebsiteSession } from "@/lib/website-session";
+import { hashWebsitePassword } from "@/lib/website-session";
 
 export async function POST(request: Request) {
   let values: Record<string, unknown>;
@@ -54,9 +54,7 @@ export async function POST(request: Request) {
           );
         }
 
-        const response = NextResponse.json({ id: data.id, displayName: `${firstName} ${surname}`, email }, { status: 201 });
-        setWebsiteSession(response, data.id);
-        return response;
+        return NextResponse.json({ email }, { status: 201 });
       }
       if (error?.code !== "23505") {
         return NextResponse.json({ error: "Account creation is temporarily unavailable." }, { status: 503 });
