@@ -23,14 +23,14 @@ export async function POST(request: Request) {
   try {
     const admin = createSupabaseAdminClient();
     const { data: account, error } = await admin.from("website_accounts")
-      .select("id, username, password_hash, is_active")
+      .select("id, username, display_name, password_hash, is_active")
       .eq("username", username)
       .maybeSingle();
     if (error || !account || !account.is_active || !(await verifyWebsitePassword(password, account.password_hash))) {
       return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
     }
 
-    const response = NextResponse.json({ id: account.id, username: account.username }, { headers: { "Cache-Control": "no-store" } });
+    const response = NextResponse.json({ id: account.id, username: account.username, displayName: account.display_name }, { headers: { "Cache-Control": "no-store" } });
     setWebsiteSession(response, account.id);
     return response;
   } catch {

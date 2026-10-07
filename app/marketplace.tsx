@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Clipboard, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
 import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -150,14 +150,12 @@ export default function Marketplace() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [user, setUser] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [userId, setUserId] = useState("");
   const [role, setRole] = useState<"user" | "admin" | null>(null);
-  const [generated, setGenerated] = useState<{ username: string; expiresAt: number } | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(60);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
-  const [copied, setCopied] = useState(false);
   const [sellerImagePreview, setSellerImagePreview] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
@@ -196,6 +194,7 @@ export default function Marketplace() {
             isAdmin = profile?.role === "admin";
             if (isAdmin && active) {
               setUser(profile?.username ?? "");
+              setDisplayName(profile?.username ?? "");
               setUserId(session.user.id);
               setRole("admin");
             }
@@ -207,6 +206,7 @@ export default function Marketplace() {
             hasWebsiteAccount = Boolean(result?.account);
             if (active) {
               setUser(result?.account?.username ?? "");
+              setDisplayName(result?.account?.display_name ?? "");
               setUserId(result?.account?.id ?? "");
               setRole(result?.account ? "user" : null);
             }
@@ -259,6 +259,7 @@ export default function Marketplace() {
       try {
         const storedUser = localStorage.getItem(USER_STORAGE_KEY) ?? "";
         setUser(storedUser);
+        setDisplayName(storedUser);
         setUserId(storedUser);
         setRole(storedUser ? "user" : null);
       } catch {
@@ -279,17 +280,6 @@ export default function Marketplace() {
       window.setTimeout(() => setNotice("This browser could not save your marketplace changes."), 0);
     }
   }, [storageReady, sellers, buyers, user]);
-  useEffect(() => {
-    if (!generated) return;
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((generated.expiresAt - Date.now()) / 1000));
-      setSecondsLeft(remaining);
-      if (remaining === 0) setGenerated(null);
-    };
-    tick();
-    const interval = window.setInterval(tick, 1000);
-    return () => window.clearInterval(interval);
-  }, [generated]);
   useEffect(() => {
     if (!notice) return;
     const timeout = window.setTimeout(() => setNotice(""), 3600);
@@ -569,22 +559,16 @@ export default function Marketplace() {
         setNotice(result.error ?? "Account creation failed.");
         return;
       }
-      setUser(result.username);
+      setUser(result.displayName);
+      setDisplayName(result.displayName);
       setUserId(result.id);
       setRole("user");
-      setGenerated({ username: result.username, expiresAt: Date.now() + 60_000 });
-      setSecondsLeft(60);
       formElement.reset();
       setDialog(null);
-      setNotice(`Account created. You are signed in as ${result.username}.`);
+      setNotice(`Account created. Your username has been sent to ${result.email}.`);
       return;
     }
-    const username = `MM-${Math.floor(1000 + Math.random() * 9000)}`;
-    setGenerated({ username, expiresAt: Date.now() + 60_000 });
-    setSecondsLeft(60);
-    formElement.reset();
-    setDialog(null);
-    setNotice(isSupabaseConfigured ? "Account created. Verify your email if prompted, then sign in with this username." : "Demo username generated. Connect Supabase to create a real account.");
+    setNotice("Account creation is unavailable until the account service is connected.");
   };
   const signIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -595,7 +579,7 @@ export default function Marketplace() {
     let signedInRole: "user" | "admin" = "user";
     if (isSupabaseConfigured) {
       try {
-        let websiteAccount: { id: string; username: string } | null = null;
+        let websiteAccount: { id: string; username: string; displayName: string } | null = null;
         if (/^MM-\d{4}$/i.test(username)) {
           const websiteResponse = await fetch("/api/auth/website-login", {
             method: "POST",
@@ -606,10 +590,11 @@ export default function Marketplace() {
         }
         if (websiteAccount) {
           setUser(websiteAccount.username);
+          setDisplayName(websiteAccount.displayName);
           setUserId(websiteAccount.id);
           setRole("user");
           await refreshRemoteListings(true);
-          setNotice(`Signed in as ${websiteAccount.username}.`);
+          setNotice("Signed in successfully.");
           formElement.reset();
           setDialog(null);
           return;
@@ -631,6 +616,7 @@ export default function Marketplace() {
           .single();
         if (profileError) throw profileError;
         setUser(profile.username);
+        setDisplayName(profile.username);
         setUserId(profile.id);
         if (profile.role !== "admin") throw new Error("Username or password is incorrect.");
         signedInRole = "admin";
@@ -643,6 +629,7 @@ export default function Marketplace() {
       setNotice(signedInRole === "admin" ? "Signed in to the admin account." : `Signed in as ${username}.`);
     } else {
       setUser(username);
+      setDisplayName(username);
       setUserId(username);
       setRole("user");
       setNotice(`Local demo session started as ${username}.`);
@@ -656,14 +643,10 @@ export default function Marketplace() {
       else await fetch("/api/auth/website-session", { method: "DELETE" });
     }
     setUser("");
+    setDisplayName("");
     setUserId("");
     setRole(null);
     setDialog(null);
-  };
-  const copyUsername = async () => {
-    if (!generated) return;
-    try { await navigator.clipboard.writeText(generated.username); setCopied(true); window.setTimeout(() => setCopied(false), 1800); }
-    catch { setNotice(`Your username is ${generated.username}.`); }
   };
   const addSeller = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -881,10 +864,8 @@ export default function Marketplace() {
         {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><span className="wordmark-symbol"><Gem size={21} strokeWidth={1.8} /></span><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals, people, places" /><kbd>/</kbd></div>
-      <div className="header-actions">{user ? <><div className="user-chip" title={user}><span className="user-avatar">{user.slice(-2)}</span><span>{user}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" onClick={() => openListing("sell")}><Plus size={16} /> List a mineral</button></div>
+      <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" onClick={() => openListing("sell")}><Plus size={16} /> List a mineral</button></div>
     </header>
-
-    {generated && <section className="username-banner" aria-live="polite"><div className="username-copy"><span className="username-icon"><Check size={17} /></span><span><strong>Your username is ready</strong><small>Use it with your password to sign in. Expires in {secondsLeft}s.</small></span></div><code>{generated.username}</code><button className="copy-button" type="button" onClick={copyUsername}>{copied ? <Check size={15} /> : <Clipboard size={15} />}{copied ? "Copied" : "Copy"}</button><button className="dismiss-username" aria-label="Dismiss username" onClick={() => setGenerated(null)}><X size={17} /></button></section>}
 
     <div className="market-content" id="top">
       <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className="market-status"><div className="status-orbit"><span /></div><div><strong>Market open</strong><small>Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
@@ -904,7 +885,7 @@ export default function Marketplace() {
     {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
     {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button><div className="dialog-brand"><Gem size={19} /> MADINIMARKET</div>
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></>}
-      {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit">Create account <ArrowUpRight size={16} /></button></form><p className="form-footnote">Your username appears here for one minute after account creation.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
+      {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit">Create account <ArrowUpRight size={16} /></button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
       {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit">Sign in <ArrowUpRight size={16} /></button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("create")}>New to the market? <strong>Create account</strong></button></>}
       {dialog === "sell" && <><div className="dialog-kicker">SELL A MINERAL</div><h2 id="dialog-title">{editingSeller ? "Edit your listing." : "Submit a listing."}</h2><p className="dialog-copy">An admin must approve the listing before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addSeller}><Field label="Mineral name" name="mineral" placeholder="e.g. Tanzanite" defaultValue={editingSeller?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Weight" name="weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingSeller?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row field-row-weight"><Field label="Price" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.price ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingSeller?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div>{sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}<label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label><Field label="Seller name" name="seller" defaultValue={editingSeller?.seller ?? ""} required /><div className="field-row"><Field label="Country" name="country" defaultValue={editingSeller?.country ?? ""} required /><Field label="Region" name="region" defaultValue={editingSeller?.region ?? ""} required /></div><div className="field-row"><Field label="District" name="district" defaultValue={editingSeller?.district ?? ""} required /><Field label="Street" name="street" defaultValue={editingSeller?.street ?? ""} required /></div><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingSeller?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingSeller ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
       {dialog === "buy" && <><div className="dialog-kicker">POST A BUYING REQUEST</div><h2 id="dialog-title">{editingBuyer ? "Edit your request." : "Submit a request."}</h2><p className="dialog-copy">An admin must approve the request before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addBuyer}><Field label="Mineral name" name="mineral" placeholder="e.g. Blue sapphire" defaultValue={editingBuyer?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Desired weight" name="weight" placeholder="e.g. 25–50" defaultValue={editingBuyer?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingBuyer?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row"><Field label="Colour" name="color" placeholder="e.g. Deep blue" defaultValue={editingBuyer?.color ?? ""} required /><SelectField label="Shape" name="shape" defaultValue={editingBuyer?.shape ?? ""} options={[["Cut", "Cut"], ["Uncut", "Uncut"]]} /></div><Field label="Quality" name="quality" placeholder="e.g. Eye-clean, AAA" defaultValue={editingBuyer?.quality ?? ""} required /><div className="field-row field-row-weight"><Field label="Offer price" name="offer" type="number" min="0.01" step="any" defaultValue={editingBuyer?.offer ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingBuyer?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div><Field label="Buyer name" name="buyer" defaultValue={editingBuyer?.buyer ?? ""} required /><Field label="Location" name="location" placeholder="City, region" defaultValue={editingBuyer?.location ?? ""} required /><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingBuyer?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingBuyer?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingBuyer ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}

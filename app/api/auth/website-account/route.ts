@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { sendGmailEmail } from "@/lib/gmail";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { hashWebsitePassword, setWebsiteSession } from "@/lib/website-session";
 
@@ -35,7 +36,25 @@ export async function POST(request: Request) {
         password_hash: passwordHash,
       }).select("id, username").maybeSingle();
       if (data) {
-        const response = NextResponse.json({ id: data.id, username: data.username }, { status: 201 });
+        try {
+          await sendGmailEmail({
+            to: email,
+            subject: "Your Madinimarket username",
+            text: `Hello ${firstName},\n\nYour Madinimarket username is ${data.username}. Use it with the password you created to sign in.\n\nMadinimarket`,
+          });
+        } catch {
+          const { error: cleanupError } = await admin.from("website_accounts").delete().eq("id", data.id);
+          return NextResponse.json(
+            {
+              error: cleanupError
+                ? "We could not email your username. Please contact support before trying again."
+                : "We could not email your username, so your account was not completed. Please try again shortly.",
+            },
+            { status: 503 },
+          );
+        }
+
+        const response = NextResponse.json({ id: data.id, displayName: `${firstName} ${surname}`, email }, { status: 201 });
         setWebsiteSession(response, data.id);
         return response;
       }
