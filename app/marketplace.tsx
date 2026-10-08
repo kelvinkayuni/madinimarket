@@ -485,10 +485,6 @@ export default function Marketplace() {
       window.clearInterval(interval);
     };
   }, [role, userId]);
-    };
-    const interval = window.setInterval(() => void synchronize(), 5000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, [role, userId]);
   const updateReviewMessage = (key: string, message: string) => {
     setRejectionMessages((current) => ({ ...current, [key]: message }));
   };
