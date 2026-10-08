@@ -557,7 +557,12 @@ export default function Marketplace() {
     setDialog(kind === "seller" ? "sell" : "buy");
   };
   const mySellers = sellers.filter((item) => item.user_id === userId && item.status !== "approved");
-  const myBuyers = buyers.filter((item) => item.user_id === userId && item.status !== "approved");
+const myBuyers = buyers.filter((item) => item.user_id === userId && item.status !== "approved");
+const disabledSubmissions = new Set(
+  [...mySellers, ...myBuyers]
+    .filter((item) => item.status === "pending")
+    .map((item) => item.id)
+);
   const pendingSellers = role === "admin" ? sellers.filter((item) => item.status === "pending") : [];
   const pendingBuyers = role === "admin" ? buyers.filter((item) => item.status === "pending") : [];
 
