@@ -417,45 +417,74 @@ export default function Marketplace() {
       if (imageLabel) imageLabel.textContent = "Saved draft photo will be used";
     }
   }, [dialog, editingSubmission, websiteDrafts]);
-    useEffect(() => {
+      useEffect(() => {
     if (!isSupabaseConfigured) return;
     let active = true;
     let syncing = false;
+
     const synchronize = async () => {
       if (!active || syncing || document.visibilityState !== "visible") return;
       syncing = true;
+
       try {
         const listings = await loadMarketplaceListings(role === "user");
+
         if (active) {
           setSellers((previous) => {
-            const pendingFromPrevious = previous.filter((item) => item.status === "pending");
-            const approvedFromFresh = listings.sellers.filter((item) => item.status === "approved");
-            const merged = [...pendingFromPrevious, ...approvedFromFresh];
+            const retained = previous.filter(
+              (item) => item.status === "pending" || item.status === "rejected"
+            );
+            const approvedFromFresh = listings.sellers.filter(
+              (item) => item.status === "approved"
+            );
+
+            const merged = [...retained, ...approvedFromFresh];
             const seen = new Set<number>();
+
             return merged.filter((item) => {
               if (seen.has(item.id)) return false;
               seen.add(item.id);
               return true;
             });
           });
+
           setBuyers((previous) => {
-            const pendingFromPrevious = previous.filter((item) => item.status === "pending");
-            const approvedFromFresh = listings.buyers.filter((item) => item.status === "approved");
-            const merged = [...pendingFromPrevious, ...approvedFromFresh];
+            const retained = previous.filter(
+              (item) => item.status === "pending" || item.status === "rejected"
+            );
+            const approvedFromFresh = listings.buyers.filter(
+              (item) => item.status === "approved"
+            );
+
+            const merged = [...retained, ...approvedFromFresh];
             const seen = new Set<number>();
+
             return merged.filter((item) => {
               if (seen.has(item.id)) return false;
               seen.add(item.id);
               return true;
             });
           });
+
           setLastUpdated(new Date());
         }
       } catch {
         // Keep the last successful Supabase snapshot when a poll fails.
       }
-      if (active && role === "user") await refreshWebsiteDrafts().catch(() => {});
+
+      if (active && role === "user") {
+        await refreshWebsiteDrafts().catch(() => {});
+      }
+
       syncing = false;
+    };
+
+    const interval = window.setInterval(() => void synchronize(), 5000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [role, userId]);
     };
     const interval = window.setInterval(() => void synchronize(), 5000);
     return () => { active = false; window.clearInterval(interval); };
