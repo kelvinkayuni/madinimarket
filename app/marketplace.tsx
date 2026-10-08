@@ -417,7 +417,7 @@ export default function Marketplace() {
       if (imageLabel) imageLabel.textContent = "Saved draft photo will be used";
     }
   }, [dialog, editingSubmission, websiteDrafts]);
-  useEffect(() => {
+    useEffect(() => {
     if (!isSupabaseConfigured) return;
     let active = true;
     let syncing = false;
@@ -427,8 +427,28 @@ export default function Marketplace() {
       try {
         const listings = await loadMarketplaceListings(role === "user");
         if (active) {
-          setSellers(listings.sellers);
-          setBuyers(listings.buyers);
+          setSellers((previous) => {
+            const pendingFromPrevious = previous.filter((item) => item.status === "pending");
+            const approvedFromFresh = listings.sellers.filter((item) => item.status === "approved");
+            const merged = [...pendingFromPrevious, ...approvedFromFresh];
+            const seen = new Set<number>();
+            return merged.filter((item) => {
+              if (seen.has(item.id)) return false;
+              seen.add(item.id);
+              return true;
+            });
+          });
+          setBuyers((previous) => {
+            const pendingFromPrevious = previous.filter((item) => item.status === "pending");
+            const approvedFromFresh = listings.buyers.filter((item) => item.status === "approved");
+            const merged = [...pendingFromPrevious, ...approvedFromFresh];
+            const seen = new Set<number>();
+            return merged.filter((item) => {
+              if (seen.has(item.id)) return false;
+              seen.add(item.id);
+              return true;
+            });
+          });
           setLastUpdated(new Date());
         }
       } catch {
