@@ -927,7 +927,24 @@ const disabledSubmissions = new Set(
   >
     Delete
   </button>
-</div> </article>)}{myBuyers.map((item) => <article className="submission-item" key={`buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}<div className="submission-actions"><button className="button button-outline" type="button" onClick={() => editSubmission("buyer", item)}>Edit</button><button className="text-button" type="button" onClick={() => void deleteSubmission("buyer", item)}>Delete</button></div></article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
+</div> </article>)}{myBuyers.map((item) => <article className="submission-item" key={`buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}<div className="submission-actions">
+  <button
+    type="button"
+    className="button button-outline"
+    onClick={() => editSubmission("buyer", item)}
+    disabled={disabledSubmissions.has(item.id)}
+  >
+    Edit
+  </button>
+  <button
+    type="button"
+    className="button button-danger"
+    onClick={() => void deleteSubmission("buyer", item)}
+    disabled={disabledSubmissions.has(item.id)}
+  >
+    Delete
+  </button>
+</div> </article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
   </main>;
