@@ -150,6 +150,7 @@ h1, h2, h3, p { margin-top: 0; }
 .status-orbit span { width: 4px; height: 4px; border-radius: 50%; background: #679267; }
 .refresh-icon { margin-left: 8px; color: #a5ada3; }
 .listing-section { min-height: 0; flex: 1 1 0; display: flex; flex-direction: column; padding: 22px 0 20px; border-top: 1px solid var(--line); }
+.seller-section { flex: 0 0 auto; }
 .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 17px; }
 .section-title-wrap { display: flex; align-items: flex-start; gap: 15px; }
 .section-index { padding-top: 4px; color: var(--red); font-family: var(--font-display), Georgia, serif; font-size: 13px; }
@@ -298,13 +299,14 @@ h1, h2, h3, p { margin-top: 0; }
   .site-header { height: 64px; padding-right: 14px; padding-left: 14px; gap: 8px; }
   .header-left { gap: 8px; }
   .icon-button { width: 34px; height: 34px; }
-  .wordmark { gap: 5px; font-size: 19px; }
+  .wordmark { gap: 5px; font-size: 16px; }
   .wordmark-symbol svg { width: 18px; }
   .header-search { position: absolute; top: 72px; right: 14px; width: calc(100% - 28px); height: 37px; }
   .header-search kbd { display: none; }
-  .header-actions { gap: 9px; }
+  .header-actions { gap: 6px; }
+  .user-chip > span:not(.user-avatar) { display: none; }
   .header-signin { display: none; }
-  .header-list { min-height: 34px; padding: 0 9px; font-size: 9px; }
+  .header-list { min-height: 34px; padding: 0 6px; font-size: 8px; }
   .market-content { padding: 0 14px; }
   .market-intro { min-height: 172px; padding: 62px 0 22px; align-items: flex-end; }
   .market-intro h1 { max-width: 340px; margin-top: 9px; font-size: 36px; }
