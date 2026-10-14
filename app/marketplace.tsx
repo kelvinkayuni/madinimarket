@@ -10,6 +10,10 @@ import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 type Unit = "g" | "kg" | "tons" | "carats";
 type Currency = "TZS" | "USD";
 type SubmissionStatus = "pending" | "approved" | "rejected";
+type CertificateKind = "dealer" | "broker";
+type CertificateStatus = "pending" | "approved" | "rejected";
+type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
+type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
 type Seller = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts };
@@ -142,10 +146,25 @@ async function loadAdminAccounts(accessToken: string): Promise<WebsiteAccount[]>
   return result.accounts as WebsiteAccount[];
 }
 
+async function loadAdminCertificates(accessToken: string): Promise<AdminCertificate[]> {
+  const response = await fetch("/api/admin/certificates", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not load licence reviews.");
+  return result.certificates as AdminCertificate[];
+}
+
 export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
+  const [certificates, setCertificates] = useState<Partial<Record<CertificateKind, CertificateSubmission>>>({});
+  const [certificateFiles, setCertificateFiles] = useState<Partial<Record<CertificateKind, File>>>({});
+  const [adminCertificates, setAdminCertificates] = useState<AdminCertificate[]>([]);
+  const [certificateRejectionMessages, setCertificateRejectionMessages] = useState<Record<string, string>>({});
+  const [busyCertificate, setBusyCertificate] = useState<CertificateKind | string | null>(null);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -209,6 +228,16 @@ export default function Marketplace() {
               setDisplayName(result?.account?.display_name ?? "");
               setUserId(result?.account?.id ?? "");
               setRole(result?.account ? "user" : null);
+              if (!result?.account) setCertificates({});
+            }
+            if (result?.account) {
+              const certificateResponse = await fetch("/api/website-certificates", { cache: "no-store" });
+              if (certificateResponse.ok) {
+                const certificateResult = await certificateResponse.json();
+                const nextCertificates: Partial<Record<CertificateKind, CertificateSubmission>> = {};
+                for (const certificate of certificateResult.certificates as CertificateSubmission[]) nextCertificates[certificate.kind] = certificate;
+                if (active) setCertificates(nextCertificates);
+              }
             }
           }
           try {
@@ -228,6 +257,7 @@ export default function Marketplace() {
           if (active && isAdmin && session) {
             try {
               setWebsiteAccounts(await loadAdminAccounts(session.access_token));
+              setAdminCertificates(await loadAdminCertificates(session.access_token));
             } catch {
               setNotice("Could not load website accounts.");
             }
@@ -287,8 +317,22 @@ export default function Marketplace() {
   }, [notice]);
 
   const openDialog = (next: Exclude<Dialog, null>) => { setMenuOpen(false); setDialog(next); };
+  const refreshCertificates = async () => {
+    const response = await fetch("/api/website-certificates", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? "Could not load your licences.");
+    const nextCertificates: Partial<Record<CertificateKind, CertificateSubmission>> = {};
+    for (const certificate of result.certificates as CertificateSubmission[]) nextCertificates[certificate.kind] = certificate;
+    setCertificates(nextCertificates);
+  };
+  const hasApprovedCertificate = Boolean(certificates.dealer?.status === "approved" || certificates.broker?.status === "approved");
   const openListing = async (type: "sell" | "buy") => {
     if (!user) { setNotice("Sign in first to post."); openDialog("signin"); return; }
+    if (type === "sell" && role === "user" && !hasApprovedCertificate) {
+      setNotice("An approved dealer or broker licence is required before listing a mineral.");
+      document.getElementById("certificate-manager")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     if (isSupabaseConfigured && role === "user") await refreshWebsiteDrafts().catch(() => {});
     setSellerImagePreview(null);
     setEditingSubmission(null);
@@ -471,11 +515,9 @@ export default function Marketplace() {
       } catch {
         // Keep the last successful Supabase snapshot when a poll fails.
       }
-
       if (active && role === "user") {
-        await refreshWebsiteDrafts().catch(() => {});
+        await Promise.all([refreshWebsiteDrafts(), refreshCertificates()]).catch(() => {});
       }
-
       syncing = false;
     };
 
@@ -506,6 +548,54 @@ export default function Marketplace() {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
     if (!session) throw new Error("Admin session expired.");
     setWebsiteAccounts(await loadAdminAccounts(session.access_token));
+  };
+  const refreshAdminCertificates = async () => {
+    const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+    if (!session) throw new Error("Admin session expired.");
+    setAdminCertificates(await loadAdminCertificates(session.access_token));
+  };
+  const submitCertificate = async (kind: CertificateKind) => {
+    const file = certificateFiles[kind];
+    if (!file || role !== "user") return;
+    setBusyCertificate(kind);
+    try {
+      const form = new FormData();
+      form.set("kind", kind);
+      form.set("file", file);
+      const response = await fetch("/api/website-certificates", { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not submit the licence.");
+      setCertificates((current) => ({ ...current, [kind]: result.certificate as CertificateSubmission }));
+      setCertificateFiles((current) => ({ ...current, [kind]: undefined }));
+      setNotice("Licence received by the admin for verification.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not submit the licence.");
+    } finally {
+      setBusyCertificate(null);
+    }
+  };
+  const reviewCertificate = async (certificate: AdminCertificate, approved: boolean) => {
+    const message = certificateRejectionMessages[certificate.id]?.trim() ?? "";
+    if (!approved && !message) { setNotice("Add a rejection reason before rejecting this licence."); return; }
+    setBusyCertificate(certificate.id);
+    try {
+      const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+      if (!session) throw new Error("Admin session expired.");
+      const response = await fetch("/api/admin/certificates", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ id: certificate.id, approved, message }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not save the licence review.");
+      setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: "" }));
+      await refreshAdminCertificates();
+      setNotice(approved ? "Licence approved. The account can now list minerals." : "Licence rejected and returned with your reason.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not save the licence review.");
+    } finally {
+      setBusyCertificate(null);
+    }
   };
   const updateWebsiteAccount = async (account: WebsiteAccount, isActive: boolean) => {
     const action = isActive ? "activate" : "deactivate";
@@ -639,6 +729,7 @@ const disabledSubmissions = new Set(
           setDisplayName(websiteAccount.displayName);
           setUserId(websiteAccount.id);
           setRole("user");
+          await refreshCertificates().catch(() => {});
           await refreshRemoteListings(true);
           setNotice("Signed in successfully.");
           formElement.reset();
@@ -692,6 +783,8 @@ const disabledSubmissions = new Set(
     setDisplayName("");
     setUserId("");
     setRole(null);
+    setCertificates({});
+    setCertificateFiles({});
     setDialog(null);
   };
   const addSeller = async (event: FormEvent<HTMLFormElement>) => {
@@ -847,7 +940,7 @@ const disabledSubmissions = new Set(
       </header>
       <div className="admin-content" id="admin-home">
         <section className="admin-overview">
-          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve listings and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" onClick={() => void Promise.all([refreshRemoteListings(), refreshAdminAccounts()]).catch(() => setNotice("Could not refresh admin data."))}><RefreshCw size={15} /> Refresh</button></div>
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" onClick={() => void Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates()]).catch(() => setNotice("Could not refresh admin data."))}><RefreshCw size={15} /> Refresh</button></div>
           <div className="admin-summary">
             <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
@@ -874,6 +967,16 @@ const disabledSubmissions = new Set(
               </div>
             </article>;
           })}</div> : <p className="admin-empty">No website accounts have been created.</p>}
+        </section>
+        <section className="admin-queue admin-certificate-queue" aria-labelledby="admin-certificates-heading">
+          <div className="admin-queue-heading"><div><span>SELLER VERIFICATION</span><h2 id="admin-certificates-heading">Licence reviews</h2></div><strong>{adminCertificates.length}</strong></div>
+          {adminCertificates.length ? adminCertificates.map((certificate) => <article className="admin-review-item" key={certificate.id}>
+            <div className="admin-review-title"><div><span>{certificate.kind === "dealer" ? "DEALER LICENCE" : "BROKER LICENCE"}</span><h3>{certificate.account?.display_name ?? "Website account"}</h3></div><span className="submission-status status-pending">Pending</span></div>
+            <p>{certificate.account?.username} · {certificate.account?.email}</p>
+            <p><a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">Review {certificate.file_name}</a></p>
+            <textarea className="review-message" aria-label={`Rejection reason for ${certificate.file_name}`} placeholder="Reason for rejection (required to reject)" value={certificateRejectionMessages[certificate.id] ?? ""} onChange={(event) => setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: event.target.value }))} />
+            <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyCertificate === certificate.id} onClick={() => void reviewCertificate(certificate, true)}>Verify</button><button className="button button-outline" type="button" disabled={busyCertificate === certificate.id || !certificateRejectionMessages[certificate.id]?.trim()} onClick={() => void reviewCertificate(certificate, false)}>Reject</button></div>
+          </article>) : <p className="admin-empty">No licences are waiting for verification.</p>}
         </section>
         <div className="admin-queues">
           <section className="admin-queue" aria-labelledby="admin-sellers-heading">
@@ -902,7 +1005,7 @@ const disabledSubmissions = new Set(
     </main>;
   }
 
-  return <main className="market-shell">
+  return <main className={`market-shell${role === "user" && !hasApprovedCertificate ? " seller-locked" : ""}`}>
     <div className="prototype-bar" style={{ display: 'none' }} aria-hidden="true" />
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
@@ -912,6 +1015,33 @@ const disabledSubmissions = new Set(
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals, people, places" /><kbd>/</kbd></div>
       <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" onClick={() => openListing("sell")}><Plus size={16} /> List a mineral</button></div>
     </header>
+
+    {role === "user" && <section className="certificate-manager" id="certificate-manager" aria-labelledby="certificate-manager-heading">
+      <div className="certificate-manager-heading"><div><span>SELLER VERIFICATION</span><h2 id="certificate-manager-heading">Your licences</h2></div><p>At least one approved licence is required to list a mineral.</p></div>
+      <div className="certificate-options">{(["dealer", "broker"] as const).map((kind) => {
+        const certificate = certificates[kind];
+        const canUpload = !certificate || certificate.status === "rejected";
+        const title = kind === "dealer" ? "Dealer licence" : "Broker licence";
+        return <article className="certificate-option" key={kind}>
+          <div className="certificate-option-heading"><h3>{title}</h3><span className={`submission-status status-${certificate?.status ?? "empty"}`}>{certificate?.status ?? "Not submitted"}</span></div>
+          {certificate?.review_message && <p className="submission-message">Admin rejection reason: {certificate.review_message}</p>}
+          {certificate && <a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">View {certificate.file_name}</a>}
+          {canUpload && <><label className="field-label certificate-file-label">Upload PDF, JPEG, or PNG<input className="certificate-file-input" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file && (file.size > 10 * 1024 * 1024 || !["application/pdf", "image/jpeg", "image/png"].includes(file.type))) {
+              setNotice("Choose a PDF, JPEG, or PNG file no larger than 10 MB.");
+              event.currentTarget.value = "";
+              setCertificateFiles((current) => ({ ...current, [kind]: undefined }));
+              return;
+            }
+            setCertificateFiles((current) => ({ ...current, [kind]: file }));
+          }} /><span className="certificate-file-name">{certificateFiles[kind]?.name ?? "Choose a file"}</span></label>
+          <button className="button button-dark" type="button" disabled={!certificateFiles[kind] || busyCertificate === kind} onClick={() => void submitCertificate(kind)}>{busyCertificate === kind ? "Submitting…" : "Submit for verification"}</button></>}
+          {certificate?.status === "pending" && <p className="certificate-status-note">Received by the admin. Submission is locked while verification is pending.</p>}
+          {certificate?.status === "approved" && <p className="certificate-status-note">Verified. Your account is enabled to list minerals.</p>}
+        </article>;
+      })}</div>
+    </section>}
 
     <div className="market-content" id="top">
       <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className="market-status"><div className="status-orbit"><span /></div><div><strong>Market open</strong><small>Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>

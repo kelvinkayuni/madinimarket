@@ -73,6 +73,28 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .button-danger:hover { background: #f7eae6; }
 .admin-mineral-image { position: relative; width: 100%; max-height: 260px; aspect-ratio: 16 / 9; margin-top: 12px; overflow: hidden; background: #eff1ec; }
 .admin-image-missing { color: #92998f !important; }
+.admin-certificate-queue { padding: 25px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.certificate-file-link { display: inline-block; margin-top: 10px; color: #315f47; font-size: 10px; font-weight: 650; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.certificate-file-link:hover { color: #203f30; }
+.certificate-manager { width: 100%; padding: 22px clamp(18px, 3vw, 48px); border-bottom: 1px solid var(--line); background: #eef1e9; }
+.certificate-manager-heading { max-width: 1320px; margin: 0 auto 14px; display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
+.certificate-manager-heading > div > span { color: #778674; font-size: 8px; font-weight: 750; }
+.certificate-manager-heading h2 { margin: 4px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 21px; font-weight: 500; }
+.certificate-manager-heading p { margin: 0; color: #71796e; font-size: 10px; }
+.certificate-options { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.certificate-option { min-width: 0; padding: 13px 15px; border: 1px solid #d9dfd4; background: #f8f9f5; }
+.certificate-option-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.certificate-option-heading h3 { margin: 0; font-size: 12px; font-weight: 650; }
+.certificate-option .submission-status { padding: 5px 7px; }
+.status-empty { background: #ecefe9; color: #778174; }
+.certificate-option .submission-message { margin: 10px 0 0; }
+.certificate-file-label { margin-top: 12px; }
+.certificate-file-input { width: 100%; color: #687368; font-size: 10px; }
+.certificate-file-name { min-height: 16px; overflow-wrap: anywhere; color: #748071; font-size: 9px; font-weight: 400; }
+.certificate-option > .button { min-height: 34px; margin-top: 10px; font-size: 10px; }
+.certificate-option .button:disabled, .admin-review-item .button:disabled { opacity: .48; cursor: not-allowed; transform: none; }
+.certificate-status-note { margin: 11px 0 0; color: #69766a; font-size: 10px; line-height: 1.5; }
+.seller-locked .header-list, .seller-locked .seller-section .section-post, .seller-locked .buyer-rail-hint button { opacity: .52; cursor: not-allowed; }
 .prototype-bar { min-height: 32px; padding: 7px max(24px, calc((100vw - 1320px) / 2)); display: flex; align-items: center; gap: 8px; color: #dce7df; background: var(--forest-deep); font-size: 10px; }
 .prototype-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 3px #d2ee7722; }
 .prototype-divider { color: #769084; }
@@ -265,6 +287,9 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-summary strong { grid-column: 1; grid-row: auto; font-size: 26px; }
   .admin-queues { grid-template-columns: 1fr; gap: 25px; padding-top: 20px; }
   .admin-account-row { grid-template-columns: 1fr; }
+  .certificate-manager { padding: 18px 14px; }
+  .certificate-manager-heading { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .certificate-options { grid-template-columns: 1fr; gap: 9px; }
   .admin-account-actions { grid-column: auto; }
   .admin-header-actions { gap: 10px; }
   .admin-account { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

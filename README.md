@@ -21,7 +21,8 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 2. Add your Supabase project URL and keys.
 3. Run `supabase/schema.sql`.
 4. Run `supabase/approval-workflow.sql`.
-5. Add `SUPABASE_SERVICE_ROLE_KEY` to the server environment. Never expose it to the browser.
+5. Run `supabase/certificate-verification.sql`.
+6. Add `SUPABASE_SERVICE_ROLE_KEY` to the server environment. Never expose it to the browser.
 
 Buyer and seller accounts are stored in `public.website_accounts`; their passwords are hashed by the server and they do not appear in Supabase Auth. The admin must be created in Supabase Auth and have a matching `public.profiles` row with `role = 'admin'`. Admin usernames can be any value; `MM-####` usernames are reserved for buyer and seller accounts.
 
@@ -30,3 +31,4 @@ Buyer and seller accounts are stored in `public.website_accounts`; their passwor
 - Buyer and seller accounts sign in to the website using generated `MM-####` usernames; they are not Supabase Auth users.
 - Only the admin signs in through Supabase Auth. The server checks the profile's admin role before issuing a Supabase session.
 - Website users can submit and manage their own pending or rejected requests; the admin reviews submissions using the Supabase-backed queue.
+- Website users must submit an approved dealer or broker licence before they can list a mineral. Licence files are private and accept PDF, JPEG, or PNG up to 10 MB; admin rejection requires a reason before the user can replace and resubmit a licence.

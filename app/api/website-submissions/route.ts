@@ -63,6 +63,14 @@ export async function POST(request: Request) {
   if (!kind || !values) return NextResponse.json({ error: "Invalid submission details." }, { status: 400 });
 
   const table = kind === "seller" ? "listings" : "buy_requests";
+  if (kind === "seller") {
+    const { count, error } = await createSupabaseAdminClient().from("website_account_certificates")
+      .select("id", { count: "exact", head: true })
+      .eq("website_user_id", accountId)
+      .eq("status", "approved");
+    if (error) return NextResponse.json({ error: "Could not verify your seller licence." }, { status: 503 });
+    if (!count) return NextResponse.json({ error: "An approved dealer or broker licence is required before listing a mineral." }, { status: 403 });
+  }
   const id = Number(body.id);
   const editing = Number.isSafeInteger(id) && id > 0;
   const admin = createSupabaseAdminClient();

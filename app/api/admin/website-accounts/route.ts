@@ -93,9 +93,14 @@ export async function DELETE(request: Request) {
       ...(listingsResult.data ?? []).map((row) => row.image_path),
       ...(draftsResult.data ?? []).map((row) => row.image_path),
     ].filter((path): path is string => Boolean(path)))];
+    const { data: certificateRows, error: certificateError } = await admin.from("website_account_certificates")
+      .select("file_path").eq("website_user_id", id);
+    if (certificateError) throw certificateError;
     const { error } = await admin.from("website_accounts").delete().eq("id", id);
     if (error) throw error;
     if (imagePaths.length) await admin.storage.from("mineral-images").remove(imagePaths);
+    const certificatePaths = (certificateRows ?? []).map((row) => row.file_path);
+    if (certificatePaths.length) await admin.storage.from("account-certificates").remove(certificatePaths);
     return NextResponse.json({ deleted: true });
   } catch {
     return NextResponse.json({ error: "Could not delete that account." }, { status: 503 });
