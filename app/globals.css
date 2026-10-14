@@ -162,6 +162,7 @@ h1, h2, h3, p { margin-top: 0; }
 .round-control { width: 34px; height: 34px; border-radius: 50%; color: #687268; }
 .seller-rail, .buyer-rail { min-height: 104px; flex: 1; display: grid; grid-auto-columns: minmax(215px, 320px); grid-auto-flow: column; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
 .seller-rail::-webkit-scrollbar, .buyer-rail::-webkit-scrollbar { display: none; }
+.seller-card, .buyer-card { height: 313px; }
 .seller-card { min-width: 0; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; animation: rise-in .45s both; }
 .seller-photo { position: relative; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
 .seller-photo::after { position: absolute; inset: 45% 0 0; content: ""; background: linear-gradient(transparent, #13231e55); pointer-events: none; }
@@ -186,8 +187,7 @@ h1, h2, h3, p { margin-top: 0; }
 .count-badge-light { border-color: #ffffff4d; color: #d4e0d3; }
 .round-control-light { border-color: #547365; color: #e5eee4; }
 .round-control-light:hover { background: #2a5143; border-color: #84a38d; }
-.buyer-rail { grid-auto-columns: minmax(235px, 1fr); }
-.buyer-card { min-height: 220px; padding: 16px 16px 13px; scroll-snap-align: start; border: 1px solid #456457; background: #1c4437; color: #f6f7f1; animation: rise-in .45s both; }
+.buyer-card { display: flex; min-width: 0; flex-direction: column; padding: 16px 16px 13px; scroll-snap-align: start; border: 1px solid #456457; background: #1c4437; color: #f6f7f1; animation: rise-in .45s both; }
 .buyer-card-top, .buyer-card-bottom { display: flex; align-items: center; justify-content: space-between; }
 .wanted-tag { display: flex; align-items: center; gap: 4px; color: var(--lime); font-size: 8px; font-weight: 700; }
 .buyer-location { max-width: 120px; overflow: hidden; color: #a9b9ae; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -197,7 +197,7 @@ h1, h2, h3, p { margin-top: 0; }
 .buyer-specs div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .buyer-specs span, .buyer-card-bottom div > span { color: #9fb1a3; font-size: 8px; font-weight: 700; }
 .buyer-specs strong { max-width: 68%; overflow: hidden; color: #edf1eb; font-size: 9px; font-weight: 500; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-.buyer-card-bottom { padding-top: 10px; }
+.buyer-card-bottom { margin-top: auto; padding-top: 10px; }
 .buyer-card-bottom div > span, .buyer-card-bottom div > strong { display: block; }
 .buyer-card-bottom div > strong { margin-top: 3px; color: var(--lime); font-size: 14px; }
 .buyer-card-bottom button { width: 30px; height: 30px; border-color: #6a8375; border-radius: 50%; color: #eaf1e8; transition: transform .2s, background .2s; }
@@ -325,11 +325,11 @@ h1, h2, h3, p { margin-top: 0; }
   .section-post { position: static; min-height: 30px; margin: 0 auto 0 0; padding: 0 8px; font-size: 9px; }
   .round-control { width: 29px; height: 29px; }
   .round-control svg { width: 14px; }
-  .seller-rail { grid-auto-columns: minmax(224px, 78%); gap: 10px; }
+  .seller-rail, .buyer-rail { grid-auto-columns: minmax(224px, 78%); gap: 10px; }
+  .seller-card, .buyer-card { height: clamp(250px, calc(48.75vw + 96px), 413px); }
   .seller-photo { aspect-ratio: 1.6; }
   .buyer-section { margin: 9px -14px 0; padding: 20px 14px 18px; }
-  .buyer-rail { grid-auto-columns: minmax(235px, 84%); gap: 10px; }
-  .buyer-card { min-height: 210px; padding: 14px; }
+  .buyer-card { padding: 14px; }
   .site-footer { min-height: 67px; flex-wrap: wrap; gap: 5px 12px; padding: 10px 0; font-size: 8px; }
   .site-footer span:nth-child(2) { order: 3; width: 100%; }
   .username-banner { margin: 10px 14px 0; padding: 10px; gap: 7px; }
