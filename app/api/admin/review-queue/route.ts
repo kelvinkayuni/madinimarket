@@ -14,9 +14,15 @@ export async function GET(request: Request) {
     if (sellersResult.error || buyersResult.error) throw new Error("Could not load pending submissions.");
 
     const sellers = await Promise.all((sellersResult.data ?? []).map(async (row) => {
-      if (!row.image_path) return row;
-      const { data } = await admin.storage.from("mineral-images").createSignedUrl(row.image_path, 3600);
-      return { ...row, signed_image_url: data?.signedUrl ?? "" };
+      const [image, certificate] = await Promise.all([
+        row.image_path ? admin.storage.from("mineral-images").createSignedUrl(row.image_path, 3600) : null,
+        row.stone_certificate_path ? admin.storage.from("stone-certificates").createSignedUrl(row.stone_certificate_path, 3600) : null,
+      ]);
+      return {
+        ...row,
+        signed_image_url: image?.data?.signedUrl ?? "",
+        signed_stone_certificate_url: certificate?.data?.signedUrl ?? "",
+      };
     }));
     return NextResponse.json({ sellers, buyers: buyersResult.data ?? [] }, { headers: { "Cache-Control": "no-store" } });
   } catch {

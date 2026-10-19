@@ -48,10 +48,24 @@ export async function GET() {
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
+  let stoneCertificate: File | null = null;
   try {
-    const parsed: unknown = await request.json();
-    if (typeof parsed !== "object" || parsed === null) throw new Error("Invalid request");
-    body = parsed as Record<string, unknown>;
+    if (request.headers.get("content-type")?.includes("multipart/form-data")) {
+      const form = await request.formData();
+      const rawValues = form.get("values");
+      body = {
+        kind: form.get("kind"),
+        id: form.get("id"),
+        imageData: form.get("imageData"),
+        values: typeof rawValues === "string" ? JSON.parse(rawValues) : null,
+      };
+      const uploadedFile = form.get("stoneCertificate");
+      if (uploadedFile instanceof File && uploadedFile.size) stoneCertificate = uploadedFile;
+    } else {
+      const parsed: unknown = await request.json();
+      if (typeof parsed !== "object" || parsed === null) throw new Error("Invalid request");
+      body = parsed as Record<string, unknown>;
+    }
   } catch {
     return NextResponse.json({ error: "Invalid submission details." }, { status: 400 });
   }
@@ -61,6 +75,7 @@ export async function POST(request: Request) {
   const accountId = await getWebsiteAccountId();
   if (!accountId) return NextResponse.json({ error: "Sign in again before submitting." }, { status: 401 });
   if (!kind || !values) return NextResponse.json({ error: "Invalid submission details." }, { status: 400 });
+  if (kind !== "seller" && stoneCertificate) return NextResponse.json({ error: "Stone certificates can only be attached to mineral listings." }, { status: 400 });
 
   const table = kind === "seller" ? "listings" : "buy_requests";
   if (kind === "seller") {
@@ -80,17 +95,17 @@ export async function POST(request: Request) {
     .eq("kind", kind)
     .maybeSingle();
   if (draftError) return NextResponse.json({ error: "Could not load your saved draft." }, { status: 503 });
-  let existing: { id: number; image_path: string | null } | null = null;
+  let existing: { id: number; image_path: string | null; stone_certificate_path: string | null } | null = null;
 
   if (editing) {
     if (kind === "seller") {
-      const { data, error } = await admin.from("listings").select("id, image_path, status")
+      const { data, error } = await admin.from("listings").select("id, image_path, stone_certificate_path, status")
         .eq("id", id).eq("website_user_id", accountId).maybeSingle();
       if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
       if (!data || !["pending", "rejected"].includes(data.status)) {
         return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
       }
-      existing = { id: data.id, image_path: data.image_path };
+      existing = { id: data.id, image_path: data.image_path, stone_certificate_path: data.stone_certificate_path };
     } else {
       const { data, error } = await admin.from("buy_requests").select("id, status")
         .eq("id", id).eq("website_user_id", accountId).maybeSingle();
@@ -98,7 +113,7 @@ export async function POST(request: Request) {
       if (!data || !["pending", "rejected"].includes(data.status)) {
         return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
       }
-      existing = { id: data.id, image_path: null };
+      existing = { id: data.id, image_path: null, stone_certificate_path: null };
     }
   }
 
@@ -113,6 +128,8 @@ export async function POST(request: Request) {
   let rowValues: Record<string, unknown>;
   let imagePath = existing?.image_path ?? null;
   let uploadedPath: string | null = null;
+  let stoneCertificatePath = existing?.stone_certificate_path ?? null;
+  let uploadedStoneCertificatePath: string | null = null;
 
   if (kind === "seller") {
     const mineralName = text(values, "mineral_name", 120);
@@ -130,21 +147,46 @@ export async function POST(request: Request) {
     if (!mineralName || !weight || !["carats", "g", "kg", "tons"].includes(unit ?? "") || !price || !["TZS", "USD"].includes(currency ?? "") || !sellerName || !country || !region || !district || !street || !validEmail(email) || !phone) {
       return NextResponse.json({ error: "Check the seller listing details and try again." }, { status: 400 });
     }
+    if (stoneCertificate) {
+      if (stoneCertificate.size > 10 * 1024 * 1024) return NextResponse.json({ error: "Choose a PDF or JPEG stone certificate no larger than 10 MB." }, { status: 400 });
+      const certificateBytes = new Uint8Array(await stoneCertificate.arrayBuffer());
+      const isPdf = certificateBytes.length >= 5 && new TextDecoder().decode(certificateBytes.slice(0, 5)) === "%PDF-";
+      const isJpeg = certificateBytes.length >= 3 && certificateBytes[0] === 0xff && certificateBytes[1] === 0xd8 && certificateBytes[2] === 0xff;
+      if (!isPdf && !isJpeg) return NextResponse.json({ error: "Choose a valid PDF or JPEG stone certificate." }, { status: 400 });
+      const extension = isPdf ? "pdf" : "jpg";
+      const contentType = isPdf ? "application/pdf" : "image/jpeg";
+      uploadedStoneCertificatePath = `${accountId}/${randomUUID()}.${extension}`;
+      const { error } = await admin.storage.from("stone-certificates").upload(uploadedStoneCertificatePath, Buffer.from(certificateBytes), { contentType });
+      if (error) return NextResponse.json({ error: "The stone certificate could not be uploaded." }, { status: 503 });
+      stoneCertificatePath = uploadedStoneCertificatePath;
+    }
     const imageData = typeof body.imageData === "string" ? body.imageData : "";
     if (imageData) {
       const match = /^data:image\/jpeg;base64,([A-Za-z\d+/=]+)$/.exec(imageData);
-      if (!match || match[1].length > 7_000_000) return NextResponse.json({ error: "Choose a PNG or JPG photo under 5 MB." }, { status: 400 });
+      if (!match || match[1].length > 7_000_000) {
+        if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
+        return NextResponse.json({ error: "Choose a PNG or JPG photo under 5 MB." }, { status: 400 });
+      }
       const image = Buffer.from(match[1], "base64");
-      if (image.length > 5 * 1024 * 1024) return NextResponse.json({ error: "Choose a PNG or JPG photo under 5 MB." }, { status: 400 });
+      if (image.length > 5 * 1024 * 1024) {
+        if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
+        return NextResponse.json({ error: "Choose a PNG or JPG photo under 5 MB." }, { status: 400 });
+      }
       uploadedPath = `${accountId}/${randomUUID()}.jpg`;
       const { error } = await admin.storage.from("mineral-images").upload(uploadedPath, image, { contentType: "image/jpeg" });
-      if (error) return NextResponse.json({ error: "The photo could not be uploaded." }, { status: 503 });
+      if (error) {
+        if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
+        return NextResponse.json({ error: "The photo could not be uploaded." }, { status: 503 });
+      }
       imagePath = uploadedPath;
     } else if (draft?.image_path) imagePath = draft.image_path;
-    if (!imagePath) return NextResponse.json({ error: "Choose a mineral photo before submitting." }, { status: 400 });
+    if (!imagePath) {
+      if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
+      return NextResponse.json({ error: "Choose a mineral photo before submitting." }, { status: 400 });
+    }
     rowValues = {
       ...common, mineral_name: mineralName, weight, unit, price, currency, seller_name: sellerName,
-      country, region, district, street, email, phone, image_path: imagePath,
+      country, region, district, street, email, phone, image_path: imagePath, stone_certificate_path: stoneCertificatePath,
     };
   } else {
     const mineralName = text(values, "mineral_name", 120);
@@ -173,10 +215,14 @@ export async function POST(request: Request) {
     : await admin.from(table).insert(rowValues).select("id").single();
   if (result.error || !result.data) {
     if (uploadedPath) await admin.storage.from("mineral-images").remove([uploadedPath]);
+    if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
     return NextResponse.json({ error: "The submission could not be saved." }, { status: 503 });
   }
   if (kind === "seller" && existing?.image_path && existing.image_path !== imagePath) {
     await admin.storage.from("mineral-images").remove([existing.image_path]);
+  }
+  if (kind === "seller" && existing?.stone_certificate_path && existing.stone_certificate_path !== stoneCertificatePath) {
+    await admin.storage.from("stone-certificates").remove([existing.stone_certificate_path]);
   }
   if (kind === "seller" && draft?.image_path && draft.image_path !== imagePath) {
     await admin.storage.from("mineral-images").remove([draft.image_path]);
@@ -205,9 +251,9 @@ export async function DELETE(request: Request) {
 
   const admin = createSupabaseAdminClient();
   const table = kind === "seller" ? "listings" : "buy_requests";
-  let existing: { id: number; image_path: string | null; status: string } | null;
+  let existing: { id: number; image_path: string | null; stone_certificate_path: string | null; status: string } | null;
   if (kind === "seller") {
-    const { data, error } = await admin.from("listings").select("id, image_path, status")
+    const { data, error } = await admin.from("listings").select("id, image_path, stone_certificate_path, status")
       .eq("id", id).eq("website_user_id", accountId).maybeSingle();
     if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
     existing = data;
@@ -215,7 +261,7 @@ export async function DELETE(request: Request) {
     const { data, error } = await admin.from("buy_requests").select("id, status")
       .eq("id", id).eq("website_user_id", accountId).maybeSingle();
     if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
-    existing = data ? { id: data.id, image_path: null, status: data.status } : null;
+    existing = data ? { id: data.id, image_path: null, stone_certificate_path: null, status: data.status } : null;
   }
   if (!existing || !["pending", "rejected"].includes(existing.status)) {
     return NextResponse.json({ error: "That submission can no longer be deleted." }, { status: 404 });
@@ -223,5 +269,6 @@ export async function DELETE(request: Request) {
   const { error } = await admin.from(table).delete().eq("id", id).eq("website_user_id", accountId);
   if (error) return NextResponse.json({ error: "The submission could not be deleted." }, { status: 503 });
   if (kind === "seller" && existing.image_path) await admin.storage.from("mineral-images").remove([existing.image_path]);
+  if (kind === "seller" && existing.stone_certificate_path) await admin.storage.from("stone-certificates").remove([existing.stone_certificate_path]);
   return NextResponse.json({ deleted: true });
 }

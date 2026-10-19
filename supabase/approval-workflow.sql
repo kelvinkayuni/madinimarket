@@ -42,6 +42,7 @@ alter table public.listings
   alter column user_id drop not null,
   add column if not exists website_user_id uuid references public.website_accounts (id) on delete cascade,
   add column if not exists image_path text,
+  add column if not exists stone_certificate_path text,
   add column if not exists status text not null default 'pending',
   add column if not exists review_message text,
   add column if not exists reviewed_by uuid references public.profiles (id),
@@ -269,6 +270,10 @@ grant select on public.marketplace_listings, public.marketplace_buy_requests to 
 
 insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
 values ('mineral-images', 'mineral-images', false, array['image/png', 'image/jpeg'], 5242880)
+on conflict (id) do update set public = false, allowed_mime_types = excluded.allowed_mime_types, file_size_limit = excluded.file_size_limit;
+
+insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
+values ('stone-certificates', 'stone-certificates', false, array['application/pdf', 'image/jpeg'], 10485760)
 on conflict (id) do update set public = false, allowed_mime_types = excluded.allowed_mime_types, file_size_limit = excluded.file_size_limit;
 
 drop policy if exists "Owners upload mineral images" on storage.objects;

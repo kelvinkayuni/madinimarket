@@ -14,7 +14,7 @@ type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
-type Seller = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; accent: string; status: SubmissionStatus; review_message?: string | null };
+type Seller = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_url?: string | null; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
@@ -124,7 +124,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       seller: row.seller_name ?? "", country: row.country, region: row.region, district: row.district,
       location: [row.district, row.region, row.country].filter(Boolean).join(", "), email: row.email ?? "", phone: row.phone ?? "",
       image, image_path: row.image_path, accent: "#43866b", status: row.status as SubmissionStatus,
-      review_message: row.review_message,
+      review_message: row.review_message, stone_certificate_url: row.signed_stone_certificate_url ?? null,
     } satisfies Seller;
   }));
   const buyers = buyerRows.map((row) => ({
@@ -329,6 +329,8 @@ export default function Marketplace() {
   const openListing = async (type: "sell" | "buy") => {
     if (!user) { setNotice("Sign in first to post."); openDialog("signin"); return; }
     if (type === "sell" && role === "user" && !hasApprovedCertificate) {
+      const certificatePanel = document.getElementById("certificate-manager");
+      if (certificatePanel instanceof HTMLDetailsElement) certificatePanel.open = true;
       setNotice("An approved dealer or broker licence is required before listing a mineral.");
       document.getElementById("certificate-manager")?.scrollIntoView({ behavior: "smooth" });
       return;
@@ -815,18 +817,20 @@ const disabledSubmissions = new Set(
     };
     if (isSupabaseConfigured && role === "user") {
       if (!userId) { setNotice("Sign in again before submitting this listing."); return; }
+      const stoneCertificate = form.get("stoneCertificate");
+      const submission = new FormData();
+      submission.set("kind", "seller");
+      if (existing?.id) submission.set("id", String(existing.id));
+      submission.set("imageData", imageData);
+      submission.set("values", JSON.stringify({
+        mineral_name: listing.mineral, weight: listing.weight, unit: listing.unit, price: listing.price,
+        currency: listing.currency, seller_name: listing.seller, country: listing.country, region: listing.region,
+        district: listing.district, street: listing.street, email: listing.email, phone: listing.phone,
+      }));
+      if (stoneCertificate instanceof File && stoneCertificate.size) submission.set("stoneCertificate", stoneCertificate);
       const response = await fetch("/api/website-submissions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "seller", id: existing?.id,
-          imageData,
-          values: {
-            mineral_name: listing.mineral, weight: listing.weight, unit: listing.unit, price: listing.price,
-            currency: listing.currency, seller_name: listing.seller, country: listing.country, region: listing.region,
-            district: listing.district, street: listing.street, email: listing.email, phone: listing.phone,
-          },
-        }),
+        body: submission,
       });
       const result = await response.json();
       if (!response.ok) { setNotice(result.error ?? "The listing could not be saved."); return; }
@@ -999,6 +1003,14 @@ const disabledSubmissions = new Set(
             </article>) : <p className="admin-empty">No buyer requests are waiting for review.</p>}
           </section>
         </div>
+        {pendingSellers.some((item) => item.stone_certificate_url) && <section className="admin-queue admin-certificate-queue" aria-labelledby="admin-stone-certificates-heading">
+          <div className="admin-queue-heading"><div><span>LISTING EVIDENCE</span><h2 id="admin-stone-certificates-heading">Stone certificates</h2></div><strong>{pendingSellers.filter((item) => item.stone_certificate_url).length}</strong></div>
+          {pendingSellers.filter((item) => item.stone_certificate_url).map((item) => <article className="admin-review-item" key={`stone-certificate-${item.id}`}>
+            <div className="admin-review-title"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3></div></div>
+            <p>{item.seller} · {item.location}</p>
+            <a className="certificate-file-link" href={item.stone_certificate_url ?? undefined} target="_blank" rel="noreferrer">Review stone certificate</a>
+          </article>)}
+        </section>}
       </div>
       {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
       {dialog === "signout" && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => setDialog(null)}><X size={19} /></button><div className="dialog-brand"><Gem size={19} /> MADINIMARKET</div><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></section></div>}
@@ -1016,9 +1028,14 @@ const disabledSubmissions = new Set(
       <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" onClick={() => openListing("sell")}><Plus size={16} /> List a mineral</button></div>
     </header>
 
-    {role === "user" && <section className="certificate-manager" id="certificate-manager" aria-labelledby="certificate-manager-heading">
-      <div className="certificate-manager-heading"><div><span>SELLER VERIFICATION</span><h2 id="certificate-manager-heading">Your licences</h2></div><p>At least one approved licence is required to list a mineral.</p></div>
-      <div className="certificate-options">{(["dealer", "broker"] as const).map((kind) => {
+    {role === "user" && <details className="certificate-manager" id="certificate-manager">
+      <summary className="certificate-manager-heading">
+        <span className="certificate-manager-toggle"><span>SELLER VERIFICATION</span><h2 id="certificate-manager-heading">Your licences</h2></span>
+        <ChevronDown className="certificate-manager-toggle-icon" size={18} />
+      </summary>
+      <div className="certificate-manager-content">
+        <p>At least one approved licence is required to list a mineral.</p>
+        <div className="certificate-options" id="certificate-options">{(["dealer", "broker"] as const).map((kind) => {
         const certificate = certificates[kind];
         const canUpload = !certificate || certificate.status === "rejected";
         const title = kind === "dealer" ? "Dealer licence" : "Broker licence";
@@ -1040,8 +1057,9 @@ const disabledSubmissions = new Set(
           {certificate?.status === "pending" && <p className="certificate-status-note">Received by the admin. Submission is locked while verification is pending.</p>}
           {certificate?.status === "approved" && <p className="certificate-status-note">Verified. Your account is enabled to list minerals.</p>}
         </article>;
-      })}</div>
-    </section>}
+        })}</div>
+      </div>
+    </details>}
 
     <div className="market-content" id="top">
       <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className="market-status"><div className="status-orbit"><span /></div><div><strong>Market open</strong><small>Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
@@ -1063,7 +1081,39 @@ const disabledSubmissions = new Set(
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></>}
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit">Create account <ArrowUpRight size={16} /></button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
       {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit">Sign in <ArrowUpRight size={16} /></button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("create")}>New to the market? <strong>Create account</strong></button></>}
-      {dialog === "sell" && <><div className="dialog-kicker">SELL A MINERAL</div><h2 id="dialog-title">{editingSeller ? "Edit your listing." : "Submit a listing."}</h2><p className="dialog-copy">An admin must approve the listing before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addSeller}><Field label="Mineral name" name="mineral" placeholder="e.g. Tanzanite" defaultValue={editingSeller?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Weight" name="weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingSeller?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row field-row-weight"><Field label="Price" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.price ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingSeller?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div>{sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}<label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label><Field label="Seller name" name="seller" defaultValue={editingSeller?.seller ?? ""} required /><div className="field-row"><Field label="Country" name="country" defaultValue={editingSeller?.country ?? ""} required /><Field label="Region" name="region" defaultValue={editingSeller?.region ?? ""} required /></div><div className="field-row"><Field label="District" name="district" defaultValue={editingSeller?.district ?? ""} required /><Field label="Street" name="street" defaultValue={editingSeller?.street ?? ""} required /></div><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingSeller?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingSeller ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
+      {dialog === "sell" && <>
+        <div className="dialog-kicker">SELL A MINERAL</div>
+        <h2 id="dialog-title">{editingSeller ? "Edit your listing." : "Submit a listing."}</h2>
+        <p className="dialog-copy">An admin must approve the listing before it appears on the market.</p>
+        <form className="form-stack form-scroll" onSubmit={addSeller}>
+          <Field label="Mineral name" name="mineral" placeholder="e.g. Tanzanite" defaultValue={editingSeller?.mineral ?? ""} required />
+          <div className="field-row field-row-weight">
+            <Field label="Weight" name="weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.weight ?? ""} required />
+            <SelectField label="Unit" name="unit" defaultValue={editingSeller?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} />
+          </div>
+          <div className="field-row field-row-weight">
+            <Field label="Price" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.price ?? ""} required />
+            <SelectField label="Currency" name="currency" defaultValue={editingSeller?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} />
+          </div>
+          {sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}
+          <label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label>
+          <StoneCertificateField />
+          <Field label="Seller name" name="seller" defaultValue={editingSeller?.seller ?? ""} required />
+          <div className="field-row">
+            <Field label="Country" name="country" defaultValue={editingSeller?.country ?? ""} required />
+            <Field label="Region" name="region" defaultValue={editingSeller?.region ?? ""} required />
+          </div>
+          <div className="field-row">
+            <Field label="District" name="district" defaultValue={editingSeller?.district ?? ""} required />
+            <Field label="Street" name="street" defaultValue={editingSeller?.street ?? ""} required />
+          </div>
+          <div className="field-row">
+            <Field label="Email address" name="email" type="email" defaultValue={editingSeller?.email ?? ""} required />
+            <Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required />
+          </div>
+          <button className="button button-dark form-submit" type="submit">{editingSeller ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button>
+        </form>
+      </>}
       {dialog === "buy" && <><div className="dialog-kicker">POST A BUYING REQUEST</div><h2 id="dialog-title">{editingBuyer ? "Edit your request." : "Submit a request."}</h2><p className="dialog-copy">An admin must approve the request before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addBuyer}><Field label="Mineral name" name="mineral" placeholder="e.g. Blue sapphire" defaultValue={editingBuyer?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Desired weight" name="weight" placeholder="e.g. 25–50" defaultValue={editingBuyer?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingBuyer?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row"><Field label="Colour" name="color" placeholder="e.g. Deep blue" defaultValue={editingBuyer?.color ?? ""} required /><SelectField label="Shape" name="shape" defaultValue={editingBuyer?.shape ?? ""} options={[["Cut", "Cut"], ["Uncut", "Uncut"]]} /></div><Field label="Quality" name="quality" placeholder="e.g. Eye-clean, AAA" defaultValue={editingBuyer?.quality ?? ""} required /><div className="field-row field-row-weight"><Field label="Offer price" name="offer" type="number" min="0.01" step="any" defaultValue={editingBuyer?.offer ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingBuyer?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div><Field label="Buyer name" name="buyer" defaultValue={editingBuyer?.buyer ?? ""} required /><Field label="Location" name="location" placeholder="City, region" defaultValue={editingBuyer?.location ?? ""} required /><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingBuyer?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingBuyer?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingBuyer ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
       {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list">{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}  <div className="submission-actions">
   <button
@@ -1113,6 +1163,11 @@ function Field(props: { label: string; name: string; type?: string; required?: b
   }
 
   return <label className="field-label">{label}<span className="password-input-wrap"><input className="text-input" {...inputProps} type={passwordVisible ? "text" : "password"} /><button className="password-visibility" type="button" aria-label={passwordVisible ? "Hide password" : "Show password"} aria-pressed={passwordVisible} onClick={() => setPasswordVisible((visible) => !visible)}>{passwordVisible ? <EyeOff size={16} /> : <Eye size={16} />}</button></span></label>;
+}
+
+function StoneCertificateField() {
+  const [fileName, setFileName] = useState("");
+  return <label className="field-label">Stone certificate (optional)<input className="file-input" name="stoneCertificate" type="file" accept="application/pdf,image/jpeg,.pdf,.jpg,.jpeg" onChange={(event) => setFileName(event.currentTarget.files?.[0]?.name ?? "")} /><span className="file-drop"><Plus size={17} /><span>{fileName || "Choose PDF or JPEG"}</span><small>Optional · max 10 MB</small></span></label>;
 }
 function SelectField({ label, name, options, defaultValue = "" }: { label: string; name: string; options: [string, string][]; defaultValue?: string }) {
   return <label className="field-label">{label}<span className="select-wrap"><select className="text-input" name={name} defaultValue={defaultValue} required><option value="" disabled>Select {label.toLowerCase()}</option>{options.map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select><ChevronDown size={15} /></span></label>;
