@@ -416,7 +416,7 @@ export default function Marketplace() {
       if (!form) return;
       const kind = form.elements.namedItem("seller") ? "seller" : form.elements.namedItem("buyer") ? "buyer" : null;
       if (!kind) return;
-      const saveImage = event.type === "change" && target instanceof HTMLInputElement && target.type === "file";
+      const saveImage = event.type === "change" && target instanceof HTMLInputElement && target.type === "file" && target.name === "image";
       if (saveImage && target instanceof HTMLInputElement) {
         const file = target.files?.[0];
         setSellerImagePreview(file ? URL.createObjectURL(file) : null);
