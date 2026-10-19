@@ -166,6 +166,7 @@ export default function Marketplace() {
   const [certificateRejectionMessages, setCertificateRejectionMessages] = useState<Record<string, string>>({});
   const [busyCertificate, setBusyCertificate] = useState<CertificateKind | string | null>(null);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
+  const [busyActions, setBusyActions] = useState<Set<string>>(() => new Set());
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [user, setUser] = useState("");
@@ -184,6 +185,20 @@ export default function Marketplace() {
   const draftRestoreDialog = useRef<Dialog>(null);
   const sellerRail = useRef<HTMLDivElement>(null);
   const buyerRail = useRef<HTMLDivElement>(null);
+
+  const withProgress = async (key: string, action: () => Promise<void>) => {
+    if (busyActions.has(key)) return;
+    setBusyActions((current) => new Set(current).add(key));
+    try {
+      await action();
+    } finally {
+      setBusyActions((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     if (!sellerImagePreview?.startsWith("blob:")) return;
@@ -327,6 +342,7 @@ export default function Marketplace() {
   };
   const hasApprovedCertificate = Boolean(certificates.dealer?.status === "approved" || certificates.broker?.status === "approved");
   const openListing = async (type: "sell" | "buy") => {
+    await withProgress(`open-${type}`, async () => {
     if (!user) { setNotice("Sign in first to post."); openDialog("signin"); return; }
     if (type === "sell" && role === "user" && !hasApprovedCertificate) {
       const certificatePanel = document.getElementById("certificate-manager");
@@ -339,6 +355,7 @@ export default function Marketplace() {
     setSellerImagePreview(null);
     setEditingSubmission(null);
     openDialog(type);
+    });
   };
   const scrollRail = (rail: HTMLDivElement | null, direction: number) => rail?.scrollBy({ left: direction * 360, behavior: "smooth" });
   const visibleSellers = sellers.filter((item) => item.status === "approved" && `${item.mineral} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
@@ -686,95 +703,99 @@ const disabledSubmissions = new Set(
   const createAccount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    if (isSupabaseConfigured) {
-      const response = await fetch("/api/auth/website-account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: form.get("firstName"), surname: form.get("surname"), email: form.get("email"),
-          phone: form.get("phone"), password: form.get("password"),
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        setNotice(result.error ?? "Account creation failed.");
+    await withProgress("account-create", async () => {
+      const form = new FormData(formElement);
+      if (isSupabaseConfigured) {
+        const response = await fetch("/api/auth/website-account", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: form.get("firstName"), surname: form.get("surname"), email: form.get("email"),
+            phone: form.get("phone"), password: form.get("password"),
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          setNotice(result.error ?? "Account creation failed.");
+          return;
+        }
+        formElement.reset();
+        setDialog("signin");
+        setNotice(`Account created. Your username has been sent to ${result.email}. Sign in to continue.`);
         return;
       }
-      formElement.reset();
-      setDialog("signin");
-      setNotice(`Account created. Your username has been sent to ${result.email}. Sign in to continue.`);
-      return;
-    }
-    setNotice("Account creation is unavailable until the account service is connected.");
+      setNotice("Account creation is unavailable until the account service is connected.");
+    });
   };
   const signIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const username = String(form.get("username") ?? "").trim();
-    const password = String(form.get("password") ?? "");
-    let signedInRole: "user" | "admin" = "user";
-    if (isSupabaseConfigured) {
-      try {
-        let websiteAccount: { id: string; username: string; displayName: string } | null = null;
-        if (/^MM-\d{4}$/i.test(username)) {
-          const websiteResponse = await fetch("/api/auth/website-login", {
+    await withProgress("account-signin", async () => {
+      const form = new FormData(formElement);
+      const username = String(form.get("username") ?? "").trim();
+      const password = String(form.get("password") ?? "");
+      let signedInRole: "user" | "admin" = "user";
+      if (isSupabaseConfigured) {
+        try {
+          let websiteAccount: { id: string; username: string; displayName: string } | null = null;
+          if (/^MM-\d{4}$/i.test(username)) {
+            const websiteResponse = await fetch("/api/auth/website-login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username, password }),
+            });
+            if (websiteResponse.ok) websiteAccount = await websiteResponse.json();
+          }
+          if (websiteAccount) {
+            setUser(websiteAccount.username);
+            setDisplayName(websiteAccount.displayName);
+            setUserId(websiteAccount.id);
+            setRole("user");
+            await refreshCertificates().catch(() => {});
+            await refreshRemoteListings(true);
+            setNotice("Signed in successfully.");
+            formElement.reset();
+            setDialog(null);
+            return;
+          }
+          const response = await fetch("/api/auth/username-login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password }),
           });
-          if (websiteResponse.ok) websiteAccount = await websiteResponse.json();
-        }
-        if (websiteAccount) {
-          setUser(websiteAccount.username);
-          setDisplayName(websiteAccount.displayName);
-          setUserId(websiteAccount.id);
-          setRole("user");
-          await refreshCertificates().catch(() => {});
-          await refreshRemoteListings(true);
-          setNotice("Signed in successfully.");
-          formElement.reset();
-          setDialog(null);
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error ?? "Username or password is incorrect.");
+          const supabase = getSupabaseBrowserClient();
+          const { data, error } = await supabase.auth.setSession({ access_token: result.accessToken, refresh_token: result.refreshToken });
+          if (error || !data.session) throw error ?? new Error("Sign-in failed.");
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("id, username, role")
+            .eq("id", data.session.user.id)
+            .single();
+          if (profileError) throw profileError;
+          setUser(profile.username);
+          setDisplayName(profile.username);
+          setUserId(profile.id);
+          if (profile.role !== "admin") throw new Error("Username or password is incorrect.");
+          signedInRole = "admin";
+          setRole(signedInRole);
+          await refreshRemoteListings();
+        } catch (error) {
+          setNotice(error instanceof Error ? error.message : "Sign-in failed.");
           return;
         }
-        const response = await fetch("/api/auth/username-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error ?? "Username or password is incorrect.");
-        const supabase = getSupabaseBrowserClient();
-        const { data, error } = await supabase.auth.setSession({ access_token: result.accessToken, refresh_token: result.refreshToken });
-        if (error || !data.session) throw error ?? new Error("Sign-in failed.");
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("id, username, role")
-          .eq("id", data.session.user.id)
-          .single();
-        if (profileError) throw profileError;
-        setUser(profile.username);
-        setDisplayName(profile.username);
-        setUserId(profile.id);
-        if (profile.role !== "admin") throw new Error("Username or password is incorrect.");
-        signedInRole = "admin";
-        setRole(signedInRole);
-        await refreshRemoteListings();
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : "Sign-in failed.");
-        return;
+        setNotice(signedInRole === "admin" ? "Signed in to the admin account." : `Signed in as ${username}.`);
+      } else {
+        setUser(username);
+        setDisplayName(username);
+        setUserId(username);
+        setRole("user");
+        setNotice(`Local demo session started as ${username}.`);
       }
-      setNotice(signedInRole === "admin" ? "Signed in to the admin account." : `Signed in as ${username}.`);
-    } else {
-      setUser(username);
-      setDisplayName(username);
-      setUserId(username);
-      setRole("user");
-      setNotice(`Local demo session started as ${username}.`);
-    }
-    formElement.reset();
-    setDialog(null);
+      formElement.reset();
+      setDialog(null);
+    });
   };
   const signOut = async () => {
     if (isSupabaseConfigured) {
@@ -792,6 +813,7 @@ const disabledSubmissions = new Set(
   const addSeller = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formElement = event.currentTarget;
+    await withProgress("seller-submit", async () => {
     const form = new FormData(formElement);
     const file = form.get("image");
     const existing = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
@@ -873,10 +895,12 @@ const disabledSubmissions = new Set(
     setSellerImagePreview(null);
     setEditingSubmission(null);
     setDialog(null);
+    });
   };
   const addBuyer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formElement = event.currentTarget;
+    await withProgress("buyer-submit", async () => {
     const form = new FormData(formElement);
     const existing = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
     const listing: Buyer = {
@@ -930,6 +954,7 @@ const disabledSubmissions = new Set(
     formElement.reset();
     setEditingSubmission(null);
     setDialog(null);
+    });
   };
   const editingSeller = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
   const editingBuyer = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
@@ -944,7 +969,7 @@ const disabledSubmissions = new Set(
       </header>
       <div className="admin-content" id="admin-home">
         <section className="admin-overview">
-          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" onClick={() => void Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates()]).catch(() => setNotice("Could not refresh admin data."))}><RefreshCw size={15} /> Refresh</button></div>
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
           <div className="admin-summary">
             <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
@@ -965,9 +990,9 @@ const disabledSubmissions = new Set(
               </div>
               <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Inactive"}</span>
               <div className="admin-account-actions">
-                <button className="button button-outline" type="button" disabled={busy || account.is_active} onClick={() => void updateWebsiteAccount(account, true)}>Activate</button>
-                <button className="button button-outline" type="button" disabled={busy || !account.is_active} onClick={() => void updateWebsiteAccount(account, false)}>Deactivate</button>
-                <button className="button button-danger" type="button" disabled={busy} onClick={() => void deleteWebsiteAccount(account)}>Delete</button>
+                <button className="button button-outline" type="button" disabled={busy || account.is_active} onClick={() => void withProgress(`account-${account.id}-activate`, () => updateWebsiteAccount(account, true))}>{busyActions.has(`account-${account.id}-activate`) ? "Activating…" : "Activate"}</button>
+                <button className="button button-outline" type="button" disabled={busy || !account.is_active} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
+                <button className="button button-danger" type="button" disabled={busy} onClick={() => void withProgress(`account-${account.id}-delete`, () => deleteWebsiteAccount(account))}>{busyActions.has(`account-${account.id}-delete`) ? "Deleting…" : "Delete"}</button>
               </div>
             </article>;
           })}</div> : <p className="admin-empty">No website accounts have been created.</p>}
@@ -979,7 +1004,7 @@ const disabledSubmissions = new Set(
             <p>{certificate.account?.username} · {certificate.account?.email}</p>
             <p><a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">Review {certificate.file_name}</a></p>
             <textarea className="review-message" aria-label={`Rejection reason for ${certificate.file_name}`} placeholder="Reason for rejection (required to reject)" value={certificateRejectionMessages[certificate.id] ?? ""} onChange={(event) => setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: event.target.value }))} />
-            <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyCertificate === certificate.id} onClick={() => void reviewCertificate(certificate, true)}>Verify</button><button className="button button-outline" type="button" disabled={busyCertificate === certificate.id || !certificateRejectionMessages[certificate.id]?.trim()} onClick={() => void reviewCertificate(certificate, false)}>Reject</button></div>
+            <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyCertificate === certificate.id} onClick={() => void withProgress(`certificate-${certificate.id}-verify`, () => reviewCertificate(certificate, true))}>{busyActions.has(`certificate-${certificate.id}-verify`) ? "Verifying…" : "Verify"}</button><button className="button button-outline" type="button" disabled={busyCertificate === certificate.id || !certificateRejectionMessages[certificate.id]?.trim()} onClick={() => void withProgress(`certificate-${certificate.id}-reject`, () => reviewCertificate(certificate, false))}>{busyActions.has(`certificate-${certificate.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
           </article>) : <p className="admin-empty">No licences are waiting for verification.</p>}
         </section>
         <div className="admin-queues">
@@ -990,7 +1015,7 @@ const disabledSubmissions = new Set(
               <p>{item.weight} {item.unit} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p>
               {item.image ? <div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div> : <p className="admin-image-missing">No mineral photo attached.</p>}
               <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
-              <div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div>
+              <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-approve`, () => reviewSubmission("seller", item.id, true))}>{busyActions.has(`review-seller-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-reject`, () => reviewSubmission("seller", item.id, false))}>{busyActions.has(`review-seller-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
             </article>) : <p className="admin-empty">No seller listings are waiting for review.</p>}
           </section>
           <section className="admin-queue" aria-labelledby="admin-buyers-heading">
@@ -999,7 +1024,7 @@ const disabledSubmissions = new Set(
               <div className="admin-review-title"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3></div><strong>{money(item.offer, item.currency)}</strong></div>
               <p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{item.location} · {item.buyer} · {item.phone} · {item.email}</p>
               <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} />
-              <div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div>
+              <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-approve`, () => reviewSubmission("buyer", item.id, true))}>{busyActions.has(`review-buyer-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-reject`, () => reviewSubmission("buyer", item.id, false))}>{busyActions.has(`review-buyer-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
             </article>) : <p className="admin-empty">No buyer requests are waiting for review.</p>}
           </section>
         </div>
@@ -1025,7 +1050,7 @@ const disabledSubmissions = new Set(
         {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><span className="wordmark-symbol"><Gem size={21} strokeWidth={1.8} /></span><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals, people, places" /><kbd>/</kbd></div>
-      <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" onClick={() => openListing("sell")}><Plus size={16} /> List a mineral</button></div>
+      <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={16} /> List a mineral</>}</button></div>
     </header>
 
     {role === "user" && <details className="certificate-manager" id="certificate-manager">
@@ -1053,7 +1078,7 @@ const disabledSubmissions = new Set(
             }
             setCertificateFiles((current) => ({ ...current, [kind]: file }));
           }} /><span className="certificate-file-name">{certificateFiles[kind]?.name ?? "Choose a file"}</span></label>
-          <button className="button button-dark" type="button" disabled={!certificateFiles[kind] || busyCertificate === kind} onClick={() => void submitCertificate(kind)}>{busyCertificate === kind ? "Submitting…" : "Submit for verification"}</button></>}
+          <button className="button button-dark" type="button" disabled={!certificateFiles[kind] || busyCertificate === kind} onClick={() => void submitCertificate(kind)}>{busyCertificate === kind ? "Submitting for verification…" : "Submit for verification"}</button></>}
           {certificate?.status === "pending" && <p className="certificate-status-note">Received by the admin. Submission is locked while verification is pending.</p>}
           {certificate?.status === "approved" && <p className="certificate-status-note">Verified. Your account is enabled to list minerals.</p>}
         </article>;
@@ -1064,23 +1089,23 @@ const disabledSubmissions = new Set(
     <div className="market-content" id="top">
       <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className="market-status"><div className="status-orbit"><span /></div><div><strong>Market open</strong><small>Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
 
-      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">AVAILABLE NOW</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" onClick={() => openListing("sell")}><Plus size={15} /> Sell a mineral</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
+      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">AVAILABLE NOW</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
         {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}<span className="photo-tag"><span /> VERIFIED SELLER</span></div><div className="seller-card-info"><div className="seller-name-row"><h3>{listing.mineral}</h3><span className="weight-tag">{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span>{listing.location}</span></div></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
-      <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" onClick={() => openListing("buy")}><Plus size={15} /> Post a request</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
+      <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
         {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location">{request.location}</span></div><h3>{request.mineral}<span className="buyer-shape">{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong>{request.color}</strong></div><div><span>QUALITY</span><strong>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong>{money(request.offer, request.currency)}</strong></div></div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
-        <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" onClick={() => openListing("sell")}>List a mineral <ArrowUpRight size={14} /></button></div>
+        <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <>List a mineral <ArrowUpRight size={14} /></>}</button></div>
       </section>
       <footer className="site-footer"><span><Gem size={16} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span><span>PREVIEW MARKET · 2025—26</span></footer>
     </div>
 
     {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
     {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button><div className="dialog-brand"><Gem size={19} /> MADINIMARKET</div>
-      {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></>}
-      {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit">Create account <ArrowUpRight size={16} /></button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
-      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit">Sign in <ArrowUpRight size={16} /></button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("create")}>New to the market? <strong>Create account</strong></button></>}
+      {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" disabled={busyActions.has("account-signout")} onClick={() => void withProgress("account-signout", signOut)}>{busyActions.has("account-signout") ? "Signing out…" : "Sign out"}</button></div></>}
+      {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
+      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("create")}>New to the market? <strong>Create account</strong></button></>}
       {dialog === "sell" && <>
         <div className="dialog-kicker">SELL A MINERAL</div>
         <h2 id="dialog-title">{editingSeller ? "Edit your listing." : "Submit a listing."}</h2>
@@ -1111,43 +1136,70 @@ const disabledSubmissions = new Set(
             <Field label="Email address" name="email" type="email" defaultValue={editingSeller?.email ?? ""} required />
             <Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required />
           </div>
-          <button className="button button-dark form-submit" type="submit">{editingSeller ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button>
+          <button className="button button-dark form-submit" type="submit" disabled={busyActions.has("seller-submit")}>{busyActions.has("seller-submit") ? (editingSeller ? "Resubmitting listing…" : "Submitting for approval…") : editingSeller ? "Resubmit for approval" : <>Submit for approval <ArrowUpRight size={16} /></>}</button>
         </form>
       </>}
-      {dialog === "buy" && <><div className="dialog-kicker">POST A BUYING REQUEST</div><h2 id="dialog-title">{editingBuyer ? "Edit your request." : "Submit a request."}</h2><p className="dialog-copy">An admin must approve the request before it appears on the market.</p><form className="form-stack form-scroll" onSubmit={addBuyer}><Field label="Mineral name" name="mineral" placeholder="e.g. Blue sapphire" defaultValue={editingBuyer?.mineral ?? ""} required /><div className="field-row field-row-weight"><Field label="Desired weight" name="weight" placeholder="e.g. 25–50" defaultValue={editingBuyer?.weight ?? ""} required /><SelectField label="Unit" name="unit" defaultValue={editingBuyer?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} /></div><div className="field-row"><Field label="Colour" name="color" placeholder="e.g. Deep blue" defaultValue={editingBuyer?.color ?? ""} required /><SelectField label="Shape" name="shape" defaultValue={editingBuyer?.shape ?? ""} options={[["Cut", "Cut"], ["Uncut", "Uncut"]]} /></div><Field label="Quality" name="quality" placeholder="e.g. Eye-clean, AAA" defaultValue={editingBuyer?.quality ?? ""} required /><div className="field-row field-row-weight"><Field label="Offer price" name="offer" type="number" min="0.01" step="any" defaultValue={editingBuyer?.offer ?? ""} required /><SelectField label="Currency" name="currency" defaultValue={editingBuyer?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} /></div><Field label="Buyer name" name="buyer" defaultValue={editingBuyer?.buyer ?? ""} required /><Field label="Location" name="location" placeholder="City, region" defaultValue={editingBuyer?.location ?? ""} required /><div className="field-row"><Field label="Email address" name="email" type="email" defaultValue={editingBuyer?.email ?? ""} required /><Field label="Phone number" name="phone" type="tel" defaultValue={editingBuyer?.phone ?? ""} required /></div><button className="button button-dark form-submit" type="submit">{editingBuyer ? "Resubmit for approval" : "Submit for approval"} <ArrowUpRight size={16} /></button></form></>}
+      {dialog === "buy" && <>
+        <div className="dialog-kicker">POST A BUYING REQUEST</div>
+        <h2 id="dialog-title">{editingBuyer ? "Edit your request." : "Submit a request."}</h2>
+        <p className="dialog-copy">An admin must approve the request before it appears on the market.</p>
+        <form className="form-stack form-scroll" onSubmit={addBuyer}>
+          <Field label="Mineral name" name="mineral" placeholder="e.g. Blue sapphire" defaultValue={editingBuyer?.mineral ?? ""} required />
+          <div className="field-row field-row-weight">
+            <Field label="Desired weight" name="weight" placeholder="e.g. 25–50" defaultValue={editingBuyer?.weight ?? ""} required />
+            <SelectField label="Unit" name="unit" defaultValue={editingBuyer?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} />
+          </div>
+          <div className="field-row">
+            <Field label="Colour" name="color" placeholder="e.g. Deep blue" defaultValue={editingBuyer?.color ?? ""} required />
+            <SelectField label="Shape" name="shape" defaultValue={editingBuyer?.shape ?? ""} options={[["Cut", "Cut"], ["Uncut", "Uncut"]]} />
+          </div>
+          <Field label="Quality" name="quality" placeholder="e.g. Eye-clean, AAA" defaultValue={editingBuyer?.quality ?? ""} required />
+          <div className="field-row field-row-weight">
+            <Field label="Offer price" name="offer" type="number" min="0.01" step="any" defaultValue={editingBuyer?.offer ?? ""} required />
+            <SelectField label="Currency" name="currency" defaultValue={editingBuyer?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} />
+          </div>
+          <Field label="Buyer name" name="buyer" defaultValue={editingBuyer?.buyer ?? ""} required />
+          <Field label="Location" name="location" placeholder="City, region" defaultValue={editingBuyer?.location ?? ""} required />
+          <div className="field-row">
+            <Field label="Email address" name="email" type="email" defaultValue={editingBuyer?.email ?? ""} required />
+            <Field label="Phone number" name="phone" type="tel" defaultValue={editingBuyer?.phone ?? ""} required />
+          </div>
+          <button className="button button-dark form-submit" type="submit" disabled={busyActions.has("buyer-submit")}>{busyActions.has("buyer-submit") ? (editingBuyer ? "Updating request…" : "Submitting request…") : editingBuyer ? "Resubmit for approval" : <>Submit for approval <ArrowUpRight size={16} /></>}</button>
+        </form>
+      </>}
       {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list">{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}  <div className="submission-actions">
   <button
     type="button"
     className="button button-outline"
     onClick={() => editSubmission("seller", item)}
-    disabled={disabledSubmissions.has(item.id)}
+    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-seller-${item.id}`)}
   >
     Edit
   </button>
   <button
     type="button"
     className="button button-danger"
-    onClick={() => void deleteSubmission("seller", item)}
-    disabled={disabledSubmissions.has(item.id)}
+    onClick={() => void withProgress(`submission-delete-seller-${item.id}`, () => deleteSubmission("seller", item))}
+    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-seller-${item.id}`)}
   >
-    Delete
+    {busyActions.has(`submission-delete-seller-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
 </div> </article>)}{myBuyers.map((item) => <article className="submission-item" key={`buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}<div className="submission-actions">
   <button
     type="button"
     className="button button-outline"
     onClick={() => editSubmission("buyer", item)}
-    disabled={disabledSubmissions.has(item.id)}
+    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-buyer-${item.id}`)}
   >
     Edit
   </button>
   <button
     type="button"
     className="button button-danger"
-    onClick={() => void deleteSubmission("buyer", item)}
-    disabled={disabledSubmissions.has(item.id)}
+    onClick={() => void withProgress(`submission-delete-buyer-${item.id}`, () => deleteSubmission("buyer", item))}
+    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-buyer-${item.id}`)}
   >
-    Delete
+    {busyActions.has(`submission-delete-buyer-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
 </div> </article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
