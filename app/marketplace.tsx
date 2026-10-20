@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
-import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -168,6 +168,10 @@ export default function Marketplace() {
   const [adminCertificates, setAdminCertificates] = useState<AdminCertificate[]>([]);
   const [myMarketMinerals, setMyMarketMinerals] = useState<AccountMarketListing[]>([]);
   const [myWantedMinerals, setMyWantedMinerals] = useState<AccountWantedMineral[]>([]);
+  const accountListScroll = useRef({ submissions: 0, market: 0, wanted: 0 });
+  const submissionsListRef = useRef<HTMLDivElement>(null);
+  const marketListRef = useRef<HTMLDivElement>(null);
+  const wantedListRef = useRef<HTMLDivElement>(null);
   const [certificateRejectionMessages, setCertificateRejectionMessages] = useState<Record<string, string>>({});
   const [busyCertificate, setBusyCertificate] = useState<CertificateKind | string | null>(null);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
@@ -764,6 +768,21 @@ export default function Marketplace() {
   };
   const mySellers = sellers.filter((item) => item.user_id === userId && item.status !== "approved");
 const myBuyers = buyers.filter((item) => item.user_id === userId && item.status !== "approved");
+  useLayoutEffect(() => {
+    if (dialog === "submissions" && submissionsListRef.current) {
+      submissionsListRef.current.scrollTop = accountListScroll.current.submissions;
+    }
+  }, [dialog, mySellers, myBuyers]);
+  useLayoutEffect(() => {
+    if (dialog === "my-market-minerals" && marketListRef.current) {
+      marketListRef.current.scrollTop = accountListScroll.current.market;
+    }
+  }, [dialog, myMarketMinerals]);
+  useLayoutEffect(() => {
+    if (dialog === "my-wanted-minerals" && wantedListRef.current) {
+      wantedListRef.current.scrollTop = accountListScroll.current.wanted;
+    }
+  }, [dialog, myWantedMinerals]);
   const pendingSellers = role === "admin" ? sellers.filter((item) => item.status === "pending") : [];
   const pendingBuyers = role === "admin" ? buyers.filter((item) => item.status === "pending") : [];
 
@@ -1245,7 +1264,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           {editingBuyer && <button className="button button-outline form-submit" type="button" disabled={busyActions.has("buyer-submit")} onClick={() => { setEditingSubmission(null); setDialog("submissions"); }}>Cancel</button>}
         </form>
       </>}
-      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list">{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}  <div className="submission-actions">
+      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}  <div className="submission-actions">
   <button
     type="button"
     className="button button-outline"
@@ -1280,8 +1299,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     {busyActions.has(`submission-delete-buyer-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
 </div> </article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
-      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list">{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p><p>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
-      {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p><div className="submission-list">{myWantedMinerals.map((item) => <article className="submission-item" key={`wanted-mineral-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-approved">Buyers looking</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>Offer: {money(item.offer, item.currency)} · {item.location}</p></article>)}{!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}</div></>}
+      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list account-scroll-list" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p><p>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
+      {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p><div className="submission-list account-scroll-list" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>{myWantedMinerals.map((item) => <article className="submission-item" key={`wanted-mineral-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-approved">Buyers looking</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>Offer: {money(item.offer, item.currency)} · {item.location}</p></article>)}{!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
   </main>;

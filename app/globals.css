@@ -289,7 +289,12 @@ h1, h2, h3, p { margin-top: 0; }
 .submission-list > .submission-item { padding: 15px 0; border-bottom: 1px solid #c6cec3; }
 .submission-list > .submission-item:first-child { padding-top: 0; }
 .submission-list > .submission-item:last-of-type { border-bottom: 0; padding-bottom: 0; }
+.account-scroll-list { max-height: 504px; overflow-y: auto; overflow-anchor: none; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.account-scroll-list > .submission-item { height: 168px; min-height: 168px; flex: 0 0 168px; overflow: hidden; }
+.account-scroll-list .submission-title h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-scroll-list .submission-message { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .account-market-item { display: flex; align-items: center; gap: 14px; }
+.account-scroll-list > .account-market-item { height: 168px; min-height: 168px; flex: 0 0 168px; }
 .account-market-image { position: relative; width: 88px; height: 88px; flex: 0 0 88px; overflow: hidden; border: 1px solid #e1e7dd; background: #f0f3ed; }
 .account-market-image img { object-fit: cover; }
 .account-market-details { min-width: 0; flex: 1; }
