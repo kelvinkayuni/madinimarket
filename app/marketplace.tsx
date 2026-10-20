@@ -1011,7 +1011,13 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 <span>Buying: <strong>{account.buying_requests.total}</strong> ({account.buying_requests.pending} pending · {account.buying_requests.approved} approved · {account.buying_requests.rejected} rejected)</span>
               </div>
               <div className="admin-account-status-group">
-                {accountCertificates.length > 0 && <span className="admin-account-status is-license-pending">Licence pending</span>}
+                {accountCertificates.length > 0 && <button className="admin-account-status is-license-pending" type="button" aria-label={`Open pending licences for ${account.display_name}`} onClick={() => {
+                  const panel = document.getElementById(`account-certificates-${account.id}`);
+                  if (panel instanceof HTMLDetailsElement) {
+                    panel.open = true;
+                    panel.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }
+                }}>Licence pending</button>}
                 <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Inactive"}</span>
               </div>
               <div className="admin-account-actions">
@@ -1019,7 +1025,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 <button className="button button-outline" type="button" disabled={busy || !account.is_active} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
                 <button className="button button-danger" type="button" disabled={busy} onClick={() => void withProgress(`account-${account.id}-delete`, () => deleteWebsiteAccount(account))}>{busyActions.has(`account-${account.id}-delete`) ? "Deleting…" : "Delete"}</button>
               </div>
-              {accountCertificates.length > 0 && <details className="admin-account-certificates">
+              {accountCertificates.length > 0 && <details className="admin-account-certificates" id={`account-certificates-${account.id}`}>
                 <summary className="admin-account-certificates-toggle"><span>Pending licences</span><strong>{accountCertificates.length}</strong><ChevronDown className="admin-submission-chevron" size={16} /></summary>
                 <div className="admin-account-certificate-list">{accountCertificates.map((certificate) => <article className="admin-account-certificate" key={certificate.id}>
                   <div className="admin-review-title"><div><span>{certificate.kind === "dealer" ? "DEALER LICENCE" : "BROKER LICENCE"}</span><h3>{certificate.account?.display_name ?? account.display_name}</h3></div><span className="submission-status status-pending">Pending</span></div>

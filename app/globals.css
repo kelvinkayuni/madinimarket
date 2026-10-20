@@ -81,6 +81,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-account-status-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .admin-account-status { padding: 5px 8px; font-size: 9px; font-weight: 700; }
 .admin-account-status.is-license-pending { background: #f5eddc; color: #806131; }
+button.admin-account-status.is-license-pending { border: 0; font: inherit; cursor: pointer; }
 .admin-account-status.is-active { background: #e7efe6; color: #3b6146; }
 .admin-account-status.is-inactive { background: #f5e9e5; color: #8b4b3d; }
 .admin-account-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; }
