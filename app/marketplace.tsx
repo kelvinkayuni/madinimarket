@@ -370,6 +370,7 @@ export default function Marketplace() {
     setSellers(listings.sellers);
     setBuyers(listings.buyers);
     setLastUpdated(new Date());
+    return listings;
   };
   const refreshWebsiteDrafts = async () => {
     const response = await fetch("/api/website-drafts", { cache: "no-store" });
@@ -492,7 +493,11 @@ export default function Marketplace() {
       try {
         const listings = await loadMarketplaceListings(role === "user");
 
-        if (active) {
+        if (active && role === "user") {
+          setSellers(listings.sellers);
+          setBuyers(listings.buyers);
+          setLastUpdated(new Date());
+        } else if (active) {
           setSellers((previous) => {
             const retained = previous.filter(
               (item) => item.status === "pending" || item.status === "rejected"
@@ -685,10 +690,31 @@ export default function Marketplace() {
     }
     setNotice("Submission deleted.");
   };
-  const editSubmission = (kind: "seller" | "buyer", item: Seller | Buyer) => {
-    setSellerImagePreview(null);
-    setEditingSubmission(kind === "seller" ? { kind, item: item as Seller } : { kind, item: item as Buyer });
-    setDialog(kind === "seller" ? "sell" : "buy");
+  const editSubmission = async (kind: "seller" | "buyer", item: Seller | Buyer) => {
+    await withProgress(`submission-edit-${kind}-${item.id}`, async () => {
+      let currentItem = item;
+      if (isSupabaseConfigured && role === "user") {
+        try {
+          const listings = await refreshRemoteListings(true);
+          const latestItem = (kind === "seller" ? listings.sellers : listings.buyers).find((submission) => submission.id === item.id);
+          if (!latestItem || latestItem.status === "approved") {
+            setNotice("This submission is no longer available to edit.");
+            return;
+          }
+          if (latestItem.status === "pending") {
+            setNotice("This submission is still waiting for review and cannot be edited yet.");
+            return;
+          }
+          currentItem = latestItem;
+        } catch {
+          setNotice("Could not load the latest submission. Please try again.");
+          return;
+        }
+      }
+      setSellerImagePreview(null);
+      setEditingSubmission(kind === "seller" ? { kind, item: currentItem as Seller } : { kind, item: currentItem as Buyer });
+      setDialog(kind === "seller" ? "sell" : "buy");
+    });
   };
   const mySellers = sellers.filter((item) => item.user_id === userId && item.status !== "approved");
 const myBuyers = buyers.filter((item) => item.user_id === userId && item.status !== "approved");
@@ -1171,10 +1197,10 @@ const disabledSubmissions = new Set(
   <button
     type="button"
     className="button button-outline"
-    onClick={() => editSubmission("seller", item)}
-    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-seller-${item.id}`)}
+    onClick={() => void editSubmission("seller", item)}
+    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-seller-${item.id}`) || busyActions.has(`submission-edit-seller-${item.id}`)}
   >
-    Edit
+    {busyActions.has(`submission-edit-seller-${item.id}`) ? "Loading submission…" : "Edit"}
   </button>
   <button
     type="button"
@@ -1188,10 +1214,10 @@ const disabledSubmissions = new Set(
   <button
     type="button"
     className="button button-outline"
-    onClick={() => editSubmission("buyer", item)}
-    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-buyer-${item.id}`)}
+    onClick={() => void editSubmission("buyer", item)}
+    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-buyer-${item.id}`) || busyActions.has(`submission-edit-buyer-${item.id}`)}
   >
-    Edit
+    {busyActions.has(`submission-edit-buyer-${item.id}`) ? "Loading submission…" : "Edit"}
   </button>
   <button
     type="button"
