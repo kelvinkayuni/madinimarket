@@ -1001,6 +1001,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
           {websiteAccounts.length ? <div className="admin-account-list">{websiteAccounts.map((account) => {
             const totalPosts = account.listings.total + account.buying_requests.total;
+            const accountCertificates = adminCertificates.filter((certificate) => certificate.website_user_id === account.id);
             const busy = busyAccountId === account.id;
             return <article className="admin-account-row" key={account.id}>
               <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username} · {account.email}</span><small>{account.phone || "No phone number"}</small></div>
@@ -1015,18 +1016,17 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 <button className="button button-outline" type="button" disabled={busy || !account.is_active} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
                 <button className="button button-danger" type="button" disabled={busy} onClick={() => void withProgress(`account-${account.id}-delete`, () => deleteWebsiteAccount(account))}>{busyActions.has(`account-${account.id}-delete`) ? "Deleting…" : "Delete"}</button>
               </div>
+              {accountCertificates.length > 0 && <details className="admin-account-certificates">
+                <summary className="admin-account-certificates-toggle"><span>Pending licences</span><strong>{accountCertificates.length}</strong><ChevronDown className="admin-submission-chevron" size={16} /></summary>
+                <div className="admin-account-certificate-list">{accountCertificates.map((certificate) => <article className="admin-account-certificate" key={certificate.id}>
+                  <div className="admin-review-title"><div><span>{certificate.kind === "dealer" ? "DEALER LICENCE" : "BROKER LICENCE"}</span><h3>{certificate.account?.display_name ?? account.display_name}</h3></div><span className="submission-status status-pending">Pending</span></div>
+                  <a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">Review {certificate.file_name}</a>
+                  <textarea className="review-message" aria-label={`Rejection reason for ${certificate.file_name}`} placeholder="Reason for rejection (required to reject)" value={certificateRejectionMessages[certificate.id] ?? ""} onChange={(event) => setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: event.target.value }))} />
+                  <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyCertificate === certificate.id} onClick={() => void withProgress(`certificate-${certificate.id}-verify`, () => reviewCertificate(certificate, true))}>{busyActions.has(`certificate-${certificate.id}-verify`) ? "Verifying…" : "Verify"}</button><button className="button button-outline" type="button" disabled={busyCertificate === certificate.id || !certificateRejectionMessages[certificate.id]?.trim()} onClick={() => void withProgress(`certificate-${certificate.id}-reject`, () => reviewCertificate(certificate, false))}>{busyActions.has(`certificate-${certificate.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
+                </article>)}</div>
+              </details>}
             </article>;
           })}</div> : <p className="admin-empty">No website accounts have been created.</p>}
-        </section>
-        <section className="admin-queue admin-certificate-queue" aria-labelledby="admin-certificates-heading">
-          <div className="admin-queue-heading"><div><span>SELLER VERIFICATION</span><h2 id="admin-certificates-heading">Licence reviews</h2></div><strong>{adminCertificates.length}</strong></div>
-          {adminCertificates.length ? adminCertificates.map((certificate) => <article className="admin-review-item" key={certificate.id}>
-            <div className="admin-review-title"><div><span>{certificate.kind === "dealer" ? "DEALER LICENCE" : "BROKER LICENCE"}</span><h3>{certificate.account?.display_name ?? "Website account"}</h3></div><span className="submission-status status-pending">Pending</span></div>
-            <p>{certificate.account?.username} · {certificate.account?.email}</p>
-            <p><a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">Review {certificate.file_name}</a></p>
-            <textarea className="review-message" aria-label={`Rejection reason for ${certificate.file_name}`} placeholder="Reason for rejection (required to reject)" value={certificateRejectionMessages[certificate.id] ?? ""} onChange={(event) => setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: event.target.value }))} />
-            <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyCertificate === certificate.id} onClick={() => void withProgress(`certificate-${certificate.id}-verify`, () => reviewCertificate(certificate, true))}>{busyActions.has(`certificate-${certificate.id}-verify`) ? "Verifying…" : "Verify"}</button><button className="button button-outline" type="button" disabled={busyCertificate === certificate.id || !certificateRejectionMessages[certificate.id]?.trim()} onClick={() => void withProgress(`certificate-${certificate.id}-reject`, () => reviewCertificate(certificate, false))}>{busyActions.has(`certificate-${certificate.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
-          </article>) : <p className="admin-empty">No licences are waiting for verification.</p>}
         </section>
         <div className="admin-queues">
           <section className="admin-queue" aria-labelledby="admin-sellers-heading">
