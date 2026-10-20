@@ -32,10 +32,23 @@ async function readOwnedRows(admin: ReturnType<typeof createSupabaseAdminClient>
 }
 
 async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminClient>, table: "listings" | "buy_requests", accountId: string) {
-  const columns = table === "listings"
-    ? "id, mineral_name, weight, unit, price, currency, country, region, district"
-    : "id, mineral_name, weight, unit, color, shape, quality, offer, currency, location";
-  const { data, error } = await admin.from(table).select(columns)
+  if (table === "listings") {
+    const { data, error } = await admin.from("listings")
+      .select("id, mineral_name, weight, unit, price, currency, country, region, district, image_path")
+      .eq("website_user_id", accountId)
+      .eq("status", "approved")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return Promise.all((data ?? []).map(async (row) => {
+      if (!row.image_path) return { ...row, signed_image_url: "" };
+      const { data: signed, error: signedUrlError } = await admin.storage.from("mineral-images").createSignedUrl(row.image_path, 3600);
+      if (signedUrlError) throw signedUrlError;
+      return { ...row, signed_image_url: signed.signedUrl };
+    }));
+  }
+  const { data, error } = await admin.from("buy_requests")
+    .select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location")
     .eq("website_user_id", accountId)
     .eq("status", "approved")
     .eq("is_active", true)
