@@ -1031,7 +1031,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         <div className="admin-queues">
           <section className="admin-queue" aria-labelledby="admin-sellers-heading">
             <div className="admin-queue-heading"><div><span>SELLERS</span><h2 id="admin-sellers-heading">Mineral listings</h2></div><strong>{pendingSellers.length}</strong></div>
-            {pendingSellers.length ? pendingSellers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-seller-${item.id}`}>
+            {pendingSellers.length ? <div className="admin-queue-list">{pendingSellers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-seller-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3></div><strong>{money(item.price, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
               <div className="admin-submission-details">
                 <p>{item.weight} {item.unit} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p>
@@ -1039,18 +1039,18 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
                 <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-approve`, () => reviewSubmission("seller", item.id, true))}>{busyActions.has(`review-seller-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-reject`, () => reviewSubmission("seller", item.id, false))}>{busyActions.has(`review-seller-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
               </div>
-            </details>) : <p className="admin-empty">No seller listings are waiting for review.</p>}
+            </details>)}</div> : <p className="admin-empty">No seller listings are waiting for review.</p>}
           </section>
           <section className="admin-queue" aria-labelledby="admin-buyers-heading">
             <div className="admin-queue-heading"><div><span>BUYERS</span><h2 id="admin-buyers-heading">Buying requests</h2></div><strong>{pendingBuyers.length}</strong></div>
-            {pendingBuyers.length ? pendingBuyers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-buyer-${item.id}`}>
+            {pendingBuyers.length ? <div className="admin-queue-list">{pendingBuyers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-buyer-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3></div><strong>{money(item.offer, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
               <div className="admin-submission-details">
                 <p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{item.location} · {item.buyer} · {item.phone} · {item.email}</p>
                 <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} />
                 <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-approve`, () => reviewSubmission("buyer", item.id, true))}>{busyActions.has(`review-buyer-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-reject`, () => reviewSubmission("buyer", item.id, false))}>{busyActions.has(`review-buyer-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
               </div>
-            </details>) : <p className="admin-empty">No buyer requests are waiting for review.</p>}
+            </details>)}</div> : <p className="admin-empty">No buyer requests are waiting for review.</p>}
           </section>
         </div>
         {pendingSellers.some((item) => item.stone_certificate_url) && <section className="admin-queue admin-certificate-queue" aria-labelledby="admin-stone-certificates-heading">
