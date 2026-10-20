@@ -718,11 +718,6 @@ export default function Marketplace() {
   };
   const mySellers = sellers.filter((item) => item.user_id === userId && item.status !== "approved");
 const myBuyers = buyers.filter((item) => item.user_id === userId && item.status !== "approved");
-const disabledSubmissions = new Set(
-  [...mySellers, ...myBuyers]
-    .filter((item) => item.status === "pending")
-    .map((item) => item.id)
-);
   const pendingSellers = role === "admin" ? sellers.filter((item) => item.status === "pending") : [];
   const pendingBuyers = role === "admin" ? buyers.filter((item) => item.status === "pending") : [];
 
@@ -1198,7 +1193,7 @@ const disabledSubmissions = new Set(
     type="button"
     className="button button-outline"
     onClick={() => void editSubmission("seller", item)}
-    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-seller-${item.id}`) || busyActions.has(`submission-edit-seller-${item.id}`)}
+    disabled={item.status === "pending" || busyActions.has(`submission-delete-seller-${item.id}`) || busyActions.has(`submission-edit-seller-${item.id}`)}
   >
     {busyActions.has(`submission-edit-seller-${item.id}`) ? "Loading submission…" : "Edit"}
   </button>
@@ -1206,7 +1201,7 @@ const disabledSubmissions = new Set(
     type="button"
     className="button button-danger"
     onClick={() => void withProgress(`submission-delete-seller-${item.id}`, () => deleteSubmission("seller", item))}
-    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-seller-${item.id}`)}
+    disabled={item.status === "pending" || busyActions.has(`submission-delete-seller-${item.id}`)}
   >
     {busyActions.has(`submission-delete-seller-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
@@ -1215,7 +1210,7 @@ const disabledSubmissions = new Set(
     type="button"
     className="button button-outline"
     onClick={() => void editSubmission("buyer", item)}
-    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-buyer-${item.id}`) || busyActions.has(`submission-edit-buyer-${item.id}`)}
+    disabled={item.status === "pending" || busyActions.has(`submission-delete-buyer-${item.id}`) || busyActions.has(`submission-edit-buyer-${item.id}`)}
   >
     {busyActions.has(`submission-edit-buyer-${item.id}`) ? "Loading submission…" : "Edit"}
   </button>
@@ -1223,7 +1218,7 @@ const disabledSubmissions = new Set(
     type="button"
     className="button button-danger"
     onClick={() => void withProgress(`submission-delete-buyer-${item.id}`, () => deleteSubmission("buyer", item))}
-    disabled={disabledSubmissions.has(item.id) || busyActions.has(`submission-delete-buyer-${item.id}`)}
+    disabled={item.status === "pending" || busyActions.has(`submission-delete-buyer-${item.id}`)}
   >
     {busyActions.has(`submission-delete-buyer-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
