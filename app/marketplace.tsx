@@ -1036,6 +1036,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <div className="admin-submission-details">
                 <p>{item.weight} {item.unit} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p>
                 {item.image ? <div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div> : <p className="admin-image-missing">No mineral photo attached.</p>}
+                {item.stone_certificate_url && <p><a className="certificate-file-link" href={item.stone_certificate_url} target="_blank" rel="noreferrer">Review stone certificate</a></p>}
                 <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
                 <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-approve`, () => reviewSubmission("seller", item.id, true))}>{busyActions.has(`review-seller-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-reject`, () => reviewSubmission("seller", item.id, false))}>{busyActions.has(`review-seller-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
               </div>
@@ -1053,14 +1054,6 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             </details>)}</div> : <p className="admin-empty">No buyer requests are waiting for review.</p>}
           </section>
         </div>
-        {pendingSellers.some((item) => item.stone_certificate_url) && <section className="admin-queue admin-certificate-queue" aria-labelledby="admin-stone-certificates-heading">
-          <div className="admin-queue-heading"><div><span>LISTING EVIDENCE</span><h2 id="admin-stone-certificates-heading">Stone certificates</h2></div><strong>{pendingSellers.filter((item) => item.stone_certificate_url).length}</strong></div>
-          {pendingSellers.filter((item) => item.stone_certificate_url).map((item) => <article className="admin-review-item" key={`stone-certificate-${item.id}`}>
-            <div className="admin-review-title"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3></div></div>
-            <p>{item.seller} · {item.location}</p>
-            <a className="certificate-file-link" href={item.stone_certificate_url ?? undefined} target="_blank" rel="noreferrer">Review stone certificate</a>
-          </article>)}
-        </section>}
       </div>
       {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
       {dialog === "signout" && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => setDialog(null)}><X size={19} /></button><div className="dialog-brand"><Gem size={19} /> MADINIMARKET</div><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></section></div>}
