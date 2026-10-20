@@ -1010,7 +1010,10 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 <span>Selling: <strong>{account.listings.total}</strong> ({account.listings.pending} pending · {account.listings.approved} approved · {account.listings.rejected} rejected)</span>
                 <span>Buying: <strong>{account.buying_requests.total}</strong> ({account.buying_requests.pending} pending · {account.buying_requests.approved} approved · {account.buying_requests.rejected} rejected)</span>
               </div>
-              <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Inactive"}</span>
+              <div className="admin-account-status-group">
+                {accountCertificates.length > 0 && <span className="admin-account-status is-license-pending">Licence pending</span>}
+                <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Inactive"}</span>
+              </div>
               <div className="admin-account-actions">
                 <button className="button button-outline" type="button" disabled={busy || account.is_active} onClick={() => void withProgress(`account-${account.id}-activate`, () => updateWebsiteAccount(account, true))}>{busyActions.has(`account-${account.id}-activate`) ? "Activating…" : "Activate"}</button>
                 <button className="button button-outline" type="button" disabled={busy || !account.is_active} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
