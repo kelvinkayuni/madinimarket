@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const { data: rows, error } = await admin.from("website_account_certificates")
       .select("id, website_user_id, kind, status, file_name, file_path, created_at")
-      .eq("status", "pending")
+      .in("status", ["pending", "approved"])
       .order("created_at", { ascending: true });
     if (error) throw error;
     const accountIds = [...new Set((rows ?? []).map((row) => row.website_user_id))];

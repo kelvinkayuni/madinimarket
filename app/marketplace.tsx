@@ -1003,6 +1003,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           {websiteAccounts.length ? <div className="admin-account-list">{websiteAccounts.map((account) => {
             const totalPosts = account.listings.total + account.buying_requests.total;
             const accountCertificates = adminCertificates.filter((certificate) => certificate.website_user_id === account.id);
+            const pendingAccountCertificates = accountCertificates.filter((certificate) => certificate.status === "pending");
+            const approvedAccountCertificates = accountCertificates.filter((certificate) => certificate.status === "approved");
             const busy = busyAccountId === account.id;
             return <article className="admin-account-row" key={account.id}>
               <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username} · {account.email}</span><small>{account.phone || "No phone number"}</small></div>
@@ -1012,13 +1014,14 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 <span>Buying: <strong>{account.buying_requests.total}</strong> ({account.buying_requests.pending} pending · {account.buying_requests.approved} approved · {account.buying_requests.rejected} rejected)</span>
               </div>
               <div className="admin-account-status-group">
-                {accountCertificates.length > 0 && <button className="admin-account-status is-license-pending" type="button" aria-label={`Open pending licences for ${account.display_name}`} onClick={() => {
+                {pendingAccountCertificates.length > 0 && <button className="admin-account-status is-license-pending" type="button" aria-label={`Open pending licences for ${account.display_name}`} onClick={() => {
                   const panel = document.getElementById(`account-certificates-${account.id}`);
                   if (panel instanceof HTMLDetailsElement) {
                     panel.open = true;
                     panel.scrollIntoView({ behavior: "smooth", block: "center" });
                   }
                 }}>Licence pending</button>}
+                {approvedAccountCertificates.length > 0 ? approvedAccountCertificates.map((certificate) => <a className="admin-account-status is-license-approved" key={certificate.id} href={certificate.signed_url} target="_blank" rel="noreferrer" aria-label={`Open approved ${certificate.kind} licence for ${account.display_name}`} title={`Approved ${certificate.kind} licence`}>Approved licence</a>) : <button className="admin-account-status is-license-unavailable" type="button" disabled>Approved licence</button>}
                 <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Inactive"}</span>
               </div>
               <div className="admin-account-actions">
@@ -1026,9 +1029,9 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 <button className="button button-outline" type="button" disabled={busy || !account.is_active} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
                 <button className="button button-danger" type="button" disabled={busy} onClick={() => void withProgress(`account-${account.id}-delete`, () => deleteWebsiteAccount(account))}>{busyActions.has(`account-${account.id}-delete`) ? "Deleting…" : "Delete"}</button>
               </div>
-              {accountCertificates.length > 0 && <details className="admin-account-certificates" id={`account-certificates-${account.id}`}>
-                <summary className="admin-account-certificates-toggle"><span>Pending licences</span><strong>{accountCertificates.length}</strong><ChevronDown className="admin-submission-chevron" size={16} /></summary>
-                <div className="admin-account-certificate-list">{accountCertificates.map((certificate) => <article className="admin-account-certificate" key={certificate.id}>
+              {pendingAccountCertificates.length > 0 && <details className="admin-account-certificates" id={`account-certificates-${account.id}`}>
+                <summary className="admin-account-certificates-toggle"><span>Pending licences</span><strong>{pendingAccountCertificates.length}</strong><ChevronDown className="admin-submission-chevron" size={16} /></summary>
+                <div className="admin-account-certificate-list">{pendingAccountCertificates.map((certificate) => <article className="admin-account-certificate" key={certificate.id}>
                   <div className="admin-review-title"><div><span>{certificate.kind === "dealer" ? "DEALER LICENCE" : "BROKER LICENCE"}</span><h3>{certificate.account?.display_name ?? account.display_name}</h3></div><span className="submission-status status-pending">Pending</span></div>
                   <a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">Review {certificate.file_name}</a>
                   <textarea className="review-message" aria-label={`Rejection reason for ${certificate.file_name}`} placeholder="Reason for rejection (required to reject)" value={certificateRejectionMessages[certificate.id] ?? ""} onChange={(event) => setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: event.target.value }))} />
