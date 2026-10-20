@@ -23,3 +23,23 @@ set public = false, allowed_mime_types = excluded.allowed_mime_types, file_size_
 
 create index if not exists website_account_certificates_status_idx
   on public.website_account_certificates (status, created_at);
+
+create or replace view public.marketplace_listings
+with (security_barrier = true)
+as
+select listing.id, listing.mineral_name, listing.weight, listing.unit, listing.price, listing.currency,
+  listing.country, listing.region, listing.district, listing.image_path, listing.status, listing.created_at, listing.is_active,
+  exists (
+    select 1 from public.website_account_certificates as certificate
+    where certificate.website_user_id = listing.website_user_id
+      and certificate.status = 'approved'
+  ) as verified_seller
+from public.listings as listing
+where listing.status = 'approved' and listing.is_active = true
+  and (
+    listing.website_user_id is null
+    or exists (
+      select 1 from public.website_accounts as account
+      where account.id = listing.website_user_id and account.is_active = true
+    )
+  );
