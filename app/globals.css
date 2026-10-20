@@ -58,12 +58,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-submission-toggle h3 { margin-top: 3px; font-size: 16px; }
 .admin-submission-chevron { flex: 0 0 auto; color: #647462; transition: transform .18s ease; }
 .admin-submission-disclosure[open] .admin-submission-chevron { transform: rotate(180deg); }
-.admin-submission-details { padding: 0 8px 8px; }
+.admin-submission-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 210px); gap: 4px 10px; padding: 0 8px 8px; }
 .admin-submission-details > p { margin: 4px 0 0; color: #697369; font-size: 9px; line-height: 1.4; }
-.admin-submission-details .admin-mineral-image { width: min(100%, 210px); margin-top: 6px; }
+.admin-submission-details .admin-mineral-image { grid-column: 2; grid-row: 1 / span 4; width: 100%; margin: 0; }
 .admin-submission-details .certificate-file-link { margin-top: 5px; font-size: 9px; }
-.admin-submission-details .review-message { min-height: 32px; margin-top: 7px; padding: 6px 8px; font-size: 9px; }
-.admin-submission-details .submission-actions { margin-top: 6px; }
+.admin-submission-details .review-message { grid-column: 1 / -1; min-height: 32px; margin-top: 2px; padding: 6px 8px; font-size: 9px; }
+.admin-submission-details .submission-actions { grid-column: 1 / -1; margin-top: 2px; }
 .admin-submission-details .button { min-height: 30px; }
 .admin-review-item > p { margin: 10px 0 0; color: #697369; font-size: 10px; line-height: 1.5; }
 .admin-review-item .review-message { width: 100%; min-height: 62px; margin-top: 13px; padding: 9px 10px; resize: vertical; border: 1px solid #d8ded5; background: #fbfcf9; color: var(--ink); font: inherit; font-size: 10px; }
@@ -312,6 +312,8 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-summary > div { grid-template-columns: 1fr; gap: 5px; }
   .admin-summary strong { grid-column: 1; grid-row: auto; font-size: 26px; }
   .admin-queues { grid-template-columns: 1fr; gap: 25px; padding-top: 20px; }
+  .admin-submission-details { grid-template-columns: minmax(0, 1fr); }
+  .admin-submission-details .admin-mineral-image { grid-column: 1; grid-row: auto; width: min(100%, 160px); }
   .admin-account-row { grid-template-columns: 1fr; }
   .certificate-manager { padding-right: 14px; padding-left: 14px; }
   .certificate-manager-heading { min-height: 64px; }
