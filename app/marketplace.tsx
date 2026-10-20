@@ -1158,6 +1158,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             <Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required />
           </div>
           <button className="button button-dark form-submit" type="submit" disabled={busyActions.has("seller-submit")}>{busyActions.has("seller-submit") ? (editingSeller ? "Resubmitting listing…" : "Submitting for approval…") : editingSeller ? "Resubmit for approval" : <>Submit for approval <ArrowUpRight size={16} /></>}</button>
+          {editingSeller && <button className="button button-outline form-submit" type="button" disabled={busyActions.has("seller-submit")} onClick={() => { setEditingSubmission(null); setSellerImagePreview(null); setDialog("submissions"); }}>Cancel</button>}
         </form>
       </>}
       {dialog === "buy" && <>
@@ -1186,6 +1187,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             <Field label="Phone number" name="phone" type="tel" defaultValue={editingBuyer?.phone ?? ""} required />
           </div>
           <button className="button button-dark form-submit" type="submit" disabled={busyActions.has("buyer-submit")}>{busyActions.has("buyer-submit") ? (editingBuyer ? "Updating request…" : "Submitting request…") : editingBuyer ? "Resubmit for approval" : <>Submit for approval <ArrowUpRight size={16} /></>}</button>
+          {editingBuyer && <button className="button button-outline form-submit" type="button" disabled={busyActions.has("buyer-submit")} onClick={() => { setEditingSubmission(null); setDialog("submissions"); }}>Cancel</button>}
         </form>
       </>}
       {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list">{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}  <div className="submission-actions">
