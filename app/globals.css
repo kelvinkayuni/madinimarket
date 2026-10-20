@@ -58,8 +58,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-submission-toggle h3 { margin-top: 3px; font-size: 16px; }
 .admin-submission-chevron { flex: 0 0 auto; color: #647462; transition: transform .18s ease; }
 .admin-submission-disclosure[open] .admin-submission-chevron { transform: rotate(180deg); }
-.admin-submission-details { padding: 0 14px 14px; }
-.admin-submission-details > p { margin: 8px 0 0; color: #697369; font-size: 10px; line-height: 1.5; }
+.admin-submission-details { padding: 0 8px 8px; }
+.admin-submission-details > p { margin: 4px 0 0; color: #697369; font-size: 9px; line-height: 1.4; }
+.admin-submission-details .admin-mineral-image { width: min(100%, 210px); margin-top: 6px; }
+.admin-submission-details .certificate-file-link { margin-top: 5px; font-size: 9px; }
+.admin-submission-details .review-message { min-height: 32px; margin-top: 7px; padding: 6px 8px; font-size: 9px; }
+.admin-submission-details .submission-actions { margin-top: 6px; }
+.admin-submission-details .button { min-height: 30px; }
 .admin-review-item > p { margin: 10px 0 0; color: #697369; font-size: 10px; line-height: 1.5; }
 .admin-review-item .review-message { width: 100%; min-height: 62px; margin-top: 13px; padding: 9px 10px; resize: vertical; border: 1px solid #d8ded5; background: #fbfcf9; color: var(--ink); font: inherit; font-size: 10px; }
 .admin-review-item .submission-actions { display: flex; gap: 8px; margin-top: 10px; }
