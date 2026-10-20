@@ -16,11 +16,13 @@ type CertificateSubmission = { id: string; kind: CertificateKind; status: Certif
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
 type Seller = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
+type AccountMarketListing = Pick<Seller, "id" | "mineral" | "weight" | "unit" | "price" | "currency" | "location">;
+type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location">;
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
-type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "signout" | null;
+type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "my-market-minerals" | "my-wanted-minerals" | "signout" | null;
 
 const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
@@ -164,6 +166,8 @@ export default function Marketplace() {
   const [certificates, setCertificates] = useState<Partial<Record<CertificateKind, CertificateSubmission>>>({});
   const [certificateFiles, setCertificateFiles] = useState<Partial<Record<CertificateKind, File>>>({});
   const [adminCertificates, setAdminCertificates] = useState<AdminCertificate[]>([]);
+  const [myMarketMinerals, setMyMarketMinerals] = useState<AccountMarketListing[]>([]);
+  const [myWantedMinerals, setMyWantedMinerals] = useState<AccountWantedMineral[]>([]);
   const [certificateRejectionMessages, setCertificateRejectionMessages] = useState<Record<string, string>>({});
   const [busyCertificate, setBusyCertificate] = useState<CertificateKind | string | null>(null);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
@@ -333,6 +337,46 @@ export default function Marketplace() {
   }, [notice]);
 
   const openDialog = (next: Exclude<Dialog, null>) => { setMenuOpen(false); setDialog(next); };
+  const openAccountMarket = async (next: "my-market-minerals" | "my-wanted-minerals") => {
+    setMenuOpen(false);
+    await withProgress(`load-${next}`, async () => {
+      try {
+        if (isSupabaseConfigured && role === "user") {
+          const response = await fetch("/api/website-submissions", { cache: "no-store" });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error ?? "Could not load your approved market items.");
+          setMyMarketMinerals((result.marketSellers ?? []).map((item: {
+            id: number; mineral_name: string; weight: string | number; unit: Unit; price: string | number;
+            currency: Currency; country: string; region: string; district: string;
+          }) => ({
+            id: Number(item.id), mineral: item.mineral_name, weight: String(item.weight), unit: item.unit,
+            price: String(item.price), currency: item.currency,
+            location: [item.district, item.region, item.country].filter(Boolean).join(", "),
+          })));
+          setMyWantedMinerals((result.marketBuyers ?? []).map((item: {
+            id: number; mineral_name: string; weight: string | number; unit: Unit; color: string; shape: Buyer["shape"];
+            quality: string; offer: string | number; currency: Currency; location: string;
+          }) => ({
+            id: Number(item.id), mineral: item.mineral_name, weight: String(item.weight), unit: item.unit,
+            color: item.color, shape: item.shape, quality: item.quality, offer: String(item.offer),
+            currency: item.currency, location: item.location,
+          })));
+        } else {
+          setMyMarketMinerals(sellers.filter((item) => item.user_id === userId && item.status === "approved").map((item) => ({
+            id: item.id, mineral: item.mineral, weight: item.weight, unit: item.unit, price: item.price,
+            currency: item.currency, location: item.location,
+          })));
+          setMyWantedMinerals(buyers.filter((item) => item.user_id === userId && item.status === "approved").map((item) => ({
+            id: item.id, mineral: item.mineral, weight: item.weight, unit: item.unit, color: item.color,
+            shape: item.shape, quality: item.quality, offer: item.offer, currency: item.currency, location: item.location,
+          })));
+        }
+        openDialog(next);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not load your approved market items.");
+      }
+    });
+  };
   const refreshCertificates = async () => {
     const response = await fetch("/api/website-certificates", { cache: "no-store" });
     const result = await response.json();
@@ -1078,7 +1122,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>My minerals on market <ArrowUpRight size={15} /></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>My wanted minerals <ArrowUpRight size={15} /></>}</button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><span className="wordmark-symbol"><Gem size={21} strokeWidth={1.8} /></span><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals, people, places" /><kbd>/</kbd></div>
       <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={16} /> List a mineral</>}</button></div>
@@ -1235,6 +1279,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     {busyActions.has(`submission-delete-buyer-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
 </div> </article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
+      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list">{myMarketMinerals.map((item) => <article className="submission-item" key={`market-mineral-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p><p>{item.location}</p></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
+      {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p><div className="submission-list">{myWantedMinerals.map((item) => <article className="submission-item" key={`wanted-mineral-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-approved">Buyers looking</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>Offer: {money(item.offer, item.currency)} · {item.location}</p></article>)}{!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
   </main>;

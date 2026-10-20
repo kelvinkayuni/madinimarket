@@ -31,16 +31,31 @@ async function readOwnedRows(admin: ReturnType<typeof createSupabaseAdminClient>
   }));
 }
 
+async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminClient>, table: "listings" | "buy_requests", accountId: string) {
+  const columns = table === "listings"
+    ? "id, mineral_name, weight, unit, price, currency, country, region, district"
+    : "id, mineral_name, weight, unit, color, shape, quality, offer, currency, location";
+  const { data, error } = await admin.from(table).select(columns)
+    .eq("website_user_id", accountId)
+    .eq("status", "approved")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function GET() {
   try {
     const accountId = await getWebsiteAccountId();
     if (!accountId) return NextResponse.json({ error: "Sign in to view your submissions." }, { status: 401 });
     const admin = createSupabaseAdminClient();
-    const [sellers, buyers] = await Promise.all([
+    const [sellers, buyers, marketSellers, marketBuyers] = await Promise.all([
       readOwnedRows(admin, "listings", accountId),
       readOwnedRows(admin, "buy_requests", accountId),
+      readOwnedMarketRows(admin, "listings", accountId),
+      readOwnedMarketRows(admin, "buy_requests", accountId),
     ]);
-    return NextResponse.json({ sellers, buyers }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ sellers, buyers, marketSellers, marketBuyers }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not load your submissions." }, { status: 503 });
   }
