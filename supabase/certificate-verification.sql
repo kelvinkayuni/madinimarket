@@ -34,7 +34,8 @@ select listing.id, listing.mineral_name, listing.weight, listing.unit, listing.p
     where certificate.website_user_id = listing.website_user_id
       and certificate.status = 'approved'
   ) as verified_seller,
-  listing.listing_type, listing.smallest_stone_weight, listing.largest_stone_weight, listing.stone_weight_unit
+  listing.listing_type, listing.smallest_stone_weight, listing.largest_stone_weight, listing.stone_weight_unit,
+  listing.seller_price, listing.platform_fee_rate, listing.platform_fee_amount
 from public.listings as listing
 where listing.status = 'approved' and listing.is_active = true
   and (

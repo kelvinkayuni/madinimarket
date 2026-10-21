@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getWebsiteAccountId } from "@/lib/website-session";
+import { calculateListingPrice, type ListingCurrency } from "@/lib/listing-pricing";
 
 function text(values: Record<string, unknown>, key: string, maxLength = 500) {
   const value = typeof values[key] === "string" ? values[key].trim() : "";
@@ -39,7 +40,7 @@ async function readOwnedRows(admin: ReturnType<typeof createSupabaseAdminClient>
 async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminClient>, table: "listings" | "buy_requests", accountId: string) {
   if (table === "listings") {
     const { data, error } = await admin.from("listings")
-      .select("id, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, price, currency, country, region, district, image_path")
+      .select("id, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, seller_price, platform_fee_rate, platform_fee_amount, price, currency, country, region, district, image_path")
       .eq("website_user_id", accountId)
       .eq("status", "approved")
       .eq("is_active", true)
@@ -172,7 +173,7 @@ export async function POST(request: Request) {
     const smallestStoneWeight = listingType === "batch" ? positiveNumber(values, "smallest_stone_weight") : null;
     const largestStoneWeight = listingType === "batch" ? positiveNumber(values, "largest_stone_weight") : null;
     const stoneWeightUnit = listingType === "batch" ? text(values, "stone_weight_unit", 10) : null;
-    const price = positiveNumber(values, "price");
+    const sellerPrice = positiveNumber(values, "price");
     const currency = text(values, "currency", 3);
     const sellerName = text(values, "seller_name", 120);
     const country = text(values, "country", 100);
@@ -181,9 +182,10 @@ export async function POST(request: Request) {
     const street = text(values, "street", 200);
     const email = text(values, "email", 254);
     const phone = text(values, "phone", 40);
-    if (!mineralName || !["single", "batch"].includes(listingType) || !weight || !["carats", "g", "kg", "tons"].includes(unit ?? "") || !price || !["TZS", "USD"].includes(currency ?? "") || !sellerName || !country || !region || !district || !street || !validEmail(email) || !phone) {
+    if (!mineralName || !["single", "batch"].includes(listingType) || !weight || !["carats", "g", "kg", "tons"].includes(unit ?? "") || !sellerPrice || !["TZS", "USD"].includes(currency ?? "") || !sellerName || !country || !region || !district || !street || !validEmail(email) || !phone) {
       return NextResponse.json({ error: "Check the seller listing details and try again." }, { status: 400 });
     }
+    const pricing = calculateListingPrice(sellerPrice, currency as ListingCurrency);
     if (listingType === "batch" && (
       !smallestStoneWeight ||
       !largestStoneWeight ||
@@ -233,7 +235,9 @@ export async function POST(request: Request) {
     rowValues = {
       ...common, mineral_name: mineralName, listing_type: listingType, weight, unit,
       smallest_stone_weight: smallestStoneWeight, largest_stone_weight: largestStoneWeight,
-      stone_weight_unit: stoneWeightUnit, price, currency, seller_name: sellerName,
+      stone_weight_unit: stoneWeightUnit, seller_price: pricing.sellerPrice,
+      platform_fee_rate: pricing.platformFeeRate, platform_fee_amount: pricing.platformFeeAmount,
+      price: pricing.marketPrice, currency, seller_name: sellerName,
       country, region, district, street, email, phone, image_path: imagePath, stone_certificate_path: stoneCertificatePath,
     };
   } else {

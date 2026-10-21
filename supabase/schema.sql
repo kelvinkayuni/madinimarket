@@ -40,6 +40,9 @@ create table if not exists public.listings (
   smallest_stone_weight numeric,
   largest_stone_weight numeric,
   stone_weight_unit text,
+  seller_price numeric not null,
+  platform_fee_rate numeric not null default 0,
+  platform_fee_amount numeric not null default 0,
   price numeric not null,
   currency text not null check (currency in ('TZS', 'USD')),
   seller_name text not null,
@@ -58,9 +61,19 @@ alter table public.listings
   add column if not exists listing_type text not null default 'single',
   add column if not exists smallest_stone_weight numeric,
   add column if not exists largest_stone_weight numeric,
-  add column if not exists stone_weight_unit text;
+  add column if not exists stone_weight_unit text,
+  add column if not exists seller_price numeric,
+  add column if not exists platform_fee_rate numeric not null default 0,
+  add column if not exists platform_fee_amount numeric not null default 0;
+update public.listings set seller_price = price where seller_price is null;
+alter table public.listings alter column seller_price set not null;
 alter table public.listings drop constraint if exists listings_listing_type_check;
 alter table public.listings add constraint listings_listing_type_check check (listing_type in ('single', 'batch'));
+alter table public.listings drop constraint if exists listings_price_breakdown_check;
+alter table public.listings add constraint listings_price_breakdown_check check (
+  seller_price > 0 and platform_fee_rate between 0 and 0.07 and platform_fee_amount >= 0
+  and price = seller_price + platform_fee_amount
+);
 alter table public.listings drop constraint if exists listings_stone_weight_unit_check;
 alter table public.listings add constraint listings_stone_weight_unit_check check (stone_weight_unit is null or stone_weight_unit in ('carats', 'g', 'kg'));
 alter table public.listings drop constraint if exists listings_batch_weights_check;

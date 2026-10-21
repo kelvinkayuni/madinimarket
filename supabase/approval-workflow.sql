@@ -47,12 +47,22 @@ alter table public.listings
   add column if not exists smallest_stone_weight numeric,
   add column if not exists largest_stone_weight numeric,
   add column if not exists stone_weight_unit text,
+  add column if not exists seller_price numeric,
+  add column if not exists platform_fee_rate numeric not null default 0,
+  add column if not exists platform_fee_amount numeric not null default 0,
   add column if not exists status text not null default 'pending',
   add column if not exists review_message text,
   add column if not exists reviewed_by uuid references public.profiles (id),
   add column if not exists reviewed_at timestamptz;
+update public.listings set seller_price = price where seller_price is null;
+alter table public.listings alter column seller_price set not null;
 alter table public.listings drop constraint if exists listings_listing_type_check;
 alter table public.listings add constraint listings_listing_type_check check (listing_type in ('single', 'batch'));
+alter table public.listings drop constraint if exists listings_price_breakdown_check;
+alter table public.listings add constraint listings_price_breakdown_check check (
+  seller_price > 0 and platform_fee_rate between 0 and 0.07 and platform_fee_amount >= 0
+  and price = seller_price + platform_fee_amount
+);
 alter table public.listings drop constraint if exists listings_stone_weight_unit_check;
 alter table public.listings add constraint listings_stone_weight_unit_check check (stone_weight_unit is null or stone_weight_unit in ('carats', 'g', 'kg'));
 alter table public.listings drop constraint if exists listings_batch_weights_check;
@@ -262,7 +272,8 @@ with (security_barrier = true)
 as
 select listing.id, listing.mineral_name, listing.weight, listing.unit, listing.price, listing.currency,
   listing.country, listing.region, listing.district, listing.image_path, listing.status, listing.created_at, listing.is_active,
-  listing.listing_type, listing.smallest_stone_weight, listing.largest_stone_weight, listing.stone_weight_unit
+  listing.listing_type, listing.smallest_stone_weight, listing.largest_stone_weight, listing.stone_weight_unit,
+  listing.seller_price, listing.platform_fee_rate, listing.platform_fee_amount
 from public.listings as listing
 where listing.status = 'approved' and listing.is_active = true
   and (
