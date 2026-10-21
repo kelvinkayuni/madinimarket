@@ -25,6 +25,7 @@ type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
+type AdminListingLedgerEntry = { id: number; seller_name: string; mineral_name: string; seller_price: string; platform_fee_rate: number; platform_fee_amount: string; price: string; currency: Currency; status: SubmissionStatus; listing_type: ListingType; created_at: string };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
 type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "signout" | null;
 
@@ -176,6 +177,16 @@ async function loadAdminAccounts(accessToken: string): Promise<WebsiteAccount[]>
   return result.accounts as WebsiteAccount[];
 }
 
+async function loadAdminListingLedger(accessToken: string): Promise<AdminListingLedgerEntry[]> {
+  const response = await fetch("/api/admin/listing-ledger", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not load the listing ledger.");
+  return result.listings as AdminListingLedgerEntry[];
+}
+
 async function loadAdminCertificates(accessToken: string): Promise<AdminCertificate[]> {
   const response = await fetch("/api/admin/certificates", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -200,6 +211,9 @@ export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
+  const [adminListingLedger, setAdminListingLedger] = useState<AdminListingLedgerEntry[]>([]);
+  const [adminLedgerUpdatedAt, setAdminLedgerUpdatedAt] = useState<Date | null>(null);
+  const [adminLedgerError, setAdminLedgerError] = useState("");
   const [translationPairs, setTranslationPairs] = useState<TranslationPair[]>([]);
   const [translationForm, setTranslationForm] = useState({ english_phrase: "", swahili_phrase: "" });
   const [editingTranslationId, setEditingTranslationId] = useState<string | null>(null);
@@ -407,6 +421,41 @@ export default function Marketplace() {
     }, 0);
     return () => window.clearTimeout(hydrationTimer);
   }, []);
+  useEffect(() => {
+    if (!isSupabaseConfigured || role !== "admin") return;
+    let active = true;
+    let isLoading = false;
+    const refreshLedger = async () => {
+      if (isLoading) return;
+      isLoading = true;
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Your admin session has expired. Sign in again to view the listing ledger.");
+        const listings = await loadAdminListingLedger(session.access_token);
+        if (active) {
+          setAdminListingLedger(listings);
+          setAdminLedgerUpdatedAt(new Date());
+          setAdminLedgerError("");
+        }
+      } catch (error) {
+        if (active) setAdminLedgerError(error instanceof Error ? error.message : "Could not refresh the listing ledger.");
+      } finally {
+        isLoading = false;
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshLedger();
+    };
+    void refreshLedger();
+    const interval = window.setInterval(() => void refreshLedger(), 10_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [role]);
   useEffect(() => {
     if (!storageReady || isSupabaseConfigured) return;
     try {
@@ -1239,6 +1288,23 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
 
   if (isAdminRole(role)) {
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
+    const ledgerTotals = (["TZS", "USD"] as const).map((currency) => {
+      const currencyListings = adminListingLedger.filter((listing) => listing.currency === currency);
+      const totals = currencyListings.reduce((current, listing) => ({
+        count: current.count + 1,
+        sellerPrice: current.sellerPrice + Number(listing.seller_price),
+        platformFee: current.platformFee + Number(listing.platform_fee_amount),
+        marketPrice: current.marketPrice + Number(listing.price),
+      }), { count: 0, sellerPrice: 0, platformFee: 0, marketPrice: 0 });
+      return { currency, ...totals };
+    });
+    const formatLedgerMoney = (amount: number, currency: Currency) => money(
+      new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: currency === "USD" ? 2 : 0,
+        maximumFractionDigits: currency === "USD" ? 2 : 0,
+      }).format(amount),
+      currency,
+    );
     return <main className="admin-shell">
       <header className="admin-header">
         <a className="admin-brand" href="#admin-home"><Gem size={20} /> MADINIMARKET <span>ADMIN</span></a>
@@ -1252,6 +1318,42 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
             <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>
           </div>
+        </section>
+        <section className="admin-ledger" aria-labelledby="admin-ledger-heading">
+          <div className="admin-queue-heading admin-ledger-heading">
+            <div><span>LISTING ACCOUNTING</span><h2 id="admin-ledger-heading">Seller price ledger</h2></div>
+            <div className="admin-ledger-live"><span className="admin-ledger-live-dot" /> Live · refreshes every 10 seconds</div>
+          </div>
+          <p className="admin-ledger-note">Tracks every submitted seller listing, including listings awaiting review. Fee totals are pricing amounts only—not confirmed sales, collected revenue, or seller payouts.</p>
+          {adminLedgerError && <p className="admin-ledger-error" role="alert">{adminLedgerError}</p>}
+          <div className="admin-ledger-totals">
+            {ledgerTotals.map((totals) => <article className="admin-ledger-currency" key={totals.currency}>
+              <div className="admin-ledger-currency-heading"><strong>{totals.currency}</strong><span>{totals.count} {totals.count === 1 ? "listing" : "listings"}</span></div>
+              <div className="admin-ledger-total-grid">
+                <div><span>Seller asking total</span><strong>{formatLedgerMoney(totals.sellerPrice, totals.currency)}</strong></div>
+                <div><span>5% fee total</span><strong>{formatLedgerMoney(totals.platformFee, totals.currency)}</strong></div>
+                <div><span>Market price total</span><strong>{formatLedgerMoney(totals.marketPrice, totals.currency)}</strong></div>
+              </div>
+            </article>)}
+          </div>
+          <div className="admin-ledger-table-wrap">
+            <table className="admin-ledger-table">
+              <thead><tr><th>Submitted</th><th>Seller</th><th>Mineral</th><th>Status</th><th>Seller price</th><th>5% added</th><th>Total market price</th></tr></thead>
+              <tbody>
+                {adminListingLedger.map((listing) => <tr key={listing.id}>
+                  <td>{new Date(listing.created_at).toLocaleString()}</td>
+                  <td>{listing.seller_name}</td>
+                  <td>{listing.mineral_name}<small>{listing.listing_type === "batch" ? "Batch" : "Single piece"}</small></td>
+                  <td><span className={`admin-ledger-status is-${listing.status}`}>{listing.status}</span></td>
+                  <td>{money(listing.seller_price, listing.currency)}</td>
+                  <td>{money(listing.platform_fee_amount, listing.currency)}<small>{(listing.platform_fee_rate * 100).toFixed(0)}%</small></td>
+                  <td><strong>{money(listing.price, listing.currency)}</strong></td>
+                </tr>)}
+                {!adminListingLedger.length && <tr><td className="admin-ledger-empty" colSpan={7}>{adminLedgerError ? "The listing ledger could not be loaded." : "No seller listings have been submitted yet."}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <p className="admin-ledger-updated">{adminLedgerUpdatedAt ? `Last updated ${adminLedgerUpdatedAt.toLocaleTimeString()}` : "Loading listing prices…"}</p>
         </section>
         <section className="admin-translations" aria-labelledby="admin-translations-heading">
           <div className="admin-queue-heading"><div><span>LANGUAGE SETTINGS</span><h2 id="admin-translations-heading">English–Swahili translations</h2></div><strong>{translationPairs.length}</strong></div>
