@@ -97,6 +97,9 @@ create table if not exists public.buy_requests (
   created_at timestamptz default now() not null
 );
 
+grant select, insert, update, delete on public.listings, public.buy_requests to authenticated;
+grant all privileges on public.listings, public.buy_requests to service_role;
+
 alter table public.profiles enable row level security;
 alter table public.website_accounts enable row level security;
 alter table public.website_account_drafts enable row level security;

@@ -48,3 +48,5 @@ where listing.status = 'approved' and listing.is_active = true
   );
 
 grant select on public.marketplace_listings to anon, authenticated;
+grant select, insert, update, delete on public.listings, public.buy_requests to authenticated;
+grant all privileges on public.listings, public.buy_requests to service_role;

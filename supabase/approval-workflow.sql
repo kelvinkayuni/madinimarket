@@ -201,9 +201,10 @@ create index if not exists buy_requests_website_user_id_idx on public.buy_reques
 revoke all on public.profiles from anon, authenticated;
 grant select on public.profiles to authenticated;
 revoke all on public.listings from anon, authenticated;
-grant insert, update, delete on public.listings to authenticated;
+grant select, insert, update, delete on public.listings to authenticated;
 revoke all on public.buy_requests from anon, authenticated;
-grant insert, update, delete on public.buy_requests to authenticated;
+grant select, insert, update, delete on public.buy_requests to authenticated;
+grant all privileges on public.listings, public.buy_requests to service_role;
 
 drop policy if exists "Users can view profiles" on public.profiles;
 drop policy if exists "Users can insert profile" on public.profiles;
