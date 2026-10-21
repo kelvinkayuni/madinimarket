@@ -172,9 +172,11 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 .menu-popover > button:hover { color: #577962; }
 .menu-language { display: grid; gap: 8px; padding: 14px 0 0; border-top: 1px solid #edf0eb; }
 .menu-language > span { color: #859084; font-size: 9px; font-weight: 700; }
-.menu-language > div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.menu-language button { min-height: 32px; border: 1px solid #dfe3db; background: #fff; font-size: 10px; cursor: pointer; }
-.menu-language button[aria-pressed="true"] { border-color: #8da38a; background: #edf2e9; color: #345b3d; font-weight: 700; }
+.language-switch { position: relative; width: 100%; height: 36px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; padding: 3px; border: 1px solid #dfe3db; border-radius: 18px; background: #f0f2ed; cursor: pointer; }
+.language-switch > span:not(.language-switch-thumb) { position: relative; z-index: 1; color: #647064; font-size: 10px; text-align: center; transition: color .18s ease; }
+.language-switch:not(.is-swahili) > span:first-child, .language-switch.is-swahili > span:nth-child(2) { color: #345b3d; font-weight: 700; }
+.language-switch-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border: 1px solid #d3ddcc; border-radius: 14px; background: #fff; box-shadow: 0 1px 3px #1e2c2012; transition: transform .18s ease; }
+.language-switch.is-swahili .language-switch-thumb { transform: translateX(100%); }
 .menu-foot { display: flex; align-items: center; gap: 8px; padding-top: 14px; color: #808980; font-size: 10px; }
 .user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; }
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
