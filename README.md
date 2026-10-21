@@ -22,7 +22,8 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 3. Run `supabase/schema.sql`.
 4. Run `supabase/approval-workflow.sql`.
 5. Run `supabase/certificate-verification.sql`.
-6. Add `SUPABASE_SERVICE_ROLE_KEY` to the server environment. Never expose it to the browser.
+6. Run `supabase/translation-dictionary.sql`.
+7. Add `SUPABASE_SERVICE_ROLE_KEY` to the server environment. Never expose it to the browser.
 
 Buyer and seller accounts are stored in `public.website_accounts`; their passwords are hashed by the server and they do not appear in Supabase Auth. The admin must be created in Supabase Auth and have a matching `public.profiles` row with `role = 'admin'`. Admin usernames can be any value; `MM-####` usernames are reserved for buyer and seller accounts.
 

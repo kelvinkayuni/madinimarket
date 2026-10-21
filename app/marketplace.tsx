@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useEffectEvent, useLayoutEffect, useRef, useState
 import type { Session } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 
 type Unit = "g" | "kg" | "tons" | "carats";
 type Currency = "TZS" | "USD";
@@ -159,10 +160,24 @@ async function loadAdminCertificates(accessToken: string): Promise<AdminCertific
   return result.certificates as AdminCertificate[];
 }
 
+async function loadAdminTranslations(accessToken: string): Promise<TranslationPair[]> {
+  const response = await fetch("/api/admin/translations", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not load translation pairs.");
+  return result.translations as TranslationPair[];
+}
+
 export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
+  const [translationPairs, setTranslationPairs] = useState<TranslationPair[]>([]);
+  const [translationForm, setTranslationForm] = useState({ english_phrase: "", swahili_phrase: "" });
+  const [editingTranslationId, setEditingTranslationId] = useState<string | null>(null);
+  const [language, setLanguage] = useState<Language>("en");
   const [certificates, setCertificates] = useState<Partial<Record<CertificateKind, CertificateSubmission>>>({});
   const [certificateFiles, setCertificateFiles] = useState<Partial<Record<CertificateKind, File>>>({});
   const [adminCertificates, setAdminCertificates] = useState<AdminCertificate[]>([]);
@@ -219,6 +234,47 @@ export default function Marketplace() {
     const interval = window.setInterval(updateTime, 60_000);
     return () => window.clearInterval(interval);
   }, []);
+  useEffect(() => {
+    let active = true;
+    const preferenceTimer = window.setTimeout(() => {
+      try {
+        const savedLanguage = localStorage.getItem("madinimarket:language:v1");
+        if (savedLanguage === "sw") setLanguage("sw");
+      } catch {
+        setNotice("This browser could not load your language preference.");
+      }
+    }, 0);
+    void fetch("/api/translations", { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load language translations.");
+        if (active) setTranslationPairs(result.translations as TranslationPair[]);
+      })
+      .catch((error: unknown) => {
+        if (active) setNotice(error instanceof Error ? error.message : "Could not load language translations.");
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(preferenceTimer);
+    };
+  }, []);
+  const chooseLanguage = (nextLanguage: Language) => {
+    setLanguage(nextLanguage);
+    try {
+      localStorage.setItem("madinimarket:language:v1", nextLanguage);
+    } catch {
+      setNotice("This browser could not save your language preference.");
+    }
+  };
+  useEffect(() => {
+    const root = document.querySelector<HTMLElement>(".market-shell");
+    if (!root) return;
+    const apply = () => applyVisibleTranslations(root, language, translationPairs);
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["placeholder"] });
+    return () => observer.disconnect();
+  }, [language, translationPairs, role]);
   useEffect(() => {
     if (isSupabaseConfigured) {
       let active = true;
@@ -282,8 +338,9 @@ export default function Marketplace() {
             try {
               setWebsiteAccounts(await loadAdminAccounts(session.access_token));
               setAdminCertificates(await loadAdminCertificates(session.access_token));
+              setTranslationPairs(await loadAdminTranslations(session.access_token));
             } catch {
-              setNotice("Could not load website accounts.");
+              setNotice("Could not load admin accounts, licences, or translations.");
             }
           }
         } catch {
@@ -634,6 +691,56 @@ export default function Marketplace() {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
     if (!session) throw new Error("Admin session expired.");
     setAdminCertificates(await loadAdminCertificates(session.access_token));
+  };
+  const refreshAdminTranslations = async () => {
+    const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+    if (!session) throw new Error("Admin session expired.");
+    setTranslationPairs(await loadAdminTranslations(session.access_token));
+  };
+  const saveTranslation = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await withProgress("translation-save", async () => {
+      try {
+        const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/translations", {
+          method: editingTranslationId ? "PATCH" : "POST",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ ...translationForm, ...(editingTranslationId ? { id: editingTranslationId } : {}) }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not save the translation pair.");
+        await refreshAdminTranslations();
+        setTranslationForm({ english_phrase: "", swahili_phrase: "" });
+        setEditingTranslationId(null);
+        setNotice(editingTranslationId ? "Translation pair updated." : "Translation pair added.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save the translation pair.");
+      }
+    });
+  };
+  const deleteTranslation = async (pair: TranslationPair) => {
+    await withProgress(`translation-delete-${pair.id}`, async () => {
+      try {
+        const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/translations", {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ id: pair.id }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not delete the translation pair.");
+        setTranslationPairs((current) => current.filter((item) => item.id !== pair.id));
+        if (editingTranslationId === pair.id) {
+          setEditingTranslationId(null);
+          setTranslationForm({ english_phrase: "", swahili_phrase: "" });
+        }
+        setNotice("Translation pair deleted.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not delete the translation pair.");
+      }
+    });
   };
   const submitCertificate = async (kind: CertificateKind) => {
     const file = certificateFiles[kind];
@@ -1062,12 +1169,22 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       </header>
       <div className="admin-content" id="admin-home">
         <section className="admin-overview">
-          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
           <div className="admin-summary">
             <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
             <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>
           </div>
+        </section>
+        <section className="admin-translations" aria-labelledby="admin-translations-heading">
+          <div className="admin-queue-heading"><div><span>LANGUAGE SETTINGS</span><h2 id="admin-translations-heading">English–Swahili translations</h2></div><strong>{translationPairs.length}</strong></div>
+          <p className="admin-translation-help">Add words or phrases for the Swahili version. Matching ignores letter case, respects word boundaries, preserves capitalization, and prefers longer phrases. Only site interface text is translated; submitted mineral names and descriptions stay unchanged.</p>
+          <form className="admin-translation-form" onSubmit={(event) => void saveTranslation(event)}>
+            <label className="field-label">English word or phrase<input className="text-input" value={translationForm.english_phrase} maxLength={120} required onChange={(event) => setTranslationForm((current) => ({ ...current, english_phrase: event.target.value }))} /></label>
+            <label className="field-label">Swahili translation<input className="text-input" value={translationForm.swahili_phrase} maxLength={120} required onChange={(event) => setTranslationForm((current) => ({ ...current, swahili_phrase: event.target.value }))} /></label>
+            <div className="admin-translation-form-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : editingTranslationId ? "Update pair" : "Add pair"}</button>{editingTranslationId && <button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>}</div>
+          </form>
+          {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <article className="admin-translation-row" key={pair.id}><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
         </section>
         <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
@@ -1149,22 +1266,22 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>My minerals on market <ArrowUpRight size={15} /></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>My wanted minerals <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => void openAccountLicences()}>Your licences <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>My minerals on market <ArrowUpRight size={15} /></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>My wanted minerals <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => void openAccountLicences()}>Your licences <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-language"><span>Language</span><div><button type="button" aria-pressed={language === "en"} onClick={() => chooseLanguage("en")}>English</button><button type="button" aria-pressed={language === "sw"} onClick={() => chooseLanguage("sw")}>Swahili</button></div></div><div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><span className="wordmark-symbol"><Gem size={21} strokeWidth={1.8} /></span><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
-      <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={16} /> List a mineral</>}</button></div>
+      <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={16} /> List a mineral</>}</button></div>
     </header>
 
     <div className="market-content" id="top">
       <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className="market-status"><div className="status-orbit"><span /></div><div><strong>Market open</strong><small>Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
 
       <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">AVAILABLE NOW</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3>{listing.mineral}</h3><span className="weight-tag">{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span>{listing.location}</span></div></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
+        {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span></div></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
       <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location">{request.location}</span></div><h3>{request.mineral}<span className="buyer-shape">{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong>{request.color}</strong></div><div><span>QUALITY</span><strong>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong>{money(request.offer, request.currency)}</strong></div></div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
+        {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div></div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
         <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <>List a mineral <ArrowUpRight size={14} /></>}</button></div>
       </section>
       <footer className="site-footer"><span><Gem size={16} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span><span>PREVIEW MARKET · 2025—26</span></footer>
@@ -1238,7 +1355,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           {editingBuyer && <button className="button button-outline form-submit" type="button" disabled={busyActions.has("buyer-submit")} onClick={() => { setEditingSubmission(null); setDialog("submissions"); }}>Cancel</button>}
         </form>
       </>}
-      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}  <div className="submission-actions">
+      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}  <div className="submission-actions">
   <button
     type="button"
     className="button button-outline"
@@ -1255,7 +1372,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
   >
     {busyActions.has(`submission-delete-seller-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
-</div> </article>)}{myBuyers.map((item) => <article className="submission-item" key={`buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>{item.review_message && <p className="submission-message">Admin message: {item.review_message}</p>}<div className="submission-actions">
+</div> </article>)}{myBuyers.map((item) => <article className="submission-item" key={`buyer-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}<div className="submission-actions">
   <button
     type="button"
     className="button button-outline"
@@ -1273,8 +1390,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     {busyActions.has(`submission-delete-buyer-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
 </div> </article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
-      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list account-scroll-list" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)}</p><p>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
-      {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p><div className="submission-list account-scroll-list" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>{myWantedMinerals.map((item) => <article className="submission-item" key={`wanted-mineral-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-approved">Buyers looking</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>Offer: {money(item.offer, item.currency)} · {item.location}</p></article>)}{!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}</div></>}
+      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list account-scroll-list" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p data-no-translate>{item.weight} {item.unit} · {money(item.price, item.currency)}</p><p data-no-translate>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
+      {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p><div className="submission-list account-scroll-list" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>{myWantedMinerals.map((item) => <article className="submission-item" key={`wanted-mineral-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">Buyers looking</span></div><p data-no-translate>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p><span>Offer: </span><span data-no-translate>{money(item.offer, item.currency)} · {item.location}</span></p></article>)}{!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}</div></>}
       {dialog === "my-licenses" && role === "user" && <><div className="dialog-kicker">SELLER VERIFICATION</div><h2 id="dialog-title">Your licences</h2><p className="dialog-copy">At least one approved licence is required to list a mineral.</p><div className="certificate-options certificate-options-account">{(["dealer", "broker"] as const).map((kind) => {
         const certificate = certificates[kind];
         const canUpload = !certificate || certificate.status === "rejected";

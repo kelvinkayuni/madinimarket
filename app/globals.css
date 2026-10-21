@@ -71,6 +71,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-review-item .button { min-height: 34px; font-size: 10px; }
 .admin-empty { padding: 24px 14px; border: 1px dashed #d8ded5; color: #798278; font-size: 11px; text-align: center; }
 .admin-accounts { padding: 25px 0 8px; border-bottom: 1px solid var(--line); }
+.admin-translations { padding: 25px 0 24px; border-bottom: 1px solid var(--line); }
+.admin-translation-help { max-width: 760px; margin: 0 0 16px; color: #778075; font-size: 10px; line-height: 1.6; }
+.admin-translation-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+.admin-translation-form-actions { display: flex; gap: 8px; }
+.admin-translation-list { margin-top: 18px; border-top: 1px solid #e1e5dd; }
+.admin-translation-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #e8ebe5; }
+.admin-translation-row > div { display: flex; flex-wrap: wrap; gap: 6px 18px; min-width: 0; font-size: 11px; }
+.admin-translation-row > div span { color: #526451; }
+.admin-translation-row .button { min-height: 32px; font-size: 9px; }
 .admin-account-list { border-top: 1px solid #e1e5dd; }
 .admin-account-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(310px, 1.7fr) auto; align-items: center; gap: 14px 20px; padding: 15px 0; border-bottom: 1px solid #e8ebe5; }
 .admin-account-identity, .admin-account-counts { display: grid; gap: 4px; min-width: 0; }
@@ -157,10 +166,15 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 .button-lime { background: var(--lime); color: var(--forest-deep); }
 .button-lime:hover { background: #e0f59a; }
 .menu-dismiss { position: fixed; inset: 0; z-index: 6; border: 0; background: transparent; cursor: default; }
-.menu-popover { position: absolute; z-index: 7; top: 49px; left: -1px; width: 242px; padding: 19px 18px 12px; border: 1px solid var(--line); background: #fff; box-shadow: 0 14px 35px #1e2c201c; animation: pop-in .16s ease-out; }
+.menu-popover { position: absolute; z-index: 7; top: 49px; left: -1px; width: 242px; max-height: calc(100vh - 90px); overflow-y: auto; padding: 19px 18px 12px; border: 1px solid var(--line); background: #fff; box-shadow: 0 14px 35px #1e2c201c; animation: pop-in .16s ease-out; }
 .menu-kicker, .section-kicker, .dialog-kicker { display: block; color: #859084; font-size: 9px; font-weight: 700; }
 .menu-popover > button { width: 100%; padding: 13px 0; display: flex; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid #edf0eb; background: transparent; text-align: left; font-size: 13px; cursor: pointer; }
 .menu-popover > button:hover { color: #577962; }
+.menu-language { display: grid; gap: 8px; padding: 14px 0 0; border-top: 1px solid #edf0eb; }
+.menu-language > span { color: #859084; font-size: 9px; font-weight: 700; }
+.menu-language > div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.menu-language button { min-height: 32px; border: 1px solid #dfe3db; background: #fff; font-size: 10px; cursor: pointer; }
+.menu-language button[aria-pressed="true"] { border-color: #8da38a; background: #edf2e9; color: #345b3d; font-weight: 700; }
 .menu-foot { display: flex; align-items: center; gap: 8px; padding-top: 14px; color: #808980; font-size: 10px; }
 .user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; }
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
@@ -320,6 +334,8 @@ h1, h2, h3, p { margin-top: 0; }
   .username-banner { margin-right: 24px; margin-left: 24px; }
 }
 @media (max-width: 650px) {
+  .admin-translation-form { grid-template-columns: 1fr; }
+  .admin-translation-form-actions { justify-content: flex-start; }
   .market-shell, .market-content { display: block; }
   .market-content { min-height: 0; }
   .listing-section { min-height: auto; display: block; flex: none; }
