@@ -18,6 +18,14 @@ alter table public.listings add constraint listings_price_breakdown_check check 
   and price = seller_price + platform_fee_amount
 );
 
+update public.listings
+set seller_price = price,
+    platform_fee_rate = 0.05,
+    platform_fee_amount = round(price * 0.05, case when currency = 'TZS' then 0 else 2 end),
+    price = price + round(price * 0.05, case when currency = 'TZS' then 0 else 2 end)
+where platform_fee_rate = 0
+  and platform_fee_amount = 0;
+
 create or replace view public.market_listing_feed
 with (security_barrier = true)
 as
