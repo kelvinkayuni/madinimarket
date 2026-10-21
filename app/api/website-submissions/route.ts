@@ -14,6 +14,11 @@ function positiveNumber(values: Record<string, unknown>, key: string) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function weightInGrams(weight: number, unit: string) {
+  const gramsPerUnit: Record<string, number> = { carats: 0.2, g: 1, kg: 1_000, tons: 1_000_000 };
+  return weight * gramsPerUnit[unit];
+}
+
 function validEmail(value: string | null) {
   return Boolean(value && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value));
 }
@@ -34,7 +39,7 @@ async function readOwnedRows(admin: ReturnType<typeof createSupabaseAdminClient>
 async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminClient>, table: "listings" | "buy_requests", accountId: string) {
   if (table === "listings") {
     const { data, error } = await admin.from("listings")
-      .select("id, mineral_name, weight, unit, price, currency, country, region, district, image_path")
+      .select("id, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, price, currency, country, region, district, image_path")
       .eq("website_user_id", accountId)
       .eq("status", "approved")
       .eq("is_active", true)
@@ -161,8 +166,12 @@ export async function POST(request: Request) {
 
   if (kind === "seller") {
     const mineralName = text(values, "mineral_name", 120);
+    const listingType = text(values, "listing_type", 10) ?? "single";
     const weight = positiveNumber(values, "weight");
     const unit = text(values, "unit", 10);
+    const smallestStoneWeight = listingType === "batch" ? positiveNumber(values, "smallest_stone_weight") : null;
+    const largestStoneWeight = listingType === "batch" ? positiveNumber(values, "largest_stone_weight") : null;
+    const stoneWeightUnit = listingType === "batch" ? text(values, "stone_weight_unit", 10) : null;
     const price = positiveNumber(values, "price");
     const currency = text(values, "currency", 3);
     const sellerName = text(values, "seller_name", 120);
@@ -172,8 +181,17 @@ export async function POST(request: Request) {
     const street = text(values, "street", 200);
     const email = text(values, "email", 254);
     const phone = text(values, "phone", 40);
-    if (!mineralName || !weight || !["carats", "g", "kg", "tons"].includes(unit ?? "") || !price || !["TZS", "USD"].includes(currency ?? "") || !sellerName || !country || !region || !district || !street || !validEmail(email) || !phone) {
+    if (!mineralName || !["single", "batch"].includes(listingType) || !weight || !["carats", "g", "kg", "tons"].includes(unit ?? "") || !price || !["TZS", "USD"].includes(currency ?? "") || !sellerName || !country || !region || !district || !street || !validEmail(email) || !phone) {
       return NextResponse.json({ error: "Check the seller listing details and try again." }, { status: 400 });
+    }
+    if (listingType === "batch" && (
+      !smallestStoneWeight ||
+      !largestStoneWeight ||
+      !["carats", "g", "kg"].includes(stoneWeightUnit ?? "") ||
+      smallestStoneWeight > largestStoneWeight ||
+      weightInGrams(largestStoneWeight, stoneWeightUnit ?? "") > weightInGrams(weight, unit ?? "")
+    )) {
+      return NextResponse.json({ error: "Check the batch weights. The smallest stone must not exceed the largest, and the largest must fit within the total batch weight." }, { status: 400 });
     }
     if (stoneCertificate) {
       if (stoneCertificate.size > 10 * 1024 * 1024) return NextResponse.json({ error: "Choose a PDF or JPEG stone certificate no larger than 10 MB." }, { status: 400 });
@@ -213,7 +231,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Choose a mineral photo before submitting." }, { status: 400 });
     }
     rowValues = {
-      ...common, mineral_name: mineralName, weight, unit, price, currency, seller_name: sellerName,
+      ...common, mineral_name: mineralName, listing_type: listingType, weight, unit,
+      smallest_stone_weight: smallestStoneWeight, largest_stone_weight: largestStoneWeight,
+      stone_weight_unit: stoneWeightUnit, price, currency, seller_name: sellerName,
       country, region, district, street, email, phone, image_path: imagePath, stone_certificate_path: stoneCertificatePath,
     };
   } else {

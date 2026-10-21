@@ -33,7 +33,8 @@ select listing.id, listing.mineral_name, listing.weight, listing.unit, listing.p
     select 1 from public.website_account_certificates as certificate
     where certificate.website_user_id = listing.website_user_id
       and certificate.status = 'approved'
-  ) as verified_seller
+  ) as verified_seller,
+  listing.listing_type, listing.smallest_stone_weight, listing.largest_stone_weight, listing.stone_weight_unit
 from public.listings as listing
 where listing.status = 'approved' and listing.is_active = true
   and (

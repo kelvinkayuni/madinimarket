@@ -9,15 +9,17 @@ import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 
 type Unit = "g" | "kg" | "tons" | "carats";
+type StoneWeightUnit = Exclude<Unit, "tons">;
+type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
-type Seller = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
+type Seller = { id: number; user_id?: string; mineral: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
-type AccountMarketListing = Pick<Seller, "id" | "mineral" | "weight" | "unit" | "price" | "currency" | "location" | "image">;
+type AccountMarketListing = Pick<Seller, "id" | "mineral" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "price" | "currency" | "location" | "image">;
 type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location">;
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
@@ -32,6 +34,17 @@ const signedMineralImageUrls = new Map<string, { url: string; expiresAt: number 
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
 const isAdminRole = (role: "user" | "admin" | null): boolean => role === "admin";
+const weightInGrams = (weight: number, unit: Unit | StoneWeightUnit) =>
+  weight * ({ carats: 0.2, g: 1, kg: 1_000, tons: 1_000_000 }[unit]);
+const isValidBatchWeightRange = (
+  totalWeight: number,
+  totalUnit: Unit,
+  smallestWeight: number,
+  largestWeight: number,
+  stoneUnit: StoneWeightUnit,
+) =>
+  smallestWeight <= largestWeight &&
+  weightInGrams(largestWeight, stoneUnit) <= weightInGrams(totalWeight, totalUnit);
 
 function readStoredArray<T>(key: string): T[] {
   try {
@@ -123,7 +136,11 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
     }
     return {
       id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
+      listing_type: row.listing_type as ListingType | undefined,
       unit: row.unit as Unit, price: String(row.price), currency: row.currency as Currency,
+      smallest_stone_weight: row.smallest_stone_weight == null ? undefined : String(row.smallest_stone_weight),
+      largest_stone_weight: row.largest_stone_weight == null ? undefined : String(row.largest_stone_weight),
+      stone_weight_unit: row.stone_weight_unit as StoneWeightUnit | undefined,
       seller: row.seller_name ?? "", country: row.country, region: row.region, district: row.district,
       location: [row.district, row.region, row.country].filter(Boolean).join(", "), email: row.email ?? "", phone: row.phone ?? "",
       image, image_path: row.image_path, accent: "#43866b", status: row.status as SubmissionStatus,
@@ -205,6 +222,7 @@ export default function Marketplace() {
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
   const [websiteDrafts, setWebsiteDrafts] = useState<{ seller: WebsiteDraft | null; buyer: WebsiteDraft | null }>({ seller: null, buyer: null });
   const [editingSubmission, setEditingSubmission] = useState<EditingSubmission>(null);
+  const [sellerListingType, setSellerListingType] = useState<ListingType>("single");
   const draftSaveTimers = useRef<{ seller: number | null; buyer: number | null }>({ seller: null, buyer: null });
   const draftRestoreDialog = useRef<Dialog>(null);
   const sellerRail = useRef<HTMLDivElement>(null);
@@ -407,10 +425,15 @@ export default function Marketplace() {
           const result = await response.json();
           if (!response.ok) throw new Error(result.error ?? "Could not load your approved market items.");
           setMyMarketMinerals((result.marketSellers ?? []).map((item: {
-            id: number; mineral_name: string; weight: string | number; unit: Unit; price: string | number;
+            id: number; mineral_name: string; listing_type?: ListingType; weight: string | number; unit: Unit;
+            smallest_stone_weight?: string | number | null; largest_stone_weight?: string | number | null; stone_weight_unit?: StoneWeightUnit | null; price: string | number;
             currency: Currency; country: string; region: string; district: string; signed_image_url: string;
           }) => ({
-            id: Number(item.id), mineral: item.mineral_name, weight: String(item.weight), unit: item.unit,
+            id: Number(item.id), mineral: item.mineral_name, listing_type: item.listing_type,
+            weight: String(item.weight), unit: item.unit,
+            smallest_stone_weight: item.smallest_stone_weight == null ? undefined : String(item.smallest_stone_weight),
+            largest_stone_weight: item.largest_stone_weight == null ? undefined : String(item.largest_stone_weight),
+            stone_weight_unit: item.stone_weight_unit ?? undefined,
             price: String(item.price), currency: item.currency,
             location: [item.district, item.region, item.country].filter(Boolean).join(", "),
             image: item.signed_image_url,
@@ -425,7 +448,9 @@ export default function Marketplace() {
           })));
         } else {
           setMyMarketMinerals(sellers.filter((item) => item.user_id === userId && item.status === "approved").map((item) => ({
-            id: item.id, mineral: item.mineral, weight: item.weight, unit: item.unit, price: item.price,
+            id: item.id, mineral: item.mineral, listing_type: item.listing_type, weight: item.weight, unit: item.unit,
+            smallest_stone_weight: item.smallest_stone_weight, largest_stone_weight: item.largest_stone_weight,
+            stone_weight_unit: item.stone_weight_unit, price: item.price,
             currency: item.currency, location: item.location, image: item.image,
           })));
           setMyWantedMinerals(buyers.filter((item) => item.user_id === userId && item.status === "approved").map((item) => ({
@@ -468,6 +493,7 @@ export default function Marketplace() {
     if (isSupabaseConfigured && role === "user") await refreshWebsiteDrafts().catch(() => {});
     setSellerImagePreview(null);
     setEditingSubmission(null);
+    setSellerListingType("single");
     openDialog(type);
     });
   };
@@ -587,6 +613,9 @@ export default function Marketplace() {
       if (name === "submissionId") continue;
       const field = form.elements.namedItem(name);
       if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.value = String(value);
+      if (kind === "seller" && name === "listing_type" && (value === "single" || value === "batch") && field instanceof HTMLSelectElement) {
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+      }
     }
     if (kind === "seller" && draft.image_path) {
       const imageInput = form.elements.namedItem("image");
@@ -877,6 +906,7 @@ export default function Marketplace() {
       }
       setSellerImagePreview(null);
       setEditingSubmission(kind === "seller" ? { kind, item: currentItem as Seller } : { kind, item: currentItem as Buyer });
+      if (kind === "seller") setSellerListingType((currentItem as Seller).listing_type ?? "single");
       setDialog(kind === "seller" ? "sell" : "buy");
     });
   };
@@ -1017,6 +1047,20 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     const form = new FormData(formElement);
     const file = form.get("image");
     const existing = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
+    const listingType = form.get("listing_type") === "batch" ? "batch" : "single";
+    const totalWeight = Number(form.get("weight"));
+    const smallestStoneWeight = Number(form.get("smallest_stone_weight"));
+    const largestStoneWeight = Number(form.get("largest_stone_weight"));
+    const stoneWeightUnit = form.get("stone_weight_unit");
+    if (listingType === "batch" && (
+      !Number.isFinite(smallestStoneWeight) ||
+      !Number.isFinite(largestStoneWeight) ||
+      !["carats", "g", "kg"].includes(String(stoneWeightUnit)) ||
+      !isValidBatchWeightRange(totalWeight, form.get("unit") as Unit, smallestStoneWeight, largestStoneWeight, stoneWeightUnit as StoneWeightUnit)
+    )) {
+      setNotice("Check the smallest and largest stone weights. The smallest must not exceed the largest, and the largest must fit within the total batch weight.");
+      return;
+    }
     let image = existing?.image ?? "";
     let imagePath = existing?.image_path ?? null;
     let imageData = "";
@@ -1031,6 +1075,10 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     }
     const listing: Seller = {
       id: existing?.id ?? Date.now(), mineral: String(form.get("mineral")), weight: String(form.get("weight")), unit: form.get("unit") as Unit,
+      listing_type: listingType,
+      smallest_stone_weight: listingType === "batch" ? String(smallestStoneWeight) : undefined,
+      largest_stone_weight: listingType === "batch" ? String(largestStoneWeight) : undefined,
+      stone_weight_unit: listingType === "batch" ? stoneWeightUnit as StoneWeightUnit : undefined,
       price: String(form.get("price")), currency: form.get("currency") as Currency, seller: String(form.get("seller")),
       location: [form.get("street"), form.get("district"), form.get("region"), form.get("country")].filter(Boolean).join(", "),
       country: String(form.get("country")), region: String(form.get("region")), district: String(form.get("district")), street: String(form.get("street")),
@@ -1045,7 +1093,9 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       if (existing?.id) submission.set("id", String(existing.id));
       submission.set("imageData", imageData);
       submission.set("values", JSON.stringify({
-        mineral_name: listing.mineral, weight: listing.weight, unit: listing.unit, price: listing.price,
+        mineral_name: listing.mineral, listing_type: listing.listing_type, weight: listing.weight, unit: listing.unit,
+        smallest_stone_weight: listing.smallest_stone_weight, largest_stone_weight: listing.largest_stone_weight,
+        stone_weight_unit: listing.stone_weight_unit, price: listing.price,
         currency: listing.currency, seller_name: listing.seller, country: listing.country, region: listing.region,
         district: listing.district, street: listing.street, email: listing.email, phone: listing.phone,
       }));
@@ -1070,7 +1120,9 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         imagePath = path;
       }
       const values = {
-        user_id: userId, mineral_name: listing.mineral, weight: listing.weight, unit: listing.unit,
+        user_id: userId, mineral_name: listing.mineral, listing_type: listing.listing_type,
+        weight: listing.weight, unit: listing.unit, smallest_stone_weight: listing.smallest_stone_weight ?? null,
+        largest_stone_weight: listing.largest_stone_weight ?? null, stone_weight_unit: listing.stone_weight_unit ?? null,
         price: listing.price, currency: listing.currency, seller_name: listing.seller,
         country: listing.country, region: listing.region, district: listing.district, street: listing.street,
         email: listing.email, phone: listing.phone, image_path: imagePath,
@@ -1235,7 +1287,9 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             {pendingSellers.length ? <div className="admin-queue-list">{pendingSellers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-seller-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3></div><strong>{money(item.price, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
               <div className="admin-submission-details">
-                <p>{item.weight} {item.unit} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p>
+                <p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {item.seller}</p>
+                {item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}
+                <p>{item.location} · {item.phone} · {item.email}</p>
                 {item.image ? <div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div> : <p className="admin-image-missing">No mineral photo attached.</p>}
                 {item.stone_certificate_url && <p><a className="certificate-file-link" href={item.stone_certificate_url} target="_blank" rel="noreferrer">Review stone certificate</a></p>}
                 <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
@@ -1276,7 +1330,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className="market-status"><div className="status-orbit"><span /></div><div><strong>Market open</strong><small>Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
 
       <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">AVAILABLE NOW</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span></div></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
+        {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span></div></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
@@ -1298,10 +1352,18 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         <p className="dialog-copy">An admin must approve the listing before it appears on the market.</p>
         <form className="form-stack form-scroll" onSubmit={addSeller}>
           <Field label="Mineral name" name="mineral" placeholder="e.g. Tanzanite" defaultValue={editingSeller?.mineral ?? ""} required />
+          <SelectField label="Listing type" name="listing_type" defaultValue={editingSeller?.listing_type ?? "single"} options={[["single", "Single piece"], ["batch", "Batch"]]} onChange={(value) => setSellerListingType(value as ListingType)} />
           <div className="field-row field-row-weight">
-            <Field label="Weight" name="weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.weight ?? ""} required />
+            <Field label={sellerListingType === "batch" ? "Total weight of batch" : "Weight"} name="weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.weight ?? ""} required />
             <SelectField label="Unit" name="unit" defaultValue={editingSeller?.unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"], ["tons", "Tons"]]} />
           </div>
+          {sellerListingType === "batch" && <>
+            <div className="field-row field-row-weight">
+              <Field label="Smallest stone weight" name="smallest_stone_weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.smallest_stone_weight ?? ""} required />
+              <Field label="Largest stone weight" name="largest_stone_weight" type="number" min="0.01" step="any" defaultValue={editingSeller?.largest_stone_weight ?? ""} required />
+            </div>
+            <SelectField label="Stone weight unit" name="stone_weight_unit" defaultValue={editingSeller?.stone_weight_unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"]]} />
+          </>}
           <div className="field-row field-row-weight">
             <Field label="Price" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.price ?? ""} required />
             <SelectField label="Currency" name="currency" defaultValue={editingSeller?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} />
@@ -1355,7 +1417,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           {editingBuyer && <button className="button button-outline form-submit" type="button" disabled={busyActions.has("buyer-submit")} onClick={() => { setEditingSubmission(null); setDialog("submissions"); }}>Cancel</button>}
         </form>
       </>}
-      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}  <div className="submission-actions">
+      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}  <div className="submission-actions">
   <button
     type="button"
     className="button button-outline"
@@ -1390,7 +1452,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     {busyActions.has(`submission-delete-buyer-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
 </div> </article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
-      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list account-scroll-list" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p data-no-translate>{item.weight} {item.unit} · {money(item.price, item.currency)}</p><p data-no-translate>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
+      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list account-scroll-list" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)}</p>{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p data-no-translate>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
       {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p><div className="submission-list account-scroll-list" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>{myWantedMinerals.map((item) => <article className="submission-item" key={`wanted-mineral-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">Buyers looking</span></div><p data-no-translate>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p><span>Offer: </span><span data-no-translate>{money(item.offer, item.currency)} · {item.location}</span></p></article>)}{!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}</div></>}
       {dialog === "my-licenses" && role === "user" && <><div className="dialog-kicker">SELLER VERIFICATION</div><h2 id="dialog-title">Your licences</h2><p className="dialog-copy">At least one approved licence is required to list a mineral.</p><div className="certificate-options certificate-options-account">{(["dealer", "broker"] as const).map((kind) => {
         const certificate = certificates[kind];
@@ -1415,7 +1477,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           {certificate?.status === "approved" && <p className="certificate-status-note">Verified. Your account is enabled to list minerals.</p>}
         </article>;
       })}</div></>}
-      {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p><p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
+      {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p>{item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
   </main>;
 }
@@ -1434,6 +1496,6 @@ function StoneCertificateField() {
   const [fileName, setFileName] = useState("");
   return <label className="field-label">Stone certificate (optional)<input className="file-input" name="stoneCertificate" type="file" accept="application/pdf,image/jpeg,.pdf,.jpg,.jpeg" onChange={(event) => setFileName(event.currentTarget.files?.[0]?.name ?? "")} /><span className="file-drop"><Plus size={17} /><span>{fileName || "Choose PDF or JPEG"}</span><small>Optional · max 10 MB</small></span></label>;
 }
-function SelectField({ label, name, options, defaultValue = "" }: { label: string; name: string; options: [string, string][]; defaultValue?: string }) {
-  return <label className="field-label">{label}<span className="select-wrap"><select className="text-input" name={name} defaultValue={defaultValue} required><option value="" disabled>Select {label.toLowerCase()}</option>{options.map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select><ChevronDown size={15} /></span></label>;
+function SelectField({ label, name, options, defaultValue = "", onChange }: { label: string; name: string; options: [string, string][]; defaultValue?: string; onChange?: (value: string) => void }) {
+  return <label className="field-label">{label}<span className="select-wrap"><select className="text-input" name={name} defaultValue={defaultValue} required onChange={(event) => onChange?.(event.currentTarget.value)}><option value="" disabled>Select {label.toLowerCase()}</option>{options.map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select><ChevronDown size={15} /></span></label>;
 }

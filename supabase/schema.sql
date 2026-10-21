@@ -34,8 +34,12 @@ create table if not exists public.listings (
   user_id uuid references public.profiles (id) on delete set null,
   website_user_id uuid references public.website_accounts (id) on delete cascade,
   mineral_name text not null,
+  listing_type text not null default 'single',
   weight numeric not null,
   unit text not null check (unit in ('carats', 'g', 'kg', 'tons')),
+  smallest_stone_weight numeric,
+  largest_stone_weight numeric,
+  stone_weight_unit text,
   price numeric not null,
   currency text not null check (currency in ('TZS', 'USD')),
   seller_name text not null,
@@ -48,6 +52,29 @@ create table if not exists public.listings (
   image_url text,
   is_active boolean default true not null,
   created_at timestamptz default now() not null
+);
+
+alter table public.listings
+  add column if not exists listing_type text not null default 'single',
+  add column if not exists smallest_stone_weight numeric,
+  add column if not exists largest_stone_weight numeric,
+  add column if not exists stone_weight_unit text;
+alter table public.listings drop constraint if exists listings_listing_type_check;
+alter table public.listings add constraint listings_listing_type_check check (listing_type in ('single', 'batch'));
+alter table public.listings drop constraint if exists listings_stone_weight_unit_check;
+alter table public.listings add constraint listings_stone_weight_unit_check check (stone_weight_unit is null or stone_weight_unit in ('carats', 'g', 'kg'));
+alter table public.listings drop constraint if exists listings_batch_weights_check;
+alter table public.listings add constraint listings_batch_weights_check check (
+  (listing_type = 'single' and smallest_stone_weight is null and largest_stone_weight is null and stone_weight_unit is null)
+  or
+  (listing_type = 'batch'
+    and smallest_stone_weight is not null
+    and largest_stone_weight is not null
+    and smallest_stone_weight > 0
+    and largest_stone_weight >= smallest_stone_weight
+    and stone_weight_unit is not null
+    and largest_stone_weight * case stone_weight_unit when 'carats' then 0.2 when 'kg' then 1000 else 1 end
+      <= weight * case unit when 'carats' then 0.2 when 'kg' then 1000 when 'tons' then 1000000 else 1 end)
 );
 
 create table if not exists public.buy_requests (
