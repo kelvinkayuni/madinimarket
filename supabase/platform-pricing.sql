@@ -18,18 +18,15 @@ alter table public.listings add constraint listings_price_breakdown_check check 
   and price = seller_price + platform_fee_amount
 );
 
-create or replace view public.marketplace_listings
+create or replace view public.market_listing_feed
 with (security_barrier = true)
 as
-select listing.id, listing.mineral_name, listing.weight, listing.unit, listing.price, listing.currency,
-  listing.country, listing.region, listing.district, listing.image_path, listing.status, listing.created_at, listing.is_active,
+select listing.*,
   exists (
     select 1 from public.website_account_certificates as certificate
     where certificate.website_user_id = listing.website_user_id
       and certificate.status = 'approved'
-  ) as verified_seller,
-  listing.listing_type, listing.smallest_stone_weight, listing.largest_stone_weight, listing.stone_weight_unit,
-  listing.seller_price, listing.platform_fee_rate, listing.platform_fee_amount
+  ) as verified_seller
 from public.listings as listing
 where listing.status = 'approved' and listing.is_active = true
   and (
@@ -40,4 +37,5 @@ where listing.status = 'approved' and listing.is_active = true
     )
   );
 
-grant select on public.marketplace_listings to anon, authenticated;
+grant select on public.market_listing_feed to anon, authenticated;
+notify pgrst, 'reload schema';

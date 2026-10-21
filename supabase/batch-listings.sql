@@ -51,3 +51,23 @@ where listing.status = 'approved' and listing.is_active = true
 grant select on public.marketplace_listings to anon, authenticated;
 grant select, insert, update, delete on public.listings, public.buy_requests to authenticated;
 grant all privileges on public.listings, public.buy_requests to service_role;
+
+create or replace view public.market_listing_feed
+with (security_barrier = true)
+as
+select listing.*,
+  exists (
+    select 1 from public.website_account_certificates as certificate
+    where certificate.website_user_id = listing.website_user_id
+      and certificate.status = 'approved'
+  ) as verified_seller
+from public.listings as listing
+where listing.status = 'approved' and listing.is_active = true
+  and (
+    listing.website_user_id is null
+    or exists (
+      select 1 from public.website_accounts as account
+      where account.id = listing.website_user_id and account.is_active = true
+    )
+  );
+grant select on public.market_listing_feed to anon, authenticated;

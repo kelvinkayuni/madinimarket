@@ -15,6 +15,6 @@ export function calculateListingPrice(sellerPrice: number, currency: ListingCurr
     sellerPrice: roundedSellerPrice,
     platformFeeRate: PLATFORM_FEE_RATE,
     platformFeeAmount: feeAmount,
-    marketPrice: roundedSellerPrice + feeAmount,
+    marketPrice: roundForCurrency(roundedSellerPrice + feeAmount, currency),
   };
 }

@@ -104,7 +104,7 @@ async function getSignedMineralImageUrl(
 async function loadMarketplaceListings(includeOwnSubmissions = false, adminAccessToken?: string) {
   const supabase = getSupabaseBrowserClient();
   const [sellerResult, buyerResult] = await Promise.all([
-    supabase.from("marketplace_listings").select("*").order("created_at", { ascending: false }),
+    supabase.from("market_listing_feed").select("*").order("created_at", { ascending: false }),
     supabase.from("marketplace_buy_requests").select("*").order("created_at", { ascending: false }),
   ]);
   if (sellerResult.error) throw sellerResult.error;

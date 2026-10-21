@@ -12,6 +12,26 @@ create table if not exists public.website_account_certificates (
   unique (website_user_id, kind)
 );
 
+create or replace view public.market_listing_feed
+with (security_barrier = true)
+as
+select listing.*,
+exists (
+  select 1 from public.website_account_certificates as certificate
+  where certificate.website_user_id = listing.website_user_id
+    and certificate.status = 'approved'
+) as verified_seller
+from public.listings as listing
+where listing.status = 'approved' and listing.is_active = true
+and (
+  listing.website_user_id is null
+  or exists (
+    select 1 from public.website_accounts as account
+    where account.id = listing.website_user_id and account.is_active = true
+  )
+);
+grant select on public.market_listing_feed to anon, authenticated;
+
 alter table public.website_account_certificates enable row level security;
 revoke all on public.website_account_certificates from anon, authenticated;
 grant all on public.website_account_certificates to service_role;

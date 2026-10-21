@@ -302,6 +302,26 @@ where request.status = 'approved' and request.is_active = true
 
 grant select on public.marketplace_listings, public.marketplace_buy_requests to anon, authenticated;
 
+create or replace view public.market_listing_feed
+with (security_barrier = true)
+as
+select listing.*,
+  exists (
+    select 1 from public.website_account_certificates as certificate
+    where certificate.website_user_id = listing.website_user_id
+      and certificate.status = 'approved'
+  ) as verified_seller
+from public.listings as listing
+where listing.status = 'approved' and listing.is_active = true
+  and (
+    listing.website_user_id is null
+    or exists (
+      select 1 from public.website_accounts as account
+      where account.id = listing.website_user_id and account.is_active = true
+    )
+  );
+grant select on public.market_listing_feed to anon, authenticated;
+
 insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
 values ('mineral-images', 'mineral-images', false, array['image/png', 'image/jpeg'], 5242880)
 on conflict (id) do update set public = false, allowed_mime_types = excluded.allowed_mime_types, file_size_limit = excluded.file_size_limit;
