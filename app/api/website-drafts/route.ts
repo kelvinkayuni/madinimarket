@@ -7,7 +7,7 @@ import { getWebsiteAccountId } from "@/lib/website-session";
 type DraftKind = "seller" | "buyer";
 
 const allowedFields: Record<DraftKind, Set<string>> = {
-  seller: new Set(["mineral", "weight", "unit", "price", "currency", "seller", "country", "region", "district", "street", "email", "phone"]),
+  seller: new Set(["mineral", "listing_type", "weight", "unit", "smallest_stone_weight", "largest_stone_weight", "stone_weight_unit", "price", "currency", "seller", "country", "region", "district", "street", "email", "phone"]),
   buyer: new Set(["mineral", "weight", "unit", "color", "shape", "quality", "offer", "currency", "buyer", "location", "email", "phone"]),
 };
 
