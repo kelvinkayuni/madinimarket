@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, FileSpreadsheet, FileText, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
 import { FormEvent, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -1368,6 +1368,15 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       }).format(amount),
       currency,
     );
+    const exportLedger = async (format: "pdf" | "excel") => {
+      try {
+        const { downloadLedgerExcel, downloadLedgerPdf } = await import("@/lib/ledger-report");
+        if (format === "pdf") downloadLedgerPdf(adminListingLedger, ledgerTotals);
+        else downloadLedgerExcel(adminListingLedger, ledgerTotals);
+      } catch (error) {
+        setNotice(error instanceof Error ? `Could not export the seller ledger: ${error.message}` : `Could not export the seller ledger as ${format.toUpperCase()}.`);
+      }
+    };
     return <main className="admin-shell">
       <header className="admin-header">
         <a className="admin-brand" href="#admin-home"><Gem size={20} /> MADINIMARKET <span>ADMIN</span></a>
@@ -1385,7 +1394,13 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         <section className="admin-ledger" aria-labelledby="admin-ledger-heading">
           <div className="admin-queue-heading admin-ledger-heading">
             <div><span>LISTING ACCOUNTING</span><h2 id="admin-ledger-heading">Seller price ledger</h2></div>
-            <div className="admin-ledger-live"><span className="admin-ledger-live-dot" /> Live · refreshes every 10 seconds</div>
+            <div className="admin-ledger-tools">
+              <div className="admin-ledger-live"><span className="admin-ledger-live-dot" /> Live · refreshes every 10 seconds</div>
+              <div className="admin-ledger-export">
+                <button className="button button-outline" type="button" disabled={!adminListingLedger.length} onClick={() => void exportLedger("pdf")}><FileText size={14} /> PDF</button>
+                <button className="button button-outline" type="button" disabled={!adminListingLedger.length} onClick={() => void exportLedger("excel")}><FileSpreadsheet size={14} /> Excel</button>
+              </div>
+            </div>
           </div>
           <p className="admin-ledger-note">Tracks every submitted seller listing, including listings awaiting review. Fee totals are pricing amounts only—not confirmed sales, collected revenue, or seller payouts.</p>
           {adminLedgerError && <p className="admin-ledger-error" role="alert">{adminLedgerError}</p>}
