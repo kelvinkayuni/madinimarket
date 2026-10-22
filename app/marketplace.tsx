@@ -256,6 +256,9 @@ export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
+  const [accountSearch, setAccountSearch] = useState("");
+  const accountListRef = useRef<HTMLDivElement>(null);
+  const accountListScrollTop = useRef<number | null>(null);
   const [adminListingLedger, setAdminListingLedger] = useState<AdminListingLedgerEntry[]>([]);
   const [adminLedgerUpdatedAt, setAdminLedgerUpdatedAt] = useState<Date | null>(null);
   const [adminLedgerError, setAdminLedgerError] = useState("");
@@ -295,6 +298,19 @@ export default function Marketplace() {
   const draftRestoreDialog = useRef<Dialog>(null);
   const sellerRail = useRef<HTMLDivElement>(null);
   const buyerRail = useRef<HTMLDivElement>(null);
+  const filteredWebsiteAccounts = [...websiteAccounts]
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+    .filter((account) => {
+      const search = accountSearch.trim().toLocaleLowerCase();
+      return !search || account.display_name.toLocaleLowerCase().includes(search) || account.username.toLocaleLowerCase().includes(search);
+    });
+
+  useLayoutEffect(() => {
+    const scrollTop = accountListScrollTop.current;
+    if (scrollTop === null) return;
+    if (accountListRef.current) accountListRef.current.scrollTop = scrollTop;
+    accountListScrollTop.current = null;
+  }, [websiteAccounts]);
 
   const withProgress = async (key: string, action: () => Promise<void>) => {
     if (busyActions.has(key)) return;
@@ -822,7 +838,9 @@ export default function Marketplace() {
   const refreshAdminAccounts = async () => {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
     if (!session) throw new Error("Admin session expired.");
-    setWebsiteAccounts(await loadAdminAccounts(session.access_token));
+    const accounts = await loadAdminAccounts(session.access_token);
+    accountListScrollTop.current = accountListRef.current?.scrollTop ?? 0;
+    setWebsiteAccounts(accounts);
   };
   const refreshAdminCertificates = async () => {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
@@ -1412,7 +1430,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         </section>
         <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
-          {websiteAccounts.length ? <div className="admin-account-list">{websiteAccounts.map((account) => {
+          <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search accounts by name or user ID" placeholder="Search name or user ID (MM-xxxx)" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} /></label>
+          {websiteAccounts.length ? filteredWebsiteAccounts.length ? <div className="admin-account-list-scroll" ref={accountListRef}><div className="admin-account-list">{filteredWebsiteAccounts.map((account) => {
             const totalPosts = account.listings.total + account.buying_requests.total;
             const accountCertificates = adminCertificates.filter((certificate) => certificate.website_user_id === account.id);
             const pendingAccountCertificates = accountCertificates.filter((certificate) => certificate.status === "pending");
@@ -1451,7 +1470,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 </article>)}</div>
               </details>}
             </article>;
-          })}</div> : <p className="admin-empty">No website accounts have been created.</p>}
+          })}</div></div> : <p className="admin-empty">No accounts match “{accountSearch.trim()}”.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>
         <div className="admin-queues">
           <section className="admin-queue" aria-labelledby="admin-sellers-heading">

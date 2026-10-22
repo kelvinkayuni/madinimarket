@@ -109,7 +109,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-translation-row > div { display: flex; flex-wrap: wrap; gap: 6px 18px; min-width: 0; font-size: 11px; }
 .admin-translation-row > div span { color: #526451; }
 .admin-translation-row .button { min-height: 32px; font-size: 9px; }
-.admin-account-list { border-top: 1px solid #e1e5dd; }
+.admin-account-search { display: flex; align-items: center; gap: 10px; max-width: 420px; height: 40px; margin: 14px 0; padding: 0 11px; border: 1px solid #d8ded5; border-radius: 2px; background: #fff; color: #788176; }
+.admin-account-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; font-size: 11px; }
+.admin-account-search input::placeholder { color: #9a9f98; }
+.admin-account-search:focus-within { border-color: #758b72; box-shadow: 0 0 0 2px rgb(88 128 94 / 12%); }
+.admin-account-list-scroll { max-height: 1400px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border-top: 1px solid #e1e5dd; }
 .admin-account-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(310px, 1.7fr) auto; align-items: center; gap: 14px 20px; padding: 15px 0; border-bottom: 1px solid #e8ebe5; }
 .admin-account-identity, .admin-account-counts { display: grid; gap: 4px; min-width: 0; }
 .admin-account-identity strong { font-size: 12px; }
