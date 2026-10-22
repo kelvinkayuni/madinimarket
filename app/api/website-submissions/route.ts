@@ -112,8 +112,19 @@ export async function POST(request: Request) {
   if (kind !== "seller" && stoneCertificate) return NextResponse.json({ error: "Stone certificates can only be attached to mineral listings." }, { status: 400 });
 
   const table = kind === "seller" ? "listings" : "buy_requests";
+  const admin = createSupabaseAdminClient();
+  if (text(values, "currency", 3) === "USD") {
+    const { data: currencySettings, error } = await admin.from("marketplace_settings")
+      .select("usd_enabled")
+      .eq("id", true)
+      .single();
+    if (error) return NextResponse.json({ error: "Could not verify marketplace currency settings." }, { status: 503 });
+    if (!currencySettings.usd_enabled) {
+      return NextResponse.json({ error: "USD is disabled. Select TSh to submit." }, { status: 400 });
+    }
+  }
   if (kind === "seller") {
-    const { count, error } = await createSupabaseAdminClient().from("website_account_certificates")
+    const { count, error } = await admin.from("website_account_certificates")
       .select("id", { count: "exact", head: true })
       .eq("website_user_id", accountId)
       .eq("status", "approved");
@@ -122,7 +133,6 @@ export async function POST(request: Request) {
   }
   const id = Number(body.id);
   const editing = Number.isSafeInteger(id) && id > 0;
-  const admin = createSupabaseAdminClient();
   const { data: draft, error: draftError } = await admin.from("website_account_drafts")
     .select("image_path")
     .eq("website_user_id", accountId)

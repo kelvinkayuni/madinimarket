@@ -41,6 +41,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-summary > div > span { color: #7b847a; font-size: 9px; font-weight: 700; }
 .admin-summary strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--forest); font-family: var(--font-display), Georgia, serif; font-size: 30px; font-weight: 500; }
 .admin-summary small { color: #92998f; font-size: 9px; }
+.admin-currency-control { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding: 14px 16px; border: 1px solid #e1e5dd; background: #fbfcf9; }
+.admin-currency-control > div { display: grid; gap: 4px; }
+.admin-currency-control > div strong { color: #354b39; font-size: 11px; }
+.admin-currency-control > div span { color: #778075; font-size: 9px; line-height: 1.5; }
+.admin-currency-switch { position: relative; flex: 0 0 auto; width: 44px; height: 25px; padding: 3px; border: 1px solid #b9c2b6; border-radius: 20px; background: #e1e5df; cursor: pointer; transition: background .18s ease, border-color .18s ease; }
+.admin-currency-switch > span { display: block; width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 20%); transition: transform .18s ease; }
+.admin-currency-switch.is-on { border-color: #3e6f4d; background: #3e6f4d; }
+.admin-currency-switch.is-on > span { transform: translateX(19px); }
+.admin-currency-switch:disabled { cursor: wait; opacity: .6; }
+.admin-currency-switch:focus-visible { outline: 2px solid #58805e; outline-offset: 3px; }
 .admin-ledger { padding: 26px 0 24px; border-bottom: 1px solid var(--line); }
 .admin-ledger-heading { align-items: flex-end; }
 .admin-ledger-heading h2 { margin: 4px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 22px; font-weight: 500; }

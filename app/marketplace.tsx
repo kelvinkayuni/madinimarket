@@ -256,6 +256,8 @@ export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
+  const [usdEnabled, setUsdEnabled] = useState(true);
+  const [currencySettingsLoaded, setCurrencySettingsLoaded] = useState(!isSupabaseConfigured);
   const [accountSearch, setAccountSearch] = useState("");
   const accountListRef = useRef<HTMLDivElement>(null);
   const accountListScrollTop = useRef<number | null>(null);
@@ -294,6 +296,9 @@ export default function Marketplace() {
   const [websiteDrafts, setWebsiteDrafts] = useState<{ seller: WebsiteDraft | null; buyer: WebsiteDraft | null }>({ seller: null, buyer: null });
   const [editingSubmission, setEditingSubmission] = useState<EditingSubmission>(null);
   const [sellerListingType, setSellerListingType] = useState<ListingType>("single");
+  const currencyOptions: [string, string][] = currencySettingsLoaded && usdEnabled
+    ? [["TZS", "TZS"], ["USD", "USD"]]
+    : [["TZS", "TSh"]];
   const draftSaveTimers = useRef<{ seller: number | null; buyer: number | null }>({ seller: null, buyer: null });
   const draftRestoreDialog = useRef<Dialog>(null);
   const sellerRail = useRef<HTMLDivElement>(null);
@@ -358,6 +363,38 @@ export default function Marketplace() {
     return () => {
       active = false;
       window.clearTimeout(preferenceTimer);
+    };
+  }, []);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
+    let loaded = false;
+    const refreshCurrencySettings = async () => {
+      try {
+        const response = await fetch("/api/currency-settings", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load marketplace currency settings.");
+        if (typeof result.usdEnabled !== "boolean") throw new Error("Marketplace currency settings are invalid.");
+        loaded = true;
+        if (active) {
+          setUsdEnabled(result.usdEnabled);
+          setCurrencySettingsLoaded(true);
+        }
+      } catch (error) {
+        if (!active) return;
+        if (!loaded) {
+          setUsdEnabled(false);
+          setCurrencySettingsLoaded(true);
+          setNotice(error instanceof Error ? error.message : "Could not load marketplace currency settings.");
+        }
+        loaded = true;
+      }
+    };
+    void refreshCurrencySettings();
+    const interval = window.setInterval(() => void refreshCurrencySettings(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
     };
   }, []);
   const chooseLanguage = (nextLanguage: Language) => {
@@ -842,6 +879,30 @@ export default function Marketplace() {
     accountListScrollTop.current = accountListRef.current?.scrollTop ?? 0;
     setWebsiteAccounts(accounts);
   };
+  const updateUsdAvailability = async (enabled: boolean) => {
+    await withProgress("currency-setting", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/currency-settings", {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ usdEnabled: enabled }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not update marketplace currency settings.");
+        if (typeof result.usdEnabled !== "boolean") throw new Error("Marketplace currency settings are invalid.");
+        setUsdEnabled(result.usdEnabled);
+        setNotice(result.usdEnabled ? "USD currency is enabled for sellers and buyers." : "USD currency is disabled. TSh is the only available currency.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update marketplace currency settings.");
+      }
+    });
+  };
   const refreshAdminCertificates = async () => {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
     if (!session) throw new Error("Admin session expired.");
@@ -1180,7 +1241,11 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     const stoneWeightUnit = form.get("stone_weight_unit");
     const sellerPrice = Number(form.get("price"));
     const currency = form.get("currency") as Currency;
-    if (!Number.isFinite(sellerPrice) || sellerPrice <= 0 || !["TZS", "USD"].includes(currency)) {
+    if (!Number.isFinite(sellerPrice) || sellerPrice <= 0 || !["TZS", "USD"].includes(currency) || (currency === "USD" && (!currencySettingsLoaded || !usdEnabled))) {
+      if (currency === "USD" && (!currencySettingsLoaded || !usdEnabled)) {
+        setNotice("USD is disabled. Select TSh to submit this listing.");
+        return;
+      }
       setNotice("Enter a valid seller price and currency.");
       return;
     }
@@ -1292,10 +1357,15 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     await withProgress("buyer-submit", async () => {
     const form = new FormData(formElement);
     const existing = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
+    const currency = form.get("currency") as Currency;
+    if (!["TZS", "USD"].includes(currency) || (currency === "USD" && (!currencySettingsLoaded || !usdEnabled))) {
+      setNotice(currency === "USD" ? "USD is disabled. Select TSh to submit this request." : "Select a valid currency before submitting this request.");
+      return;
+    }
     const listing: Buyer = {
       id: existing?.id ?? Date.now(), mineral: String(form.get("mineral")), weight: String(form.get("weight")), unit: form.get("unit") as Unit,
       color: String(form.get("color")), shape: form.get("shape") as "Cut" | "Uncut", quality: String(form.get("quality")),
-      offer: String(form.get("offer")), currency: form.get("currency") as Currency, buyer: String(form.get("buyer")),
+      offer: String(form.get("offer")), currency, buyer: String(form.get("buyer")),
       location: String(form.get("location")), email: String(form.get("email")), phone: String(form.get("phone")),
       user_id: userId, status: "pending", review_message: null,
     };
@@ -1389,6 +1459,12 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
             <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>
+          </div>
+          <div className="admin-currency-control">
+            <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available to sellers and buyers." : "USD is disabled; only TSh is available."} Existing listings are unchanged.</span></div>
+            <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
+              <span />
+            </button>
           </div>
         </section>
         <section className="admin-ledger" aria-labelledby="admin-ledger-heading">
@@ -1573,7 +1649,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           </>}
           <div className="field-row field-row-weight">
             <Field label="Your price (before 5% fee)" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.seller_price ?? editingSeller?.price ?? ""} required />
-            <SelectField label="Currency" name="currency" defaultValue={editingSeller?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} />
+            <SelectField label="Currency" name="currency" defaultValue={currencyOptions.length > 1 ? editingSeller?.currency ?? "" : editingSeller?.currency === "TZS" ? "TZS" : ""} options={currencyOptions} />
           </div>
           <p className="form-footnote">A fixed 5% Madinimarket fee is added. Buyers see the total; your entered amount is the seller portion.</p>
           {sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}
@@ -1613,7 +1689,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           <Field label="Quality" name="quality" placeholder="e.g. Eye-clean, AAA" defaultValue={editingBuyer?.quality ?? ""} required />
           <div className="field-row field-row-weight">
             <Field label="Offer price" name="offer" type="number" min="0.01" step="any" defaultValue={editingBuyer?.offer ?? ""} required />
-            <SelectField label="Currency" name="currency" defaultValue={editingBuyer?.currency ?? ""} options={[["TZS", "TZS"], ["USD", "USD"]]} />
+            <SelectField label="Currency" name="currency" defaultValue={currencyOptions.length > 1 ? editingBuyer?.currency ?? "" : editingBuyer?.currency === "TZS" ? "TZS" : ""} options={currencyOptions} />
           </div>
           <Field label="Buyer name" name="buyer" defaultValue={editingBuyer?.buyer ?? ""} required />
           <Field label="Location" name="location" placeholder="City, region" defaultValue={editingBuyer?.location ?? ""} required />
