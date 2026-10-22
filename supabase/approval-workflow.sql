@@ -32,6 +32,40 @@ create table if not exists public.website_account_drafts (
   primary key (website_user_id, kind)
 );
 
+create table if not exists public.subscription_plans (
+  id uuid primary key default gen_random_uuid(),
+  months integer not null unique check (months between 1 and 120),
+  price_tzs numeric(14, 2) not null check (price_tzs > 0),
+  price_usd numeric(14, 2) not null check (price_usd > 0),
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.account_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  website_user_id uuid not null references public.website_accounts (id) on delete cascade,
+  plan_id uuid references public.subscription_plans (id) on delete set null,
+  months integer not null check (months between 1 and 120),
+  currency text not null check (currency in ('TZS', 'USD')),
+  amount numeric(14, 2) not null check (amount > 0),
+  status text not null default 'pending' check (status in ('pending', 'active', 'expired', 'rejected')),
+  requested_at timestamptz not null default now(),
+  starts_at timestamptz,
+  expires_at timestamptz,
+  paid_at timestamptz,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  check (
+    (status = 'active' and starts_at is not null and expires_at is not null and paid_at is not null)
+    or (status <> 'active')
+  )
+);
+create index if not exists account_subscriptions_user_requested_idx
+  on public.account_subscriptions (website_user_id, requested_at desc);
+create unique index if not exists account_subscriptions_one_pending_per_user_idx
+  on public.account_subscriptions (website_user_id) where status = 'pending';
+
 alter table public.profiles
   add column if not exists email text,
   add column if not exists role text not null default 'user';
@@ -161,13 +195,21 @@ as $is_account_active$
   select p_website_user_id is null or exists (
     select 1 from public.website_accounts
     where id = p_website_user_id and is_active = true
+      and exists (
+        select 1 from public.account_subscriptions
+        where website_user_id = p_website_user_id
+          and status = 'active'
+          and starts_at <= now()
+          and expires_at > now()
+      )
   );
 $is_account_active$;
 
 revoke all on function private.is_website_account_active(uuid) from public, anon, authenticated;
 
 revoke all on function private.is_admin() from public, anon;
-grant usage on schema private to authenticated;
+grant usage on schema private to anon, authenticated;
+grant execute on function private.is_website_account_active(uuid) to anon, authenticated;
 grant execute on function private.is_admin() to authenticated;
 
 create or replace function public.handle_new_user()
@@ -314,6 +356,15 @@ with check ((select auth.uid()) = user_id and status = 'pending' and review_mess
 create policy "Owners can delete returned buy requests" on public.buy_requests for delete to authenticated
 using ((select auth.uid()) = user_id and status in ('pending', 'rejected'));
 
+alter table public.subscription_plans enable row level security;
+alter table public.account_subscriptions enable row level security;
+revoke all on public.subscription_plans, public.account_subscriptions from anon, authenticated;
+drop policy if exists "Public can read active subscription plans" on public.subscription_plans;
+create policy "Public can read active subscription plans" on public.subscription_plans for select to anon, authenticated
+using (is_active = true);
+grant select on public.subscription_plans to anon, authenticated;
+grant all privileges on public.subscription_plans, public.account_subscriptions to service_role;
+
 create or replace view public.marketplace_listings
 with (security_barrier = true)
 as
@@ -325,10 +376,7 @@ from public.listings as listing
 where listing.status = 'approved' and listing.is_active = true
   and (
     listing.website_user_id is null
-    or exists (
-      select 1 from public.website_accounts as account
-      where account.id = listing.website_user_id and account.is_active = true
-    )
+    or private.is_website_account_active(listing.website_user_id)
   );
 
 create or replace view public.marketplace_buy_requests
@@ -341,10 +389,7 @@ from public.buy_requests as request
 where request.status = 'approved' and request.is_active = true
   and (
     request.website_user_id is null
-    or exists (
-      select 1 from public.website_accounts as account
-      where account.id = request.website_user_id and account.is_active = true
-    )
+    or private.is_website_account_active(request.website_user_id)
   );
 
 grant select on public.marketplace_listings, public.marketplace_buy_requests to anon, authenticated;
@@ -362,10 +407,7 @@ from public.listings as listing
 where listing.status = 'approved' and listing.is_active = true
   and (
     listing.website_user_id is null
-    or exists (
-      select 1 from public.website_accounts as account
-      where account.id = listing.website_user_id and account.is_active = true
-    )
+    or private.is_website_account_active(listing.website_user_id)
   );
 grant select on public.market_listing_feed to anon, authenticated;
 

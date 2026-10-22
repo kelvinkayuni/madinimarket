@@ -63,17 +63,32 @@ async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminC
   return data ?? [];
 }
 
+async function websiteAccountHasMarketAccess(admin: ReturnType<typeof createSupabaseAdminClient>, accountId: string) {
+  const now = new Date().toISOString();
+  const [accountResult, subscriptionResult] = await Promise.all([
+    admin.from("website_accounts").select("is_active").eq("id", accountId).maybeSingle(),
+    admin.from("account_subscriptions").select("id").eq("website_user_id", accountId)
+      .eq("status", "active").lte("starts_at", now).gt("expires_at", now).limit(1).maybeSingle(),
+  ]);
+  if (accountResult.error) throw accountResult.error;
+  if (subscriptionResult.error) throw subscriptionResult.error;
+  return accountResult.data?.is_active === true && Boolean(subscriptionResult.data);
+}
+
 export async function GET() {
   try {
     const accountId = await getWebsiteAccountId();
     if (!accountId) return NextResponse.json({ error: "Sign in to view your submissions." }, { status: 401 });
     const admin = createSupabaseAdminClient();
-    const [sellers, buyers, marketSellers, marketBuyers] = await Promise.all([
+    const [sellers, buyers, hasMarketAccess] = await Promise.all([
       readOwnedRows(admin, "listings", accountId),
       readOwnedRows(admin, "buy_requests", accountId),
+      websiteAccountHasMarketAccess(admin, accountId),
+    ]);
+    const [marketSellers, marketBuyers] = hasMarketAccess ? await Promise.all([
       readOwnedMarketRows(admin, "listings", accountId),
       readOwnedMarketRows(admin, "buy_requests", accountId),
-    ]);
+    ]) : [[], []];
     return NextResponse.json({ sellers, buyers, marketSellers, marketBuyers }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not load your submissions." }, { status: 503 });

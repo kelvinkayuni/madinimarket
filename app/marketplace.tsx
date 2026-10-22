@@ -13,7 +13,7 @@ type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "accounts";
+type AdminPanel = "review" | "ledger" | "translations" | "accounts" | "subscriptions";
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
@@ -27,8 +27,10 @@ type WebsiteAccount = { id: string; display_name: string; username: string; emai
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
 type AdminListingLedgerEntry = { id: number; seller_name: string; mineral_name: string; seller_price: string; platform_fee_rate: number; platform_fee_amount: string; price: string; currency: Currency; status: SubmissionStatus; listing_type: ListingType; created_at: string };
+type SubscriptionPlan = { id: string; months: number; price_tzs: string; price_usd: string; is_active: boolean; updated_at?: string };
+type AccountSubscription = { id: string; website_user_id?: string; plan_id: string | null; months: number; currency: Currency; amount: string; status: "pending" | "active" | "expired" | "rejected"; requested_at: string; starts_at: string | null; expires_at: string | null; paid_at: string | null; account?: { display_name: string; username: string; email: string } | null };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
-type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "signout" | null;
+type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "subscription" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "signout" | null;
 
 const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
@@ -253,6 +255,19 @@ async function loadAdminTranslations(accessToken: string): Promise<TranslationPa
   return result.translations as TranslationPair[];
 }
 
+async function loadAdminSubscriptions(accessToken: string): Promise<{ plans: SubscriptionPlan[]; pendingSubscriptions: AccountSubscription[] }> {
+  const response = await fetch("/api/admin/subscriptions", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not load subscription administration data.");
+  return {
+    plans: result.plans as SubscriptionPlan[],
+    pendingSubscriptions: result.pendingSubscriptions as AccountSubscription[],
+  };
+}
+
 export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
@@ -268,6 +283,17 @@ export default function Marketplace() {
   const [translationPairs, setTranslationPairs] = useState<TranslationPair[]>([]);
   const [translationForm, setTranslationForm] = useState({ english_phrase: "", swahili_phrase: "" });
   const [editingTranslationId, setEditingTranslationId] = useState<string | null>(null);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+  const [pendingSubscriptions, setPendingSubscriptions] = useState<AccountSubscription[]>([]);
+  const [subscriptionPlanForm, setSubscriptionPlanForm] = useState({ months: "", price_tzs: "", price_usd: "" });
+  const [editingSubscriptionPlanId, setEditingSubscriptionPlanId] = useState<string | null>(null);
+  const [userSubscriptionPlans, setUserSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+  const [activeSubscription, setActiveSubscription] = useState<AccountSubscription | null>(null);
+  const [scheduledSubscription, setScheduledSubscription] = useState<AccountSubscription | null>(null);
+  const [pendingUserSubscription, setPendingUserSubscription] = useState<AccountSubscription | null>(null);
+  const [previousSubscription, setPreviousSubscription] = useState<AccountSubscription | null>(null);
+  const [userSubscriptionLoaded, setUserSubscriptionLoaded] = useState(false);
+  const [userSubscriptionError, setUserSubscriptionError] = useState("");
   const [language, setLanguage] = useState<Language>("en");
   const [certificates, setCertificates] = useState<Partial<Record<CertificateKind, CertificateSubmission>>>({});
   const [certificateFiles, setCertificateFiles] = useState<Partial<Record<CertificateKind, File>>>({});
@@ -481,6 +507,9 @@ export default function Marketplace() {
               setWebsiteAccounts(await loadAdminAccounts(session.access_token));
               setAdminCertificates(await loadAdminCertificates(session.access_token));
               setTranslationPairs(await loadAdminTranslations(session.access_token));
+              const subscriptions = await loadAdminSubscriptions(session.access_token);
+              setSubscriptionPlans(subscriptions.plans);
+              setPendingSubscriptions(subscriptions.pendingSubscriptions);
             } catch {
               setNotice("Could not load admin accounts, licences, or translations.");
             }
@@ -915,6 +944,95 @@ export default function Marketplace() {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
     if (!session) throw new Error("Admin session expired.");
     setTranslationPairs(await loadAdminTranslations(session.access_token));
+  };
+  const refreshAdminSubscriptions = async () => {
+    const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+    if (!session) throw new Error("Admin session expired.");
+    const subscriptions = await loadAdminSubscriptions(session.access_token);
+    setSubscriptionPlans(subscriptions.plans);
+    setPendingSubscriptions(subscriptions.pendingSubscriptions);
+  };
+  const loadUserSubscriptions = async () => {
+    setUserSubscriptionLoaded(false);
+    setUserSubscriptionError("");
+    try {
+      const response = await fetch("/api/subscriptions", { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not load subscription options.");
+      setUserSubscriptionPlans(result.plans as SubscriptionPlan[]);
+      setActiveSubscription(result.activeSubscription as AccountSubscription | null);
+      setScheduledSubscription(result.scheduledSubscription as AccountSubscription | null);
+      setPendingUserSubscription(result.pendingSubscription as AccountSubscription | null);
+      setPreviousSubscription(result.previousSubscription as AccountSubscription | null);
+      setUserSubscriptionLoaded(true);
+    } catch (error) {
+      setUserSubscriptionError(error instanceof Error ? error.message : "Could not load subscription options.");
+      setUserSubscriptionLoaded(true);
+    }
+  };
+  const saveSubscriptionPlan = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await withProgress("subscription-plan-save", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/subscriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(subscriptionPlanForm),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not save subscription plan.");
+        setSubscriptionPlanForm({ months: "", price_tzs: "", price_usd: "" });
+        setEditingSubscriptionPlanId(null);
+        await refreshAdminSubscriptions();
+        setNotice(`The ${result.plan.months}-month subscription plan is saved and available to users.`);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save subscription plan.");
+      }
+    });
+  };
+  const reviewSubscriptionPayment = async (subscription: AccountSubscription, paid: boolean) => {
+    await withProgress(`subscription-review-${subscription.id}`, async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/subscriptions", {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ subscriptionId: subscription.id, paid }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not update subscription payment.");
+        await refreshAdminSubscriptions();
+        setNotice(paid
+          ? `Payment confirmed for ${subscription.account?.username ?? "user"} (${subscription.months} month${subscription.months === 1 ? "" : "s"}); the subscription is active now or scheduled after their current term.`
+          : `Subscription request from ${subscription.account?.username ?? "user"} was rejected.`);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update subscription payment.");
+      }
+    });
+  };
+  const requestSubscription = async (plan: SubscriptionPlan, currency: Currency) => {
+    await withProgress(`subscription-request-${plan.id}`, async () => {
+      try {
+        const response = await fetch("/api/subscriptions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planId: plan.id, currency }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not request this subscription.");
+        setPendingUserSubscription(result.subscription as AccountSubscription);
+        setPreviousSubscription(null);
+        setNotice("Subscription requested. Your plan starts after the admin confirms your payment.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not request this subscription.");
+        await loadUserSubscriptions();
+      }
+    });
   };
   const saveTranslation = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1465,6 +1583,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>
               <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>
               <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>
+              <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
               <div className="admin-menu-currency">
                 <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                 <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
@@ -1479,7 +1598,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       <div className="admin-content" id="admin-home">
         {activeAdminPanel === "review" && <>
         <section className="admin-overview">
-          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
           <div className="admin-summary">
             <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
@@ -1612,6 +1731,34 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             </article>;
           })}</div></div> : <p className="admin-empty">No accounts match “{accountSearch.trim()}”.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
+        {activeAdminPanel === "subscriptions" && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">
+          <div className="admin-queue-heading"><div><span>SELLER AND BUYER ACCESS</span><h2 id="admin-subscriptions-heading">Seller/buyer subscription</h2></div><button className="button button-outline" type="button" disabled={busyActions.has("subscription-refresh")} onClick={() => void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not refresh subscriptions."); } })}><RefreshCw size={14} /> Refresh</button></div>
+          <p className="admin-subscription-help">Plans use 30-day months. Saving a duration that already exists updates its price; previous subscriptions keep their original price and duration.</p>
+          <form className="admin-subscription-plan-form" onSubmit={(event) => void saveSubscriptionPlan(event)}>
+            <label className="field-label">Months<input className="text-input" type="number" name="months" min="1" max="120" step="1" required value={subscriptionPlanForm.months} onChange={(event) => setSubscriptionPlanForm((current) => ({ ...current, months: event.target.value }))} /></label>
+            <label className="field-label">Amount in TSh<input className="text-input" type="number" name="price_tzs" min="0.01" step="0.01" required value={subscriptionPlanForm.price_tzs} onChange={(event) => setSubscriptionPlanForm((current) => ({ ...current, price_tzs: event.target.value }))} /></label>
+            <label className="field-label">Amount in USD<input className="text-input" type="number" name="price_usd" min="0.01" step="0.01" required value={subscriptionPlanForm.price_usd} onChange={(event) => setSubscriptionPlanForm((current) => ({ ...current, price_usd: event.target.value }))} /></label>
+            <div className="admin-subscription-plan-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("subscription-plan-save")}>{busyActions.has("subscription-plan-save") ? "Saving…" : editingSubscriptionPlanId ? "Update plan" : "Save plan"}</button>{editingSubscriptionPlanId && <button className="button button-outline" type="button" onClick={() => { setEditingSubscriptionPlanId(null); setSubscriptionPlanForm({ months: "", price_tzs: "", price_usd: "" }); }}>Cancel</button>}</div>
+          </form>
+          <div className="admin-subscription-plans">
+            <div className="admin-queue-heading"><div><span>AVAILABLE PLANS</span><h3>Saved durations</h3></div><strong>{subscriptionPlans.length}</strong></div>
+            {subscriptionPlans.length ? <div className="admin-subscription-plan-list">{subscriptionPlans.map((plan) => <article className="admin-subscription-plan" key={plan.id}>
+              <div><strong>{plan.months} month{plan.months === 1 ? "" : "s"}</strong><span>{money(plan.price_tzs, "TZS")} · ${Number(plan.price_usd).toFixed(2)} USD</span></div>
+              <button className="button button-outline" type="button" onClick={() => { setEditingSubscriptionPlanId(plan.id); setSubscriptionPlanForm({ months: String(plan.months), price_tzs: String(plan.price_tzs), price_usd: String(plan.price_usd) }); }}>Edit</button>
+            </article>)}</div> : <p className="admin-empty">No subscription plans saved yet.</p>}
+          </div>
+          <div className="admin-subscription-requests">
+            <div className="admin-queue-heading"><div><span>PAYMENT CONFIRMATION</span><h3>Pending user requests</h3></div><strong>{pendingSubscriptions.length}</strong></div>
+            {pendingSubscriptions.length ? <div className="admin-subscription-request-list">{pendingSubscriptions.map((subscription) => <article className="admin-subscription-request" key={subscription.id}>
+              <div className="admin-subscription-request-heading"><div><strong>{subscription.account?.display_name ?? "Account"}</strong><span>{subscription.account?.username ?? "Unknown user"} · {subscription.account?.email ?? ""}</span></div><span className="admin-subscription-pending">Payment pending</span></div>
+              <p>{subscription.months} month{subscription.months === 1 ? "" : "s"} · {money(Number(subscription.amount).toFixed(subscription.currency === "USD" ? 2 : 0), subscription.currency)} · Requested {new Date(subscription.requested_at).toLocaleString()}</p>
+              <div className="admin-subscription-request-actions">
+                <button className="button button-dark" type="button" disabled={busyActions.has(`subscription-review-${subscription.id}`)} onClick={() => void reviewSubscriptionPayment(subscription, true)}>{busyActions.has(`subscription-review-${subscription.id}`) ? "Updating…" : "Confirm payment"}</button>
+                <button className="button button-outline" type="button" disabled={busyActions.has(`subscription-review-${subscription.id}`)} onClick={() => void reviewSubscriptionPayment(subscription, false)}>Reject request</button>
+              </div>
+            </article>)}</div> : <p className="admin-empty">No subscription payments are waiting for confirmation.</p>}
+          </div>
+        </section>}
       </div>
       {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
       {dialog === "signout" && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => setDialog(null)}><X size={19} /></button><div className="dialog-brand"><Gem size={19} /> MADINIMARKET</div><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></section></div>}
@@ -1623,7 +1770,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>My minerals on market <ArrowUpRight size={15} /></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>My wanted minerals <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => void openAccountLicences()}>Your licences <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div><div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>My minerals on market <ArrowUpRight size={15} /></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>My wanted minerals <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => void openAccountLicences()}>Your licences <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div><div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><span className="wordmark-symbol"><Gem size={21} strokeWidth={1.8} /></span><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
       <div className="header-actions">{user ? <><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></> : <button className="text-button header-signin" type="button" onClick={() => openDialog("signin")}>Sign in</button>}<button className="button button-dark header-list" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={16} /> List a mineral</>}</button></div>
@@ -1720,6 +1867,50 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           <button className="button button-dark form-submit" type="submit" disabled={busyActions.has("buyer-submit")}>{busyActions.has("buyer-submit") ? (editingBuyer ? "Updating request…" : "Submitting request…") : editingBuyer ? "Resubmit for approval" : <>Submit for approval <ArrowUpRight size={16} /></>}</button>
           {editingBuyer && <button className="button button-outline form-submit" type="button" disabled={busyActions.has("buyer-submit")} onClick={() => { setEditingSubmission(null); setDialog("submissions"); }}>Cancel</button>}
         </form>
+      </>}
+      {dialog === "subscription" && role === "user" && <>
+        <div className="dialog-kicker">YOUR ACCOUNT</div>
+        <h2 id="dialog-title">Seller/buyer subscription</h2>
+        <p className="dialog-copy">An approved listing or buying request appears on the market only while your account subscription is active. Each month is 30 days; the subscription begins when the admin confirms your payment.</p>
+        {!userSubscriptionLoaded ? <p className="admin-empty">Loading subscription options…</p> : userSubscriptionError ? <div className="user-subscription-status is-rejected"><strong>Could not load subscription information</strong><span>{userSubscriptionError}</span><button className="button button-outline" type="button" onClick={() => void loadUserSubscriptions()}>Try again</button></div> : <>
+          {activeSubscription && <div className="user-subscription-status is-active">
+            <strong>Subscription active · {activeSubscription.months} month{activeSubscription.months === 1 ? "" : "s"}</strong>
+            <span>Started {activeSubscription.starts_at ? new Date(activeSubscription.starts_at).toLocaleString() : "—"} · Expires {activeSubscription.expires_at ? new Date(activeSubscription.expires_at).toLocaleString() : "—"}</span>
+            <span>Paid {money(Number(activeSubscription.amount).toFixed(activeSubscription.currency === "USD" ? 2 : 0), activeSubscription.currency)}</span>
+          </div>}
+          {scheduledSubscription && <div className="user-subscription-status is-scheduled">
+            <strong>Next subscription scheduled · {scheduledSubscription.months} month{scheduledSubscription.months === 1 ? "" : "s"}</strong>
+            <span>Starts {scheduledSubscription.starts_at ? new Date(scheduledSubscription.starts_at).toLocaleString() : "—"} · Expires {scheduledSubscription.expires_at ? new Date(scheduledSubscription.expires_at).toLocaleString() : "—"}</span>
+            <span>Your current subscription remains active until its expiry. Paid {money(Number(scheduledSubscription.amount).toFixed(scheduledSubscription.currency === "USD" ? 2 : 0), scheduledSubscription.currency)}.</span>
+          </div>}
+          {pendingUserSubscription && <div className="user-subscription-status is-pending">
+            <strong>Payment awaiting admin confirmation</strong>
+            <span>{pendingUserSubscription.months} month{pendingUserSubscription.months === 1 ? "" : "s"} · {money(Number(pendingUserSubscription.amount).toFixed(pendingUserSubscription.currency === "USD" ? 2 : 0), pendingUserSubscription.currency)} · Requested {new Date(pendingUserSubscription.requested_at).toLocaleString()}</span>
+            <span>Your subscription period starts after payment is confirmed. If renewing early, your current subscription remains active until its expiry.</span>
+          </div>}
+          {!activeSubscription && !pendingUserSubscription && previousSubscription && <div className={`user-subscription-status is-${previousSubscription.status}`}>
+            <strong>{previousSubscription.status === "expired" ? "Your previous subscription has expired" : "Your previous subscription request was rejected"}</strong>
+            {previousSubscription.expires_at && <span>It expired {new Date(previousSubscription.expires_at).toLocaleString()}.</span>}
+          </div>}
+          <div className="user-subscription-plan-list">
+            {userSubscriptionPlans.map((plan) => {
+              const now = lastUpdated?.getTime() ?? 0;
+              const currentActive = Boolean(activeSubscription?.expires_at && Date.parse(activeSubscription.expires_at) > now);
+              const hasValidScheduled = Boolean(scheduledSubscription?.expires_at && Date.parse(scheduledSubscription.expires_at) > now);
+              const isCurrentPlan = (currentActive && activeSubscription?.plan_id === plan.id) || (hasValidScheduled && scheduledSubscription?.plan_id === plan.id);
+              const planLocked = Boolean(pendingUserSubscription) || ((currentActive || hasValidScheduled) && !isCurrentPlan);
+              return <article className={`user-subscription-plan${isCurrentPlan ? " is-current" : ""}`} key={plan.id}>
+                <div className="user-subscription-plan-heading"><strong>{plan.months} month{plan.months === 1 ? "" : "s"}</strong>{isCurrentPlan && <span>{currentActive ? "Current plan" : "Scheduled plan"}</span>}</div>
+                <div className="user-subscription-prices"><span>{money(Number(plan.price_tzs).toFixed(0), "TZS")}</span><span>${Number(plan.price_usd).toFixed(2)} USD</span></div>
+                <div className="user-subscription-actions">
+                  <button className="button button-dark" type="button" disabled={planLocked || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => void requestSubscription(plan, "TZS")}>{busyActions.has(`subscription-request-${plan.id}`) ? "Requesting…" : isCurrentPlan ? "Renew with TSh" : "Choose TSh"}</button>
+                  <button className="button button-outline" type="button" disabled={planLocked || !usdEnabled || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => void requestSubscription(plan, "USD")}>{!usdEnabled ? "USD unavailable" : isCurrentPlan ? "Renew with USD" : "Choose USD"}</button>
+                </div>
+              </article>;
+            })}
+          </div>
+          {!userSubscriptionPlans.length && <p className="admin-empty">No subscription plans are available yet. Please check again later.</p>}
+        </>}
       </>}
       {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>{item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} (5% fee)</p> : null}{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}  <div className="submission-actions">
   <button
