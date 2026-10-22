@@ -97,31 +97,76 @@ async function getSignedMineralImageUrl(
 ) {
   const cached = signedMineralImageUrls.get(imagePath);
   if (cached && cached.expiresAt > Date.now() + 30_000) return cached.url;
-  const url = refreshedUrl ?? (await supabase.storage.from("mineral-images").createSignedUrl(imagePath, 3600)).data?.signedUrl ?? "";
-  if (url) signedMineralImageUrls.set(imagePath, { url, expiresAt: Date.now() + 50 * 60 * 1000 });
-  return url;
+
+  try {
+    const url = refreshedUrl ?? (await supabase.storage.from("mineral-images").createSignedUrl(imagePath, 3600)).data?.signedUrl ?? "";
+    if (url) signedMineralImageUrls.set(imagePath, { url, expiresAt: Date.now() + 50 * 60 * 1000 });
+    return url;
+  } catch {
+    return "";
+  }
 }
 
 async function loadMarketplaceListings(includeOwnSubmissions = false, adminAccessToken?: string) {
   const supabase = getSupabaseBrowserClient();
-  const [sellerResult, buyerResult] = await Promise.all([
-    supabase.from("market_listing_feed").select("*").order("created_at", { ascending: false }),
-    supabase.from("marketplace_buy_requests").select("*").order("created_at", { ascending: false }),
-  ]);
-  if (sellerResult.error) throw sellerResult.error;
-  if (buyerResult.error) throw buyerResult.error;
 
-  let sellerRows = sellerResult.data ?? [];
-  let buyerRows = buyerResult.data ?? [];
+  const loadPublicSellerRows = async () => {
+    const attempts = [
+      () => supabase.from("market_listing_feed").select("*").order("created_at", { ascending: false }),
+      () => supabase.from("marketplace_listings").select("*").order("created_at", { ascending: false }),
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const { data, error } = await attempt();
+        if (error) throw error;
+        return data ?? [];
+      } catch {
+        // Try the next fallback view before treating the marketplace as unavailable.
+      }
+    }
+    return [];
+  };
+
+  const loadPublicBuyerRows = async () => {
+    const attempts = [
+      () => supabase.from("marketplace_buy_requests").select("*").order("created_at", { ascending: false }),
+      () => supabase.from("buy_requests").select("*").eq("status", "approved").eq("is_active", true).order("created_at", { ascending: false }),
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const { data, error } = await attempt();
+        if (error) throw error;
+        return data ?? [];
+      } catch {
+        // Continue to the next fallback strategy if a public buy-request view is unavailable.
+      }
+    }
+    return [];
+  };
+
+  const [sellerResult, buyerResult] = await Promise.all([
+    loadPublicSellerRows(),
+    loadPublicBuyerRows(),
+  ]);
+
+  let sellerRows = sellerResult;
+  let buyerRows = buyerResult;
   if (adminAccessToken) {
-    const response = await fetch("/api/admin/review-queue", {
-      headers: { Authorization: `Bearer ${adminAccessToken}` },
-      cache: "no-store",
-    });
-    const reviewQueue = await response.json();
-    if (!response.ok) throw new Error(reviewQueue.error ?? "Could not load pending submissions.");
-    sellerRows = [...sellerRows, ...(reviewQueue.sellers ?? [])];
-    buyerRows = [...buyerRows, ...(reviewQueue.buyers ?? [])];
+    try {
+      const response = await fetch("/api/admin/review-queue", {
+        headers: { Authorization: `Bearer ${adminAccessToken}` },
+        cache: "no-store",
+      });
+      const reviewQueue = await response.json();
+      if (!response.ok) throw new Error(reviewQueue.error ?? "Could not load pending submissions.");
+      sellerRows = [...sellerRows, ...(reviewQueue.sellers ?? [])];
+      buyerRows = [...buyerRows, ...(reviewQueue.buyers ?? [])];
+    } catch {
+      // Admin review queue is optional for public market loading. Keep the public listings available even if
+      // the queue endpoint is temporarily unavailable or the admin session cannot be validated.
+    }
   }
   if (includeOwnSubmissions) {
     try {
