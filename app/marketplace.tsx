@@ -7,6 +7,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import AdminMarketplaceOrders from "./admin-marketplace-orders";
 import CommercePanel from "./commerce-panel";
+import PrivateOfferForm from "./private-offer-form";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 import { calculateListingPrice } from "@/lib/listing-pricing";
@@ -23,7 +24,7 @@ type CertificateStatus = "pending" | "approved" | "rejected";
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
 type Seller = { id: number; user_id?: string; website_account_seller?: boolean; reservation_status?: string | null; mineral: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
-type Buyer = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
+type Buyer = { id: number; user_id?: string; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type AccountMarketListing = Pick<Seller, "id" | "mineral" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image">;
 type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location">;
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts };
@@ -33,7 +34,7 @@ type AdminListingLedgerEntry = { id: number; seller_name: string; mineral_name: 
 type SubscriptionPlan = { id: string; months: number; price_tzs: string; price_usd: string; is_active: boolean; updated_at?: string };
 type AccountSubscription = { id: string; website_user_id?: string; plan_id: string | null; months: number; currency: Currency; amount: string; status: "pending" | "active" | "expired" | "rejected"; requested_at: string; starts_at: string | null; expires_at: string | null; paid_at: string | null; account?: { display_name: string; username: string; email: string } | null };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
-type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "subscription" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "commerce" | "signout" | null;
+type Dialog = "create" | "signin" | "sell" | "buy" | "review" | "submissions" | "subscription" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "commerce" | "private-offer" | "signout" | null;
 
 const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
@@ -198,7 +199,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
   const loadPublicBuyerRows = async () => {
     const attempts = [
       () => supabase.from("marketplace_buy_requests").select("*").order("created_at", { ascending: false }),
-      () => supabase.from("buy_requests").select("*").eq("status", "approved").eq("is_active", true).order("created_at", { ascending: false }),
+        () => supabase.from("buy_requests").select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location, status, created_at, is_active").eq("status", "approved").eq("is_active", true).order("created_at", { ascending: false }),
     ];
 
     for (const attempt of attempts) {
@@ -277,6 +278,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
     unit: row.unit as Unit, color: row.color, shape: row.shape as Buyer["shape"], quality: row.quality,
     offer: String(row.offer), currency: row.currency as Currency, buyer: row.buyer_name, location: row.location,
     email: row.email ?? "", phone: row.phone ?? "", status: row.status as SubmissionStatus, review_message: row.review_message,
+    offer_enabled: row.offer_enabled === true,
   } satisfies Buyer));
   return { sellers, buyers };
 }
@@ -388,6 +390,7 @@ export default function Marketplace() {
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [busyActions, setBusyActions] = useState<Set<string>>(() => new Set());
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [privateOfferRequest, setPrivateOfferRequest] = useState<Buyer | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [activeAdminPanel, setActiveAdminPanel] = useState<AdminPanel | null>(null);
@@ -496,6 +499,41 @@ export default function Marketplace() {
         setNotice(`${listing.mineral} added to your cart.`);
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not add this mineral to your cart.");
+      }
+    });
+  };
+
+  const openPrivateOfferForm = (request: Buyer) => {
+    if (role !== "user") {
+      setNotice("Sign in to send a private offer through Madinimarket.");
+      setDialog("signin");
+      return;
+    }
+    if (!hasApprovedCertificate) {
+      setNotice("An approved dealer or broker licence is required before sending a private mineral offer.");
+      void openAccountLicences();
+      return;
+    }
+    if (!request.offer_enabled || request.user_id === userId) return;
+    setPrivateOfferRequest(request);
+    setDialog("private-offer");
+  };
+
+  const sendPrivateOffer = async (details: Record<string, string | number | null>) => {
+    await withProgress("private-offer-submit", async () => {
+      try {
+        const response = await fetch("/api/marketplace-offers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(details),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not send your private offer.");
+        setDialog(null);
+        setPrivateOfferRequest(null);
+        setNotice("Private offer sent. The buyer can review it in their account.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not send your private offer.");
       }
     });
   };
@@ -2397,7 +2435,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       </section>
 
       <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div></div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
+        {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div>{request.offer_enabled && request.user_id !== userId && <button className="private-offer-button" type="button" onClick={() => openPrivateOfferForm(request)}>Send private offer</button>}</div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
         <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <>List a mineral <ArrowUpRight size={14} /></>}</button></div>
       </section>
         </> : <section className="market-closed-notice"><span>MARKET CLOSED</span><h2>{marketHoursError ? "Market status unavailable" : "The market is closed"}</h2><p>{marketHoursError
@@ -2530,6 +2568,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         </>}
       </>}
       {dialog === "commerce" && <CommercePanel onNotice={setNotice} onCartCount={setCartCount} />}
+      {dialog === "private-offer" && privateOfferRequest && <><div className="dialog-kicker">PRIVATE OFFER · REQUEST #{privateOfferRequest.id}</div><h2 id="dialog-title">Offer a mineral privately.</h2><p className="dialog-copy">Send a mineral card and price to this buyer. Your contact details stay private. The current marketplace fee is saved with this offer and included in the buyer total.</p><div className="private-offer-request-summary"><strong>{privateOfferRequest.mineral}</strong><span>{privateOfferRequest.weight} {privateOfferRequest.unit} · {privateOfferRequest.color} · {privateOfferRequest.shape} · {privateOfferRequest.quality}</span><span>Buyer’s request offer: {money(privateOfferRequest.offer, privateOfferRequest.currency)}</span></div>{listingFeeSettingsLoaded ? <PrivateOfferForm requestId={privateOfferRequest.id} threadId={null} feeRate={listingFeePercent / 100} usdEnabled={usdEnabled && currencySettingsLoaded} defaultCurrency={usdEnabled && currencySettingsLoaded ? privateOfferRequest.currency : "TZS"} submitting={busyActions.has("private-offer-submit")} onSubmit={(details) => void sendPrivateOffer(details)} /> : <p className="admin-empty">Loading current marketplace pricing…</p>}</>}
       {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>{item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}  <div className="submission-actions">
   <button
     type="button"

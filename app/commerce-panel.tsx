@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Image from "next/image";
+import PrivateOfferForm, { FinalizePrivateOfferForm } from "./private-offer-form";
 
 type Currency = "TZS" | "USD";
 type CartListing = {
@@ -63,6 +65,40 @@ type BuyerOrder = {
   seller_response_deadline: string;
   items: OrderItem[];
 };
+type PrivateOffer = {
+  id: string;
+  attempt_number: number;
+  mineral_name: string;
+  listing_type: string;
+  weight: number;
+  unit: string;
+  smallest_stone_weight: number | null;
+  largest_stone_weight: number | null;
+  stone_weight_unit: string | null;
+  color: string;
+  shape: string;
+  quality: string;
+  country: string;
+  region: string;
+  district: string;
+  seller_amount: string | number;
+  platform_fee_rate: string | number;
+  platform_fee_amount: string | number;
+  total_price: string | number;
+  currency: Currency;
+  status: string;
+  signed_image_url: string | null;
+};
+type PrivateOfferThread = {
+  id: string;
+  request_id: number;
+  side: "buyer" | "seller";
+  state: string;
+  attempt_count: number;
+  seller_username: string;
+  request: { mineral_name: string; weight: string | number; unit: string; color: string; shape: string; quality: string; offer: string | number; currency: Currency; location: string } | null;
+  offers: PrivateOffer[];
+};
 type CommerceData = {
   profile: {
     display_name: string;
@@ -77,6 +113,7 @@ type CommerceData = {
   buyerOrders: BuyerOrder[];
   sellerItems: OrderItem[];
   paymentInstructions: string;
+  privateOffers: { threads: PrivateOfferThread[]; feeRate: number; usdEnabled: boolean };
 };
 
 function amount(value: number | string, currency: Currency) {
@@ -108,10 +145,14 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
   const [disputeReasons, setDisputeReasons] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
-    const response = await fetch("/api/commerce", { cache: "no-store" });
-    const result = await response.json();
+    const [response, offersResponse] = await Promise.all([
+      fetch("/api/commerce", { cache: "no-store" }),
+      fetch("/api/marketplace-offers", { cache: "no-store" }),
+    ]);
+    const [result, offersResult] = await Promise.all([response.json(), offersResponse.json()]);
     if (!response.ok) throw new Error(result.error ?? "Could not load your cart and orders.");
-    const commerce = result as CommerceData;
+    if (!offersResponse.ok) throw new Error(offersResult.error ?? "Could not load private offers.");
+    const commerce = { ...result, privateOffers: offersResult } as CommerceData;
     setData(commerce);
     onCartCount(commerce.cartItems.length);
     setBuyerName((current) => current || commerce.profile.display_name || "");
@@ -125,10 +166,14 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/commerce", { cache: "no-store" }).then(async (response) => {
-      const result = await response.json();
+    void Promise.all([
+      fetch("/api/commerce", { cache: "no-store" }),
+      fetch("/api/marketplace-offers", { cache: "no-store" }),
+    ]).then(async ([response, offersResponse]) => {
+      const [result, offersResult] = await Promise.all([response.json(), offersResponse.json()]);
       if (!response.ok) throw new Error(result.error ?? "Could not load your cart and orders.");
-      return result as CommerceData;
+      if (!offersResponse.ok) throw new Error(offersResult.error ?? "Could not load private offers.");
+      return { ...result, privateOffers: offersResult } as CommerceData;
     }).then((commerce) => {
       if (!active) return;
       setData(commerce);
@@ -177,6 +222,33 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
     }
   };
 
+  const performPrivateOffer = async (key: string, values: Record<string, unknown>) => {
+    setBusy(key);
+    try {
+      const response = await fetch("/api/marketplace-offers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "The private offer action could not be completed.");
+      await refresh();
+      if (values.action === "checkout_offer" && result.order?.control_number) {
+        onNotice(`Private order ${result.order.control_number} confirmed. The seller has 6 hours to respond.`);
+      } else if (values.action === "decide_offer") {
+        onNotice(values.agree ? "Offer accepted. The seller will confirm the mineral details." : "Offer declined. The seller may send a revised offer if attempts remain.");
+      } else if (values.action === "confirm_offer") {
+        onNotice("Mineral details confirmed and sent to the buyer for checkout.");
+      } else {
+        onNotice("Private offer sent. The buyer can review it in their account.");
+      }
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "The private offer action could not be completed.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const checkout = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = await perform("checkout", "checkout", {
@@ -219,6 +291,81 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
   return <div className="commerce-panel">
     <div className="dialog-kicker">BUYER & SELLER ORDERS</div>
     <h2 id="dialog-title">My cart and orders.</h2>
+    <section className="commerce-section">
+      <h3>Private mineral offers</h3>
+      {data.privateOffers.threads.length ? <div className="commerce-list">
+        {data.privateOffers.threads.map((thread) => {
+          const latestOffer = thread.offers[thread.offers.length - 1];
+          const buyerRequest = thread.request;
+          return <article className="commerce-private-thread" key={thread.id}>
+            <div className="commerce-order-heading">
+              <strong>{thread.side === "buyer" ? `Seller @${thread.seller_username}` : "Your offer"} · Request #{thread.request_id}</strong>
+              <span>{statusLabel(thread.state)}</span>
+            </div>
+            {buyerRequest && <p className="commerce-note">Request: {buyerRequest.mineral_name} · {buyerRequest.weight} {buyerRequest.unit} · {buyerRequest.color} · {buyerRequest.shape} · {buyerRequest.quality} · {buyerRequest.location}</p>}
+            {thread.offers.map((offer) => <div className="commerce-private-offer" key={offer.id}>
+              <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{statusLabel(offer.status)}</span></div>
+              {offer.signed_image_url && <div className="commerce-private-image"><Image src={offer.signed_image_url} alt={`${offer.mineral_name} private offer`} width={800} height={800} unoptimized /></div>}
+              <p>{offer.listing_type === "batch" ? "Batch · " : ""}{offer.weight} {offer.unit}{offer.listing_type === "batch" && ` · Stone sizes ${offer.smallest_stone_weight}–${offer.largest_stone_weight} ${offer.stone_weight_unit}`}</p>
+              <p>{offer.color} · {offer.shape} · {offer.quality}</p>
+              <p>Location: {offer.district}, {offer.region}, {offer.country}</p>
+              <p>Seller amount {amount(offer.seller_amount, offer.currency)} + Madinimarket fee {amount(offer.platform_fee_amount, offer.currency)} = <strong>{amount(offer.total_price, offer.currency)}</strong></p>
+              {thread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions">
+                <button className="button button-dark" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: true })}>Agree</button>
+                <button className="button button-outline" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: false })}>Decline</button>
+              </div>}
+              {thread.side === "seller" && offer.status === "accepted" && <div className="commerce-revised-offer">
+                <h4>Finalize the mineral card</h4>
+                <p className="commerce-note">Review or complete the mineral details. The buyer-approved amount and currency cannot be changed.</p>
+                <FinalizePrivateOfferForm offer={{
+                  mineralName: offer.mineral_name,
+                  listingType: offer.listing_type as "single" | "batch",
+                  weight: Number(offer.weight),
+                  unit: offer.unit as "carats" | "g" | "kg" | "tons",
+                  smallestStoneWeight: offer.smallest_stone_weight,
+                  largestStoneWeight: offer.largest_stone_weight,
+                  stoneWeightUnit: offer.stone_weight_unit,
+                  color: offer.color,
+                  shape: offer.shape,
+                  quality: offer.quality,
+                  country: offer.country,
+                  region: offer.region,
+                  district: offer.district,
+                }} submitting={busy === `confirm-offer-${offer.id}`} onSubmit={(details) => void performPrivateOffer(`confirm-offer-${offer.id}`, { ...details, offerId: offer.id })} />
+              </div>}
+              {thread.side === "buyer" && offer.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => {
+                event.preventDefault();
+                void performPrivateOffer(`checkout-offer-${offer.id}`, {
+                  action: "checkout_offer", offerId: offer.id, buyerName, buyerPhone,
+                  country, region, district, address,
+                });
+              }}>
+                <h4>Confirm mineral and delivery details</h4>
+                <p className="commerce-note">The seller’s price and fee are locked. Confirm this private mineral to create a standard order and start the six-hour availability response period.</p>
+                <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
+                <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
+                <div className="field-row">
+                  <label className="field-label">Country<input className="text-input" required maxLength={100} value={country} onChange={(event) => setCountry(event.target.value)} /></label>
+                  <label className="field-label">Region<input className="text-input" required maxLength={100} value={region} onChange={(event) => setRegion(event.target.value)} /></label>
+                </div>
+                <div className="field-row">
+                  <label className="field-label">District<input className="text-input" required maxLength={100} value={district} onChange={(event) => setDistrict(event.target.value)} /></label>
+                  <label className="field-label">Street / delivery address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+                </div>
+                <button className="button button-dark" type="submit" disabled={busy === `checkout-offer-${offer.id}`}>{busy === `checkout-offer-${offer.id}` ? "Confirming…" : `Confirm and continue · ${amount(offer.total_price, offer.currency)}`}</button>
+              </form>}
+            </div>)}
+            {thread.side === "buyer" && thread.state === "accepted" && <p className="commerce-note">You accepted this offer. The seller will confirm the mineral details before checkout.</p>}
+            {thread.side === "seller" && thread.state === "open" && latestOffer?.status === "pending" && <p className="commerce-note">Waiting for the buyer to accept or decline. Offer attempts: {thread.attempt_count}/3.</p>}
+            {thread.side === "seller" && thread.state === "open" && latestOffer?.status === "declined" && thread.attempt_count < 3 && buyerRequest && <div className="commerce-revised-offer">
+              <h4>Send a revised offer ({thread.attempt_count}/3 used)</h4>
+              <PrivateOfferForm requestId={thread.request_id} threadId={thread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? buyerRequest.currency : "TZS"} submitting={busy === `revise-offer-${thread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${thread.id}`, details)} />
+            </div>}
+            {thread.state === "closed" && <p className="commerce-note">This offer thread is closed. No more offers can be sent for this request.</p>}
+          </article>;
+        })}
+      </div> : <p className="commerce-note">No private mineral offers yet. You can send offers to buyer requests directly from the market.</p>}
+    </section>
     <section className="commerce-section">
       <h3>My cart ({data.cartItems.length})</h3>
       {data.cartItems.length ? <>

@@ -383,6 +383,23 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-panel > h2 { margin: -15px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 26px; font-weight: 500; }
 .commerce-section { display: grid; gap: 12px; }
 .commerce-section > h3 { margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-family: var(--font-display), Georgia, serif; font-size: 18px; font-weight: 600; }
+.commerce-private-thread { display: grid; gap: 10px; padding: 13px; border: 1px solid #e2e8df; background: #fbfcf9; }
+.commerce-private-thread > p, .commerce-private-offer > p { margin: 0; color: #667366; font-size: 10px; line-height: 1.55; }
+.commerce-private-offer { display: grid; gap: 6px; padding: 11px; border: 1px solid #e8ece5; background: white; }
+.commerce-private-image { max-width: 300px; overflow: hidden; background: #f1f4ee; }
+.commerce-private-image img { width: 100%; height: auto; display: block; object-fit: cover; }
+.commerce-private-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.commerce-revised-offer { display: grid; gap: 9px; padding-top: 8px; }
+.commerce-revised-offer h4 { margin: 0; font-size: 12px; }
+.private-offer-form { display: grid; gap: 11px; }
+.private-offer-form label { display: grid; gap: 5px; color: #526052; font-size: 10px; font-weight: 600; }
+.private-offer-form input, .private-offer-form select { width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid #d8ded5; border-radius: 2px; background: #fff; color: #263128; font: inherit; font-size: 12px; }
+.private-offer-form input[type="file"] { min-height: auto; padding: 7px; }
+.private-offer-form .form-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.private-offer-price-preview { margin: 0; padding: 10px; background: #f1f4ee; color: #4d614e; font-size: 10px; line-height: 1.55; }
+.private-offer-price-preview span { display: block; margin-top: 3px; }
+.private-offer-request-summary { display: grid; gap: 4px; padding: 11px; background: #f1f4ee; color: #536353; font-size: 10px; }
+.private-offer-request-summary strong { color: #304b39; font-size: 12px; }
 .commerce-list { display: grid; gap: 11px; }
 .commerce-item, .commerce-order-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 11px 0; border-bottom: 1px solid #edf0ea; }
 .commerce-item > div, .commerce-order-item > div:first-child { display: grid; gap: 5px; }
@@ -416,6 +433,7 @@ h1, h2, h3, p { margin-top: 0; }
 .admin-commerce-item small { color: #69766a; font-size: 10px; }
 @media (max-width: 560px) {
   .commerce-checkout .field-row { grid-template-columns: 1fr; }
+  .private-offer-form .form-row { grid-template-columns: 1fr; }
   .commerce-item { grid-template-columns: 1fr; }
   .commerce-order-heading { align-items: start; flex-direction: column; }
 }
@@ -444,6 +462,8 @@ h1, h2, h3, p { margin-top: 0; }
 .buyer-card-bottom div > strong { margin-top: 3px; color: var(--lime); font-size: 14px; }
 .buyer-card-bottom button { width: 30px; height: 30px; border-color: #6a8375; border-radius: 50%; color: #eaf1e8; transition: transform .2s, background .2s; }
 .buyer-card-bottom button:hover { transform: rotate(45deg); background: #315c4b; }
+.buyer-card-bottom .private-offer-button { width: auto; height: auto; min-height: 30px; padding: 0 9px; border: 1px solid #6a8375; border-radius: 2px; color: #eaf1e8; font-size: 9px; }
+.buyer-card-bottom .private-offer-button:hover { transform: none; background: #315c4b; }
 .buyer-rail-hint { display: flex; align-items: center; gap: 9px; margin-top: 14px; color: #a2b5a8; font-size: 8px; font-weight: 700; }
 .buyer-rail-hint .rail-line { background: #628072; }
 .buyer-rail-hint button { display: flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lime); font-size: 9px; cursor: pointer; }
