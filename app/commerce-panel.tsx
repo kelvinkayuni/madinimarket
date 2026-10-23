@@ -15,10 +15,12 @@ type CartListing = {
   seller_name: string;
   status: string;
   is_active: boolean;
+  marketplace_state: string;
 };
 type CartItem = { id: string; listing_id: number; listing: CartListing | null };
 type OrderItem = {
   id: string;
+  listing_id: number | null;
   mineral_name: string;
   weight: number;
   unit: string;
@@ -164,6 +166,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "The request could not be completed.");
       if (result.warning) onNotice(result.warning);
+      if (action === "relist_unavailable") onNotice("You confirmed the mineral is in stock and relisted it on the market.");
       await refresh();
       return result;
     } catch (error) {
@@ -223,7 +226,9 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
           {data.cartItems.map((item) => <article className="commerce-item" key={item.id}>
             <div><strong>{item.listing?.mineral_name ?? "Listing no longer available"}</strong>
               {item.listing && <small>{item.listing.listing_type === "batch" ? "Batch · " : ""}{item.listing.weight} {item.listing.unit} · {amount(item.listing.price, item.listing.currency)}</small>}
-              {item.listing && (!item.listing.is_active || item.listing.status !== "approved") && <small className="commerce-warning">This listing may no longer be available.</small>}
+              {item.listing && item.listing.marketplace_state === "reserved" && <small className="commerce-warning">This mineral is temporarily reserved by another confirmed order. Cart items are not reserved until you confirm an order.</small>}
+              {item.listing && item.listing.marketplace_state === "seller_unavailable" && <small className="commerce-warning">The seller confirmed this mineral is unavailable. It has been removed from the market.</small>}
+              {item.listing && (!item.listing.is_active || item.listing.status !== "approved" || item.listing.marketplace_state === "sold") && <small className="commerce-warning">This listing is no longer available.</small>}
             </div>
             <button className="button button-outline" type="button" disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
           </article>)}
@@ -231,7 +236,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
         <p className="commerce-total">Cart total <strong>{amount(total, cartCurrency)}</strong></p>
         <form className="commerce-checkout" onSubmit={checkout}>
           <h4>Confirm your order and delivery address</h4>
-          <p className="commerce-note">Confirming locks the cart. Sellers will be asked to confirm availability; unavailable items will be removed before payment.</p>
+          <p className="commerce-note">Items stay available to other buyers while in your cart. Confirming locks the cart and reserves the minerals; sellers will be asked to confirm availability. Unavailable items will be removed before payment.</p>
           <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
           <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
           <div className="field-row">
@@ -242,7 +247,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
             <label className="field-label">District<input className="text-input" required maxLength={100} value={district} onChange={(event) => setDistrict(event.target.value)} /></label>
             <label className="field-label">Street / delivery address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
           </div>
-          <button className="button button-dark" type="submit" disabled={busy === "checkout"}>{busy === "checkout" ? "Confirming…" : "Confirm order"}</button>
+          <button className="button button-dark" type="submit" disabled={busy === "checkout" || data.cartItems.some((item) => !item.listing || !item.listing.is_active || item.listing.status !== "approved" || item.listing.marketplace_state !== "available")}>{busy === "checkout" ? "Confirming…" : "Confirm order"}</button>
         </form>
       </> : <p className="commerce-note">Your cart is empty. Add a mineral from the market to begin.</p>}
     </section>
@@ -288,6 +293,10 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
             <button className="button button-dark" type="button" disabled={busy === `available-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>Available</button>
             <button className="button button-outline" type="button" disabled={busy === `unavailable-${item.id}`} onClick={() => void perform(`unavailable-${item.id}`, "seller_availability", { itemId: item.id, available: false })}>Unavailable</button>
             <small>Respond by {new Date(item.seller_response_deadline).toLocaleString()}</small>
+          </div>}
+          {["unavailable", "refunded"].includes(item.status) && item.listing_id && <div className="commerce-item-actions">
+            <p className="commerce-warning">This mineral is hidden from the public market. Confirm that it is in stock before relisting it.</p>
+            <button className="button button-outline" type="button" disabled={busy === `relist-${item.id}`} onClick={() => void perform(`relist-${item.id}`, "relist_unavailable", { itemId: item.id })}>{busy === `relist-${item.id}` ? "Relisting…" : "Confirm stock and relist"}</button>
           </div>}
           {["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status) && item.order?.buyer_name && <div className="commerce-delivery-details">
             <strong>Deliver to</strong>

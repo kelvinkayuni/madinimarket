@@ -22,7 +22,7 @@ type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
-type Seller = { id: number; user_id?: string; website_account_seller?: boolean; mineral: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
+type Seller = { id: number; user_id?: string; website_account_seller?: boolean; reservation_status?: string | null; mineral: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type AccountMarketListing = Pick<Seller, "id" | "mineral" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image">;
 type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location">;
@@ -166,16 +166,33 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       () => supabase.from("marketplace_listings").select("*").order("created_at", { ascending: false }),
     ];
 
-    for (const attempt of attempts) {
-      try {
-        const { data, error } = await attempt();
-        if (error) throw error;
-        return data ?? [];
-      } catch {
-        // Try the next fallback view before treating the marketplace as unavailable.
+    const loadPublicRows = async () => {
+      for (const attempt of attempts) {
+        try {
+          const { data, error } = await attempt();
+          if (error) throw error;
+          return data ?? [];
+        } catch {
+          // Try the next fallback view before treating the marketplace as unavailable.
+        }
       }
-    }
-    return [];
+      return null;
+    };
+    const publicRows = await loadPublicRows();
+    if (!publicRows) return [];
+    if (publicRows.length === 0) return [];
+    const { data: reservationRows, error: reservationError } = await supabase
+      .from("marketplace_listing_reservations")
+      .select("listing_id, reservation_status")
+      .in("listing_id", publicRows.map((row) => Number(row.id)));
+    if (reservationError) throw reservationError;
+    const reservationStatusByListing = new Map(
+      (reservationRows ?? []).map((row) => [Number(row.listing_id), row.reservation_status as string]),
+    );
+    return publicRows.map((row) => ({
+      ...row,
+      reservation_status: reservationStatusByListing.get(Number(row.id)) ?? null,
+    }));
   };
 
   const loadPublicBuyerRows = async () => {
@@ -249,6 +266,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       seller: row.seller_name ?? "", country: row.country, region: row.region, district: row.district,
       location: [row.district, row.region, row.country].filter(Boolean).join(", "), email: row.email ?? "", phone: row.phone ?? "",
       image, image_path: row.image_path, accent: "#43866b", status: row.status as SubmissionStatus,
+      reservation_status: row.reservation_status ?? null,
       review_message: row.review_message, stone_certificate_url: row.signed_stone_certificate_url ?? null,
       verified_seller: row.verified_seller === true,
       website_account_seller: Boolean(row.website_user_id),
@@ -2367,8 +2385,14 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>
-      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">AVAILABLE NOW</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span></div><button className="button button-dark add-to-cart-button" type="button" disabled={!listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
+      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">LISTED MINERALS</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
+        {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => {
+          const isReserved = Boolean(listing.reservation_status);
+          const reservationLabel = listing.reservation_status === "availability_pending"
+            ? "Temporarily reserved — availability being confirmed"
+            : "Reserved for a buyer";
+          return <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span></div><button className="button button-dark add-to-cart-button" type="button" disabled={isReserved || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved ? "Temporarily unavailable" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
+        })}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 

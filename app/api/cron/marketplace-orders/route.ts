@@ -46,6 +46,33 @@ export async function GET(request: Request) {
       }
     }
 
+    const { data: expiredAvailabilityItems, error: expiredAvailabilityError } = await admin.from("marketplace_order_items")
+      .select("id, seller_email, mineral_name, order:marketplace_orders!inner(control_number)")
+      .eq("status", "unavailable")
+      .not("availability_expired_at", "is", null)
+      .is("seller_availability_timeout_email_sent_at", null)
+      .limit(5);
+    if (expiredAvailabilityError) throw expiredAvailabilityError;
+    for (const item of expiredAvailabilityItems ?? []) {
+      const order = Array.isArray(item.order) ? item.order[0] : item.order;
+      try {
+        await sendGmailEmail({
+          to: item.seller_email,
+          subject: `Mineral hidden after no availability response for order ${order.control_number}`,
+          text: `The six-hour availability response period ended for ${item.mineral_name} in order ${order.control_number}. This mineral has been hidden from the public market. If you confirm that it is in stock, sign in to My orders and choose Confirm stock and relist.\n\nMadinimarket`,
+        });
+        const { error } = await admin.from("marketplace_order_items")
+          .update({ seller_availability_timeout_email_sent_at: new Date().toISOString() })
+          .eq("id", item.id)
+          .is("seller_availability_timeout_email_sent_at", null);
+        if (error) throw error;
+        sentCount += 1;
+      } catch (error) {
+        emailFailures += 1;
+        console.error(`Availability timeout notification failed for order item ${item.id}`, error);
+      }
+    }
+
     const { data: paymentReadyOrders, error: paymentReadyError } = await admin.from("marketplace_orders")
       .select("id, control_number, buyer_email, buyer_name")
       .eq("payment_status", "awaiting_payment").is("payment_ready_email_sent_at", null).limit(5);

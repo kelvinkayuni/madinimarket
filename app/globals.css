@@ -367,6 +367,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-photo::after { position: absolute; inset: 45% 0 0; content: ""; background: linear-gradient(transparent, #13231e55); pointer-events: none; }
 .photo-tag { position: absolute; z-index: 1; top: 10px; left: 10px; display: flex; align-items: center; gap: 6px; padding: 6px 7px; background: #ffffffed; color: #415446; font-size: 8px; font-weight: 700; }
 .photo-tag span { width: 5px; height: 5px; border-radius: 50%; background: #62a46a; }
+.reservation-photo-tag { top: auto; right: 8px; bottom: 8px; left: 8px; display: block; line-height: 1.4; }
 .photo-action { position: absolute; z-index: 1; right: 10px; bottom: 10px; width: 31px; height: 31px; border-color: #ffffff77; border-radius: 50%; background: #ffffffeb; color: #273a2e; transition: transform .2s; }
 .photo-action:hover { transform: rotate(45deg); }
 .seller-card-info { padding: 12px 13px 13px; }

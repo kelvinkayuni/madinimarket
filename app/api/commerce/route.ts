@@ -26,7 +26,7 @@ export async function GET() {
     const admin = createSupabaseAdminClient();
     const [{ data: profile, error: profileError }, { data: cart, error: cartError }, { data: buyerOrders, error: buyerOrdersError }, { data: sellerItems, error: sellerItemsError }] = await Promise.all([
       admin.from("website_accounts").select("id, display_name, email, phone, delivery_country, delivery_region, delivery_district, delivery_address").eq("id", accountId).single(),
-      admin.from("marketplace_cart_items").select("id, listing_id, created_at, listing:listings(id, mineral_name, listing_type, weight, unit, price, seller_price, platform_fee_amount, currency, image_path, website_user_id, seller_name, status, is_active)").eq("buyer_id", accountId).order("created_at"),
+      admin.from("marketplace_cart_items").select("id, listing_id, created_at, listing:listings(id, mineral_name, listing_type, weight, unit, price, seller_price, platform_fee_amount, currency, image_path, website_user_id, seller_name, status, is_active, marketplace_state)").eq("buyer_id", accountId).order("created_at"),
       admin.from("marketplace_orders").select("*, items:marketplace_order_items(*)").eq("buyer_id", accountId).order("created_at", { ascending: false }).limit(50),
       admin.from("marketplace_order_items").select("*, order:marketplace_orders!inner(id, control_number, payment_status, payment_deadline, currency, created_at, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)").eq("seller_id", accountId).order("created_at", { ascending: false }).limit(100),
     ]);
@@ -63,7 +63,8 @@ export async function GET() {
         items: ((order.items ?? []) as Record<string, unknown>[]).map((item) => Object.fromEntries(
           Object.entries(item).filter(([key]) => ![
             "seller_email", "seller_id", "payment_proof_path",
-            "availability_email_sent_at", "dispatch_email_sent_at",
+            "availability_email_sent_at", "availability_expired_at",
+            "seller_availability_timeout_email_sent_at", "dispatch_email_sent_at",
           ].includes(key)),
         )),
     }));
@@ -94,10 +95,10 @@ export async function POST(request: Request) {
       const listingId = Number(body.listingId);
       if (!Number.isSafeInteger(listingId) || listingId < 1) return NextResponse.json({ error: "Choose a valid listing." }, { status: 400 });
       const { data: listing, error: listingError } = await admin.from("listings")
-        .select("id, website_user_id, currency, status, is_active")
+        .select("id, website_user_id, currency, status, is_active, marketplace_state")
         .eq("id", listingId).maybeSingle();
       if (listingError) throw listingError;
-      if (!listing || !listing.is_active || listing.status !== "approved" || !listing.website_user_id) {
+      if (!listing || !listing.is_active || listing.status !== "approved" || listing.marketplace_state !== "available" || !listing.website_user_id) {
         return NextResponse.json({ error: "This listing is not available for checkout." }, { status: 409 });
       }
       if (listing.website_user_id === accountId) return NextResponse.json({ error: "You cannot buy your own listing." }, { status: 400 });
@@ -167,6 +168,44 @@ export async function POST(request: Request) {
         throw error;
       }
       return NextResponse.json({ ok: true, finalized: data?.finalized ?? false, paymentStatus: data?.payment_status });
+    }
+
+    if (action === "relist_unavailable") {
+      const itemId = text(body.itemId, 60);
+      if (!/^[0-9a-f-]{36}$/i.test(itemId)) return NextResponse.json({ error: "Choose a valid unavailable order item." }, { status: 400 });
+      const { data: orderItem, error: itemError } = await admin.from("marketplace_order_items")
+        .select("listing_id")
+        .eq("id", itemId)
+        .eq("seller_id", accountId)
+        .in("status", ["unavailable", "refunded"])
+        .maybeSingle();
+      if (itemError) throw itemError;
+      if (!orderItem?.listing_id) return NextResponse.json({ error: "This unavailable mineral cannot be relisted." }, { status: 409 });
+
+      const now = new Date().toISOString();
+      const { data: subscription, error: subscriptionError } = await admin.from("account_subscriptions")
+        .select("id")
+        .eq("website_user_id", accountId)
+        .eq("status", "active")
+        .lte("starts_at", now)
+        .gt("expires_at", now)
+        .limit(1)
+        .maybeSingle();
+      if (subscriptionError) throw subscriptionError;
+      if (!subscription) return NextResponse.json({ error: "An active seller subscription is required before relisting this mineral." }, { status: 403 });
+
+      const { data: listing, error: listingError } = await admin.from("listings")
+        .update({ marketplace_state: "available", is_active: true })
+        .eq("id", orderItem.listing_id)
+        .eq("website_user_id", accountId)
+        .eq("status", "approved")
+        .eq("marketplace_state", "seller_unavailable")
+        .eq("is_active", false)
+        .select("id")
+        .maybeSingle();
+      if (listingError) throw listingError;
+      if (!listing) return NextResponse.json({ error: "This mineral has changed status and cannot be relisted. Refresh your orders and try again." }, { status: 409 });
+      return NextResponse.json({ ok: true });
     }
 
     if (action === "seller_dispatch") {
