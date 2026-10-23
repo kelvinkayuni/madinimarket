@@ -13,7 +13,7 @@ type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "accounts" | "subscriptions";
+type AdminPanel = "review" | "ledger" | "translations" | "accounts" | "subscriptions" | "listing-fee";
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
@@ -1672,48 +1672,12 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>
               <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>
               <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
+              <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
               <div className="admin-menu-currency">
                 <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                 <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
                   <span />
                 </button>
-              </div>
-              <div className="admin-menu-fee">
-                <label htmlFor="admin-listing-fee">New mineral listing fee (%)</label>
-                <div className="admin-menu-fee-input">
-                  <input id="admin-listing-fee" type="number" min="0" max="100" step="0.01" value={listingFeePercentInput}
-                    disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting")}
-                    onChange={(event) => {
-                      setListingFeePercentInput(event.target.value);
-                      listingFeeDraftDirty.current = event.target.value.trim() === "" || Number(event.target.value) !== listingFeePercent;
-                    }} />
-                </div>
-                <div className="admin-menu-fee-actions">
-                  <button className="button button-dark" type="button"
-                    disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") ||
-                      (listingFeePercentInput.trim() !== "" && Number(listingFeePercentInput) === listingFeePercent)}
-                    onClick={() => void updateListingFee()}>
-                    {busyActions.has("listing-fee-setting") ? "Saving…" : "Save"}
-                  </button>
-                  <button className="button button-outline" type="button"
-                    disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") ||
-                      (listingFeePercentInput.trim() !== "" && Number(listingFeePercentInput) === listingFeePercent)}
-                    onClick={cancelListingFeeEdit}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-              <div className="admin-menu-fee-current" aria-live="polite">
-                <div className="admin-menu-fee-current-heading">
-                  <strong>Saved fee</strong>
-                  <span>Current fee</span>
-                </div>
-                {listingFeeSettingsLoaded
-                  ? <><strong className="admin-menu-fee-current-value">{formatFeePercent(listingFeePercent)}%</strong>
-                    <small>{listingFeeUpdatedAt
-                      ? `Updated on ${new Date(listingFeeUpdatedAt).toLocaleString()}`
-                      : "Update date and time unavailable"}</small></>
-                  : <small>Loading saved fee…</small>}
               </div>
             </nav>
           </>}
@@ -1721,6 +1685,50 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         <div className="admin-header-actions"><span className="admin-account">{user}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
       <div className="admin-content" id="admin-home">
+        {activeAdminPanel === "listing-fee" && <section className="admin-listing-fee-panel" aria-labelledby="admin-listing-fee-heading">
+          <div className="admin-page-heading">
+            <div><div className="dialog-kicker">MARKETPLACE SETTINGS</div><h1 id="admin-listing-fee-heading">New mineral listing fee</h1><p>Set the fee that will be applied to new mineral listings. Existing listings keep their saved fee and price.</p></div>
+          </div>
+          <div className="admin-listing-fee-editor">
+            <label className="field-label" htmlFor="admin-listing-fee">Listing fee percentage</label>
+            <div className="admin-listing-fee-input">
+              <input className="text-input" id="admin-listing-fee" type="number" min="0" max="100" step="0.01" value={listingFeePercentInput}
+                disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting")}
+                onChange={(event) => {
+                  setListingFeePercentInput(event.target.value);
+                  listingFeeDraftDirty.current = event.target.value.trim() === "" || Number(event.target.value) !== listingFeePercent;
+                }} />
+              <span>%</span>
+            </div>
+            <p>Enter a value from 0.00% to 100.00%, with up to two decimal places.</p>
+            <div className="admin-listing-fee-actions">
+              <button className="button button-dark" type="button"
+                disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") ||
+                  (listingFeePercentInput.trim() !== "" && Number(listingFeePercentInput) === listingFeePercent)}
+                onClick={() => void updateListingFee()}>
+                {busyActions.has("listing-fee-setting") ? "Saving…" : "Save"}
+              </button>
+              <button className="button button-outline" type="button"
+                disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") ||
+                  (listingFeePercentInput.trim() !== "" && Number(listingFeePercentInput) === listingFeePercent)}
+                onClick={cancelListingFeeEdit}>
+                Cancel
+              </button>
+            </div>
+          </div>
+          <div className="admin-listing-fee-current" aria-live="polite">
+            <div className="admin-listing-fee-current-heading">
+              <div><span>SAVED SETTING</span><h2>Current fee</h2></div>
+              <span className="admin-listing-fee-status">Current</span>
+            </div>
+            {listingFeeSettingsLoaded
+              ? <><strong className="admin-listing-fee-current-value">{formatFeePercent(listingFeePercent)}%</strong>
+                <small>{listingFeeUpdatedAt
+                  ? `Updated on ${new Date(listingFeeUpdatedAt).toLocaleString()}`
+                  : "Update date and time unavailable"}</small></>
+              : <small>Loading saved fee…</small>}
+          </div>
+        </section>}
         {activeAdminPanel === "review" && <>
         <section className="admin-overview">
           <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
