@@ -38,6 +38,7 @@ const USER_STORAGE_KEY = "madinimarket:user:v1";
 const signedMineralImageUrls = new Map<string, { url: string; expiresAt: number }>();
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
+const formatFeePercent = (value: number) => value.toFixed(2);
 const sellerPriceDetails = (listing: Pick<Seller, "seller_price" | "platform_fee_amount" | "price" | "currency">) => {
   const sellerPrice = listing.seller_price ?? listing.price;
   const platformFee = listing.platform_fee_amount ?? String(Number(listing.price) - Number(sellerPrice));
@@ -452,7 +453,7 @@ export default function Marketplace() {
         setListingFeePercent(result.feePercent);
         setListingFeeUpdatedAt(typeof result.updatedAt === "string" ? result.updatedAt : null);
         setListingFeeSettingsLoaded(true);
-        if (!listingFeeDraftDirty.current) setListingFeePercentInput(String(result.feePercent));
+        if (!listingFeeDraftDirty.current) setListingFeePercentInput(formatFeePercent(result.feePercent));
       } catch (error) {
         if (!active) return;
         if (!initialLoadComplete) {
@@ -979,11 +980,11 @@ export default function Marketplace() {
           throw new Error("Mineral listing fee settings are invalid.");
         }
         setListingFeePercent(result.feePercent);
-        setListingFeePercentInput(String(result.feePercent));
+        setListingFeePercentInput(formatFeePercent(result.feePercent));
         setListingFeeUpdatedAt(typeof result.updatedAt === "string" ? result.updatedAt : null);
         setListingFeeSettingsLoaded(true);
         listingFeeDraftDirty.current = false;
-        setNotice(`The ${result.feePercent}% listing fee now applies to new listings. Existing listings keep their saved fee.`);
+        setNotice(`The ${formatFeePercent(result.feePercent)}% listing fee now applies to new listings. Existing listings keep their saved fee.`);
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not update the mineral listing fee.");
       }
@@ -1680,16 +1681,17 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                     disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting")}
                     onChange={(event) => {
                       setListingFeePercentInput(event.target.value);
-                      listingFeeDraftDirty.current = event.target.value !== String(listingFeePercent);
+                      listingFeeDraftDirty.current = event.target.value.trim() === "" || Number(event.target.value) !== listingFeePercent;
                     }} />
                   <button className="button button-dark" type="button"
-                    disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") || listingFeePercentInput === String(listingFeePercent)}
+                    disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") ||
+                      (listingFeePercentInput.trim() !== "" && Number(listingFeePercentInput) === listingFeePercent)}
                     onClick={() => void updateListingFee()}>
                     {busyActions.has("listing-fee-setting") ? "Saving…" : "Save"}
                   </button>
                 </div>
                 <small>{listingFeeSettingsLoaded
-                  ? `Current rate: ${listingFeePercent}% · applies to new listings only${listingFeeUpdatedAt ? ` · updated ${new Date(listingFeeUpdatedAt).toLocaleString()}` : ""}`
+                  ? `Current rate: ${formatFeePercent(listingFeePercent)}% · applies to new listings only${listingFeeUpdatedAt ? ` · updated ${new Date(listingFeeUpdatedAt).toLocaleString()}` : ""}`
                   : "Loading listing fee settings…"}</small>
               </div>
             </nav>
