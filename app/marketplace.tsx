@@ -329,6 +329,7 @@ export default function Marketplace() {
   const [marketHoursLoaded, setMarketHoursLoaded] = useState(!isSupabaseConfigured);
   const marketHoursDraftDirty = useRef(false);
   const [marketIsOpen, setMarketIsOpen] = useState(!isSupabaseConfigured);
+  const [currentMarketHours, setCurrentMarketHours] = useState<string | null>(null);
   const [nextMarketOpenAt, setNextMarketOpenAt] = useState<string | null>(null);
   const [marketHoursError, setMarketHoursError] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
@@ -583,6 +584,7 @@ export default function Marketplace() {
           schedule.openDays.some((day) => !Number.isInteger(day) || day < 0 || day > 6) ||
           typeof schedule.openTime !== "string" || typeof schedule.closeTime !== "string" ||
           typeof result.isOpen !== "boolean" ||
+          !(result.currentHours === null || typeof result.currentHours === "string") ||
           !(result.nextOpenAt === null || typeof result.nextOpenAt === "string") ||
           !(result.nextTransitionAt === null || typeof result.nextTransitionAt === "string")) {
           throw new Error("Market hours settings are invalid.");
@@ -598,6 +600,7 @@ export default function Marketplace() {
         setMarketHours(schedule);
         if (!marketHoursDraftDirty.current) setMarketHoursDraft(schedule);
         setMarketIsOpen(result.isOpen);
+        setCurrentMarketHours(result.currentHours);
         setNextMarketOpenAt(result.nextOpenAt);
         setMarketHoursError("");
         setMarketHoursLoaded(true);
@@ -605,6 +608,7 @@ export default function Marketplace() {
         if (!active) return;
         if (boundaryTimer !== undefined) window.clearTimeout(boundaryTimer);
         setMarketIsOpen(false);
+        setCurrentMarketHours(null);
         setNextMarketOpenAt(null);
         setMarketHoursError(error instanceof Error ? error.message : "Could not verify market hours.");
         setMarketHoursLoaded(true);
@@ -1249,6 +1253,7 @@ export default function Marketplace() {
         if (!Array.isArray(savedSchedule?.openDays) || !savedSchedule.openDays.length ||
           typeof savedSchedule.openTime !== "string" || typeof savedSchedule.closeTime !== "string" ||
           typeof result.isOpen !== "boolean" ||
+          !(result.currentHours === null || typeof result.currentHours === "string") ||
           !(result.nextOpenAt === null || typeof result.nextOpenAt === "string")) {
           throw new Error("The saved market hours response is invalid.");
         }
@@ -1256,6 +1261,7 @@ export default function Marketplace() {
         setMarketHoursDraft(savedSchedule);
         setMarketHoursLoaded(true);
         setMarketIsOpen(result.isOpen);
+        setCurrentMarketHours(result.currentHours);
         setNextMarketOpenAt(result.nextOpenAt);
         setMarketHoursError("");
         marketHoursDraftDirty.current = false;
@@ -2297,7 +2303,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     </header>
 
     <div className="market-content" id="top">
-      <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className={`market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`}><div className="status-orbit"><span /></div><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "Tanzania time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? `Updated ${lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}` : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time` : "No upcoming opening is scheduled."}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
+      <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className={`market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`}><div className="status-orbit"><span /></div><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "Tanzania time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} Tanzania time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time` : "No upcoming opening is scheduled."}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>

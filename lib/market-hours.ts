@@ -41,6 +41,11 @@ function minutesOf(time: string) {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
+function weekdayName(day: number) {
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: MARKET_TIME_ZONE })
+    .format(new Date(Date.UTC(2024, 0, 7 + day, 12)));
+}
+
 export function isMarketOpenAt(schedule: MarketHoursSchedule, at = new Date()) {
   const { weekday, minutes } = localParts(at);
   const open = minutesOf(schedule.openTime);
@@ -51,6 +56,19 @@ export function isMarketOpenAt(schedule: MarketHoursSchedule, at = new Date()) {
   if (open < close) return days.has(weekday) && minutes >= open && minutes < close;
   if (minutes >= open) return days.has(weekday);
   return minutes < close && days.has((weekday + 6) % 7);
+}
+
+export function getCurrentMarketHoursLabel(schedule: MarketHoursSchedule, at = new Date()) {
+  if (!isMarketOpenAt(schedule, at)) return null;
+  const { weekday, minutes } = localParts(at);
+  const open = minutesOf(schedule.openTime);
+  const close = minutesOf(schedule.closeTime);
+  const dayName = weekdayName(weekday);
+
+  if (open === close) return `${dayName} 00:00–24:00`;
+  if (open < close) return `${dayName} ${schedule.openTime}–${schedule.closeTime}`;
+  if (minutes >= open) return `${dayName} ${schedule.openTime}–${weekdayName((weekday + 1) % 7)} ${schedule.closeTime}`;
+  return `${weekdayName((weekday + 6) % 7)} ${schedule.openTime}–${dayName} ${schedule.closeTime}`;
 }
 
 function localDate(date: Date) {
