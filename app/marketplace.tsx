@@ -77,15 +77,29 @@ function onBrowserResume(refresh: () => void | Promise<void>) {
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
 const formatFeePercent = (value: number) => value.toFixed(2);
-const formatMarketOpening = (value: string) => new Date(value).toLocaleString("en-GB", {
-  timeZone: MARKET_TIME_ZONE,
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
+const formatMarketOpening = (value: string) => {
+  const opening = new Date(value);
+  const date = opening.toLocaleDateString("en-GB", {
+    timeZone: MARKET_TIME_ZONE,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const time = opening.toLocaleTimeString("en-GB", {
+    timeZone: MARKET_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const hour = Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: MARKET_TIME_ZONE,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(opening));
+  const timeOfDay = hour < 5 ? "at night" : hour < 12 ? "in the morning" : hour < 17 ? "in the afternoon" : hour < 21 ? "in the evening" : "at night";
+  return `${date} at ${time} ${timeOfDay}`;
+};
 const sellerPriceDetails = (listing: Pick<Seller, "seller_price" | "platform_fee_amount" | "price" | "currency">) => {
   const sellerPrice = listing.seller_price ?? listing.price;
   const platformFee = listing.platform_fee_amount ?? String(Number(listing.price) - Number(sellerPrice));
