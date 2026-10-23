@@ -1,19 +1,17 @@
 export type ListingCurrency = "TZS" | "USD";
 
-export const PLATFORM_FEE_RATE = 0.05;
-
 function roundForCurrency(amount: number, currency: ListingCurrency) {
   const precision = currency === "TZS" ? 0 : 2;
   const factor = 10 ** precision;
   return Math.round((amount + Number.EPSILON) * factor) / factor;
 }
 
-export function calculateListingPrice(sellerPrice: number, currency: ListingCurrency) {
+export function calculateListingPrice(sellerPrice: number, currency: ListingCurrency, feeRate: number) {
   const roundedSellerPrice = roundForCurrency(sellerPrice, currency);
-  const feeAmount = roundForCurrency(roundedSellerPrice * PLATFORM_FEE_RATE, currency);
+  const feeAmount = roundForCurrency(roundedSellerPrice * feeRate, currency);
   return {
     sellerPrice: roundedSellerPrice,
-    platformFeeRate: PLATFORM_FEE_RATE,
+    platformFeeRate: feeRate,
     platformFeeAmount: feeAmount,
     marketPrice: roundForCurrency(roundedSellerPrice + feeAmount, currency),
   };

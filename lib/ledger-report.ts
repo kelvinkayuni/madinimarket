@@ -141,7 +141,7 @@ export function downloadLedgerPdf(entries: LedgerReportEntry[], totals: LedgerRe
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 28;
   const columnWidths = [95, 115, 130, 65, 115, 115, 150];
-  const headers = ["Submitted", "Seller", "Mineral", "Status", "Seller price", "5% added", "Total market price"];
+  const headers = ["Submitted", "Seller", "Mineral", "Status", "Seller price", "Fee added", "Total market price"];
   let pageNumber = 1;
   let y = margin;
 

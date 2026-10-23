@@ -274,6 +274,11 @@ export default function Marketplace() {
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
   const [usdEnabled, setUsdEnabled] = useState(true);
   const [currencySettingsLoaded, setCurrencySettingsLoaded] = useState(!isSupabaseConfigured);
+  const [listingFeePercent, setListingFeePercent] = useState(5);
+  const [listingFeePercentInput, setListingFeePercentInput] = useState("5");
+  const [listingFeeUpdatedAt, setListingFeeUpdatedAt] = useState<string | null>(null);
+  const [listingFeeSettingsLoaded, setListingFeeSettingsLoaded] = useState(!isSupabaseConfigured);
+  const listingFeeDraftDirty = useRef(false);
   const [accountSearch, setAccountSearch] = useState("");
   const accountListRef = useRef<HTMLDivElement>(null);
   const accountListScrollTop = useRef<number | null>(null);
@@ -328,6 +333,9 @@ export default function Marketplace() {
   const currencyOptions: [string, string][] = currencySettingsLoaded && usdEnabled
     ? [["TZS", "TZS"], ["USD", "USD"]]
     : [["TZS", "TSh"]];
+  const sellerFeePercent = editingSubmission?.kind === "seller" && editingSubmission.item.platform_fee_rate != null
+    ? editingSubmission.item.platform_fee_rate * 100
+    : listingFeePercent;
   const draftSaveTimers = useRef<{ seller: number | null; buyer: number | null }>({ seller: null, buyer: null });
   const draftRestoreDialog = useRef<Dialog>(null);
   const sellerRail = useRef<HTMLDivElement>(null);
@@ -421,6 +429,40 @@ export default function Marketplace() {
     };
     void refreshCurrencySettings();
     const interval = window.setInterval(() => void refreshCurrencySettings(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
+    let initialLoadComplete = false;
+    const refreshListingFeeSettings = async () => {
+      try {
+        const response = await fetch("/api/listing-fee-settings", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load mineral listing fee settings.");
+        if (typeof result.feePercent !== "number" || !Number.isFinite(result.feePercent) ||
+          result.feePercent < 0 || result.feePercent > 100) {
+          throw new Error("Mineral listing fee settings are invalid.");
+        }
+        initialLoadComplete = true;
+        if (!active) return;
+        setListingFeePercent(result.feePercent);
+        setListingFeeUpdatedAt(typeof result.updatedAt === "string" ? result.updatedAt : null);
+        setListingFeeSettingsLoaded(true);
+        if (!listingFeeDraftDirty.current) setListingFeePercentInput(String(result.feePercent));
+      } catch (error) {
+        if (!active) return;
+        if (!initialLoadComplete) {
+          setNotice(error instanceof Error ? error.message : "Could not load mineral listing fee settings.");
+        }
+        initialLoadComplete = true;
+      }
+    };
+    void refreshListingFeeSettings();
+    const interval = window.setInterval(() => void refreshListingFeeSettings(), 30_000);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -911,6 +953,42 @@ export default function Marketplace() {
     accountListScrollTop.current = accountListRef.current?.scrollTop ?? 0;
     setWebsiteAccounts(accounts);
   };
+  const updateListingFee = async () => {
+    const feePercent = Number(listingFeePercentInput);
+    if (!listingFeePercentInput.trim() || !Number.isFinite(feePercent) || feePercent < 0 || feePercent > 100 ||
+      Math.abs(feePercent * 100 - Math.round(feePercent * 100)) > 1e-8) {
+      setNotice("Enter a fee from 0% to 100%, with up to two decimal places.");
+      return;
+    }
+    await withProgress("listing-fee-setting", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/listing-fee-settings", {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ feePercent }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not update the mineral listing fee.");
+        if (typeof result.feePercent !== "number" || !Number.isFinite(result.feePercent)) {
+          throw new Error("Mineral listing fee settings are invalid.");
+        }
+        setListingFeePercent(result.feePercent);
+        setListingFeePercentInput(String(result.feePercent));
+        setListingFeeUpdatedAt(typeof result.updatedAt === "string" ? result.updatedAt : null);
+        setListingFeeSettingsLoaded(true);
+        listingFeeDraftDirty.current = false;
+        setNotice(`The ${result.feePercent}% listing fee now applies to new listings. Existing listings keep their saved fee.`);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update the mineral listing fee.");
+      }
+    });
+  };
   const updateUsdAvailability = async (enabled: boolean) => {
     await withProgress("currency-setting", async () => {
       try {
@@ -1391,7 +1469,12 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         return;
       }
     }
-    const pricing = calculateListingPrice(sellerPrice, currency);
+    if (isSupabaseConfigured && !existing && !listingFeeSettingsLoaded) {
+      setNotice("The current mineral listing fee is still loading. Please try again.");
+      return;
+    }
+    const feeRate = existing?.platform_fee_rate ?? listingFeePercent / 100;
+    const pricing = calculateListingPrice(sellerPrice, currency, feeRate);
     const listing: Seller = {
       id: existing?.id ?? Date.now(), mineral: String(form.get("mineral")), weight: String(form.get("weight")), unit: form.get("unit") as Unit,
       listing_type: listingType,
@@ -1590,6 +1673,25 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                   <span />
                 </button>
               </div>
+              <div className="admin-menu-fee">
+                <label htmlFor="admin-listing-fee">New mineral listing fee (%)</label>
+                <div>
+                  <input id="admin-listing-fee" type="number" min="0" max="100" step="0.01" value={listingFeePercentInput}
+                    disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting")}
+                    onChange={(event) => {
+                      setListingFeePercentInput(event.target.value);
+                      listingFeeDraftDirty.current = event.target.value !== String(listingFeePercent);
+                    }} />
+                  <button className="button button-dark" type="button"
+                    disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") || listingFeePercentInput === String(listingFeePercent)}
+                    onClick={() => void updateListingFee()}>
+                    {busyActions.has("listing-fee-setting") ? "Saving…" : "Save"}
+                  </button>
+                </div>
+                <small>{listingFeeSettingsLoaded
+                  ? `Current rate: ${listingFeePercent}% · applies to new listings only${listingFeeUpdatedAt ? ` · updated ${new Date(listingFeeUpdatedAt).toLocaleString()}` : ""}`
+                  : "Loading listing fee settings…"}</small>
+              </div>
             </nav>
           </>}
         </div>
@@ -1612,7 +1714,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <summary className="admin-review-title admin-submission-toggle"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3></div><strong>{money(item.price, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
               <div className="admin-submission-details">
                 <p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {item.seller}</p>
-                {item.platform_fee_rate ? <p>{sellerPriceDetails(item)} (5% fee)</p> : null}
+                {item.platform_fee_rate ? <p>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}
                 {item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}
                 <p>{item.location} · {item.phone} · {item.email}</p>
                 {item.image ? <div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div> : <p className="admin-image-missing">No mineral photo attached.</p>}
@@ -1653,14 +1755,14 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <div className="admin-ledger-currency-heading"><strong>{totals.currency}</strong><span>{totals.count} {totals.count === 1 ? "listing" : "listings"}</span></div>
               <div className="admin-ledger-total-grid">
                 <div><span>Seller asking total</span><strong>{formatLedgerMoney(totals.sellerPrice, totals.currency)}</strong></div>
-                <div><span>5% fee total</span><strong>{formatLedgerMoney(totals.platformFee, totals.currency)}</strong></div>
+                <div><span>Fee total</span><strong>{formatLedgerMoney(totals.platformFee, totals.currency)}</strong></div>
                 <div><span>Market price total</span><strong>{formatLedgerMoney(totals.marketPrice, totals.currency)}</strong></div>
               </div>
             </article>)}
           </div>
           <div className="admin-ledger-table-wrap">
             <table className="admin-ledger-table">
-              <thead><tr><th>Submitted</th><th>Seller</th><th>Mineral</th><th>Status</th><th>Seller price</th><th>5% added</th><th>Total market price</th></tr></thead>
+              <thead><tr><th>Submitted</th><th>Seller</th><th>Mineral</th><th>Status</th><th>Seller price</th><th>Fee added</th><th>Total market price</th></tr></thead>
               <tbody>
                 {adminListingLedger.map((listing) => <tr key={listing.id}>
                   <td>{new Date(listing.created_at).toLocaleString()}</td>
@@ -1815,10 +1917,10 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             <SelectField label="Stone weight unit" name="stone_weight_unit" defaultValue={editingSeller?.stone_weight_unit ?? ""} options={[["carats", "Carats"], ["g", "Grams"], ["kg", "Kilograms"]]} />
           </>}
           <div className="field-row field-row-weight">
-            <Field label="Your price (before 5% fee)" name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.seller_price ?? editingSeller?.price ?? ""} required />
+            <Field label={`Your price (before ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)`} name="price" type="number" min="0.01" step="any" defaultValue={editingSeller?.seller_price ?? editingSeller?.price ?? ""} required />
             <SelectField label="Currency" name="currency" defaultValue={currencyOptions.length > 1 ? editingSeller?.currency ?? "" : editingSeller?.currency === "TZS" ? "TZS" : ""} options={currencyOptions} />
           </div>
-          <p className="form-footnote">A fixed 5% Madinimarket fee is added. Buyers see the total; your entered amount is the seller portion.</p>
+          <p className="form-footnote">{editingSeller ? `The original ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee stays on this listing. ` : `A ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee applies to new listings. `}Buyers see the total; your entered amount is the seller portion.</p>
           {sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}
           <label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label>
           <StoneCertificateField />
@@ -1912,7 +2014,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           {!userSubscriptionPlans.length && <p className="admin-empty">No subscription plans are available yet. Please check again later.</p>}
         </>}
       </>}
-      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>{item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} (5% fee)</p> : null}{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}  <div className="submission-actions">
+      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>{item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}  <div className="submission-actions">
   <button
     type="button"
     className="button button-outline"
@@ -1947,7 +2049,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     {busyActions.has(`submission-delete-buyer-${item.id}`) ? "Deleting…" : "Delete"}
   </button>
 </div> </article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
-      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list account-scroll-list" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>{item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} (5% fee)</p> : null}{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p data-no-translate>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
+      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list account-scroll-list" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>{item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p data-no-translate>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
       {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p><div className="submission-list account-scroll-list" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>{myWantedMinerals.map((item) => <article className="submission-item" key={`wanted-mineral-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">Buyers looking</span></div><p data-no-translate>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p><span>Offer: </span><span data-no-translate>{money(item.offer, item.currency)} · {item.location}</span></p></article>)}{!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}</div></>}
       {dialog === "my-licenses" && role === "user" && <><div className="dialog-kicker">SELLER VERIFICATION</div><h2 id="dialog-title">Your licences</h2><p className="dialog-copy">At least one approved licence is required to list a mineral.</p><div className="certificate-options certificate-options-account">{(["dealer", "broker"] as const).map((kind) => {
         const certificate = certificates[kind];

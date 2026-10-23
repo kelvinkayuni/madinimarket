@@ -154,17 +154,17 @@ export async function POST(request: Request) {
     .eq("kind", kind)
     .maybeSingle();
   if (draftError) return NextResponse.json({ error: "Could not load your saved draft." }, { status: 503 });
-  let existing: { id: number; image_path: string | null; stone_certificate_path: string | null } | null = null;
+  let existing: { id: number; image_path: string | null; stone_certificate_path: string | null; platform_fee_rate: number | null } | null = null;
 
   if (editing) {
     if (kind === "seller") {
-      const { data, error } = await admin.from("listings").select("id, image_path, stone_certificate_path, status")
+      const { data, error } = await admin.from("listings").select("id, image_path, stone_certificate_path, platform_fee_rate, status")
         .eq("id", id).eq("website_user_id", accountId).maybeSingle();
       if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
       if (!data || !["pending", "rejected"].includes(data.status)) {
         return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
       }
-      existing = { id: data.id, image_path: data.image_path, stone_certificate_path: data.stone_certificate_path };
+      existing = { id: data.id, image_path: data.image_path, stone_certificate_path: data.stone_certificate_path, platform_fee_rate: Number(data.platform_fee_rate) };
     } else {
       const { data, error } = await admin.from("buy_requests").select("id, status")
         .eq("id", id).eq("website_user_id", accountId).maybeSingle();
@@ -172,7 +172,7 @@ export async function POST(request: Request) {
       if (!data || !["pending", "rejected"].includes(data.status)) {
         return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
       }
-      existing = { id: data.id, image_path: null, stone_certificate_path: null };
+      existing = { id: data.id, image_path: null, stone_certificate_path: null, platform_fee_rate: null };
     }
   }
 
@@ -210,7 +210,18 @@ export async function POST(request: Request) {
     if (!mineralName || !["single", "batch"].includes(listingType) || !weight || !["carats", "g", "kg", "tons"].includes(unit ?? "") || !sellerPrice || !["TZS", "USD"].includes(currency ?? "") || !sellerName || !country || !region || !district || !street || !validEmail(email) || !phone) {
       return NextResponse.json({ error: "Check the seller listing details and try again." }, { status: 400 });
     }
-    const pricing = calculateListingPrice(sellerPrice, currency as ListingCurrency);
+    let feeRate = existing?.platform_fee_rate;
+    if (feeRate == null) {
+      const { data: settings, error } = await admin.from("marketplace_settings")
+        .select("listing_fee_rate")
+        .eq("id", true)
+        .single();
+      if (error || !settings || !Number.isFinite(Number(settings.listing_fee_rate))) {
+        return NextResponse.json({ error: "Could not load the current mineral listing fee." }, { status: 503 });
+      }
+      feeRate = Number(settings.listing_fee_rate);
+    }
+    const pricing = calculateListingPrice(sellerPrice, currency as ListingCurrency, feeRate);
     if (listingType === "batch" && (
       !smallestStoneWeight ||
       !largestStoneWeight ||

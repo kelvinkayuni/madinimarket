@@ -3,6 +3,9 @@ create schema if not exists private;
 create table if not exists public.marketplace_settings (
   id boolean primary key default true check (id),
   usd_enabled boolean not null default true,
+  listing_fee_rate numeric(5, 4) not null default 0.05 check (listing_fee_rate between 0 and 1),
+  listing_fee_updated_at timestamptz not null default now(),
+  listing_fee_updated_by uuid references public.profiles (id) on delete set null,
   updated_at timestamptz not null default now()
 );
 insert into public.marketplace_settings (id, usd_enabled)
@@ -103,7 +106,7 @@ alter table public.listings drop constraint if exists listings_listing_type_chec
 alter table public.listings add constraint listings_listing_type_check check (listing_type in ('single', 'batch'));
 alter table public.listings drop constraint if exists listings_price_breakdown_check;
 alter table public.listings add constraint listings_price_breakdown_check check (
-  seller_price > 0 and platform_fee_rate between 0 and 0.07 and platform_fee_amount >= 0
+  seller_price > 0 and platform_fee_rate between 0 and 1 and platform_fee_amount >= 0
   and price = seller_price + platform_fee_amount
 );
 alter table public.listings drop constraint if exists listings_stone_weight_unit_check;
@@ -171,6 +174,41 @@ drop trigger if exists enforce_buy_request_currency_setting on public.buy_reques
 create trigger enforce_buy_request_currency_setting
 before insert or update of currency on public.buy_requests
 for each row execute function public.enforce_marketplace_currency_setting();
+
+create or replace function public.apply_listing_fee()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $apply_listing_fee$
+declare
+  fee_rate numeric;
+begin
+  if tg_op = 'INSERT' then
+    select settings.listing_fee_rate
+      into fee_rate
+      from public.marketplace_settings as settings
+      where settings.id = true;
+    if fee_rate is null then
+      raise exception 'Mineral listing fee settings are unavailable'
+        using errcode = '23514';
+    end if;
+  else
+    fee_rate := old.platform_fee_rate;
+  end if;
+
+  new.platform_fee_rate := fee_rate;
+  new.platform_fee_amount := round(new.seller_price * fee_rate, case when new.currency = 'TZS' then 0 else 2 end);
+  new.price := new.seller_price + new.platform_fee_amount;
+  return new;
+end;
+$apply_listing_fee$;
+revoke all on function public.apply_listing_fee() from public, anon, authenticated;
+
+drop trigger if exists apply_listing_fee on public.listings;
+create trigger apply_listing_fee
+before insert or update of seller_price, platform_fee_rate, platform_fee_amount, price, currency on public.listings
+for each row execute function public.apply_listing_fee();
 
 create or replace function private.is_admin()
 returns boolean
