@@ -990,6 +990,10 @@ export default function Marketplace() {
       }
     });
   };
+  const cancelListingFeeEdit = () => {
+    setListingFeePercentInput(formatFeePercent(listingFeePercent));
+    listingFeeDraftDirty.current = false;
+  };
   const updateUsdAvailability = async (enabled: boolean) => {
     await withProgress("currency-setting", async () => {
       try {
@@ -1676,23 +1680,40 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               </div>
               <div className="admin-menu-fee">
                 <label htmlFor="admin-listing-fee">New mineral listing fee (%)</label>
-                <div>
+                <div className="admin-menu-fee-input">
                   <input id="admin-listing-fee" type="number" min="0" max="100" step="0.01" value={listingFeePercentInput}
                     disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting")}
                     onChange={(event) => {
                       setListingFeePercentInput(event.target.value);
                       listingFeeDraftDirty.current = event.target.value.trim() === "" || Number(event.target.value) !== listingFeePercent;
                     }} />
+                </div>
+                <div className="admin-menu-fee-actions">
                   <button className="button button-dark" type="button"
                     disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") ||
                       (listingFeePercentInput.trim() !== "" && Number(listingFeePercentInput) === listingFeePercent)}
                     onClick={() => void updateListingFee()}>
                     {busyActions.has("listing-fee-setting") ? "Saving…" : "Save"}
                   </button>
+                  <button className="button button-outline" type="button"
+                    disabled={!listingFeeSettingsLoaded || busyActions.has("listing-fee-setting") ||
+                      (listingFeePercentInput.trim() !== "" && Number(listingFeePercentInput) === listingFeePercent)}
+                    onClick={cancelListingFeeEdit}>
+                    Cancel
+                  </button>
                 </div>
-                <small>{listingFeeSettingsLoaded
-                  ? `Current rate: ${formatFeePercent(listingFeePercent)}% · applies to new listings only${listingFeeUpdatedAt ? ` · updated ${new Date(listingFeeUpdatedAt).toLocaleString()}` : ""}`
-                  : "Loading listing fee settings…"}</small>
+              </div>
+              <div className="admin-menu-fee-current" aria-live="polite">
+                <div className="admin-menu-fee-current-heading">
+                  <strong>Saved fee</strong>
+                  <span>Current fee</span>
+                </div>
+                {listingFeeSettingsLoaded
+                  ? <><strong className="admin-menu-fee-current-value">{formatFeePercent(listingFeePercent)}%</strong>
+                    <small>{listingFeeUpdatedAt
+                      ? `Saved ${new Date(listingFeeUpdatedAt).toLocaleString()}`
+                      : "Saved date and time unavailable"}</small></>
+                  : <small>Loading saved fee…</small>}
               </div>
             </nav>
           </>}

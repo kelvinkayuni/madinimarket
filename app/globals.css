@@ -46,10 +46,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-menu-currency > div span { color: #778075; font-size: 9px; line-height: 1.5; }
 .admin-menu-fee { display: grid; gap: 8px; margin-top: 8px; padding: 13px 10px 6px; border-top: 1px solid #e8ebe5; }
 .admin-menu-fee > label { color: #354b39; font-size: 11px; font-weight: 650; }
-.admin-menu-fee > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.admin-menu-fee-input { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .admin-menu-fee input { width: 100%; min-width: 0; min-height: 36px; padding: 0 9px; border: 1px solid #dfe3db; background: #fff; color: #35443a; font-size: 12px; }
 .admin-menu-fee .button { min-height: 36px; padding: 0 12px; font-size: 10px; }
-.admin-menu-fee small { color: #778075; font-size: 9px; line-height: 1.5; }
+.admin-menu-fee-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.admin-menu-fee-current { display: grid; gap: 6px; margin: 0 10px 7px; padding: 11px 10px; border: 1px solid #dfe6dc; background: #f7f9f4; }
+.admin-menu-fee-current-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-menu-fee-current-heading > strong { color: #354b39; font-size: 10px; }
+.admin-menu-fee-current-heading > span { padding: 4px 7px; border-radius: 12px; background: #e5efe3; color: #3f6a48; font-size: 8px; font-weight: 700; }
+.admin-menu-fee-current-value { color: var(--forest); font-size: 18px; font-weight: 650; }
+.admin-menu-fee-current small { color: #778075; font-size: 9px; line-height: 1.5; }
 .admin-content { width: 100%; padding: 38px clamp(18px, 3vw, 48px) 64px; }
 .admin-overview { padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .admin-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
