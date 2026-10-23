@@ -74,12 +74,6 @@ function onBrowserResume(refresh: () => void | Promise<void>) {
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
 const formatFeePercent = (value: number) => value.toFixed(2);
-const formatMarketTime = (value: string) => {
-  const [hour, minute] = value.split(":").map(Number);
-  const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 || 12;
-  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
-};
 const formatMarketOpening = (value: string) => new Date(value).toLocaleString("en-GB", {
   timeZone: MARKET_TIME_ZONE,
   weekday: "long",
@@ -1217,6 +1211,16 @@ export default function Marketplace() {
     setMarketHoursDraft(marketHours);
     marketHoursDraftDirty.current = false;
   };
+  const updateMarketHoursDraftTime = (field: "openTime" | "closeTime", time: string) => {
+    setMarketHoursDraft((current) => {
+      const next = { ...current, [field]: time };
+      marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
+        next.closeTime !== marketHours.closeTime ||
+        next.openDays.length !== marketHours.openDays.length ||
+        next.openDays.some((day) => !marketHours.openDays.includes(day));
+      return next;
+    });
+  };
   const updateMarketHours = async () => {
     if (!marketHoursDraft.openDays.length) {
       setNotice("Select at least one day when the market is open.");
@@ -2054,34 +2058,35 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               </label>)}</div>
             </fieldset>
             <div className="admin-market-time-fields">
-              <label className="field-label" htmlFor="market-open-time">Opening time (Tanzania)
-                <input className="text-input" id="market-open-time" type="time" value={marketHoursDraft.openTime}
-                  disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
-                  onChange={(event) => setMarketHoursDraft((current) => {
-                    const next = { ...current, openTime: event.target.value };
-                    marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
-                      next.closeTime !== marketHours.closeTime ||
-                      next.openDays.length !== marketHours.openDays.length ||
-                      next.openDays.some((day) => !marketHours.openDays.includes(day));
-                    return next;
-                  })} />
-                <small className="admin-market-time-preview">{formatMarketTime(marketHoursDraft.openTime)} Tanzania time</small>
-              </label>
-              <label className="field-label" htmlFor="market-close-time">Closing time (Tanzania)
-                <input className="text-input" id="market-close-time" type="time" value={marketHoursDraft.closeTime}
-                  disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
-                  onChange={(event) => setMarketHoursDraft((current) => {
-                    const next = { ...current, closeTime: event.target.value };
-                    marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
-                      next.closeTime !== marketHours.closeTime ||
-                      next.openDays.length !== marketHours.openDays.length ||
-                      next.openDays.some((day) => !marketHours.openDays.includes(day));
-                    return next;
-                  })} />
-                <small className="admin-market-time-preview">{formatMarketTime(marketHoursDraft.closeTime)} Tanzania time</small>
-              </label>
+              {([
+                { field: "openTime", id: "market-open-time", label: "Opening time", value: marketHoursDraft.openTime },
+                { field: "closeTime", id: "market-close-time", label: "Closing time", value: marketHoursDraft.closeTime },
+              ] as const).map(({ field, id, label, value }) => {
+                const [hour, minute] = value.split(":");
+                const disabled = !marketHoursLoaded || busyActions.has("market-hours-setting");
+                return <fieldset className="admin-market-time-control" key={field} disabled={disabled}>
+                  <legend>{label} (Tanzania)</legend>
+                  <div className="admin-market-time-selects">
+                      <label htmlFor={`${id}-hour`}>Hour (00–23)
+                        <select id={`${id}-hour`} aria-label={`${label} hour (24-hour clock)`} value={hour}
+                          onChange={(event) => updateMarketHoursDraftTime(field, `${event.target.value}:${minute}`)}>
+                          {Array.from({ length: 24 }, (_, value) => String(value).padStart(2, "0")).map((value) =>
+                            <option key={value} value={value}>{value}</option>)}
+                      </select>
+                      </label>
+                      <label htmlFor={`${id}-minute`}>Minute
+                        <select id={`${id}-minute`} aria-label={`${label} minute`} value={minute}
+                          onChange={(event) => updateMarketHoursDraftTime(field, `${hour}:${event.target.value}`)}>
+                          {Array.from({ length: 60 }, (_, value) => String(value).padStart(2, "0")).map((value) =>
+                            <option key={value} value={value}>{value}</option>)}
+                        </select>
+                      </label>
+                  </div>
+                  <small className="admin-market-time-preview">{value} Tanzania time (24-hour clock)</small>
+                </fieldset>;
+              })}
             </div>
-            <p>Times use East Africa Time (Africa/Dar_es_Salaam). If opening and closing times are the same, the market stays open all day on selected days. A closing time earlier than opening time means the market closes the following day.</p>
+            <p>Enter times using the 24-hour clock (00:00–23:59) in East Africa Time (Africa/Dar_es_Salaam). If opening and closing times are the same, the market stays open all day on selected days. A closing time earlier than opening time means the market closes the following day.</p>
             <div className="admin-listing-fee-actions">
               <button className="button button-dark" type="button" disabled={!marketHoursLoaded || busyActions.has("market-hours-setting") || !marketHoursChanged}
                 onClick={() => void updateMarketHours()}>
@@ -2100,7 +2105,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             </div>
             {marketHoursLoaded ? <>
               <strong className="admin-market-hours-summary">{marketWeekdays.filter(({ day }) => marketHours.openDays.includes(day)).map(({ label }) => label).join(", ")}</strong>
-              <small>{formatMarketTime(marketHours.openTime)}–{formatMarketTime(marketHours.closeTime)} Tanzania time</small>
+              <small>{marketHours.openTime}–{marketHours.closeTime} Tanzania time (24-hour clock)</small>
               <small>{marketHours.updatedAt
                 ? `Updated on ${new Date(marketHours.updatedAt).toLocaleString()}`
                 : "Update date and time unavailable"}</small>
