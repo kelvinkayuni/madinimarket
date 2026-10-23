@@ -1711,8 +1711,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 {listingFeeSettingsLoaded
                   ? <><strong className="admin-menu-fee-current-value">{formatFeePercent(listingFeePercent)}%</strong>
                     <small>{listingFeeUpdatedAt
-                      ? `Saved ${new Date(listingFeeUpdatedAt).toLocaleString()}`
-                      : "Saved date and time unavailable"}</small></>
+                      ? `Updated on ${new Date(listingFeeUpdatedAt).toLocaleString()}`
+                      : "Update date and time unavailable"}</small></>
                   : <small>Loading saved fee…</small>}
               </div>
             </nav>
