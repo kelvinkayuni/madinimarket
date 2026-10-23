@@ -18,8 +18,15 @@ export async function POST(request: Request) {
   const surname = typeof values.surname === "string" ? values.surname.trim() : "";
   const email = typeof values.email === "string" ? values.email.trim().toLowerCase() : "";
   const phone = typeof values.phone === "string" ? values.phone.trim() : "";
+  const deliveryCountry = typeof values.country === "string" ? values.country.trim() : "";
+  const deliveryRegion = typeof values.region === "string" ? values.region.trim() : "";
+  const deliveryDistrict = typeof values.district === "string" ? values.district.trim() : "";
+  const deliveryAddress = typeof values.address === "string" ? values.address.trim() : "";
   const password = typeof values.password === "string" ? values.password : "";
-  if (!firstName || !surname || firstName.length > 100 || surname.length > 100 || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254 || !phone || phone.length > 40 || password.length < 8 || password.length > 256) {
+  if (!firstName || !surname || firstName.length > 100 || surname.length > 100 || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254 || !phone || phone.length > 40 ||
+    !deliveryCountry || deliveryCountry.length > 100 || !deliveryRegion || deliveryRegion.length > 100 ||
+    !deliveryDistrict || deliveryDistrict.length > 100 || !deliveryAddress || deliveryAddress.length > 300 ||
+    password.length < 8 || password.length > 256) {
     return NextResponse.json({ error: "Check the account details and try again." }, { status: 400 });
   }
 
@@ -33,6 +40,10 @@ export async function POST(request: Request) {
         username,
         email,
         phone,
+        delivery_country: deliveryCountry,
+        delivery_region: deliveryRegion,
+        delivery_district: deliveryDistrict,
+        delivery_address: deliveryAddress,
         password_hash: passwordHash,
       }).select("id, username").maybeSingle();
       if (data) {

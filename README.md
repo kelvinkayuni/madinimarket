@@ -28,7 +28,9 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 9. Run `supabase/translation-dictionary.sql`.
 10. Run `supabase/market-hours.sql` after the other scripts so public listing and request views enforce the weekly market schedule.
 11. Run `supabase/live-refresh.sql` to enable Realtime change notifications for public listing and buyer-request updates.
-12. Add `SUPABASE_SERVICE_ROLE_KEY` to the server environment. Never expose it to the browser.
+12. Run `supabase/marketplace-orders.sql` to add the mineral cart, purchase orders, availability/payment/shipping workflows, and payout records.
+13. Add `SUPABASE_SERVICE_ROLE_KEY`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `MARKETPLACE_PAYMENT_INSTRUCTIONS`, and a strong `CRON_SECRET` to the server environment. Never expose the service-role key or cron secret to the browser.
+14. Deploy with a scheduler that permits a one-minute interval. The configured Vercel job calls `/api/cron/marketplace-orders` every minute to expire response/payment windows, trigger the seven-day delivery payout rule, and retry unsent transactional emails. Set the same `CRON_SECRET` in the deployment environment. If the hosting plan does not permit minute-level cron, configure an external scheduler at this endpoint; deadlines and automatic payout eligibility will otherwise be processed late.
 
 The admin currency switch controls whether new seller listings and buyer requests can use USD. The database keeps existing USD records unchanged and rejects new or currency-edited USD records while USD is disabled. The admin listing fee setting applies to new mineral listings; each listing keeps its saved fee rate and price when the setting changes. The admin market-hours schedule repeats weekly in Tanzania time; its default keeps the market open until an admin saves a schedule. When closed, public listing and buyer-request views return no records.
 
@@ -39,6 +41,15 @@ Buyer and seller accounts are stored in `public.website_accounts`; their passwor
 Admins manage subscription plans from the Seller/buyer subscription panel. Website users request a plan and submit payment outside the site; an admin confirms or rejects the payment. Confirmation starts the plan immediately or schedules a same-plan renewal at the current expiry. Each subscription month is exactly 30 days, and approved listings and buyer requests from website accounts are visible only during an active subscription.
 
 Active subscription plan prices are readable through the public Data API. Subscription records remain private: only the server's service-role API can access them; do not grant anonymous or authenticated CRUD access to `account_subscriptions`.
+
+## Mineral purchase workflow
+
+- New website accounts collect a delivery address; existing accounts can fill or correct it when confirming their first order. The buyer's saved name, phone, and delivery address are snapshotted to each order. The seller receives the buyer name, phone, and address only after an administrator verifies payment; the buyer email is not included.
+- Buyers can add active website-account seller listings to the cart. An order is locked at confirmation, reserves its listings, and gives all sellers six hours to respond. Unavailable items and non-responses are removed; the two-hour payment period starts after the seller responses are finalized. Orders use one currency at a time.
+- Buyers submit a payment transaction reference. An administrator verifies payment manually before sellers are instructed to dispatch. Sellers record the carrier and tracking number. An administrator checks the carrier's tracking and marks delivery confirmed; the buyer may confirm receipt or open a dispute.
+- Receipt confirmation makes the seller payout due. If the buyer does not confirm, the scheduled job makes the payout due seven days after the administrator records carrier-confirmed delivery, unless the buyer opens a dispute. An administrator resolves disputes and records seller payout or buyer refund transaction references.
+- This is manual payment administration, not escrow or an automatic money-transfer integration. Madinimarket must receive and hold buyer funds outside the app, make seller payouts/refunds outside the app, and record those transfers in the admin orders panel. Configure `MARKETPLACE_PAYMENT_INSTRUCTIONS` with the approved payment destination and steps. Configure Gmail SMTP so seller and buyer notifications can be sent. The app does not independently verify a carrier API or transfer funds.
+- Listings owned by a seller without a website account cannot be purchased through this checkout workflow because that seller cannot respond to availability requests in their account.
 
 ## Account and data model
 
