@@ -110,3 +110,39 @@ export function getNextMarketOpening(schedule: MarketHoursSchedule, at = new Dat
   }
   return null;
 }
+
+export function getNextMarketTransition(schedule: MarketHoursSchedule, at = new Date()) {
+  const { year, month, day } = localDate(at);
+  const startOfLocalDay = Date.UTC(year, month - 1, day);
+  const open = minutesOf(schedule.openTime);
+  const close = minutesOf(schedule.closeTime);
+
+  if (open === close) {
+    for (let offset = 1; offset <= 7; offset += 1) {
+      const date = new Date(startOfLocalDay + offset * 86_400_000);
+      const boundary = dateAtMarketTime(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), "00:00");
+      if (boundary.getTime() > at.getTime() &&
+        isMarketOpenAt(schedule, new Date(boundary.getTime() - 60_000)) !== isMarketOpenAt(schedule, boundary)) {
+        return boundary.toISOString();
+      }
+    }
+    return null;
+  }
+
+  const openDays = new Set(schedule.openDays);
+  const boundaries: Date[] = [];
+  for (let offset = -1; offset <= 7; offset += 1) {
+    const openDate = new Date(startOfLocalDay + offset * 86_400_000);
+    if (!openDays.has(openDate.getUTCDay())) continue;
+    const closeDate = new Date(startOfLocalDay + (offset + (open > close ? 1 : 0)) * 86_400_000);
+    boundaries.push(
+      dateAtMarketTime(openDate.getUTCFullYear(), openDate.getUTCMonth() + 1, openDate.getUTCDate(), schedule.openTime),
+      dateAtMarketTime(closeDate.getUTCFullYear(), closeDate.getUTCMonth() + 1, closeDate.getUTCDate(), schedule.closeTime),
+    );
+  }
+
+  const nextBoundary = boundaries
+    .filter((boundary) => boundary.getTime() > at.getTime())
+    .sort((left, right) => left.getTime() - right.getTime())[0];
+  return nextBoundary?.toISOString() ?? null;
+}

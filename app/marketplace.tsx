@@ -53,6 +53,25 @@ const marketWeekdays = [
   { day: 0, label: "Sunday" },
 ];
 
+function onBrowserResume(refresh: () => void | Promise<void>) {
+  let lastRefreshAt = 0;
+  const refreshWhenActive = () => {
+    if (document.visibilityState !== "visible" || Date.now() - lastRefreshAt < 1_000) return;
+    lastRefreshAt = Date.now();
+    void refresh();
+  };
+  document.addEventListener("visibilitychange", refreshWhenActive);
+  window.addEventListener("focus", refreshWhenActive);
+  window.addEventListener("pageshow", refreshWhenActive);
+  window.addEventListener("online", refreshWhenActive);
+  return () => {
+    document.removeEventListener("visibilitychange", refreshWhenActive);
+    window.removeEventListener("focus", refreshWhenActive);
+    window.removeEventListener("pageshow", refreshWhenActive);
+    window.removeEventListener("online", refreshWhenActive);
+  };
+}
+
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
 const formatFeePercent = (value: number) => value.toFixed(2);
 const formatMarketOpening = (value: string) => new Date(value).toLocaleString("en-GB", {
@@ -355,6 +374,8 @@ export default function Marketplace() {
   const [userId, setUserId] = useState("");
   const [role, setRole] = useState<"user" | "admin" | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
+  const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
   const [sellerImagePreview, setSellerImagePreview] = useState<string | null>(null);
@@ -417,6 +438,33 @@ export default function Marketplace() {
   }, []);
   useEffect(() => {
     let active = true;
+    const checkAppVersion = async () => {
+      try {
+        const response = await fetch("/api/app-version", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok || typeof result.version !== "string") {
+          throw new Error(result.error ?? "Could not check for app updates.");
+        }
+        if (!active) return;
+        if (appVersion.current === null) appVersion.current = result.version;
+        else if (appVersion.current !== result.version) setAppUpdateAvailable(true);
+      } catch (error) {
+        if (active) console.error("Could not check for app updates.", error);
+      }
+    };
+    void checkAppVersion();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void checkAppVersion();
+    }, 60_000);
+    const removeResumeListener = onBrowserResume(checkAppVersion);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      removeResumeListener();
+    };
+  }, []);
+  useEffect(() => {
+    let active = true;
     const preferenceTimer = window.setTimeout(() => {
       try {
         const savedLanguage = localStorage.getItem("madinimarket:language:v1");
@@ -425,18 +473,26 @@ export default function Marketplace() {
         setNotice("This browser could not load your language preference.");
       }
     }, 0);
-    void fetch("/api/translations", { cache: "no-store" })
-      .then(async (response) => {
+    const refreshTranslations = async () => {
+      try {
+        const response = await fetch("/api/translations", { cache: "no-store" });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? "Could not load language translations.");
         if (active) setTranslationPairs(result.translations as TranslationPair[]);
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
         if (active) setNotice(error instanceof Error ? error.message : "Could not load language translations.");
-      });
+      }
+    };
+    void refreshTranslations();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshTranslations();
+    }, 60_000);
+    const removeResumeListener = onBrowserResume(refreshTranslations);
     return () => {
       active = false;
       window.clearTimeout(preferenceTimer);
+      window.clearInterval(interval);
+      removeResumeListener();
     };
   }, []);
   useEffect(() => {
@@ -465,10 +521,14 @@ export default function Marketplace() {
       }
     };
     void refreshCurrencySettings();
-    const interval = window.setInterval(() => void refreshCurrencySettings(), 30_000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshCurrencySettings();
+    }, 30_000);
+    const removeResumeListener = onBrowserResume(refreshCurrencySettings);
     return () => {
       active = false;
       window.clearInterval(interval);
+      removeResumeListener();
     };
   }, []);
   useEffect(() => {
@@ -499,15 +559,20 @@ export default function Marketplace() {
       }
     };
     void refreshListingFeeSettings();
-    const interval = window.setInterval(() => void refreshListingFeeSettings(), 30_000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshListingFeeSettings();
+    }, 30_000);
+    const removeResumeListener = onBrowserResume(refreshListingFeeSettings);
     return () => {
       active = false;
       window.clearInterval(interval);
+      removeResumeListener();
     };
   }, []);
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     let active = true;
+    let boundaryTimer: number | undefined;
     const refreshMarketHours = async () => {
       try {
         const response = await fetch("/api/market-hours", { cache: "no-store" });
@@ -518,10 +583,18 @@ export default function Marketplace() {
           schedule.openDays.some((day) => !Number.isInteger(day) || day < 0 || day > 6) ||
           typeof schedule.openTime !== "string" || typeof schedule.closeTime !== "string" ||
           typeof result.isOpen !== "boolean" ||
-          !(result.nextOpenAt === null || typeof result.nextOpenAt === "string")) {
+          !(result.nextOpenAt === null || typeof result.nextOpenAt === "string") ||
+          !(result.nextTransitionAt === null || typeof result.nextTransitionAt === "string")) {
           throw new Error("Market hours settings are invalid.");
         }
         if (!active) return;
+        if (boundaryTimer !== undefined) window.clearTimeout(boundaryTimer);
+        if (result.nextTransitionAt) {
+          const delay = Date.parse(result.nextTransitionAt) - Date.now() + 250;
+          if (Number.isFinite(delay) && delay > 0) {
+            boundaryTimer = window.setTimeout(() => void refreshMarketHours(), delay);
+          }
+        }
         setMarketHours(schedule);
         if (!marketHoursDraftDirty.current) setMarketHoursDraft(schedule);
         setMarketIsOpen(result.isOpen);
@@ -530,6 +603,7 @@ export default function Marketplace() {
         setMarketHoursLoaded(true);
       } catch (error) {
         if (!active) return;
+        if (boundaryTimer !== undefined) window.clearTimeout(boundaryTimer);
         setMarketIsOpen(false);
         setNextMarketOpenAt(null);
         setMarketHoursError(error instanceof Error ? error.message : "Could not verify market hours.");
@@ -537,10 +611,15 @@ export default function Marketplace() {
       }
     };
     void refreshMarketHours();
-    const interval = window.setInterval(() => void refreshMarketHours(), 15_000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshMarketHours();
+    }, 15_000);
+    const removeResumeListener = onBrowserResume(refreshMarketHours);
     return () => {
       active = false;
       window.clearInterval(interval);
+      if (boundaryTimer !== undefined) window.clearTimeout(boundaryTimer);
+      removeResumeListener();
     };
   }, []);
   const chooseLanguage = (nextLanguage: Language) => {
@@ -643,12 +722,22 @@ export default function Marketplace() {
         window.setTimeout(() => void hydrate(session), 0);
       });
       const interval = window.setInterval(() => {
+        if (document.visibilityState !== "visible") return;
         void supabase.auth.getSession().then(({ data }) => hydrate(data.session));
       }, 60_000);
+      const refreshSession = async () => {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        await hydrate(data.session);
+      };
+      const removeResumeListener = onBrowserResume(() => refreshSession().catch((error: unknown) => {
+        setNotice(error instanceof Error ? error.message : "Could not refresh the current session.");
+      }));
       return () => {
         active = false;
         subscription.unsubscribe();
         window.clearInterval(interval);
+        removeResumeListener();
       };
     }
 
@@ -691,16 +780,15 @@ export default function Marketplace() {
         isLoading = false;
       }
     };
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refreshLedger();
-    };
     void refreshLedger();
-    const interval = window.setInterval(() => void refreshLedger(), 10_000);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshLedger();
+    }, 10_000);
+    const removeResumeListener = onBrowserResume(refreshLedger);
     return () => {
       active = false;
       window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      removeResumeListener();
     };
   }, [role]);
   useEffect(() => {
@@ -822,6 +910,41 @@ export default function Marketplace() {
     setLastUpdated(new Date());
     return listings;
   };
+  const refreshListingsFromRealtime = useEffectEvent(async () => {
+    if (document.visibilityState !== "visible") return;
+    try {
+      await refreshRemoteListings(role === "user");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not refresh marketplace data.");
+    }
+  });
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const supabase = getSupabaseBrowserClient();
+    let refreshTimer: number | undefined;
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible" || refreshTimer !== undefined) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        refreshListingsFromRealtime();
+      }, 250);
+    };
+    const channel = supabase
+      .channel("marketplace-live-updates")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "listings" }, scheduleRefresh)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "listings" }, scheduleRefresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "buy_requests" }, scheduleRefresh)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "buy_requests" }, scheduleRefresh)
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`Supabase Realtime subscription status: ${status}. Polling remains enabled.`);
+        }
+      });
+    return () => {
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, []);
   const refreshWebsiteDrafts = async () => {
     const response = await fetch("/api/website-drafts", { cache: "no-store" });
     if (!response.ok) return;
@@ -944,7 +1067,13 @@ export default function Marketplace() {
       syncing = true;
 
       try {
-        const listings = await loadMarketplaceListings(role === "user");
+        let adminAccessToken: string | undefined;
+        if (role === "admin") {
+          const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+          if (error) throw error;
+          adminAccessToken = session?.access_token;
+        }
+        const listings = await loadMarketplaceListings(role === "user", adminAccessToken);
 
         if (active && role === "user") {
           setSellers(listings.sellers);
@@ -955,11 +1084,14 @@ export default function Marketplace() {
             const retained = previous.filter(
               (item) => item.status === "pending" || item.status === "rejected"
             );
+            const pendingFromFresh = listings.sellers.filter(
+              (item) => item.status === "pending"
+            );
             const approvedFromFresh = listings.sellers.filter(
               (item) => item.status === "approved"
             );
 
-            const merged = [...retained, ...approvedFromFresh];
+            const merged = [...retained, ...pendingFromFresh, ...approvedFromFresh];
             const seen = new Set<number>();
 
             return merged.filter((item) => {
@@ -973,11 +1105,14 @@ export default function Marketplace() {
             const retained = previous.filter(
               (item) => item.status === "pending" || item.status === "rejected"
             );
+            const pendingFromFresh = listings.buyers.filter(
+              (item) => item.status === "pending"
+            );
             const approvedFromFresh = listings.buyers.filter(
               (item) => item.status === "approved"
             );
 
-            const merged = [...retained, ...approvedFromFresh];
+            const merged = [...retained, ...pendingFromFresh, ...approvedFromFresh];
             const seen = new Set<number>();
 
             return merged.filter((item) => {
@@ -998,10 +1133,14 @@ export default function Marketplace() {
       syncing = false;
     };
 
-    const interval = window.setInterval(() => void synchronize(), 5000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void synchronize();
+    }, 5000);
+    const removeResumeListener = onBrowserResume(synchronize);
     return () => {
       active = false;
       window.clearInterval(interval);
+      removeResumeListener();
     };
   }, [role, userId]);
   const updateReviewMessage = (key: string, message: string) => {
@@ -1157,9 +1296,11 @@ export default function Marketplace() {
     setSubscriptionPlans(subscriptions.plans);
     setPendingSubscriptions(subscriptions.pendingSubscriptions);
   };
-  const loadUserSubscriptions = async () => {
-    setUserSubscriptionLoaded(false);
-    setUserSubscriptionError("");
+  const loadUserSubscriptions = async (backgroundRefresh = false) => {
+    if (!backgroundRefresh) {
+      setUserSubscriptionLoaded(false);
+      setUserSubscriptionError("");
+    }
     try {
       const response = await fetch("/api/subscriptions", { cache: "no-store" });
       const result = await response.json();
@@ -1169,12 +1310,32 @@ export default function Marketplace() {
       setScheduledSubscription(result.scheduledSubscription as AccountSubscription | null);
       setPendingUserSubscription(result.pendingSubscription as AccountSubscription | null);
       setPreviousSubscription(result.previousSubscription as AccountSubscription | null);
+      setUserSubscriptionError("");
       setUserSubscriptionLoaded(true);
     } catch (error) {
       setUserSubscriptionError(error instanceof Error ? error.message : "Could not load subscription options.");
       setUserSubscriptionLoaded(true);
     }
   };
+  useEffect(() => {
+    if (!isSupabaseConfigured || role !== "user" || dialog !== "subscription") return;
+    let active = true;
+    let isLoading = false;
+    const refreshSubscription = async () => {
+      if (!active || isLoading || document.visibilityState !== "visible") return;
+      isLoading = true;
+      await loadUserSubscriptions(true);
+      isLoading = false;
+    };
+    void refreshSubscription();
+    const interval = window.setInterval(() => void refreshSubscription(), 30_000);
+    const removeResumeListener = onBrowserResume(refreshSubscription);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      removeResumeListener();
+    };
+  }, [role, dialog]);
   const saveSubscriptionPlan = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await withProgress("subscription-plan-save", async () => {
@@ -1779,6 +1940,10 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       }
     };
     return <main className="admin-shell">
+      {appUpdateAvailable && <div className="app-update-banner" role="status">
+        <span>A new version of Madinimarket is available.</span>
+        <button type="button" onClick={() => window.location.reload()}>Reload to update</button>
+      </div>}
       <header className="admin-header">
         <a className="admin-brand" href="#admin-home"><Gem size={20} /> MADINIMARKET <span>ADMIN</span></a>
         <div className="admin-menu-wrap">
@@ -2102,6 +2267,10 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
   }
 
   return <main className={`market-shell${role === "user" && !hasApprovedCertificate ? " seller-locked" : ""}`}>
+    {appUpdateAvailable && <div className="app-update-banner" role="status">
+      <span>A new version of Madinimarket is available.</span>
+      <button type="button" onClick={() => window.location.reload()}>Reload to update</button>
+    </div>}
     <div className="prototype-bar" style={{ display: 'none' }} aria-hidden="true" />
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">

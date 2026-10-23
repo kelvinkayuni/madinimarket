@@ -26,6 +26,9 @@ button { color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #58805e; outline-offset: 3px; }
 .market-shell { min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 .admin-shell { min-height: 100vh; background: var(--paper); color: var(--ink); }
+.app-update-banner { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px 16px; background: #17392f; color: #fff; font-size: 12px; }
+.app-update-banner button { padding: 6px 10px; border: 1px solid rgb(255 255 255 / 55%); border-radius: 4px; background: transparent; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
+.app-update-banner button:hover { background: rgb(255 255 255 / 12%); }
 .admin-header { position: relative; z-index: 20; min-height: 68px; padding: 0 clamp(18px, 3vw, 48px); display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); background: #fcfcf9; }
 .admin-brand { display: flex; align-items: center; gap: 9px; color: var(--forest); font-size: 11px; font-weight: 750; text-decoration: none; }
 .admin-brand span { margin-left: 6px; padding: 5px 7px; background: #e9eee6; color: #667365; font-size: 8px; }

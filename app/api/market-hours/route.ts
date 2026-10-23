@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
-import { getNextMarketOpening, isMarketOpenAt, MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
+import { getNextMarketOpening, getNextMarketTransition, isMarketOpenAt, MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 function scheduleFromRow(row: {
@@ -25,6 +25,7 @@ function responseForSchedule(schedule: MarketHoursSchedule) {
     timeZone: MARKET_TIME_ZONE,
     isOpen: isMarketOpenAt(schedule, now),
     nextOpenAt: getNextMarketOpening(schedule, now),
+    nextTransitionAt: getNextMarketTransition(schedule, now),
   };
 }
 

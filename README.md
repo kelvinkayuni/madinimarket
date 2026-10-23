@@ -27,9 +27,12 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 8. Run `supabase/certificate-verification.sql`.
 9. Run `supabase/translation-dictionary.sql`.
 10. Run `supabase/market-hours.sql` after the other scripts so public listing and request views enforce the weekly market schedule.
-11. Add `SUPABASE_SERVICE_ROLE_KEY` to the server environment. Never expose it to the browser.
+11. Run `supabase/live-refresh.sql` to enable Realtime change notifications for public listing and buyer-request updates.
+12. Add `SUPABASE_SERVICE_ROLE_KEY` to the server environment. Never expose it to the browser.
 
 The admin currency switch controls whether new seller listings and buyer requests can use USD. The database keeps existing USD records unchanged and rejects new or currency-edited USD records while USD is disabled. The admin listing fee setting applies to new mineral listings; each listing keeps its saved fee rate and price when the setting changes. The admin market-hours schedule repeats weekly in Tanzania time; its default keeps the market open until an admin saves a schedule. When closed, public listing and buyer-request views return no records.
+
+Open marketplace pages refresh when they become visible or reconnect, poll for changes as a fallback, and use Supabase Realtime notifications to refresh listings and buyer requests. Private settings and administrator data continue to refresh through authenticated API polling. A version notice appears when a newer deployment is detected; users can reload when ready so an open form is not lost.
 
 Buyer and seller accounts are stored in `public.website_accounts`; their passwords are hashed by the server and they do not appear in Supabase Auth. The admin must be created in Supabase Auth and have a matching `public.profiles` row with `role = 'admin'`. Admin usernames can be any value; `MM-####` usernames are reserved for buyer and seller accounts.
 
