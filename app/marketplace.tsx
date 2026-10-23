@@ -8,12 +8,13 @@ import type { Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 import { calculateListingPrice } from "@/lib/listing-pricing";
+import { MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
 
 type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "accounts" | "subscriptions" | "listing-fee";
+type AdminPanel = "review" | "ledger" | "translations" | "accounts" | "subscriptions" | "listing-fee" | "market-hours";
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
@@ -36,9 +37,33 @@ const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
 const USER_STORAGE_KEY = "madinimarket:user:v1";
 const signedMineralImageUrls = new Map<string, { url: string; expiresAt: number }>();
+const defaultMarketHours: MarketHoursSchedule = {
+  openDays: [0, 1, 2, 3, 4, 5, 6],
+  openTime: "00:00",
+  closeTime: "00:00",
+  updatedAt: null,
+};
+const marketWeekdays = [
+  { day: 1, label: "Monday" },
+  { day: 2, label: "Tuesday" },
+  { day: 3, label: "Wednesday" },
+  { day: 4, label: "Thursday" },
+  { day: 5, label: "Friday" },
+  { day: 6, label: "Saturday" },
+  { day: 0, label: "Sunday" },
+];
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
 const formatFeePercent = (value: number) => value.toFixed(2);
+const formatMarketOpening = (value: string) => new Date(value).toLocaleString("en-GB", {
+  timeZone: MARKET_TIME_ZONE,
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 const sellerPriceDetails = (listing: Pick<Seller, "seller_price" | "platform_fee_amount" | "price" | "currency">) => {
   const sellerPrice = listing.seller_price ?? listing.price;
   const platformFee = listing.platform_fee_amount ?? String(Number(listing.price) - Number(sellerPrice));
@@ -280,6 +305,13 @@ export default function Marketplace() {
   const [listingFeeUpdatedAt, setListingFeeUpdatedAt] = useState<string | null>(null);
   const [listingFeeSettingsLoaded, setListingFeeSettingsLoaded] = useState(!isSupabaseConfigured);
   const listingFeeDraftDirty = useRef(false);
+  const [marketHours, setMarketHours] = useState<MarketHoursSchedule>(defaultMarketHours);
+  const [marketHoursDraft, setMarketHoursDraft] = useState<MarketHoursSchedule>(defaultMarketHours);
+  const [marketHoursLoaded, setMarketHoursLoaded] = useState(!isSupabaseConfigured);
+  const marketHoursDraftDirty = useRef(false);
+  const [marketIsOpen, setMarketIsOpen] = useState(!isSupabaseConfigured);
+  const [nextMarketOpenAt, setNextMarketOpenAt] = useState<string | null>(null);
+  const [marketHoursError, setMarketHoursError] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
   const accountListRef = useRef<HTMLDivElement>(null);
   const accountListScrollTop = useRef<number | null>(null);
@@ -337,6 +369,10 @@ export default function Marketplace() {
   const sellerFeePercent = editingSubmission?.kind === "seller" && editingSubmission.item.platform_fee_rate != null
     ? editingSubmission.item.platform_fee_rate * 100
     : listingFeePercent;
+  const marketHoursChanged = marketHoursDraft.openTime !== marketHours.openTime ||
+    marketHoursDraft.closeTime !== marketHours.closeTime ||
+    marketHoursDraft.openDays.length !== marketHours.openDays.length ||
+    marketHoursDraft.openDays.some((day) => !marketHours.openDays.includes(day));
   const draftSaveTimers = useRef<{ seller: number | null; buyer: number | null }>({ seller: null, buyer: null });
   const draftRestoreDialog = useRef<Dialog>(null);
   const sellerRail = useRef<HTMLDivElement>(null);
@@ -464,6 +500,44 @@ export default function Marketplace() {
     };
     void refreshListingFeeSettings();
     const interval = window.setInterval(() => void refreshListingFeeSettings(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
+    const refreshMarketHours = async () => {
+      try {
+        const response = await fetch("/api/market-hours", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load market hours.");
+        const schedule = result.schedule as MarketHoursSchedule;
+        if (!Array.isArray(schedule?.openDays) || !schedule.openDays.length ||
+          schedule.openDays.some((day) => !Number.isInteger(day) || day < 0 || day > 6) ||
+          typeof schedule.openTime !== "string" || typeof schedule.closeTime !== "string" ||
+          typeof result.isOpen !== "boolean" ||
+          !(result.nextOpenAt === null || typeof result.nextOpenAt === "string")) {
+          throw new Error("Market hours settings are invalid.");
+        }
+        if (!active) return;
+        setMarketHours(schedule);
+        if (!marketHoursDraftDirty.current) setMarketHoursDraft(schedule);
+        setMarketIsOpen(result.isOpen);
+        setNextMarketOpenAt(result.nextOpenAt);
+        setMarketHoursError("");
+        setMarketHoursLoaded(true);
+      } catch (error) {
+        if (!active) return;
+        setMarketIsOpen(false);
+        setNextMarketOpenAt(null);
+        setMarketHoursError(error instanceof Error ? error.message : "Could not verify market hours.");
+        setMarketHoursLoaded(true);
+      }
+    };
+    void refreshMarketHours();
+    const interval = window.setInterval(() => void refreshMarketHours(), 15_000);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -993,6 +1067,54 @@ export default function Marketplace() {
   const cancelListingFeeEdit = () => {
     setListingFeePercentInput(formatFeePercent(listingFeePercent));
     listingFeeDraftDirty.current = false;
+  };
+  const cancelMarketHoursEdit = () => {
+    setMarketHoursDraft(marketHours);
+    marketHoursDraftDirty.current = false;
+  };
+  const updateMarketHours = async () => {
+    if (!marketHoursDraft.openDays.length) {
+      setNotice("Select at least one day when the market is open.");
+      return;
+    }
+    await withProgress("market-hours-setting", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/market-hours", {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            openDays: marketHoursDraft.openDays,
+            openTime: marketHoursDraft.openTime,
+            closeTime: marketHoursDraft.closeTime,
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not update market hours.");
+        const savedSchedule = result.schedule as MarketHoursSchedule;
+        if (!Array.isArray(savedSchedule?.openDays) || !savedSchedule.openDays.length ||
+          typeof savedSchedule.openTime !== "string" || typeof savedSchedule.closeTime !== "string" ||
+          typeof result.isOpen !== "boolean" ||
+          !(result.nextOpenAt === null || typeof result.nextOpenAt === "string")) {
+          throw new Error("The saved market hours response is invalid.");
+        }
+        setMarketHours(savedSchedule);
+        setMarketHoursDraft(savedSchedule);
+        setMarketHoursLoaded(true);
+        setMarketIsOpen(result.isOpen);
+        setNextMarketOpenAt(result.nextOpenAt);
+        setMarketHoursError("");
+        marketHoursDraftDirty.current = false;
+        setNotice("Weekly market hours updated.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update market hours.");
+      }
+    });
   };
   const updateUsdAvailability = async (enabled: boolean) => {
     await withProgress("currency-setting", async () => {
@@ -1673,6 +1795,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>
               <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
               <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
+              <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
               <div className="admin-menu-currency">
                 <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                 <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
@@ -1727,6 +1850,86 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                   ? `Updated on ${new Date(listingFeeUpdatedAt).toLocaleString()}`
                   : "Update date and time unavailable"}</small></>
               : <small>Loading saved fee…</small>}
+          </div>
+        </section>}
+        {activeAdminPanel === "market-hours" && <section className="admin-listing-fee-panel admin-market-hours-panel" aria-labelledby="admin-market-hours-heading">
+          <div className="admin-page-heading">
+            <div><div className="dialog-kicker">MARKETPLACE SETTINGS</div><h1 id="admin-market-hours-heading">Market hours</h1><p>Set a recurring weekly schedule. Mineral listings and buyer requests are visible only while the market is open.</p></div>
+          </div>
+          <div className="admin-market-hours-status" aria-live="polite">
+            <div><span>MARKET STATUS</span><strong className={marketHoursLoaded && marketIsOpen ? "is-open" : "is-closed"}>
+              {!marketHoursLoaded ? "Checking schedule…" : marketHoursError ? "Unavailable" : marketIsOpen ? "Open" : "Closed"}
+            </strong></div>
+            <small>{marketHoursLoaded && !marketHoursError && !marketIsOpen && nextMarketOpenAt
+              ? `Opens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time`
+              : marketHoursError || "Schedule time zone: Africa/Dar_es_Salaam"}</small>
+          </div>
+          <div className="admin-listing-fee-editor admin-market-hours-editor">
+            <fieldset className="admin-market-days">
+              <legend>Days open</legend>
+              <div>{marketWeekdays.map(({ day, label }) => <label key={day}>
+                <input type="checkbox" checked={marketHoursDraft.openDays.includes(day)} disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
+                  onChange={(event) => setMarketHoursDraft((current) => {
+                    const openDays = event.target.checked
+                      ? [...current.openDays, day].sort((a, b) => a - b)
+                      : current.openDays.filter((value) => value !== day);
+                    marketHoursDraftDirty.current = openDays.length !== marketHours.openDays.length ||
+                      openDays.some((value) => !marketHours.openDays.includes(value)) ||
+                      current.openTime !== marketHours.openTime ||
+                      current.closeTime !== marketHours.closeTime;
+                    return { ...current, openDays };
+                  })} />
+                <span>{label}</span>
+              </label>)}</div>
+            </fieldset>
+            <div className="admin-market-time-fields">
+              <label className="field-label" htmlFor="market-open-time">Opening time (Tanzania)</label>
+              <input className="text-input" id="market-open-time" type="time" value={marketHoursDraft.openTime}
+                disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
+                onChange={(event) => setMarketHoursDraft((current) => {
+                  const next = { ...current, openTime: event.target.value };
+                  marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
+                    next.closeTime !== marketHours.closeTime ||
+                    next.openDays.length !== marketHours.openDays.length ||
+                    next.openDays.some((day) => !marketHours.openDays.includes(day));
+                  return next;
+                })} />
+              <label className="field-label" htmlFor="market-close-time">Closing time (Tanzania)</label>
+              <input className="text-input" id="market-close-time" type="time" value={marketHoursDraft.closeTime}
+                disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
+                onChange={(event) => setMarketHoursDraft((current) => {
+                  const next = { ...current, closeTime: event.target.value };
+                  marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
+                    next.closeTime !== marketHours.closeTime ||
+                    next.openDays.length !== marketHours.openDays.length ||
+                    next.openDays.some((day) => !marketHours.openDays.includes(day));
+                  return next;
+                })} />
+            </div>
+            <p>Times use East Africa Time (Africa/Dar_es_Salaam). If opening and closing times are the same, the market stays open all day on selected days. A closing time earlier than opening time means the market closes the following day.</p>
+            <div className="admin-listing-fee-actions">
+              <button className="button button-dark" type="button" disabled={!marketHoursLoaded || busyActions.has("market-hours-setting") || !marketHoursChanged}
+                onClick={() => void updateMarketHours()}>
+                {busyActions.has("market-hours-setting") ? "Saving…" : "Save"}
+              </button>
+              <button className="button button-outline" type="button" disabled={!marketHoursLoaded || busyActions.has("market-hours-setting") || !marketHoursChanged}
+                onClick={cancelMarketHoursEdit}>Cancel</button>
+            </div>
+          </div>
+          <div className="admin-listing-fee-current admin-market-hours-current" aria-live="polite">
+            <div className="admin-listing-fee-current-heading">
+              <div><span>SAVED SETTING</span><h2>Weekly schedule</h2></div>
+              <span className={`admin-listing-fee-status${marketHoursLoaded && marketIsOpen ? "" : " is-closed"}`}>
+                {!marketHoursLoaded ? "Checking" : marketHoursError ? "Unavailable" : marketIsOpen ? "Open now" : "Closed now"}
+              </span>
+            </div>
+            {marketHoursLoaded ? <>
+              <strong className="admin-market-hours-summary">{marketWeekdays.filter(({ day }) => marketHours.openDays.includes(day)).map(({ label }) => label).join(", ")}</strong>
+              <small>{marketHours.openTime}–{marketHours.closeTime} Tanzania time</small>
+              <small>{marketHours.updatedAt
+                ? `Updated on ${new Date(marketHours.updatedAt).toLocaleString()}`
+                : "Update date and time unavailable"}</small>
+            </> : <small>Loading saved schedule…</small>}
           </div>
         </section>}
         {activeAdminPanel === "review" && <>
@@ -1910,8 +2113,10 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     </header>
 
     <div className="market-content" id="top">
-      <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className="market-status"><div className="status-orbit"><span /></div><div><strong>Market open</strong><small>Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
+      <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className={`market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`}><div className="status-orbit"><span /></div><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "Tanzania time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? `Updated ${lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}` : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time` : "No upcoming opening is scheduled."}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
 
+      {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
+        : marketIsOpen ? <>
       <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">AVAILABLE NOW</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
         {visibleSellers.length ? <div className="seller-rail" ref={sellerRail}>{visibleSellers.map((listing, index) => <article className="seller-card" key={listing.id} style={{ animationDelay: `${index * 70}ms` }}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span></div></div></article>)}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
@@ -1921,6 +2126,11 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div></div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
         <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <>List a mineral <ArrowUpRight size={14} /></>}</button></div>
       </section>
+        </> : <section className="market-closed-notice"><span>MARKET CLOSED</span><h2>{marketHoursError ? "Market status unavailable" : "The market is closed"}</h2><p>{marketHoursError
+          ? "We can't verify the market schedule right now. Please try again shortly."
+          : nextMarketOpenAt
+            ? `The market will reopen on ${formatMarketOpening(nextMarketOpenAt)} Tanzania time.`
+            : "No upcoming opening is currently scheduled."}</p></section>}
       <footer className="site-footer"><span><Gem size={16} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span><span>PREVIEW MARKET · 2025—26</span></footer>
     </div>
 

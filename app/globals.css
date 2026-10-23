@@ -62,6 +62,27 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-listing-fee-status { padding: 5px 9px; border-radius: 12px; background: #e5efe3; color: #3f6a48; font-size: 9px; font-weight: 700; }
 .admin-listing-fee-current-value { color: var(--forest); font-size: 24px; font-weight: 650; }
 .admin-listing-fee-current > small { color: #778075; font-size: 10px; line-height: 1.5; }
+.admin-market-hours-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; max-width: 720px; margin-top: 22px; padding: 14px 16px; border: 1px solid #dfe6dc; background: #f7f9f4; }
+.admin-market-hours-status > div { display: grid; gap: 5px; }
+.admin-market-hours-status > div > span { color: #859084; font-size: 8px; font-weight: 700; letter-spacing: .1em; }
+.admin-market-hours-status > div > strong { color: var(--forest); font-size: 14px; }
+.admin-market-hours-status > div > strong.is-closed { color: #925144; }
+.admin-market-hours-status > small { color: #778075; font-size: 10px; line-height: 1.5; }
+.admin-market-hours-editor { max-width: 720px; }
+.admin-market-days { min-width: 0; margin: 0; padding: 0; border: 0; }
+.admin-market-days legend { margin-bottom: 10px; color: #354b39; font-size: 12px; font-weight: 650; }
+.admin-market-days > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.admin-market-days label { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 9px; border: 1px solid #dfe3db; background: #fff; color: #465246; font-size: 10px; cursor: pointer; }
+.admin-market-days input { accent-color: var(--forest); }
+.admin-market-time-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; align-items: end; }
+.admin-market-time-fields .field-label { margin: 0; color: #354b39; font-size: 11px; }
+.admin-market-time-fields .text-input { width: 100%; }
+.admin-listing-fee-status.is-closed { background: #f5e9e5; color: #8b4b3d; }
+.admin-market-hours-summary { color: var(--forest); font-size: 13px; font-weight: 600; line-height: 1.5; }
+.market-closed-notice { display: grid; place-content: center; min-height: 380px; margin: 28px 0; padding: 36px 20px; border: 1px solid #dfe3db; background: #fbfcf9; text-align: center; }
+.market-closed-notice > span { color: #859084; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
+.market-closed-notice h2 { margin: 12px 0 8px; color: var(--forest); font-family: var(--font-display), Georgia, serif; font-size: clamp(28px, 4vw, 42px); font-weight: 500; }
+.market-closed-notice p { margin: 0; color: #777f76; font-size: 13px; line-height: 1.6; }
 .admin-content { width: 100%; padding: 38px clamp(18px, 3vw, 48px) 64px; }
 .admin-overview { padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .admin-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
@@ -311,6 +332,9 @@ h1, h2, h3, p { margin-top: 0; }
 .market-status strong, .market-status small { display: block; }
 .market-status strong { font-size: 11px; font-weight: 650; }
 .market-status small { margin-top: 3px; color: #8e958c; font-size: 9px; }
+.market-status.is-closed .status-orbit { border-color: #b17c70; }
+.market-status.is-closed .status-orbit span { background: #a85f50; }
+.market-status.is-closed strong { color: #925144; }
 .status-orbit { width: 9px; height: 9px; display: grid; place-items: center; border: 1px solid #8ca38c; border-radius: 50%; }
 .status-orbit span { width: 4px; height: 4px; border-radius: 50%; background: #679267; }
 .refresh-icon { margin-left: 8px; color: #a5ada3; }
@@ -456,6 +480,8 @@ h1, h2, h3, p { margin-top: 0; }
   .username-banner { margin-right: 24px; margin-left: 24px; }
 }
 @media (max-width: 650px) {
+  .admin-market-days > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-market-time-fields { grid-template-columns: 1fr; }
   .admin-translation-form { grid-template-columns: 1fr; }
   .admin-subscription-plan-form { grid-template-columns: 1fr; }
   .admin-subscription-plan-actions { grid-column: auto; }
