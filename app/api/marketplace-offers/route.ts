@@ -49,10 +49,13 @@ export async function GET() {
       admin.from("marketplace_settings").select("listing_fee_rate, usd_enabled").eq("id", true).single(),
     ]);
     if (threadError || settingsError) throw threadError ?? settingsError;
+    const sellerThreadIds = new Set(
+      (threads ?? []).filter((thread) => thread.seller_id === accountId).map((thread) => thread.id),
+    );
     const threadIds = (threads ?? []).map((thread) => thread.id);
     if (threadIds.length === 0) return NextResponse.json({
       threads: [],
-      feeRate: Number(settings.listing_fee_rate),
+      feeRate: null,
       usdEnabled: settings.usd_enabled,
     });
 
@@ -70,14 +73,29 @@ export async function GET() {
     const usernameById = new Map((accounts ?? []).map((account) => [account.id, account.username]));
     const safeOffersByThread = new Map<string, Array<Record<string, unknown>>>();
     const safeOffers = await Promise.all((offers ?? []).map(async (offer) => {
-      const { image_path: imagePath, ...safeOffer } = offer;
+      const {
+        image_path: imagePath,
+        seller_amount: sellerAmount,
+        platform_fee_rate: platformFeeRate,
+        platform_fee_amount: platformFeeAmount,
+        ...safeOffer
+      } = offer;
       let signedImageUrl: string | null = null;
       if (imagePath) {
         const { data: signed, error } = await admin.storage.from("mineral-images").createSignedUrl(imagePath, 3600);
         if (error || !signed?.signedUrl) throw error ?? new Error("Could not sign a private offer image.");
         signedImageUrl = signed.signedUrl;
       }
-      return { thread_id: offer.thread_id, offer: { ...safeOffer, signed_image_url: signedImageUrl } };
+      return {
+        thread_id: offer.thread_id,
+        offer: {
+          ...safeOffer,
+          ...(sellerThreadIds.has(offer.thread_id)
+            ? { seller_amount: sellerAmount, platform_fee_rate: platformFeeRate, platform_fee_amount: platformFeeAmount }
+            : {}),
+          signed_image_url: signedImageUrl,
+        },
+      };
     }));
     for (const { thread_id, offer } of safeOffers) {
       const entries = safeOffersByThread.get(thread_id) ?? [];
@@ -85,7 +103,7 @@ export async function GET() {
       safeOffersByThread.set(thread_id, entries);
     }
     return NextResponse.json({
-      feeRate: Number(settings.listing_fee_rate),
+      feeRate: sellerThreadIds.size > 0 ? Number(settings.listing_fee_rate) : null,
       usdEnabled: settings.usd_enabled,
       threads: (threads ?? []).map(({ buyer_id: buyerId, seller_id: sellerId, ...thread }) => ({
         ...thread,

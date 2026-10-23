@@ -216,8 +216,8 @@ export default function PrivateOfferForm({
         <label>Currency<select value={currency} onChange={(event) => setCurrency(event.target.value as Currency)}><option value="TZS">TSh</option>{usdEnabled && <option value="USD">USD</option>}</select></label>
       </div>
       {price && <p className="private-offer-price-preview">
-        Buyer total: <strong>{formatAmount(price.marketPrice)}</strong>
-        <span> Includes {formatAmount(price.platformFeeAmount)} Madinimarket fee; seller receives {formatAmount(price.sellerPrice)}.</span>
+        Your price: <strong>{formatAmount(price.sellerPrice)}</strong>
+        <span> · Madinimarket fee: {formatAmount(price.platformFeeAmount)} · Buyer total: {formatAmount(price.marketPrice)}.</span>
       </p>}
       <button className="button button-dark" type="submit" disabled={submitting || preparingPhoto}>{preparingPhoto ? "Preparing photo…" : submitting ? "Sending offer…" : "Send private offer"}</button>
     </form>

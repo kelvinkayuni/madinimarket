@@ -81,9 +81,9 @@ type PrivateOffer = {
   country: string;
   region: string;
   district: string;
-  seller_amount: string | number;
-  platform_fee_rate: string | number;
-  platform_fee_amount: string | number;
+  seller_amount?: string | number;
+  platform_fee_rate?: string | number;
+  platform_fee_amount?: string | number;
   total_price: string | number;
   currency: Currency;
   status: string;
@@ -113,7 +113,7 @@ type CommerceData = {
   buyerOrders: BuyerOrder[];
   sellerItems: OrderItem[];
   paymentInstructions: string;
-  privateOffers: { threads: PrivateOfferThread[]; feeRate: number; usdEnabled: boolean };
+  privateOffers: { threads: PrivateOfferThread[]; feeRate: number | null; usdEnabled: boolean };
 };
 
 function amount(value: number | string, currency: Currency) {
@@ -309,7 +309,9 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
               <p>{offer.listing_type === "batch" ? "Batch · " : ""}{offer.weight} {offer.unit}{offer.listing_type === "batch" && ` · Stone sizes ${offer.smallest_stone_weight}–${offer.largest_stone_weight} ${offer.stone_weight_unit}`}</p>
               <p>{offer.color} · {offer.shape} · {offer.quality}</p>
               <p>Location: {offer.district}, {offer.region}, {offer.country}</p>
-              <p>Seller amount {amount(offer.seller_amount, offer.currency)} + Madinimarket fee {amount(offer.platform_fee_amount, offer.currency)} = <strong>{amount(offer.total_price, offer.currency)}</strong></p>
+              {thread.side === "seller" && offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined
+                ? <p>Your price {amount(offer.seller_amount, offer.currency)} + Madinimarket fee {amount(offer.platform_fee_amount, offer.currency)} = <strong>Buyer total {amount(offer.total_price, offer.currency)}</strong></p>
+                : <p>Total price: <strong>{amount(offer.total_price, offer.currency)}</strong></p>}
               {thread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions">
                 <button className="button button-dark" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: true })}>Agree</button>
                 <button className="button button-outline" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: false })}>Decline</button>
@@ -341,7 +343,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
                 });
               }}>
                 <h4>Confirm mineral and delivery details</h4>
-                <p className="commerce-note">The seller’s price and fee are locked. Confirm this private mineral to create a standard order and start the six-hour availability response period.</p>
+                <p className="commerce-note">The total price is locked. Confirm this private mineral to create a standard order and start the six-hour availability response period.</p>
                 <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
                 <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
                 <div className="field-row">
@@ -357,7 +359,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
             </div>)}
             {thread.side === "buyer" && thread.state === "accepted" && <p className="commerce-note">You accepted this offer. The seller will confirm the mineral details before checkout.</p>}
             {thread.side === "seller" && thread.state === "open" && latestOffer?.status === "pending" && <p className="commerce-note">Waiting for the buyer to accept or decline. Offer attempts: {thread.attempt_count}/3.</p>}
-            {thread.side === "seller" && thread.state === "open" && latestOffer?.status === "declined" && thread.attempt_count < 3 && buyerRequest && <div className="commerce-revised-offer">
+            {thread.side === "seller" && thread.state === "open" && latestOffer?.status === "declined" && thread.attempt_count < 3 && buyerRequest && data.privateOffers.feeRate !== null && <div className="commerce-revised-offer">
               <h4>Send a revised offer ({thread.attempt_count}/3 used)</h4>
               <PrivateOfferForm requestId={thread.request_id} threadId={thread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? buyerRequest.currency : "TZS"} submitting={busy === `revise-offer-${thread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${thread.id}`, details)} />
             </div>}
