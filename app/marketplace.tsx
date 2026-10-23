@@ -74,6 +74,12 @@ function onBrowserResume(refresh: () => void | Promise<void>) {
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
 const formatFeePercent = (value: number) => value.toFixed(2);
+const formatMarketTime = (value: string) => {
+  const [hour, minute] = value.split(":").map(Number);
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+};
 const formatMarketOpening = (value: string) => new Date(value).toLocaleString("en-GB", {
   timeZone: MARKET_TIME_ZONE,
   weekday: "long",
@@ -2048,28 +2054,32 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               </label>)}</div>
             </fieldset>
             <div className="admin-market-time-fields">
-              <label className="field-label" htmlFor="market-open-time">Opening time (Tanzania)</label>
-              <input className="text-input" id="market-open-time" type="time" value={marketHoursDraft.openTime}
-                disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
-                onChange={(event) => setMarketHoursDraft((current) => {
-                  const next = { ...current, openTime: event.target.value };
-                  marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
-                    next.closeTime !== marketHours.closeTime ||
-                    next.openDays.length !== marketHours.openDays.length ||
-                    next.openDays.some((day) => !marketHours.openDays.includes(day));
-                  return next;
-                })} />
-              <label className="field-label" htmlFor="market-close-time">Closing time (Tanzania)</label>
-              <input className="text-input" id="market-close-time" type="time" value={marketHoursDraft.closeTime}
-                disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
-                onChange={(event) => setMarketHoursDraft((current) => {
-                  const next = { ...current, closeTime: event.target.value };
-                  marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
-                    next.closeTime !== marketHours.closeTime ||
-                    next.openDays.length !== marketHours.openDays.length ||
-                    next.openDays.some((day) => !marketHours.openDays.includes(day));
-                  return next;
-                })} />
+              <label className="field-label" htmlFor="market-open-time">Opening time (Tanzania)
+                <input className="text-input" id="market-open-time" type="time" value={marketHoursDraft.openTime}
+                  disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
+                  onChange={(event) => setMarketHoursDraft((current) => {
+                    const next = { ...current, openTime: event.target.value };
+                    marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
+                      next.closeTime !== marketHours.closeTime ||
+                      next.openDays.length !== marketHours.openDays.length ||
+                      next.openDays.some((day) => !marketHours.openDays.includes(day));
+                    return next;
+                  })} />
+                <small className="admin-market-time-preview">{formatMarketTime(marketHoursDraft.openTime)} Tanzania time</small>
+              </label>
+              <label className="field-label" htmlFor="market-close-time">Closing time (Tanzania)
+                <input className="text-input" id="market-close-time" type="time" value={marketHoursDraft.closeTime}
+                  disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")}
+                  onChange={(event) => setMarketHoursDraft((current) => {
+                    const next = { ...current, closeTime: event.target.value };
+                    marketHoursDraftDirty.current = next.openTime !== marketHours.openTime ||
+                      next.closeTime !== marketHours.closeTime ||
+                      next.openDays.length !== marketHours.openDays.length ||
+                      next.openDays.some((day) => !marketHours.openDays.includes(day));
+                    return next;
+                  })} />
+                <small className="admin-market-time-preview">{formatMarketTime(marketHoursDraft.closeTime)} Tanzania time</small>
+              </label>
             </div>
             <p>Times use East Africa Time (Africa/Dar_es_Salaam). If opening and closing times are the same, the market stays open all day on selected days. A closing time earlier than opening time means the market closes the following day.</p>
             <div className="admin-listing-fee-actions">
@@ -2090,7 +2100,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             </div>
             {marketHoursLoaded ? <>
               <strong className="admin-market-hours-summary">{marketWeekdays.filter(({ day }) => marketHours.openDays.includes(day)).map(({ label }) => label).join(", ")}</strong>
-              <small>{marketHours.openTime}–{marketHours.closeTime} Tanzania time</small>
+              <small>{formatMarketTime(marketHours.openTime)}–{formatMarketTime(marketHours.closeTime)} Tanzania time</small>
               <small>{marketHours.updatedAt
                 ? `Updated on ${new Date(marketHours.updatedAt).toLocaleString()}`
                 : "Update date and time unavailable"}</small>

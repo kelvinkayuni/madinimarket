@@ -80,6 +80,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-market-time-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; align-items: end; }
 .admin-market-time-fields .field-label { margin: 0; color: #354b39; font-size: 11px; }
 .admin-market-time-fields .text-input { width: 100%; }
+.admin-market-time-preview { color: #778075; font-size: 10px; font-weight: 500; }
 .admin-listing-fee-status.is-closed { background: #f5e9e5; color: #8b4b3d; }
 .admin-market-hours-summary { color: var(--forest); font-size: 13px; font-weight: 600; line-height: 1.5; }
 .market-closed-notice { display: grid; place-content: center; min-height: 380px; margin: 28px 0; padding: 36px 20px; border: 1px solid #dfe3db; background: #fbfcf9; text-align: center; }
