@@ -282,7 +282,7 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 .certificate-option .button:disabled, .admin-review-item .button:disabled { opacity: .48; cursor: not-allowed; transform: none; }
 .submission-item .submission-actions .button:disabled { opacity: .42; cursor: not-allowed; transform: none; }
 .certificate-status-note { margin: 11px 0 0; color: #69766a; font-size: 10px; line-height: 1.5; }
-.seller-locked .header-list, .seller-locked .seller-section .section-post, .seller-locked .buyer-rail-hint button { opacity: .52; cursor: not-allowed; }
+.seller-locked .seller-section .section-post, .seller-locked .buyer-rail-hint button { opacity: .52; cursor: not-allowed; }
 .prototype-bar { min-height: 32px; padding: 7px max(24px, calc((100vw - 1320px) / 2)); display: flex; align-items: center; gap: 8px; color: #dce7df; background: var(--forest-deep); font-size: 10px; }
 .prototype-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 3px #d2ee7722; }
 .prototype-divider { color: #769084; }
@@ -308,7 +308,7 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 .button:hover { transform: translateY(-1px); }
 .button-dark { background: var(--forest); color: white; }
 .button-dark:hover { background: #254c3f; }
-.header-list { min-height: 38px; }
+
 .button-outline { border-color: #cbd3c8; background: transparent; color: var(--ink); }
 .button-outline:hover { background: #e9eee6; }
 .button-lime { background: var(--lime); color: var(--forest-deep); }
@@ -531,8 +531,6 @@ h1, h2, h3, p { margin-top: 0; }
   .header-search kbd { display: none; }
   .header-actions { gap: 6px; }
   .user-chip > span:not(.user-avatar) { display: none; }
-  .header-signin { display: none; }
-  .header-list { min-height: 34px; padding: 0 6px; font-size: 8px; }
   .market-content { padding: 0 14px; }
   .market-intro { min-height: 172px; padding: 62px 0 22px; align-items: flex-end; }
   .market-intro h1 { max-width: 340px; margin-top: 9px; font-size: 36px; }
