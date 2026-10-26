@@ -313,8 +313,9 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 .icon-button, .round-control, .photo-action, .buyer-card-bottom button, .dialog-close, .dismiss-username { display: inline-grid; place-items: center; border: 1px solid var(--line); background: transparent; cursor: pointer; }
 .icon-button { width: 38px; height: 38px; border-radius: 50%; transition: background .2s, border-color .2s; }
 .icon-button:hover, .round-control:hover { background: #eaf0e6; border-color: #b9c8b9; }
-.wordmark { flex-shrink: 0; text-decoration: none; }
-.wordmark img { display: block; width: 62px; height: 62px; object-fit: contain; }
+.wordmark { gap: 9px; flex-shrink: 0; color: var(--ink); text-decoration: none; font-family: var(--font-display), Georgia, serif; font-size: 24px; font-weight: 700; }
+.wordmark img { display: block; width: 30px; height: 30px; object-fit: contain; }
+.wordmark-market { color: #82917f; font-weight: 400; }
 .header-search { display: flex; align-items: center; gap: 11px; width: min(370px, 34vw); height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; background: #f7f8f4; color: #81877f; }
 .site-header > .header-search { display: none; }
 .header-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 12px; }
@@ -616,7 +617,8 @@ h1, h2, h3, p { margin-top: 0; }
   .site-header { height: auto; min-height: 64px; padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
   .header-left { order: 1; gap: 8px; }
   .icon-button { width: 34px; height: 34px; }
-  .wordmark img { width: 48px; height: 48px; }
+  .wordmark { gap: 5px; font-size: 16px; }
+  .wordmark img { width: 22px; height: 22px; }
   .header-actions { order: 2; }
   .market-intro-tools { width: 100%; }
   .market-intro-tools { gap: 8px; }
