@@ -366,11 +366,7 @@ h1, h2, h3, p { margin-top: 0; }
 .market-status strong, .market-status small { display: block; }
 .market-status strong { font-size: 11px; font-weight: 650; }
 .market-status small { margin-top: 3px; color: #8e958c; font-size: 9px; }
-.market-status.is-closed .status-orbit { border-color: #b17c70; }
-.market-status.is-closed .status-orbit span { background: #a85f50; }
 .market-status.is-closed strong { color: #925144; }
-.status-orbit { width: 9px; height: 9px; display: grid; place-items: center; border: 1px solid #8ca38c; border-radius: 50%; }
-.status-orbit span { width: 4px; height: 4px; border-radius: 50%; background: #679267; }
 .listing-section { min-height: 0; flex: 1 1 0; display: flex; flex-direction: column; padding: 22px 0 20px; border-top: 1px solid var(--line); }
 .seller-section { flex: 0 0 auto; }
 .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 17px; }
@@ -670,7 +666,6 @@ h1, h2, h3, p { margin-top: 0; }
 @media (max-width: 390px) {
   .market-intro h1 { font-size: min(var(--homepage-headline-font-size, 32px), 8.8vw); }
   .market-status { align-items: flex-start; }
-  .status-orbit { margin-top: 2px; }
   .eyebrow { gap: 6px; font-size: 8px; }
   .eyebrow-year { display: none; }
   .section-head h2 { font-size: 19px; }
