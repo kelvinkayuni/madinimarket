@@ -244,7 +244,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-account-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; font-size: 11px; }
 .admin-account-search input::placeholder { color: #9a9f98; }
 .admin-account-search:focus-within { border-color: #758b72; box-shadow: 0 0 0 2px rgb(88 128 94 / 12%); }
-.admin-account-list-scroll { max-height: 1400px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border-top: 1px solid #e1e5dd; }
+.admin-account-list-scroll { max-height: min(65vh, 720px); min-height: 240px; margin-right: 16px; padding-right: 8px; overflow-y: auto; overscroll-behavior-y: auto; scrollbar-gutter: stable; border-top: 1px solid #e1e5dd; }
 .admin-account-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(310px, 1.7fr) auto; align-items: center; gap: 14px 20px; padding: 15px 0; border-bottom: 1px solid #e8ebe5; }
 .admin-account-identity, .admin-account-counts { display: grid; gap: 4px; min-width: 0; }
 .admin-account-identity strong { font-size: 12px; }
