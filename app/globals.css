@@ -259,6 +259,9 @@ button.admin-account-status.is-license-pending { border: 0; font: inherit; curso
 button.admin-account-status.is-license-unavailable { border: 0; background: #ecefe9; color: #8a9187; font: inherit; cursor: not-allowed; opacity: .55; }
 .admin-account-status.is-active { background: #e7efe6; color: #3b6146; }
 .admin-account-status.is-inactive { background: #f5e9e5; color: #8b4b3d; }
+.admin-account-status.is-subscribed { background: #e7efe6; color: #3b6146; }
+.admin-account-status.is-not-subscribed { background: #ecefe9; color: #778174; }
+.admin-account-subscription-details { overflow-wrap: anywhere; }
 .admin-account-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; }
 .admin-account-actions .button { min-height: 32px; padding: 0 10px; font-size: 9px; }
 .admin-account-actions .button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
@@ -620,7 +623,8 @@ h1, h2, h3, p { margin-top: 0; }
   .wordmark-symbol svg { width: 18px; }
   .header-actions { order: 2; }
   .market-intro-tools { width: 100%; }
-  .market-intro-tools .market-status { flex: 1; min-width: 0; }
+  .market-intro-tools { gap: 12px; }
+  .market-intro-tools .market-status { flex: 0 1 auto; min-width: 0; }
   .header-search kbd { display: none; }
   .header-actions { gap: 6px; }
   .user-chip > span:not(.user-avatar) { display: none; }

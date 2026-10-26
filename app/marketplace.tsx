@@ -28,7 +28,7 @@ type Seller = { id: number; user_id?: string; website_account_seller?: boolean; 
 type Buyer = { id: number; user_id?: string; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type AccountMarketListing = Pick<Seller, "id" | "mineral" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image">;
 type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location">;
-type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts };
+type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
 type AdminListingLedgerEntry = { id: number; seller_name: string; mineral_name: string; seller_price: string; platform_fee_rate: number; platform_fee_amount: string; price: string; currency: Currency; status: SubmissionStatus; listing_type: ListingType; created_at: string };
@@ -2596,6 +2596,9 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 <span><strong>{totalPosts}</strong> total posted</span>
                 <span>Selling: <strong>{account.listings.total}</strong> ({account.listings.pending} pending · {account.listings.approved} approved · {account.listings.rejected} rejected)</span>
                 <span>Buying: <strong>{account.buying_requests.total}</strong> ({account.buying_requests.pending} pending · {account.buying_requests.approved} approved · {account.buying_requests.rejected} rejected)</span>
+                {account.subscription && <span className="admin-account-subscription-details">
+                  <strong>Subscription:</strong> {account.subscription.months} month{account.subscription.months === 1 ? "" : "s"} · Starts {new Date(account.subscription.starts_at).toLocaleString()} · Ends {new Date(account.subscription.expires_at).toLocaleString()}
+                </span>}
               </div>
               <div className="admin-account-status-group">
                 {pendingAccountCertificates.length > 0 && <button className="admin-account-status is-license-pending" type="button" aria-label={`Open pending licences for ${account.display_name}`} onClick={() => {
@@ -2607,6 +2610,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                 }}>Licence pending</button>}
                 {approvedAccountCertificates.length > 0 ? approvedAccountCertificates.map((certificate) => <a className="admin-account-status is-license-approved" key={certificate.id} href={certificate.signed_url} target="_blank" rel="noreferrer" aria-label={`Open approved ${certificate.kind} licence for ${account.display_name}`} title={`Approved ${certificate.kind} licence`}>Approved licence</a>) : <button className="admin-account-status is-license-unavailable" type="button" disabled>Approved licence</button>}
                 <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Inactive"}</span>
+                <span className={`admin-account-status ${account.subscription ? "is-subscribed" : "is-not-subscribed"}`}>{account.subscription ? "Subscribed" : "Not subscribed"}</span>
               </div>
               <div className="admin-account-actions">
                 <button className="button button-outline" type="button" disabled={busy || account.is_active} onClick={() => void withProgress(`account-${account.id}-activate`, () => updateWebsiteAccount(account, true))}>{busyActions.has(`account-${account.id}-activate`) ? "Activating…" : "Activate"}</button>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 
@@ -38,14 +39,36 @@ export async function GET(request: Request) {
     ]);
     if (accountsResult.error || listingsResult.error || requestsResult.error) throw new Error("Could not load account data.");
 
+    const accounts = accountsResult.data ?? [];
+    const accountIds = accounts.map((account) => account.id);
+    const now = new Date().toISOString();
+    const service = createSupabaseAdminClient();
+    const { data: activeSubscriptions, error: subscriptionsError } = accountIds.length
+      ? await service.from("account_subscriptions")
+        .select("website_user_id, months, starts_at, expires_at")
+        .in("website_user_id", accountIds)
+        .eq("status", "active")
+        .lte("starts_at", now)
+        .gt("expires_at", now)
+        .order("expires_at", { ascending: false })
+      : { data: [], error: null };
+    if (subscriptionsError) throw subscriptionsError;
+
     const listingCounts = countSubmissions(listingsResult.data ?? []);
     const buyingCounts = countSubmissions(requestsResult.data ?? []);
-    const accounts = (accountsResult.data ?? []).map((account) => ({
+    const subscriptionsByAccount = new Map<string, NonNullable<typeof activeSubscriptions>[number]>();
+    for (const subscription of activeSubscriptions ?? []) {
+      if (!subscriptionsByAccount.has(subscription.website_user_id)) {
+        subscriptionsByAccount.set(subscription.website_user_id, subscription);
+      }
+    }
+    const resultAccounts = accounts.map((account) => ({
       ...account,
       listings: listingCounts.get(account.id) ?? { total: 0, pending: 0, approved: 0, rejected: 0 },
       buying_requests: buyingCounts.get(account.id) ?? { total: 0, pending: 0, approved: 0, rejected: 0 },
+      subscription: subscriptionsByAccount.get(account.id) ?? null,
     }));
-    return NextResponse.json({ accounts }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ accounts: resultAccounts }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not load website accounts." }, { status: 503 });
   }
