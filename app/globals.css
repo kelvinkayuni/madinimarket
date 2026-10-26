@@ -345,7 +345,7 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 .user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; }
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
 .market-content { width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0 clamp(18px, 3vw, 48px); }
-.market-intro { min-height: 171px; flex: 0 0 auto; padding: 34px 0 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.market-intro { flex: 0 0 auto; padding: 12px 0 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .eyebrow { display: flex; align-items: center; gap: 9px; color: #667267; font-size: 9px; font-weight: 700; }
 .eyebrow-line { width: 20px; height: 1px; background: var(--red); }
 .eyebrow-year { margin-left: 3px; color: #a1a79e; font-size: 8px; }
@@ -620,7 +620,7 @@ h1, h2, h3, p { margin-top: 0; }
   .header-actions { gap: 6px; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
-  .market-intro { min-height: 172px; padding: 62px 0 22px; align-items: flex-end; }
+  .market-intro { padding: 8px 0 16px; align-items: flex-end; }
   .market-intro h1 { max-width: 340px; margin-top: 9px; font-size: min(var(--homepage-headline-font-size, 36px), 10vw); }
   .market-status { gap: 7px; margin-bottom: 2px; }
   .market-status strong { font-size: 9px; }
