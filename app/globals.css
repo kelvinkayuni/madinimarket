@@ -489,6 +489,7 @@ h1, h2, h3, p { margin-top: 0; }
 .empty-search-dark { border-color: #456457; color: #c6d3c8; }
 .site-footer { min-height: 57px; display: flex; align-items: center; justify-content: space-between; gap: 15px; color: #929990; font-size: 9px; }
 .site-footer span:first-child { display: flex; align-items: center; gap: 6px; color: #43584a; font-size: 9px; font-weight: 700; }
+.site-footer span:first-child img { width: 22px; height: 16px; object-fit: contain; }
 
 .username-banner { position: relative; z-index: 3; max-width: 1256px; margin: 12px auto 0; padding: 12px 15px; display: flex; align-items: center; gap: 13px; border: 1px solid #d7e2cf; background: #edf4e6; animation: rise-in .35s both; }
 .username-copy { display: flex; align-items: center; gap: 10px; margin-right: auto; }

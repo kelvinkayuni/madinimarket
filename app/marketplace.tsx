@@ -2708,7 +2708,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           : nextMarketOpenAt
             ? `The market will reopen on ${formatMarketOpening(nextMarketOpenAt)} Tanzania time.`
             : "No upcoming opening is currently scheduled."}</p></section>}
-      <footer className="site-footer"><span><Gem size={16} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span><span>PREVIEW MARKET · 2025—26</span></footer>
+      <footer className="site-footer"><span><Image src="/madinimarket-logo.png" alt="" width={906} height={672} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span><span>PREVIEW MARKET · 2025—26</span></footer>
     </div>
 
     {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
