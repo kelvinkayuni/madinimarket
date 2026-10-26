@@ -216,6 +216,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-empty { padding: 24px 14px; border: 1px dashed #d8ded5; color: #798278; font-size: 11px; text-align: center; }
 .admin-accounts { padding: 25px 0 8px; border-bottom: 1px solid var(--line); }
 .admin-translations { padding: 25px 0 24px; border-bottom: 1px solid var(--line); }
+.admin-site-setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 18px 0; padding: 14px; border: 1px solid #e1e5dd; background: #fff; }
+.admin-site-setting > div { display: grid; gap: 4px; }
+.admin-site-setting strong { color: #3d493e; font-size: 11px; }
+.admin-site-setting span { color: #778075; font-size: 9px; line-height: 1.5; }
 .admin-translation-help { max-width: 760px; margin: 0 0 16px; color: #778075; font-size: 10px; line-height: 1.6; }
 .admin-translation-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
 .admin-translation-form-actions { display: flex; gap: 8px; }
@@ -224,6 +228,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-translation-row > div { display: flex; flex-wrap: wrap; gap: 6px 18px; min-width: 0; font-size: 11px; }
 .admin-translation-row > div span { color: #526451; }
 .admin-translation-row .button { min-height: 32px; font-size: 9px; }
+.admin-homepage-headlines { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); }
+.admin-homepage-headline-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+.admin-homepage-headline-form > .button { min-height: 40px; }
+.admin-homepage-headline-list { margin-top: 18px; border-top: 1px solid #e1e5dd; }
+.admin-homepage-headline-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #e8ebe5; }
+.admin-homepage-headline-row > div { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font-family: var(--font-display), Georgia, serif; font-size: 16px; }
+.admin-homepage-headline-row em { color: #55755e; font-weight: 500; }
+.admin-homepage-headline-row .button { min-height: 32px; font-size: 9px; }
 .admin-account-search { display: flex; align-items: center; gap: 10px; max-width: 420px; height: 40px; margin: 14px 0; padding: 0 11px; border: 1px solid #d8ded5; border-radius: 2px; background: #fff; color: #788176; }
 .admin-account-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; font-size: 11px; }
 .admin-account-search input::placeholder { color: #9a9f98; }
@@ -336,7 +348,6 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 h1, h2, h3, p { margin-top: 0; }
 .market-intro h1 { margin: 10px 0 4px; font-family: var(--font-display), Georgia, serif; font-size: clamp(35px, 3.8vw, 49px); line-height: 1.05; font-weight: 500; }
 .market-intro h1 em { color: #55755e; font-weight: 500; }
-.intro-copy { margin: 0; color: #777f76; font-size: 12px; }
 .market-status { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .market-status strong, .market-status small { display: block; }
 .market-status strong { font-size: 11px; font-weight: 650; }
@@ -562,6 +573,7 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-market-days > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-market-time-fields { grid-template-columns: 1fr; }
   .admin-translation-form { grid-template-columns: 1fr; }
+  .admin-homepage-headline-form { grid-template-columns: 1fr; }
   .admin-subscription-plan-form { grid-template-columns: 1fr; }
   .admin-subscription-plan-actions { grid-column: auto; }
   .admin-ledger-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
@@ -604,7 +616,6 @@ h1, h2, h3, p { margin-top: 0; }
   .market-content { padding: 0 14px; }
   .market-intro { min-height: 172px; padding: 62px 0 22px; align-items: flex-end; }
   .market-intro h1 { max-width: 340px; margin-top: 9px; font-size: 36px; }
-  .intro-copy { max-width: 240px; font-size: 10px; line-height: 1.5; }
   .market-status { gap: 7px; margin-bottom: 2px; }
   .market-status strong { font-size: 9px; }
   .market-status small { font-size: 8px; white-space: nowrap; }

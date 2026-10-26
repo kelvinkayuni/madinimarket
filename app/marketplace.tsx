@@ -18,6 +18,7 @@ type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
 type AdminPanel = "review" | "ledger" | "translations" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders";
+type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
@@ -337,6 +338,28 @@ async function loadAdminTranslations(accessToken: string): Promise<TranslationPa
   return result.translations as TranslationPair[];
 }
 
+async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlines: HomepageHeadline[] }> {
+  const response = await fetch("/api/admin/site-content", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not load homepage and language settings.");
+  if (typeof result.swahiliEnabled !== "boolean" || !Array.isArray(result.headlines) ||
+    !result.headlines.every((headline: unknown) =>
+      typeof headline === "object" && headline !== null &&
+      "id" in headline && typeof headline.id === "string" &&
+      "main_phrase" in headline && typeof headline.main_phrase === "string" &&
+      "accent_phrase" in headline && typeof headline.accent_phrase === "string",
+    )) {
+    throw new Error("Homepage and language settings are invalid.");
+  }
+  return {
+    swahiliEnabled: result.swahiliEnabled,
+    headlines: result.headlines,
+  };
+}
+
 async function loadAdminSubscriptions(accessToken: string): Promise<{ plans: SubscriptionPlan[]; pendingSubscriptions: AccountSubscription[] }> {
   const response = await fetch("/api/admin/subscriptions", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -378,6 +401,14 @@ export default function Marketplace() {
   const [translationPairs, setTranslationPairs] = useState<TranslationPair[]>([]);
   const [translationForm, setTranslationForm] = useState({ english_phrase: "", swahili_phrase: "" });
   const [editingTranslationId, setEditingTranslationId] = useState<string | null>(null);
+  const [swahiliEnabled, setSwahiliEnabled] = useState(true);
+  const [siteContentLoaded, setSiteContentLoaded] = useState(false);
+  const [homepageHeadlines, setHomepageHeadlines] = useState<HomepageHeadline[]>([]);
+  const [homepageHeadlineIndex, setHomepageHeadlineIndex] = useState(0);
+  const activeHomepageHeadline = homepageHeadlines.length
+    ? homepageHeadlines[homepageHeadlineIndex % homepageHeadlines.length]
+    : null;
+  const [homepageHeadlineForm, setHomepageHeadlineForm] = useState({ mainPhrase: "", accentPhrase: "" });
   const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
   const [pendingSubscriptions, setPendingSubscriptions] = useState<AccountSubscription[]>([]);
   const [subscriptionPlanForm, setSubscriptionPlanForm] = useState({ months: "", price_tzs: "", price_usd: "" });
@@ -591,14 +622,6 @@ export default function Marketplace() {
   }, []);
   useEffect(() => {
     let active = true;
-    const preferenceTimer = window.setTimeout(() => {
-      try {
-        const savedLanguage = localStorage.getItem("madinimarket:language:v1");
-        if (savedLanguage === "sw") setLanguage("sw");
-      } catch {
-        setNotice("This browser could not load your language preference.");
-      }
-    }, 0);
     const refreshTranslations = async () => {
       try {
         const response = await fetch("/api/translations", { cache: "no-store" });
@@ -609,18 +632,67 @@ export default function Marketplace() {
         if (active) setNotice(error instanceof Error ? error.message : "Could not load language translations.");
       }
     };
+    const refreshSiteContent = async () => {
+      try {
+        const response = await fetch("/api/site-content", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok || typeof result.swahiliEnabled !== "boolean" || !Array.isArray(result.headlines)) {
+          throw new Error(result.error ?? "Could not load homepage and language settings.");
+        }
+        if (!active) return;
+        setSwahiliEnabled(result.swahiliEnabled);
+        setSiteContentLoaded(true);
+        setHomepageHeadlines((current) => {
+          const next = result.headlines as HomepageHeadline[];
+          return current.length === next.length && current.every((headline, index) =>
+            headline.id === next[index]?.id &&
+            headline.main_phrase === next[index]?.main_phrase &&
+            headline.accent_phrase === next[index]?.accent_phrase,
+          ) ? current : next;
+        });
+        if (!result.swahiliEnabled) {
+          setLanguage("en");
+          try {
+            localStorage.setItem("madinimarket:language:v1", "en");
+          } catch {
+            setNotice("This browser could not update its language preference.");
+          }
+        } else {
+          try {
+            if (localStorage.getItem("madinimarket:language:v1") === "sw") setLanguage("sw");
+          } catch {
+            setNotice("This browser could not load your language preference.");
+          }
+        }
+      } catch (error) {
+        if (active) setNotice(error instanceof Error ? error.message : "Could not load homepage and language settings.");
+      }
+    };
     void refreshTranslations();
+    void refreshSiteContent();
     const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshTranslations();
+      if (document.visibilityState === "visible") {
+        void refreshTranslations();
+        void refreshSiteContent();
+      }
     }, 60_000);
-    const removeResumeListener = onBrowserResume(refreshTranslations);
+    const removeResumeListener = onBrowserResume(() => {
+      void refreshTranslations();
+      void refreshSiteContent();
+    });
     return () => {
       active = false;
-      window.clearTimeout(preferenceTimer);
       window.clearInterval(interval);
       removeResumeListener();
     };
   }, []);
+  useEffect(() => {
+    if (homepageHeadlines.length < 2) return;
+    const interval = window.setInterval(() => {
+      setHomepageHeadlineIndex((current) => (current + 1) % homepageHeadlines.length);
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [homepageHeadlines.length]);
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     let active = true;
@@ -752,6 +824,7 @@ export default function Marketplace() {
     };
   }, []);
   const chooseLanguage = (nextLanguage: Language) => {
+    if (!swahiliEnabled && nextLanguage === "sw") return;
     setLanguage(nextLanguage);
     try {
       localStorage.setItem("madinimarket:language:v1", nextLanguage);
@@ -832,6 +905,10 @@ export default function Marketplace() {
               setWebsiteAccounts(await loadAdminAccounts(session.access_token));
               setAdminCertificates(await loadAdminCertificates(session.access_token));
               setTranslationPairs(await loadAdminTranslations(session.access_token));
+              const siteContent = await loadAdminSiteContent(session.access_token);
+              setSwahiliEnabled(siteContent.swahiliEnabled);
+              setSiteContentLoaded(true);
+              setHomepageHeadlines(siteContent.headlines);
               const subscriptions = await loadAdminSubscriptions(session.access_token);
               setSubscriptionPlans(subscriptions.plans);
               setPendingSubscriptions(subscriptions.pendingSubscriptions);
@@ -1429,6 +1506,89 @@ export default function Marketplace() {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
     if (!session) throw new Error("Admin session expired.");
     setTranslationPairs(await loadAdminTranslations(session.access_token));
+  };
+  const refreshAdminSiteContent = async () => {
+    const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+    if (error) throw error;
+    if (!session) throw new Error("Admin session expired.");
+    const content = await loadAdminSiteContent(session.access_token);
+    setSwahiliEnabled(content.swahiliEnabled);
+    setSiteContentLoaded(true);
+    setHomepageHeadlines(content.headlines);
+  };
+  const updateSwahiliAvailability = async (enabled: boolean) => {
+    await withProgress("swahili-setting", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ swahiliEnabled: enabled }),
+        });
+        const result = await response.json();
+        if (!response.ok || typeof result.swahiliEnabled !== "boolean") {
+          throw new Error(result.error ?? "Could not update the language setting.");
+        }
+        setSwahiliEnabled(result.swahiliEnabled);
+        setSiteContentLoaded(true);
+        if (!result.swahiliEnabled) {
+          setLanguage("en");
+          try {
+            localStorage.setItem("madinimarket:language:v1", "en");
+          } catch {
+            setNotice("Language access was updated, but this browser could not save its English preference.");
+            return;
+          }
+        }
+        setNotice(result.swahiliEnabled ? "Swahili language switching is available to visitors." : "Swahili language switching is hidden from visitors.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update the language setting.");
+      }
+    });
+  };
+  const saveHomepageHeadline = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await withProgress("homepage-headline-save", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(homepageHeadlineForm),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.headline) throw new Error(result.error ?? "Could not save the homepage phrase.");
+        setHomepageHeadlines((current) => [...current, result.headline as HomepageHeadline]);
+        setHomepageHeadlineForm({ mainPhrase: "", accentPhrase: "" });
+        setNotice("Homepage phrase saved.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save the homepage phrase.");
+      }
+    });
+  };
+  const deleteHomepageHeadline = async (headline: HomepageHeadline) => {
+    await withProgress(`homepage-headline-delete-${headline.id}`, async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ id: headline.id }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not delete the homepage phrase.");
+        setHomepageHeadlines((current) => current.filter((item) => item.id !== headline.id));
+        setNotice("Homepage phrase deleted.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not delete the homepage phrase.");
+      }
+    });
   };
   const refreshAdminSubscriptions = async () => {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
@@ -2270,7 +2430,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         </section>}
         {activeAdminPanel === "review" && <>
         <section className="admin-overview">
-          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSiteContent(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
           <div className="admin-summary">
             <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
@@ -2351,6 +2511,10 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         </section>}
         {activeAdminPanel === "translations" && <section className="admin-translations" aria-labelledby="admin-translations-heading">
           <div className="admin-queue-heading"><div><span>LANGUAGE SETTINGS</span><h2 id="admin-translations-heading">English–Swahili translations</h2></div><strong>{translationPairs.length}</strong></div>
+          <div className="admin-site-setting">
+            <div><strong>Allow visitors to switch to Swahili</strong><span>{siteContentLoaded ? swahiliEnabled ? "The language switch is visible in the visitor menu." : "The language switch is hidden; visitors use English." : "Loading language settings…"}</span></div>
+            <button className={`admin-currency-switch${swahiliEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={swahiliEnabled} aria-label="Allow visitors to switch to Swahili" disabled={!siteContentLoaded || busyActions.has("swahili-setting")} onClick={() => void updateSwahiliAvailability(!swahiliEnabled)}><span /></button>
+          </div>
           <p className="admin-translation-help">Add words or phrases for the Swahili version. Matching ignores letter case, respects word boundaries, preserves capitalization, and prefers longer phrases. Only site interface text is translated; submitted mineral names and descriptions stay unchanged.</p>
           <form className="admin-translation-form" onSubmit={(event) => void saveTranslation(event)}>
             <label className="field-label">English word or phrase<input className="text-input" value={translationForm.english_phrase} maxLength={120} required onChange={(event) => setTranslationForm((current) => ({ ...current, english_phrase: event.target.value }))} /></label>
@@ -2358,6 +2522,16 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             <div className="admin-translation-form-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : editingTranslationId ? "Update pair" : "Add pair"}</button>{editingTranslationId && <button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>}</div>
           </form>
           {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <article className="admin-translation-row" key={pair.id}><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
+          <div className="admin-homepage-headlines">
+            <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2>Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
+            <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases rotate every minute; if all are deleted, the homepage shows no headline.</p>
+            <form className="admin-homepage-headline-form" onSubmit={(event) => void saveHomepageHeadline(event)}>
+              <label className="field-label">Regular phrase<input className="text-input" value={homepageHeadlineForm.mainPhrase} maxLength={120} placeholder="Find your next" onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, mainPhrase: event.target.value }))} /></label>
+              <label className="field-label">Highlighted phrase<input className="text-input" value={homepageHeadlineForm.accentPhrase} maxLength={120} placeholder="good stone." onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, accentPhrase: event.target.value }))} /></label>
+              <button className="button button-dark" type="submit" disabled={busyActions.has("homepage-headline-save") || (!homepageHeadlineForm.mainPhrase.trim() && !homepageHeadlineForm.accentPhrase.trim())}>{busyActions.has("homepage-headline-save") ? "Saving…" : "Save phrase"}</button>
+            </form>
+            {homepageHeadlines.length ? <div className="admin-homepage-headline-list">{homepageHeadlines.map((headline) => <article className="admin-homepage-headline-row" key={headline.id}><div><span>{headline.main_phrase}</span>{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></div><button className="button button-danger" type="button" disabled={busyActions.has(`homepage-headline-delete-${headline.id}`)} onClick={() => void deleteHomepageHeadline(headline)}>{busyActions.has(`homepage-headline-delete-${headline.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No homepage phrases have been saved.</p>}
+          </div>
         </section>}
         {activeAdminPanel === "accounts" && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
@@ -2447,14 +2621,14 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>My cart &amp; orders <span className="cart-count">{cartCount}</span></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>My minerals on market <ArrowUpRight size={15} /></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>My wanted minerals <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => void openAccountLicences()}>Your licences <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}<div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div><div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>My cart &amp; orders <span className="cart-count">{cartCount}</span></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>My minerals on market <ArrowUpRight size={15} /></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>My wanted minerals <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => void openAccountLicences()}>Your licences <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><span className="wordmark-symbol"><Gem size={21} strokeWidth={1.8} /></span><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
       {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
     </header>
 
     <div className="market-content" id="top">
-      <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div><h1>Find your next <em>good stone.</em></h1><p className="intro-copy">A direct market for the people who know minerals best.</p></div><div className={`market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`}><div className="status-orbit"><span /></div><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "Tanzania time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} Tanzania time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time` : "No upcoming opening is scheduled."}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
+      <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div>{activeHomepageHeadline && <h1><span>{activeHomepageHeadline.main_phrase}</span>{activeHomepageHeadline.main_phrase && activeHomepageHeadline.accent_phrase ? " " : ""}<em>{activeHomepageHeadline.accent_phrase}</em></h1>}</div><div className={`market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`}><div className="status-orbit"><span /></div><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "Tanzania time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} Tanzania time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time` : "No upcoming opening is scheduled."}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>
