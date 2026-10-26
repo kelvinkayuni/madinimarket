@@ -346,6 +346,8 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
 .market-content { width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0 clamp(18px, 3vw, 48px); }
 .market-intro { flex: 0 0 auto; padding: 12px 0 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.market-intro-tools { display: contents; }
+.mobile-market-search { display: none; }
 .eyebrow { display: flex; align-items: center; gap: 9px; color: #667267; font-size: 9px; font-weight: 700; }
 .eyebrow-line { width: 20px; height: 1px; background: var(--red); }
 .eyebrow-year { margin-left: 3px; color: #a1a79e; font-size: 8px; }
@@ -616,17 +618,21 @@ h1, h2, h3, p { margin-top: 0; }
   .wordmark { gap: 5px; font-size: 16px; }
   .wordmark-symbol svg { width: 18px; }
   .header-actions { order: 2; }
-  .header-search { position: static; order: 3; flex: 0 0 100%; width: 100%; height: 37px; }
+  .site-header > .header-search { display: none; }
+  .market-intro-tools { display: flex; align-items: center; gap: 8px; width: 100%; }
+  .mobile-market-search { display: flex; flex: 0 0 142px; width: 142px; height: 37px; gap: 7px; padding: 0 9px; }
+  .mobile-market-search input { font-size: 9px; }
+  .market-intro-tools .market-status { flex: 1; min-width: 0; }
   .header-search kbd { display: none; }
   .header-actions { gap: 6px; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
   .market-intro { display: block; padding: 8px 0 16px; }
   .market-intro h1 { max-width: none; margin-top: 9px; font-size: min(var(--homepage-headline-font-size, 36px), 8.8vw); white-space: nowrap; }
-  .market-status { margin-top: 10px; }
+  .market-status { margin-top: 0; }
   .market-status { gap: 7px; margin-bottom: 2px; }
   .market-status strong { font-size: 9px; }
-  .market-status small { font-size: 8px; white-space: nowrap; }
+  .market-status small { font-size: 8px; white-space: normal; }
   .refresh-icon { display: none; }
   .listing-section { padding-top: 19px; }
   .section-head { align-items: flex-start; flex-wrap: wrap; margin-bottom: 13px; }
