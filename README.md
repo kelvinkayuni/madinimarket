@@ -38,7 +38,7 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 
 The admin currency switch controls whether new seller listings and buyer requests can use USD. The database keeps existing USD records unchanged and rejects new or currency-edited USD records while USD is disabled. The admin listing fee setting applies to new mineral listings; each listing keeps its saved fee rate and price when the setting changes. The admin market-hours schedule repeats weekly in Tanzania time; its default keeps the market open until an admin saves a schedule. When closed, public listing and buyer-request views return no records.
 
-The admin English–Swahili panel controls whether visitors can switch to Swahili and manages the homepage headline. Headline phrases are entered as regular and highlighted parts, rotate every minute, and are hidden when none are saved.
+The admin English–Swahili panel controls whether visitors can switch to Swahili. Homepage headline phrases have their own admin panel; enter regular and highlighted parts separately. Saved phrases rotate every minute and are hidden when none are saved.
 
 Open marketplace pages refresh when they become visible or reconnect, poll for changes as a fallback, and use Supabase Realtime notifications to refresh listings and buyer requests. Private settings and administrator data continue to refresh through authenticated API polling. A version notice appears when a newer deployment is detected; users can reload when ready so an open form is not lost.
 

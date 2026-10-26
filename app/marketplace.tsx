@@ -17,7 +17,7 @@ type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders";
+type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders";
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
@@ -2283,6 +2283,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>
               <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>
               <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>
+              <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>
               <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
               <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
               <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
@@ -2522,16 +2523,16 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             <div className="admin-translation-form-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : editingTranslationId ? "Update pair" : "Add pair"}</button>{editingTranslationId && <button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>}</div>
           </form>
           {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <article className="admin-translation-row" key={pair.id}><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
-          <div className="admin-homepage-headlines">
-            <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2>Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
-            <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases rotate every minute; if all are deleted, the homepage shows no headline.</p>
-            <form className="admin-homepage-headline-form" onSubmit={(event) => void saveHomepageHeadline(event)}>
-              <label className="field-label">Regular phrase<input className="text-input" value={homepageHeadlineForm.mainPhrase} maxLength={120} placeholder="Find your next" onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, mainPhrase: event.target.value }))} /></label>
-              <label className="field-label">Highlighted phrase<input className="text-input" value={homepageHeadlineForm.accentPhrase} maxLength={120} placeholder="good stone." onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, accentPhrase: event.target.value }))} /></label>
-              <button className="button button-dark" type="submit" disabled={busyActions.has("homepage-headline-save") || (!homepageHeadlineForm.mainPhrase.trim() && !homepageHeadlineForm.accentPhrase.trim())}>{busyActions.has("homepage-headline-save") ? "Saving…" : "Save phrase"}</button>
-            </form>
-            {homepageHeadlines.length ? <div className="admin-homepage-headline-list">{homepageHeadlines.map((headline) => <article className="admin-homepage-headline-row" key={headline.id}><div><span>{headline.main_phrase}</span>{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></div><button className="button button-danger" type="button" disabled={busyActions.has(`homepage-headline-delete-${headline.id}`)} onClick={() => void deleteHomepageHeadline(headline)}>{busyActions.has(`homepage-headline-delete-${headline.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No homepage phrases have been saved.</p>}
-          </div>
+        </section>}
+        {activeAdminPanel === "homepage" && <section className="admin-homepage-panel" aria-labelledby="admin-homepage-headlines-heading">
+          <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
+          <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases rotate every minute; if all are deleted, the homepage shows no headline.</p>
+          <form className="admin-homepage-headline-form" onSubmit={(event) => void saveHomepageHeadline(event)}>
+            <label className="field-label">Regular phrase<input className="text-input" value={homepageHeadlineForm.mainPhrase} maxLength={120} placeholder="Find your next" onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, mainPhrase: event.target.value }))} /></label>
+            <label className="field-label">Highlighted phrase<input className="text-input" value={homepageHeadlineForm.accentPhrase} maxLength={120} placeholder="good stone." onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, accentPhrase: event.target.value }))} /></label>
+            <button className="button button-dark" type="submit" disabled={busyActions.has("homepage-headline-save") || (!homepageHeadlineForm.mainPhrase.trim() && !homepageHeadlineForm.accentPhrase.trim())}>{busyActions.has("homepage-headline-save") ? "Saving…" : "Save phrase"}</button>
+          </form>
+          {homepageHeadlines.length ? <div className="admin-homepage-headline-list">{homepageHeadlines.map((headline) => <article className="admin-homepage-headline-row" key={headline.id}><div><span>{headline.main_phrase}</span>{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></div><button className="button button-danger" type="button" disabled={busyActions.has(`homepage-headline-delete-${headline.id}`)} onClick={() => void deleteHomepageHeadline(headline)}>{busyActions.has(`homepage-headline-delete-${headline.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No homepage phrases have been saved.</p>}
         </section>}
         {activeAdminPanel === "accounts" && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>

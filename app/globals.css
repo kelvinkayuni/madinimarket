@@ -228,7 +228,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-translation-row > div { display: flex; flex-wrap: wrap; gap: 6px 18px; min-width: 0; font-size: 11px; }
 .admin-translation-row > div span { color: #526451; }
 .admin-translation-row .button { min-height: 32px; font-size: 9px; }
-.admin-homepage-headlines { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); }
+.admin-homepage-panel { padding: 25px 0 24px; border-bottom: 1px solid var(--line); }
 .admin-homepage-headline-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
 .admin-homepage-headline-form > .button { min-height: 40px; }
 .admin-homepage-headline-list { margin-top: 18px; border-top: 1px solid #e1e5dd; }
