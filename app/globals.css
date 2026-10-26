@@ -508,6 +508,12 @@ h1, h2, h3, p { margin-top: 0; }
 .form-submit { width: 100%; min-height: 44px; margin-top: 5px; }
 .signout-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 .form-footnote { margin: 13px 0 0; color: #898f87; font-size: 9px; line-height: 1.55; }
+.password-reset-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--paper); }
+.password-reset-card { width: min(100%, 460px); padding: 38px; border: 1px solid #dce4d9; background: #fff; box-shadow: 0 12px 42px #10251b12; }
+.password-reset-card h1 { margin: 9px 0 5px; font-family: var(--font-display), Georgia, serif; font-size: 32px; font-weight: 500; line-height: 1.1; }
+.password-reset-error, .password-reset-message { color: #9c3b34; font-size: 12px; line-height: 1.6; }
+.password-reset-message { color: #456b4c; }
+.password-reset-link { display: flex; align-items: center; justify-content: center; margin-top: 18px; text-decoration: none; }
 .submission-list > .submission-item { padding: 15px 0; border-bottom: 1px solid #c6cec3; }
 .submission-list > .submission-item:first-child { padding-top: 0; }
 .submission-list > .submission-item:last-of-type { border-bottom: 0; padding-bottom: 0; }

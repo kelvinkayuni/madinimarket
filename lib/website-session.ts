@@ -29,9 +29,9 @@ export async function verifyWebsitePassword(password: string, storedHash: string
   return timingSafeEqual(actual, expected);
 }
 
-export function setWebsiteSession(response: NextResponse, accountId: string) {
+export function setWebsiteSession(response: NextResponse, accountId: string, sessionVersion: number) {
   const expiresAt = Date.now() + SESSION_SECONDS * 1000;
-  const payload = Buffer.from(`${accountId}:${expiresAt}`).toString("base64url");
+  const payload = Buffer.from(`${accountId}:${sessionVersion}:${expiresAt}`).toString("base64url");
   const signature = createHmac("sha256", signingKey()).update(payload).digest("base64url");
   response.cookies.set(COOKIE_NAME, `${payload}.${signature}`, {
     httpOnly: true,
@@ -63,16 +63,18 @@ export async function getWebsiteAccountId() {
   } catch {
     return null;
   }
-  const separator = decoded.lastIndexOf(":");
-  const accountId = decoded.slice(0, separator);
-  const expiresAt = Number(decoded.slice(separator + 1));
-  if (separator < 1 || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
+  const parts = decoded.split(":");
+  const accountId = parts[0];
+  if (parts.length !== 2 && parts.length !== 3) return null;
+  const sessionVersion = parts.length === 2 ? 0 : Number(parts[1]);
+  const expiresAt = Number(parts.length === 2 ? parts[1] : parts[2]);
+  if (!accountId || !Number.isSafeInteger(sessionVersion) || sessionVersion < 0 || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
   try {
     const { data } = await createSupabaseAdminClient().from("website_accounts")
-      .select("is_active")
+      .select("is_active, session_version")
       .eq("id", accountId)
       .maybeSingle();
-    return data?.is_active ? accountId : null;
+    return data?.is_active && data.session_version === sessionVersion ? accountId : null;
   } catch {
     return null;
   }

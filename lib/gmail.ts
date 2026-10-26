@@ -45,5 +45,6 @@ export async function sendGmailEmail({
   html?: string;
 }) {
   const { user } = getGmailConfig();
-  return createTransporter().sendMail({ from: user, to, subject, text, html });
+  const from = process.env.GMAIL_FROM?.trim() || user;
+  return createTransporter().sendMail({ from, to, subject, text, html });
 }
