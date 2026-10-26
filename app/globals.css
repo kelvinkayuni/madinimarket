@@ -394,10 +394,9 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-name-row h3 { margin: 0; overflow: hidden; font-family: var(--font-display), Georgia, serif; font-size: 17px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .weight-tag { flex-shrink: 0; padding: 4px 6px; background: #f0f3ed; color: #667469; font-size: 9px; }
 .seller-price { margin-top: 6px; color: #395c46; font-size: 13px; font-weight: 700; }
-.seller-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #edf0ea; color: #858d83; font-size: 9px; }
+.seller-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #edf0ea; color: #858d83; font-size: 9px; }
 .seller-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.seller-certificate-row { display: flex; min-height: 12px; justify-content: flex-end; margin-top: 8px; font-size: 9px; }
-.seller-certificate-link { color: #395c46; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
+.seller-certificate-link { flex-shrink: 0; color: #395c46; font-size: 9px; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 .add-to-cart-button { width: 100%; min-height: 34px; margin-top: 10px; font-size: 10px; }
 .cart-count { min-width: 19px; height: 19px; display: inline-grid; place-items: center; margin-left: auto; border-radius: 50%; background: #e6eddf; color: #355443; font-size: 9px; }
 .commerce-panel { display: grid; gap: 21px; }
