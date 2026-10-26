@@ -34,7 +34,14 @@ export async function POST(request: Request) {
 
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    const resetUrl = new URL("/reset-password", process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.madinimarket.co.tz");
+    const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+    const resetBaseUrl = configuredAppUrl ? new URL(configuredAppUrl) : new URL("https://www.madinimarket.co.tz");
+    if (["localhost", "127.0.0.1", "[::1]"].includes(resetBaseUrl.hostname)) {
+      resetBaseUrl.hostname = "www.madinimarket.co.tz";
+      resetBaseUrl.protocol = "https:";
+      resetBaseUrl.port = "";
+    }
+    const resetUrl = new URL("/reset-password", resetBaseUrl);
     resetUrl.searchParams.set("token", token);
     const { data: issued, error: issueError } = await admin.rpc("issue_website_password_reset", {
       p_account_id: account.id,
