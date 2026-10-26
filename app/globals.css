@@ -379,10 +379,9 @@ h1, h2, h3, p { margin-top: 0; }
 .round-control { width: 34px; height: 34px; border-radius: 50%; color: #687268; }
 .seller-rail, .buyer-rail { min-height: 104px; flex: 1; display: grid; grid-auto-columns: minmax(215px, 320px); grid-auto-flow: column; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
 .seller-rail::-webkit-scrollbar, .buyer-rail::-webkit-scrollbar { display: none; }
-.seller-card, .buyer-card { height: 313px; }
-.seller-card { height: 350px; }
-.seller-card { min-width: 0; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; }
-.seller-photo { position: relative; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
+.buyer-card { height: 313px; }
+.seller-card { display: flex; min-width: 0; height: auto; flex-direction: column; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; }
+.seller-photo { position: relative; flex: 0 0 auto; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
 .seller-photo::after { position: absolute; inset: 45% 0 0; content: ""; background: linear-gradient(transparent, #13231e55); pointer-events: none; }
 .photo-tag { position: absolute; z-index: 1; top: 10px; left: 10px; display: flex; align-items: center; gap: 6px; padding: 6px 7px; background: #ffffffed; color: #415446; font-size: 8px; font-weight: 700; }
 .photo-tag span { width: 5px; height: 5px; border-radius: 50%; background: #62a46a; }
@@ -644,7 +643,7 @@ h1, h2, h3, p { margin-top: 0; }
   .round-control { width: 29px; height: 29px; }
   .round-control svg { width: 14px; }
   .seller-rail, .buyer-rail { grid-auto-columns: minmax(224px, 78%); gap: 10px; }
-  .seller-card, .buyer-card { height: clamp(250px, calc(48.75vw + 96px), 413px); }
+  .buyer-card { height: clamp(250px, calc(48.75vw + 96px), 413px); }
   .seller-photo { aspect-ratio: 1.6; }
   .buyer-section { margin: 9px -14px 0; padding: 20px 14px 18px; }
   .buyer-card { padding: 14px; }
