@@ -553,6 +553,10 @@ export default function Marketplace() {
   };
 
   const openPrivateOfferForm = (request: Buyer) => {
+    if (request.user_id === userId) {
+      setNotice("You cannot send a private offer to your own buying request.");
+      return;
+    }
     if (role !== "user") {
       setNotice("Sign in to send a private offer through Madinimarket.");
       setDialog("signin");
@@ -563,7 +567,7 @@ export default function Marketplace() {
       void openAccountLicences();
       return;
     }
-    if (!request.offer_enabled || request.user_id === userId) return;
+    if (!request.offer_enabled) return;
     setPrivateOfferRequest(request);
     setDialog("private-offer");
   };
@@ -2696,7 +2700,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       </section>
 
       <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div>{request.offer_enabled && request.user_id !== userId && <button className="private-offer-button" type="button" onClick={() => openPrivateOfferForm(request)}>Send private offer</button>}</div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
+        {visibleBuyers.length ? <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div>{request.offer_enabled && <button className="private-offer-button" type="button" onClick={() => openPrivateOfferForm(request)}>Send private offer</button>}</div></article>)}</div> : <div className="empty-search empty-search-dark">{query ? `No requests match “${query}”.` : "No buying requests yet."}</div>}
         <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <>List a mineral <ArrowUpRight size={14} /></>}</button></div>
       </section>
         </> : <section className="market-closed-notice"><span>MARKET CLOSED</span><h2>{marketHoursError ? "Market status unavailable" : "The market is closed"}</h2><p>{marketHoursError

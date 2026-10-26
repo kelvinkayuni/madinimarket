@@ -133,6 +133,17 @@ export async function POST(request: Request) {
       const threadId = body.threadId === null || body.threadId === undefined || body.threadId === ""
         ? null
         : text(body.threadId, 36);
+      if (!Number.isSafeInteger(requestId) || requestId < 1 || (threadId !== null && !uuidPattern.test(threadId))) {
+        return NextResponse.json({ error: "Choose a valid buyer request." }, { status: 400 });
+      }
+      const { data: requestOwner, error: requestOwnerError } = await admin.from("buy_requests")
+        .select("website_user_id")
+        .eq("id", requestId)
+        .maybeSingle();
+      if (requestOwnerError) throw requestOwnerError;
+      if (requestOwner?.website_user_id === accountId) {
+        return NextResponse.json({ error: "You cannot send a private offer to your own buying request." }, { status: 403 });
+      }
       const weight = numeric(body.weight);
       const sellerAmount = numeric(body.sellerAmount);
       const smallest = body.smallestStoneWeight === "" || body.smallestStoneWeight === null || body.smallestStoneWeight === undefined
