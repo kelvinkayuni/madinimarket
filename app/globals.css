@@ -610,18 +610,20 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-account { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .prototype-bar { min-height: 31px; padding-right: 14px; padding-left: 14px; font-size: 8px; }
   .prototype-note { display: none; }
-  .site-header { height: 64px; padding-right: 14px; padding-left: 14px; gap: 8px; }
-  .header-left { gap: 8px; }
+  .site-header { height: auto; min-height: 64px; padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
+  .header-left { order: 1; gap: 8px; }
   .icon-button { width: 34px; height: 34px; }
   .wordmark { gap: 5px; font-size: 16px; }
   .wordmark-symbol svg { width: 18px; }
-  .header-search { position: absolute; top: 72px; right: 14px; width: calc(100% - 28px); height: 37px; }
+  .header-actions { order: 2; }
+  .header-search { position: static; order: 3; flex: 0 0 100%; width: 100%; height: 37px; }
   .header-search kbd { display: none; }
   .header-actions { gap: 6px; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
-  .market-intro { padding: 8px 0 16px; align-items: flex-end; }
-  .market-intro h1 { max-width: 340px; margin-top: 9px; font-size: min(var(--homepage-headline-font-size, 36px), 10vw); }
+  .market-intro { display: block; padding: 8px 0 16px; }
+  .market-intro h1 { max-width: none; margin-top: 9px; font-size: min(var(--homepage-headline-font-size, 36px), 8.8vw); white-space: nowrap; }
+  .market-status { margin-top: 10px; }
   .market-status { gap: 7px; margin-bottom: 2px; }
   .market-status strong { font-size: 9px; }
   .market-status small { font-size: 8px; white-space: nowrap; }
@@ -658,7 +660,7 @@ h1, h2, h3, p { margin-top: 0; }
   .toast { right: 12px; bottom: 12px; }
 }
 @media (max-width: 390px) {
-  .market-intro h1 { font-size: min(var(--homepage-headline-font-size, 32px), 10vw); }
+  .market-intro h1 { font-size: min(var(--homepage-headline-font-size, 32px), 8.8vw); }
   .market-status { align-items: flex-start; }
   .status-orbit { margin-top: 2px; }
   .eyebrow { gap: 6px; font-size: 8px; }
