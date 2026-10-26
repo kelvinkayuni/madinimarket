@@ -2811,13 +2811,18 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               const currentActive = Boolean(activeSubscription?.expires_at && Date.parse(activeSubscription.expires_at) > now);
               const hasValidScheduled = Boolean(scheduledSubscription?.expires_at && Date.parse(scheduledSubscription.expires_at) > now);
               const isCurrentPlan = (currentActive && activeSubscription?.plan_id === plan.id) || (hasValidScheduled && scheduledSubscription?.plan_id === plan.id);
-              const planLocked = Boolean(pendingUserSubscription) || ((currentActive || hasValidScheduled) && !isCurrentPlan);
+              const planLocked = Boolean(pendingUserSubscription) || currentActive || hasValidScheduled;
+              const planStatus = currentActive && activeSubscription?.plan_id === plan.id
+                ? "Current plan"
+                : hasValidScheduled && scheduledSubscription?.plan_id === plan.id
+                  ? "Scheduled plan"
+                  : null;
               return <article className={`user-subscription-plan${isCurrentPlan ? " is-current" : ""}`} key={plan.id}>
-                <div className="user-subscription-plan-heading"><strong>{plan.months} month{plan.months === 1 ? "" : "s"}</strong>{isCurrentPlan && <span>{currentActive ? "Current plan" : "Scheduled plan"}</span>}</div>
+                <div className="user-subscription-plan-heading"><strong>{plan.months} month{plan.months === 1 ? "" : "s"}</strong>{planStatus && <span>{planStatus}</span>}</div>
                 <div className="user-subscription-prices"><span>{money(Number(plan.price_tzs).toFixed(0), "TZS")}</span><span>${Number(plan.price_usd).toFixed(2)} USD</span></div>
                 <div className="user-subscription-actions">
-                  <button className="button button-dark" type="button" disabled={planLocked || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => void requestSubscription(plan, "TZS")}>{busyActions.has(`subscription-request-${plan.id}`) ? "Requesting…" : isCurrentPlan ? "Renew with TSh" : "Choose TSh"}</button>
-                  <button className="button button-outline" type="button" disabled={planLocked || !usdEnabled || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => void requestSubscription(plan, "USD")}>{!usdEnabled ? "USD unavailable" : isCurrentPlan ? "Renew with USD" : "Choose USD"}</button>
+                  <button className="button button-dark" type="button" disabled={planLocked || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => void requestSubscription(plan, "TZS")}>{busyActions.has(`subscription-request-${plan.id}`) ? "Requesting…" : planStatus ?? "Choose TSh"}</button>
+                  <button className="button button-outline" type="button" disabled={planLocked || !usdEnabled || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => void requestSubscription(plan, "USD")}>{planLocked ? planStatus ?? "Unavailable" : !usdEnabled ? "USD unavailable" : "Choose USD"}</button>
                 </div>
               </article>;
             })}

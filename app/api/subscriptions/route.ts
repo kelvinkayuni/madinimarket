@@ -76,6 +76,19 @@ export async function POST(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
+    const now = new Date().toISOString();
+    const { data: activeSubscription, error: activeSubscriptionError } = await admin.from("account_subscriptions")
+      .select("id")
+      .eq("website_user_id", accountId)
+      .eq("status", "active")
+      .gt("expires_at", now)
+      .limit(1)
+      .maybeSingle();
+    if (activeSubscriptionError) throw activeSubscriptionError;
+    if (activeSubscription) {
+      return NextResponse.json({ error: "Your subscription is active. You can choose another plan after it expires." }, { status: 409 });
+    }
+
     const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
       .select("usd_enabled").eq("id", true).single();
     if (settingsError) throw settingsError;
