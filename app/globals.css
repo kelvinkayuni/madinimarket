@@ -381,7 +381,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-rail::-webkit-scrollbar, .buyer-rail::-webkit-scrollbar { display: none; }
 .seller-card, .buyer-card { height: 313px; }
 .seller-card { height: 350px; }
-.seller-card { min-width: 0; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; animation: rise-in .45s both; }
+.seller-card { min-width: 0; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; }
 .seller-photo { position: relative; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
 .seller-photo::after { position: absolute; inset: 45% 0 0; content: ""; background: linear-gradient(transparent, #13231e55); pointer-events: none; }
 .photo-tag { position: absolute; z-index: 1; top: 10px; left: 10px; display: flex; align-items: center; gap: 6px; padding: 6px 7px; background: #ffffffed; color: #415446; font-size: 8px; font-weight: 700; }
