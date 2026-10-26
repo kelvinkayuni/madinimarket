@@ -229,6 +229,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-translation-row > div span { color: #526451; }
 .admin-translation-row .button { min-height: 32px; font-size: 9px; }
 .admin-homepage-panel { padding: 25px 0 24px; border-bottom: 1px solid var(--line); }
+.admin-homepage-font-size { display: flex; align-items: end; gap: 12px; margin: 20px 0 24px; padding: 14px; border: 1px solid #e1e5dd; background: #fff; }
+.admin-homepage-font-size label { width: min(100%, 240px); }
+.admin-homepage-font-size .button { min-height: 40px; }
+.admin-homepage-font-size > span { align-self: center; color: #778075; font-size: 9px; line-height: 1.5; }
 .admin-homepage-headline-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
 .admin-homepage-headline-form > .button { min-height: 40px; }
 .admin-homepage-headline-list { margin-top: 18px; border-top: 1px solid #e1e5dd; }
@@ -346,7 +350,7 @@ button.admin-account-status.is-license-unavailable { border: 0; background: #ece
 .eyebrow-line { width: 20px; height: 1px; background: var(--red); }
 .eyebrow-year { margin-left: 3px; color: #a1a79e; font-size: 8px; }
 h1, h2, h3, p { margin-top: 0; }
-.market-intro h1 { margin: 10px 0 4px; font-family: var(--font-display), Georgia, serif; font-size: clamp(35px, 3.8vw, 49px); line-height: 1.05; font-weight: 500; }
+.market-intro h1 { margin: 10px 0 4px; font-family: var(--font-display), Georgia, serif; font-size: var(--homepage-headline-font-size, 49px); line-height: 1.05; font-weight: 500; }
 .market-intro h1 em { color: #55755e; font-weight: 500; }
 .market-status { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .market-status strong, .market-status small { display: block; }
@@ -574,6 +578,8 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-market-time-fields { grid-template-columns: 1fr; }
   .admin-translation-form { grid-template-columns: 1fr; }
   .admin-homepage-headline-form { grid-template-columns: 1fr; }
+  .admin-homepage-font-size { align-items: flex-start; flex-direction: column; }
+  .admin-homepage-font-size label { width: 100%; }
   .admin-subscription-plan-form { grid-template-columns: 1fr; }
   .admin-subscription-plan-actions { grid-column: auto; }
   .admin-ledger-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
@@ -615,7 +621,7 @@ h1, h2, h3, p { margin-top: 0; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
   .market-intro { min-height: 172px; padding: 62px 0 22px; align-items: flex-end; }
-  .market-intro h1 { max-width: 340px; margin-top: 9px; font-size: 36px; }
+  .market-intro h1 { max-width: 340px; margin-top: 9px; font-size: min(var(--homepage-headline-font-size, 36px), 10vw); }
   .market-status { gap: 7px; margin-bottom: 2px; }
   .market-status strong { font-size: 9px; }
   .market-status small { font-size: 8px; white-space: nowrap; }
@@ -652,7 +658,7 @@ h1, h2, h3, p { margin-top: 0; }
   .toast { right: 12px; bottom: 12px; }
 }
 @media (max-width: 390px) {
-  .market-intro h1 { font-size: 32px; }
+  .market-intro h1 { font-size: min(var(--homepage-headline-font-size, 32px), 10vw); }
   .market-status { align-items: flex-start; }
   .status-orbit { margin-top: 2px; }
   .eyebrow { gap: 6px; font-size: 8px; }

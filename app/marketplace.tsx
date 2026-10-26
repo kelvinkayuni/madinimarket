@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, FileSpreadsheet, FileText, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
-import { FormEvent, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { Session } from "@supabase/supabase-js";
 
 import AdminMarketplaceOrders from "./admin-marketplace-orders";
@@ -338,14 +338,15 @@ async function loadAdminTranslations(accessToken: string): Promise<TranslationPa
   return result.translations as TranslationPair[];
 }
 
-async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlines: HomepageHeadline[] }> {
+async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; headlines: HomepageHeadline[] }> {
   const response = await fetch("/api/admin/site-content", {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "Could not load homepage and language settings.");
-  if (typeof result.swahiliEnabled !== "boolean" || !Array.isArray(result.headlines) ||
+  if (typeof result.swahiliEnabled !== "boolean" || !Number.isInteger(result.headlineFontSize) ||
+    result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Array.isArray(result.headlines) ||
     !result.headlines.every((headline: unknown) =>
       typeof headline === "object" && headline !== null &&
       "id" in headline && typeof headline.id === "string" &&
@@ -356,6 +357,7 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
   }
   return {
     swahiliEnabled: result.swahiliEnabled,
+    headlineFontSize: result.headlineFontSize,
     headlines: result.headlines,
   };
 }
@@ -405,6 +407,8 @@ export default function Marketplace() {
   const [siteContentLoaded, setSiteContentLoaded] = useState(false);
   const [homepageHeadlines, setHomepageHeadlines] = useState<HomepageHeadline[]>([]);
   const [homepageHeadlineIndex, setHomepageHeadlineIndex] = useState(0);
+  const [homepageHeadlineFontSize, setHomepageHeadlineFontSize] = useState(49);
+  const [homepageHeadlineFontSizeInput, setHomepageHeadlineFontSizeInput] = useState("49");
   const activeHomepageHeadline = homepageHeadlines.length
     ? homepageHeadlines[homepageHeadlineIndex % homepageHeadlines.length]
     : null;
@@ -636,11 +640,14 @@ export default function Marketplace() {
       try {
         const response = await fetch("/api/site-content", { cache: "no-store" });
         const result = await response.json();
-        if (!response.ok || typeof result.swahiliEnabled !== "boolean" || !Array.isArray(result.headlines)) {
+        if (!response.ok || typeof result.swahiliEnabled !== "boolean" || !Number.isInteger(result.headlineFontSize) ||
+          result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Array.isArray(result.headlines)) {
           throw new Error(result.error ?? "Could not load homepage and language settings.");
         }
         if (!active) return;
         setSwahiliEnabled(result.swahiliEnabled);
+        setHomepageHeadlineFontSize(result.headlineFontSize);
+        setHomepageHeadlineFontSizeInput(String(result.headlineFontSize));
         setSiteContentLoaded(true);
         setHomepageHeadlines((current) => {
           const next = result.headlines as HomepageHeadline[];
@@ -907,6 +914,8 @@ export default function Marketplace() {
               setTranslationPairs(await loadAdminTranslations(session.access_token));
               const siteContent = await loadAdminSiteContent(session.access_token);
               setSwahiliEnabled(siteContent.swahiliEnabled);
+              setHomepageHeadlineFontSize(siteContent.headlineFontSize);
+              setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
               setSiteContentLoaded(true);
               setHomepageHeadlines(siteContent.headlines);
               const subscriptions = await loadAdminSubscriptions(session.access_token);
@@ -1513,8 +1522,39 @@ export default function Marketplace() {
     if (!session) throw new Error("Admin session expired.");
     const content = await loadAdminSiteContent(session.access_token);
     setSwahiliEnabled(content.swahiliEnabled);
+    setHomepageHeadlineFontSize(content.headlineFontSize);
+    setHomepageHeadlineFontSizeInput(String(content.headlineFontSize));
     setSiteContentLoaded(true);
     setHomepageHeadlines(content.headlines);
+  };
+  const saveHomepageHeadlineFontSize = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const fontSize = Number(homepageHeadlineFontSizeInput);
+    if (!Number.isInteger(fontSize) || fontSize < 24 || fontSize > 72) {
+      setNotice("Choose a headline font size between 24 and 72 pixels.");
+      return;
+    }
+    await withProgress("homepage-headline-font-size", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "PATCH",
+          headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
+          body: JSON.stringify({ headlineFontSize: fontSize }),
+        });
+        const result = await response.json();
+        if (!response.ok || !Number.isInteger(result.headlineFontSize) || result.headlineFontSize < 24 || result.headlineFontSize > 72) {
+          throw new Error(result.error ?? "Could not save the headline font size.");
+        }
+        setHomepageHeadlineFontSize(result.headlineFontSize);
+        setHomepageHeadlineFontSizeInput(String(result.headlineFontSize));
+        setNotice("Homepage headline font size saved.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save the headline font size.");
+      }
+    });
   };
   const updateSwahiliAvailability = async (enabled: boolean) => {
     await withProgress("swahili-setting", async () => {
@@ -1524,7 +1564,7 @@ export default function Marketplace() {
         if (!session) throw new Error("Admin session expired.");
         const response = await fetch("/api/admin/site-content", {
           method: "PATCH",
-          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
           body: JSON.stringify({ swahiliEnabled: enabled }),
         });
         const result = await response.json();
@@ -1557,7 +1597,7 @@ export default function Marketplace() {
         if (!session) throw new Error("Admin session expired.");
         const response = await fetch("/api/admin/site-content", {
           method: "POST",
-          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
           body: JSON.stringify(homepageHeadlineForm),
         });
         const result = await response.json();
@@ -2527,6 +2567,13 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         {activeAdminPanel === "homepage" && <section className="admin-homepage-panel" aria-labelledby="admin-homepage-headlines-heading">
           <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
           <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases rotate every minute; if all are deleted, the homepage shows no headline.</p>
+          <form className="admin-homepage-font-size" onSubmit={(event) => void saveHomepageHeadlineFontSize(event)}>
+            <label className="field-label" htmlFor="admin-homepage-headline-font-size">Headline font size (pixels)
+              <input className="text-input" id="admin-homepage-headline-font-size" type="number" min={24} max={72} step={1} required value={homepageHeadlineFontSizeInput} onChange={(event) => setHomepageHeadlineFontSizeInput(event.target.value)} />
+            </label>
+            <button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("homepage-headline-font-size") || Number(homepageHeadlineFontSizeInput) === homepageHeadlineFontSize}>{busyActions.has("homepage-headline-font-size") ? "Saving…" : "Save font size"}</button>
+            <span>Choose from 24–72 px. On narrow screens, the headline scales down to fit.</span>
+          </form>
           <form className="admin-homepage-headline-form" onSubmit={(event) => void saveHomepageHeadline(event)}>
             <label className="field-label">Regular phrase<input className="text-input" value={homepageHeadlineForm.mainPhrase} maxLength={120} placeholder="Find your next" onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, mainPhrase: event.target.value }))} /></label>
             <label className="field-label">Highlighted phrase<input className="text-input" value={homepageHeadlineForm.accentPhrase} maxLength={120} placeholder="good stone." onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, accentPhrase: event.target.value }))} /></label>
@@ -2629,7 +2676,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     </header>
 
     <div className="market-content" id="top">
-      <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div>{activeHomepageHeadline && <h1><span>{activeHomepageHeadline.main_phrase}</span>{activeHomepageHeadline.main_phrase && activeHomepageHeadline.accent_phrase ? " " : ""}<em>{activeHomepageHeadline.accent_phrase}</em></h1>}</div><div className={`market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`}><div className="status-orbit"><span /></div><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "Tanzania time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} Tanzania time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time` : "No upcoming opening is scheduled."}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
+      <section className="market-intro"><div><div className="eyebrow"><span className="eyebrow-line" /> TANZANIA & BEYOND <span className="eyebrow-year">EST. 2025</span></div>{activeHomepageHeadline && <h1 style={{ "--homepage-headline-font-size": `${homepageHeadlineFontSize}px` } as CSSProperties & { "--homepage-headline-font-size": string }}><span>{activeHomepageHeadline.main_phrase}</span>{activeHomepageHeadline.main_phrase && activeHomepageHeadline.accent_phrase ? " " : ""}<em>{activeHomepageHeadline.accent_phrase}</em></h1>}</div><div className={`market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`}><div className="status-orbit"><span /></div><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "Tanzania time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} Tanzania time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time` : "No upcoming opening is scheduled."}</small></div><RefreshCw size={14} className="refresh-icon" /></div></section>
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>

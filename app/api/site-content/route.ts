@@ -6,13 +6,14 @@ export async function GET() {
   try {
     const admin = createSupabaseAdminClient();
     const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled").eq("id", true).single(),
+      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size").eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsError) throw settingsError;
     if (headlinesError) throw headlinesError;
     return NextResponse.json({
       swahiliEnabled: settings.swahili_enabled,
+      headlineFontSize: settings.homepage_headline_font_size,
       headlines: headlines ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {

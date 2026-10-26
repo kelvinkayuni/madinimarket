@@ -37,13 +37,14 @@ export async function GET(request: Request) {
 
     const admin = createSupabaseAdminClient();
     const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled").eq("id", true).single(),
+      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size").eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsError) throw settingsError;
     if (headlinesError) throw headlinesError;
     return NextResponse.json({
       swahiliEnabled: settings.swahili_enabled,
+      headlineFontSize: settings.homepage_headline_font_size,
       headlines: headlines ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {
@@ -56,17 +57,29 @@ export async function PATCH(request: Request) {
     const authorized = await getAdminClient(request);
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const values = await readBody(request);
-    if (!values || typeof values.swahiliEnabled !== "boolean") {
-      return NextResponse.json({ error: "Choose whether visitors can switch to Swahili." }, { status: 400 });
+    if (typeof values?.swahiliEnabled === "boolean") {
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ swahili_enabled: values.swahiliEnabled })
+        .eq("id", true)
+        .select("swahili_enabled")
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ swahiliEnabled: data.swahili_enabled }, { headers: { "Cache-Control": "no-store" } });
     }
-
-    const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
-      .update({ swahili_enabled: values.swahiliEnabled })
-      .eq("id", true)
-      .select("swahili_enabled")
-      .single();
-    if (error) throw error;
-    return NextResponse.json({ swahiliEnabled: data.swahili_enabled }, { headers: { "Cache-Control": "no-store" } });
+    if (values &&
+      Number.isInteger(values.headlineFontSize) &&
+      typeof values.headlineFontSize === "number" &&
+      values.headlineFontSize >= 24 &&
+      values.headlineFontSize <= 72) {
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ homepage_headline_font_size: values.headlineFontSize })
+        .eq("id", true)
+        .select("homepage_headline_font_size")
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ headlineFontSize: data.homepage_headline_font_size }, { headers: { "Cache-Control": "no-store" } });
+    }
+    return NextResponse.json({ error: "Choose a font size between 24 and 72 pixels." }, { status: 400 });
   } catch {
     return NextResponse.json({ error: "Could not update the language setting." }, { status: 503 });
   }

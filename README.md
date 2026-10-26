@@ -26,7 +26,7 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 7. Run `supabase/subscription-control.sql` to add account subscription plans and marketplace visibility controls.
 8. Run `supabase/certificate-verification.sql`.
 9. Run `supabase/translation-dictionary.sql`.
-10. Run `supabase/homepage-content-settings.sql` to allow admin control of the Swahili switch and rotating homepage phrases.
+10. Run `supabase/homepage-content-settings.sql` to allow admin control of the Swahili switch, rotating homepage phrases, and headline font size. Re-run this idempotent script when applying updates to an existing installation.
 11. Run `supabase/market-hours.sql` after the other scripts so public listing and request views enforce the weekly market schedule.
 12. Run `supabase/live-refresh.sql` to enable Realtime change notifications for public listing and buyer-request updates.
 13. Run `supabase/marketplace-orders.sql` to add the mineral cart, purchase orders, availability/payment/shipping workflows, and payout records.
@@ -38,7 +38,7 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 
 The admin currency switch controls whether new seller listings and buyer requests can use USD. The database keeps existing USD records unchanged and rejects new or currency-edited USD records while USD is disabled. The admin listing fee setting applies to new mineral listings; each listing keeps its saved fee rate and price when the setting changes. The admin market-hours schedule repeats weekly in Tanzania time; its default keeps the market open until an admin saves a schedule. When closed, public listing and buyer-request views return no records.
 
-The admin English–Swahili panel controls whether visitors can switch to Swahili. Homepage headline phrases have their own admin panel; enter regular and highlighted parts separately. Saved phrases rotate every minute and are hidden when none are saved.
+The admin English–Swahili panel controls whether visitors can switch to Swahili. Homepage headline phrases have their own admin panel; enter regular and highlighted parts separately, then set the headline size from 24 to 72 pixels. Saved phrases rotate every minute and are hidden when none are saved; the font size scales down on narrow screens.
 
 Open marketplace pages refresh when they become visible or reconnect, poll for changes as a fallback, and use Supabase Realtime notifications to refresh listings and buyer requests. Private settings and administrator data continue to refresh through authenticated API polling. A version notice appears when a newer deployment is detected; users can reload when ready so an open form is not lost.
 

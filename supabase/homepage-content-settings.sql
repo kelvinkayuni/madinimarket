@@ -1,5 +1,7 @@
 alter table public.marketplace_settings
-  add column if not exists swahili_enabled boolean not null default true;
+  add column if not exists swahili_enabled boolean not null default true,
+  add column if not exists homepage_headline_font_size integer not null default 49
+    check (homepage_headline_font_size between 24 and 72);
 
 create table if not exists public.homepage_headlines (
   id uuid primary key default gen_random_uuid(),
