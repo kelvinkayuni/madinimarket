@@ -398,7 +398,6 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seller-certificate-row { display: flex; min-height: 12px; justify-content: flex-end; margin-top: 8px; font-size: 9px; }
 .seller-certificate-link { color: #395c46; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
-.seller-certificate-empty { color: #858d83; }
 .add-to-cart-button { width: 100%; min-height: 34px; margin-top: 10px; font-size: 10px; }
 .cart-count { min-width: 19px; height: 19px; display: inline-grid; place-items: center; margin-left: auto; border-radius: 50%; background: #e6eddf; color: #355443; font-size: 9px; }
 .commerce-panel { display: grid; gap: 21px; }
