@@ -10,10 +10,20 @@ export async function GET(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
-    const { data: listing, error: listingError } = await admin
+    const { data: visibleListing, error: visibleListingError } = await admin
       .from("market_listing_feed")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+    if (visibleListingError) throw visibleListingError;
+    if (!visibleListing) return NextResponse.json({ error: "This listing is not available." }, { status: 404 });
+
+    const { data: listing, error: listingError } = await admin
+      .from("listings")
       .select("stone_certificate_path")
       .eq("id", id)
+      .eq("status", "approved")
+      .eq("is_active", true)
       .maybeSingle();
     if (listingError) throw listingError;
     if (!listing) return NextResponse.json({ error: "This listing is not available." }, { status: 404 });
