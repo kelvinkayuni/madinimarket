@@ -76,6 +76,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-payment-method-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 10px; padding: 12px; border: 1px solid #e1e5dd; background: #fff; }
 .admin-payment-method-row .field-label { min-width: 0; }
 .admin-payment-method-row .button { min-height: 40px; }
+.admin-payment-method-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .admin-payment-method-preview { display: grid; gap: 4px; padding: 9px 0; }
 .admin-payment-method-preview + .admin-payment-method-preview { border-top: 1px solid #e1e5dd; }
 .admin-payment-method-preview > span { overflow-wrap: anywhere; }

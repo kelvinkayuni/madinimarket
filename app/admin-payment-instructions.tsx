@@ -12,6 +12,7 @@ type PaymentInstructionsSettings = {
 };
 
 type PaymentMethod = { method: string; accountNumber: string };
+type DraftPaymentMethod = PaymentMethod & { prepared: boolean };
 
 function isSettings(value: unknown): value is PaymentInstructionsSettings {
   if (typeof value !== "object" || value === null) return false;
@@ -35,7 +36,7 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
     updatedAt: null,
     awaitingPaymentOrderCount: 0,
   });
-  const [draftMethods, setDraftMethods] = useState<PaymentMethod[]>([]);
+  const [draftMethods, setDraftMethods] = useState<DraftPaymentMethod[]>([]);
   const [draft, setDraft] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -55,7 +56,7 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
     if (!response.ok) throw new Error(result.error ?? "Could not load payment instructions.");
     if (!isSettings(result)) throw new Error("Saved payment instructions are invalid.");
     setSavedSettings(result);
-    setDraftMethods(result.paymentMethods);
+    setDraftMethods(result.paymentMethods.map((method) => ({ ...method, prepared: true })));
     setDraft(result.instructions);
     setLoaded(true);
   }, []);
@@ -86,6 +87,10 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
       onNotice("Add no more than 10 payment methods.");
       return;
     }
+    if (draftMethods.some(({ prepared }) => !prepared)) {
+      onNotice("Save each payment method to the draft before saving payment instructions.");
+      return;
+    }
     if (draftMethods.some(({ method, accountNumber }) =>
       !method.trim() || method.trim().length > 80 || !accountNumber.trim() || accountNumber.trim().length > 200)) {
       onNotice("Complete every payment method and account number, or remove the empty row.");
@@ -104,7 +109,11 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
             Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ paymentMethods: draftMethods, instructions: draft, confirmUpdateExisting }),
+          body: JSON.stringify({
+            paymentMethods: draftMethods.map(({ method, accountNumber }) => ({ method, accountNumber })),
+            instructions: draft,
+            confirmUpdateExisting,
+          }),
         });
         const result: unknown = await response.json();
         if (response.status === 409 && typeof result === "object" && result !== null &&
@@ -144,7 +153,7 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
         awaitingPaymentOrderCount: result.affectedOrders,
       };
       setSavedSettings(next);
-      setDraftMethods(next.paymentMethods);
+      setDraftMethods(next.paymentMethods.map((method) => ({ ...method, prepared: true })));
       setDraft(next.instructions);
       onNotice(`Payment instructions saved. They now apply to ${result.affectedOrders} order${result.affectedOrders === 1 ? "" : "s"} awaiting payment.`);
     } catch (error) {
@@ -155,7 +164,8 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
   };
 
   const changed = draft !== savedSettings.instructions ||
-    JSON.stringify(draftMethods) !== JSON.stringify(savedSettings.paymentMethods);
+    JSON.stringify(draftMethods.map(({ method, accountNumber }) => ({ method, accountNumber }))) !==
+      JSON.stringify(savedSettings.paymentMethods);
 
   return <section className="admin-listing-fee-panel" aria-labelledby="admin-payment-instructions-heading">
     <div className="admin-page-heading">
@@ -164,28 +174,38 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
     </div>
     <div className="admin-listing-fee-editor admin-payment-instructions-editor">
       <div className="admin-payment-methods-heading">
-        <div><strong>Payment methods and accounts</strong><small>Each method is saved with its matching account number and reused for all orders. Save all changes to publish your methods and general note.</small></div>
-        <button className="button button-dark" type="button" disabled={!loaded || busy || !changed} onClick={() => void save()}>
-          {busy ? "Saving…" : "Save all changes"}
-        </button>
+        <div><strong>Payment methods and accounts</strong><small>Save each method to keep it in this draft. It will not be sent to Supabase until you click “Save payment instructions” below.</small></div>
         <button className="button button-outline" type="button" disabled={!loaded || busy || draftMethods.length >= 10}
-          onClick={() => setDraftMethods((current) => [...current, { method: "", accountNumber: "" }])}>Add method</button>
+          onClick={() => setDraftMethods((current) => [...current, { method: "", accountNumber: "", prepared: false }])}>Add method</button>
       </div>
       {draftMethods.map((paymentMethod, index) => <div className="admin-payment-method-row" key={`payment-method-${index}`}>
         <label className="field-label">Payment method
           <input className="text-input" value={paymentMethod.method} maxLength={80} disabled={!loaded || busy}
             placeholder="For example, mobile money or bank transfer"
             onChange={(event) => setDraftMethods((current) => current.map((item, itemIndex) =>
-              itemIndex === index ? { ...item, method: event.target.value } : item))} />
+              itemIndex === index ? { ...item, method: event.target.value, prepared: false } : item))} />
         </label>
         <label className="field-label">Account number / payment number
           <input className="text-input" value={paymentMethod.accountNumber} maxLength={200} disabled={!loaded || busy}
             onChange={(event) => setDraftMethods((current) => current.map((item, itemIndex) =>
-              itemIndex === index ? { ...item, accountNumber: event.target.value } : item))} />
+              itemIndex === index ? { ...item, accountNumber: event.target.value, prepared: false } : item))} />
         </label>
-        <button className="button button-outline" type="button" disabled={!loaded || busy}
-          aria-label={`Remove payment method ${index + 1}`}
-          onClick={() => setDraftMethods((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+        <div className="admin-payment-method-actions">
+          <button className="button button-dark" type="button" disabled={!loaded || busy || paymentMethod.prepared}
+            onClick={() => {
+              const method = paymentMethod.method.trim();
+              const accountNumber = paymentMethod.accountNumber.trim();
+              if (!method || method.length > 80 || !accountNumber || accountNumber.length > 200) {
+                onNotice("Enter a payment method (up to 80 characters) and account number (up to 200 characters).");
+                return;
+              }
+              setDraftMethods((current) => current.map((item, itemIndex) =>
+                itemIndex === index ? { ...item, method, accountNumber, prepared: true } : item));
+            }}>{paymentMethod.prepared ? "Saved in draft" : "Save method"}</button>
+          <button className="button button-outline" type="button" disabled={!loaded || busy}
+            aria-label={`Remove payment method ${index + 1}`}
+            onClick={() => setDraftMethods((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+        </div>
       </div>)}
       {!draftMethods.length && <p>No payment methods added. Buyers will not be able to submit payment proof.</p>}
       <label className="field-label" htmlFor="marketplace-payment-instructions">General instructions for buyers</label>
@@ -200,7 +220,7 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
         </button>
         <button className="button button-outline" type="button" disabled={!loaded || busy || !changed}
           onClick={() => {
-            setDraftMethods(savedSettings.paymentMethods);
+            setDraftMethods(savedSettings.paymentMethods.map((method) => ({ ...method, prepared: true })));
             setDraft(savedSettings.instructions);
           }}>Cancel</button>
       </div>
