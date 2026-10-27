@@ -54,6 +54,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-listing-fee-editor > .field-label { margin: 0; color: #354b39; font-size: 12px; }
 .admin-listing-fee-input { position: relative; max-width: 260px; }
 .admin-listing-fee-input input { padding-right: 36px; }
+.admin-order-duration-input input { padding-right: 54px; }
 .admin-listing-fee-input > span { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); color: #778075; font-size: 12px; pointer-events: none; }
 .admin-listing-fee-editor > p { margin: 0; color: #778075; font-size: 10px; line-height: 1.5; }
 .admin-listing-fee-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }

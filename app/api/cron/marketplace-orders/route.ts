@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     emailFailures += availabilityNotifications.emailFailures;
 
     const { data: expiredAvailabilityItems, error: expiredAvailabilityError } = await admin.from("marketplace_order_items")
-      .select("id, seller_email, mineral_name, order:marketplace_orders!inner(control_number)")
+      .select("id, seller_email, mineral_name, order:marketplace_orders!inner(control_number, seller_response_deadline)")
       .eq("status", "unavailable")
       .not("availability_expired_at", "is", null)
       .is("seller_availability_timeout_email_sent_at", null)
@@ -38,11 +38,14 @@ export async function GET(request: Request) {
     if (expiredAvailabilityError) throw expiredAvailabilityError;
     for (const item of expiredAvailabilityItems ?? []) {
       const order = Array.isArray(item.order) ? item.order[0] : item.order;
+      const responseDeadline = order.seller_response_deadline
+        ? new Date(order.seller_response_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })
+        : "the seller response deadline";
       try {
         await sendGmailEmail({
           to: item.seller_email,
           subject: `Mineral hidden after no availability response for order ${order.control_number}`,
-          text: `The six-hour availability response period ended for ${item.mineral_name} in order ${order.control_number}. This mineral has been hidden from the public market. If you confirm that it is in stock, sign in to My orders and choose Confirm stock and relist.\n\nMadinimarket`,
+          text: `The availability response deadline (${responseDeadline} Tanzania time) passed for ${item.mineral_name} in order ${order.control_number}. This mineral has been hidden from the public market. If you confirm that it is in stock, sign in to My orders and choose Confirm stock and relist.\n\nMadinimarket`,
         });
         const { error } = await admin.from("marketplace_order_items")
           .update({ seller_availability_timeout_email_sent_at: new Date().toISOString() })
@@ -57,15 +60,18 @@ export async function GET(request: Request) {
     }
 
     const { data: paymentReadyOrders, error: paymentReadyError } = await admin.from("marketplace_orders")
-      .select("id, control_number, buyer_email, buyer_name")
+      .select("id, control_number, buyer_email, buyer_name, payment_deadline")
       .eq("payment_status", "awaiting_payment").is("payment_ready_email_sent_at", null).limit(5);
     if (paymentReadyError) throw paymentReadyError;
     for (const order of paymentReadyOrders ?? []) {
       try {
+        const paymentDeadline = order.payment_deadline
+          ? new Date(order.payment_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })
+          : "the deadline shown in My orders";
         await sendGmailEmail({
           to: order.buyer_email,
           subject: `Your order ${order.control_number} is ready for payment`,
-          text: `Hello ${order.buyer_name},\n\nSeller responses are complete for order ${order.control_number}. Unavailable items have been removed. Sign in to My orders and submit your payment reference within 2 hours.\n\nMadinimarket`,
+          text: `Hello ${order.buyer_name},\n\nSeller responses are complete for order ${order.control_number}. Unavailable items have been removed. Sign in to My orders and submit your payment reference by ${paymentDeadline} Tanzania time.\n\nMadinimarket`,
         });
         const { error } = await admin.from("marketplace_orders")
           .update({ payment_ready_email_sent_at: new Date().toISOString() }).eq("id", order.id).is("payment_ready_email_sent_at", null);

@@ -13,7 +13,7 @@ type AvailabilityItem = {
   unit: string;
   total_price: number | string;
   currency: string;
-  order: { control_number: string } | { control_number: string }[] | null;
+  order: { control_number: string; seller_response_deadline: string } | { control_number: string; seller_response_deadline: string }[] | null;
 };
 
 function getSellerSignInUrl() {
@@ -41,7 +41,7 @@ export async function sendPendingSellerAvailabilityEmails(orderId?: string) {
   const signInUrl = getSellerSignInUrl();
 
   let itemsQuery = admin.from("marketplace_order_items")
-    .select("id, order_id, seller_id, seller_email, mineral_name, weight, unit, total_price, currency, order:marketplace_orders!inner(control_number)")
+    .select("id, order_id, seller_id, seller_email, mineral_name, weight, unit, total_price, currency, order:marketplace_orders!inner(control_number, seller_response_deadline)")
     .eq("status", "awaiting_seller")
     .is("availability_email_sent_at", null)
     .or(`availability_email_claimed_at.is.null,availability_email_claimed_at.lt.${reclaimBefore}`)
@@ -81,6 +81,9 @@ export async function sendPendingSellerAvailabilityEmails(orderId?: string) {
 
     const firstItem = claimedSellerItems[0];
     const order = Array.isArray(firstItem.order) ? firstItem.order[0] : firstItem.order;
+    const responseDeadline = order?.seller_response_deadline
+      ? new Date(order.seller_response_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })
+      : "the deadline shown in My orders";
     const orderItemsText = claimedSellerItems.map((item) =>
       `- ${item.mineral_name}: ${item.weight} ${item.unit} - ${item.currency} ${Number(item.total_price).toLocaleString()}`,
     ).join("\n");
@@ -93,8 +96,8 @@ export async function sendPendingSellerAvailabilityEmails(orderId?: string) {
       await sendGmailEmail({
         to: firstItem.seller_email,
         subject: `Please confirm availability for order ${order?.control_number ?? ""}`,
-        text: `Please sign in to confirm the availability of the following mineral${claimedSellerItems.length === 1 ? "" : "s"} within 6 hours.\n\nOrder: ${order?.control_number ?? "New order"}\n${orderItemsText}\n\nSign in to Madinimarket: ${signInUrl}\n\nAfter signing in, your Orders dashboard will open to the seller requests.`,
-        html: `<p>Please sign in to confirm the availability of the following mineral${claimedSellerItems.length === 1 ? "" : "s"} within 6 hours.</p><p><strong>Order:</strong> ${escapeHtml(order?.control_number ?? "New order")}</p><ul>${orderItemsHtml}</ul><p><a href="${escapeHtml(signInUrl)}">Sign in to Madinimarket and open your Orders dashboard</a></p>`,
+        text: `Please sign in to confirm the availability of the following mineral${claimedSellerItems.length === 1 ? "" : "s"} by ${responseDeadline} Tanzania time.\n\nOrder: ${order?.control_number ?? "New order"}\n${orderItemsText}\n\nSign in to Madinimarket: ${signInUrl}\n\nAfter signing in, your Orders dashboard will open to the seller requests.`,
+        html: `<p>Please sign in to confirm the availability of the following mineral${claimedSellerItems.length === 1 ? "" : "s"} by ${escapeHtml(responseDeadline)} Tanzania time.</p><p><strong>Order:</strong> ${escapeHtml(order?.control_number ?? "New order")}</p><ul>${orderItemsHtml}</ul><p><a href="${escapeHtml(signInUrl)}">Sign in to Madinimarket and open your Orders dashboard</a></p>`,
       });
 
       const { error: sentUpdateError } = await admin.from("marketplace_order_items")

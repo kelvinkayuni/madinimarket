@@ -247,7 +247,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       if (!response.ok) throw new Error(result.error ?? "The private offer action could not be completed.");
       await refresh();
       if (values.action === "checkout_offer" && result.order?.control_number) {
-        onNotice(`Private order ${result.order.control_number} confirmed. The seller has 6 hours to respond.`);
+        onNotice(`Private order ${result.order.control_number} confirmed. The seller response deadline is shown in My orders.`);
       } else if (values.action === "decide_offer") {
         onNotice(values.agree ? "Offer accepted. The seller will confirm the mineral details." : "Offer declined. The seller may send a revised offer if attempts remain.");
       } else if (values.action === "confirm_offer") {
@@ -356,7 +356,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
                 });
               }}>
                 <h4>Confirm mineral and delivery details</h4>
-                <p className="commerce-note">The total price is locked. Confirm this private mineral to create a standard order and start the six-hour availability response period.</p>
+                <p className="commerce-note">The total price is locked. Confirm this private mineral to create a standard order. The seller response deadline is set by the marketplace administrator.</p>
                 <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
                 <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
                 <div className="field-row">
