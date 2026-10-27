@@ -1,3 +1,5 @@
+import { normalizeTranslationPhrase } from "@/lib/translation-phrase-normalization";
+
 export type TranslationPair = {
   id: string;
   english_phrase: string;
@@ -10,10 +12,6 @@ const originalText = new WeakMap<Text, string>();
 const renderedText = new WeakMap<Text, string>();
 const originalPlaceholder = new WeakMap<Element, string>();
 const renderedPlaceholder = new WeakMap<Element, string>();
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 function preserveCase(source: string, translation: string) {
   if (source === source.toUpperCase()) return translation.toUpperCase();
@@ -29,15 +27,17 @@ function preserveCase(source: string, translation: string) {
 }
 
 function createTranslator(pairs: TranslationPair[]) {
-  const ordered = [...pairs].sort((left, right) => right.english_phrase.length - left.english_phrase.length);
-  if (!ordered.length) return (value: string) => value;
-  const replacements = new Map(ordered.map((pair) => [pair.english_phrase.toLowerCase().replace(/\s+/g, " "), pair.swahili_phrase]));
-  const alternatives = ordered.map((pair) => escapeRegExp(pair.english_phrase).replace(/\s+/g, "\\s+")).join("|");
-  const matcher = new RegExp(`(^|[^\\p{L}\\p{N}_])(${alternatives})(?=$|[^\\p{L}\\p{N}_])`, "giu");
-  return (value: string) => value.replace(matcher, (match, prefix: string, phrase: string) => {
-    const translation = replacements.get(phrase.toLowerCase().replace(/\s+/g, " "));
-    return `${prefix}${translation ? preserveCase(phrase, translation) : phrase}`;
-  });
+  const replacements = new Map(pairs.map((pair) => [
+    normalizeTranslationPhrase(pair.english_phrase),
+    pair.swahili_phrase,
+  ]));
+  return (value: string) => {
+    const phrase = value.trim();
+    const translation = replacements.get(normalizeTranslationPhrase(phrase));
+    if (!translation) return value;
+    const start = value.indexOf(phrase);
+    return `${value.slice(0, start)}${preserveCase(phrase, translation)}${value.slice(start + phrase.length)}`;
+  };
 }
 
 export function translateText(value: string, pairs: TranslationPair[]) {

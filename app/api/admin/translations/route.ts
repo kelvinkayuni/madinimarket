@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getAdminClient } from "@/lib/admin-auth";
+import { publicTranslationPhrases } from "@/lib/public-translation-catalog";
+import { normalizeTranslationPhrase } from "@/lib/translation-phrase-normalization";
+
+const publicPhraseCatalog = new Set(publicTranslationPhrases.map(normalizeTranslationPhrase));
 
 function parsePair(values: Record<string, unknown>) {
-  const englishPhrase = typeof values.english_phrase === "string" ? values.english_phrase.trim() : "";
+  const englishPhrase = typeof values.english_phrase === "string"
+    ? values.english_phrase.trim().replace(/\s+/g, " ")
+    : "";
   const swahiliPhrase = typeof values.swahili_phrase === "string" ? values.swahili_phrase.trim() : "";
   if (!englishPhrase || !swahiliPhrase || englishPhrase.length > 120 || swahiliPhrase.length > 120) return null;
   return { english_phrase: englishPhrase, swahili_phrase: swahiliPhrase };
@@ -13,6 +20,17 @@ function parseId(value: unknown) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
     ? value
     : null;
+}
+
+async function phraseExistsOnSite(admin: SupabaseClient, englishPhrase: string) {
+  const normalizedPhrase = normalizeTranslationPhrase(englishPhrase);
+  if (publicPhraseCatalog.has(normalizedPhrase)) return true;
+
+  const { data, error } = await admin.from("homepage_headlines").select("main_phrase, accent_phrase");
+  if (error) throw error;
+  return (data ?? []).some((headline) =>
+    [headline.main_phrase, headline.accent_phrase].some((phrase) =>
+      typeof phrase === "string" && normalizeTranslationPhrase(phrase) === normalizedPhrase));
 }
 
 async function readValues(request: Request) {
@@ -48,9 +66,12 @@ export async function POST(request: Request) {
     if (!values) return NextResponse.json({ error: "Invalid translation details." }, { status: 400 });
     const pair = parsePair(values);
     if (!pair) return NextResponse.json({ error: "Enter English and Swahili text up to 120 characters each." }, { status: 400 });
+    if (!await phraseExistsOnSite(admin, pair.english_phrase)) {
+      return NextResponse.json({ error: "That English phrase does not match a complete phrase in the public interface." }, { status: 400 });
+    }
     const { data, error } = await admin.from("translation_pairs").insert(pair)
       .select("id, english_phrase, swahili_phrase").single();
-    if (error?.code === "23505") return NextResponse.json({ error: "A translation for that English word or phrase already exists." }, { status: 409 });
+    if (error?.code === "23505") return NextResponse.json({ error: "A translation for that English phrase already exists." }, { status: 409 });
     if (error) throw error;
     return NextResponse.json({ translation: data }, { status: 201 });
   } catch {
@@ -67,9 +88,12 @@ export async function PATCH(request: Request) {
     const id = parseId(values.id);
     const pair = parsePair(values);
     if (!id || !pair) return NextResponse.json({ error: "Enter valid English and Swahili text up to 120 characters each." }, { status: 400 });
+    if (!await phraseExistsOnSite(admin, pair.english_phrase)) {
+      return NextResponse.json({ error: "That English phrase does not match a complete phrase in the public interface." }, { status: 400 });
+    }
     const { data, error } = await admin.from("translation_pairs").update(pair).eq("id", id)
       .select("id, english_phrase, swahili_phrase").maybeSingle();
-    if (error?.code === "23505") return NextResponse.json({ error: "A translation for that English word or phrase already exists." }, { status: 409 });
+    if (error?.code === "23505") return NextResponse.json({ error: "A translation for that English phrase already exists." }, { status: 409 });
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Translation pair not found." }, { status: 404 });
     return NextResponse.json({ translation: data });
