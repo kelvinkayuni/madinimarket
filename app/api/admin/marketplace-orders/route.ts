@@ -21,6 +21,16 @@ async function readBody(request: Request): Promise<Body | null> {
 export async function GET(request: Request) {
   const admin = await getAdminClient(request);
   if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
+  if (new URL(request.url).searchParams.get("summary") === "1") {
+    const { count, error } = await admin.from("marketplace_orders")
+      .select("id", { count: "exact", head: true })
+      .eq("payment_status", "payment_submitted");
+    if (error) {
+      console.error("Admin could not load pending marketplace payment count", error);
+      return NextResponse.json({ error: "Could not load pending payment count." }, { status: 503 });
+    }
+    return NextResponse.json({ pendingPaymentCount: count ?? 0 }, { headers: { "Cache-Control": "no-store" } });
+  }
   const { data, error } = await admin.from("marketplace_orders")
     .select("*, items:marketplace_order_items(*)").order("created_at", { ascending: false }).limit(200);
   if (error) {

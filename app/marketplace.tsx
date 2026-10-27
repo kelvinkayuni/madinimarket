@@ -35,6 +35,11 @@ type WebsiteAccount = { id: string; display_name: string; username: string; emai
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
 type AdminListingLedgerEntry = { id: number; seller_name: string; mineral_name: string; seller_price: string; platform_fee_rate: number; platform_fee_amount: string; price: string; currency: Currency; status: SubmissionStatus; listing_type: ListingType; created_at: string };
+type SalesLedgerTotals = Record<Currency, { transactions: number; grossSales: number; sellerAmount: number; marketplaceFee: number }>;
+type SalesLedgerPeriod = { today: SalesLedgerTotals; thisWeek: SalesLedgerTotals; thisMonth: SalesLedgerTotals; thisYear: SalesLedgerTotals };
+type SalesLedgerTransaction = { itemId: string; orderId: string; controlNumber: string; verifiedAt: string; mineralName: string; status: string; currency: Currency; grossSales: number; sellerAmount: number; marketplaceFee: number; feeRate: number };
+type SalesLedgerHistory = Record<"daily" | "weekly" | "monthly" | "yearly", { period: string; totals: SalesLedgerTotals }[]>;
+type SalesLedgerData = { periods: SalesLedgerPeriod; history: SalesLedgerHistory; transactions: SalesLedgerTransaction[]; timeZone: string };
 type SubscriptionPlan = { id: string; months: number; price_tzs: string; price_usd: string; is_active: boolean; updated_at?: string };
 type AccountSubscription = { id: string; website_user_id?: string; plan_id: string | null; months: number; currency: Currency; amount: string; status: "pending" | "active" | "expired" | "rejected"; requested_at: string; starts_at: string | null; expires_at: string | null; paid_at: string | null; account?: { display_name: string; username: string; email: string } | null };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
@@ -329,6 +334,22 @@ async function loadAdminListingLedger(accessToken: string): Promise<AdminListing
   return result.listings as AdminListingLedgerEntry[];
 }
 
+async function loadAdminSalesLedger(accessToken: string): Promise<SalesLedgerData> {
+  const response = await fetch("/api/admin/sales-ledger", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not load the marketplace sales ledger.");
+  if (typeof result !== "object" || result === null || !Array.isArray(result.transactions) ||
+    typeof result.timeZone !== "string" || typeof result.periods !== "object" || result.periods === null ||
+    typeof result.history !== "object" || result.history === null ||
+    !["daily", "weekly", "monthly", "yearly"].every((period) => Array.isArray(result.history[period]))) {
+    throw new Error("Marketplace sales ledger data is invalid.");
+  }
+  return result as SalesLedgerData;
+}
+
 async function loadAdminCertificates(accessToken: string): Promise<AdminCertificate[]> {
   const response = await fetch("/api/admin/certificates", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -411,6 +432,9 @@ export default function Marketplace() {
   const [adminListingLedger, setAdminListingLedger] = useState<AdminListingLedgerEntry[]>([]);
   const [adminLedgerUpdatedAt, setAdminLedgerUpdatedAt] = useState<Date | null>(null);
   const [adminLedgerError, setAdminLedgerError] = useState("");
+  const [adminSalesLedger, setAdminSalesLedger] = useState<SalesLedgerData | null>(null);
+  const [adminSalesLedgerUpdatedAt, setAdminSalesLedgerUpdatedAt] = useState<Date | null>(null);
+  const [adminSalesLedgerError, setAdminSalesLedgerError] = useState("");
   const [translationPairs, setTranslationPairs] = useState<TranslationPair[]>([]);
   const [translationForm, setTranslationForm] = useState({ english_phrase: "", swahili_phrase: "" });
   const [editingTranslationId, setEditingTranslationId] = useState<string | null>(null);
@@ -460,6 +484,7 @@ export default function Marketplace() {
   const [user, setUser] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [userId, setUserId] = useState("");
+  const [pendingMarketplacePayments, setPendingMarketplacePayments] = useState(0);
   const [cartListingIds, setCartListingIds] = useState<Set<number>>(() => new Set());
   const [cartListingAccountId, setCartListingAccountId] = useState("");
   const [sellerRequestsCount, setSellerRequestsCount] = useState(0);
@@ -575,6 +600,42 @@ export default function Marketplace() {
     void refreshAccountCounts();
     const interval = window.setInterval(() => void refreshAccountCounts(), 30_000);
     const removeResumeListener = onBrowserResume(refreshAccountCounts);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      removeResumeListener();
+    };
+  }, [role, userId]);
+  useEffect(() => {
+    if (role !== "admin" || !userId || !isSupabaseConfigured) return;
+    let active = true;
+    let loading = false;
+    const refreshPendingMarketplacePayments = async () => {
+      if (loading || document.visibilityState !== "visible") return;
+      loading = true;
+      try {
+        const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/marketplace-orders?summary=1", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load pending payment count.");
+        if (!Number.isInteger(result.pendingPaymentCount) || result.pendingPaymentCount < 0) {
+          throw new Error("Pending payment count is invalid.");
+        }
+        if (active) setPendingMarketplacePayments(result.pendingPaymentCount);
+      } catch (error) {
+        if (active) console.error("Could not refresh pending marketplace payments.", error);
+      } finally {
+        loading = false;
+      }
+    };
+    void refreshPendingMarketplacePayments();
+    const interval = window.setInterval(() => void refreshPendingMarketplacePayments(), 30_000);
+    const removeResumeListener = onBrowserResume(refreshPendingMarketplacePayments);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -1102,6 +1163,38 @@ export default function Marketplace() {
       if (document.visibilityState === "visible") void refreshLedger();
     }, 10_000);
     const removeResumeListener = onBrowserResume(refreshLedger);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      removeResumeListener();
+    };
+  }, [role]);
+  useEffect(() => {
+    if (!isSupabaseConfigured || role !== "admin") return;
+    let active = true;
+    let isLoading = false;
+    const refreshSalesLedger = async () => {
+      if (isLoading || document.visibilityState !== "visible") return;
+      isLoading = true;
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Your admin session has expired. Sign in again to view the sales ledger.");
+        const salesLedger = await loadAdminSalesLedger(session.access_token);
+        if (active) {
+          setAdminSalesLedger(salesLedger);
+          setAdminSalesLedgerUpdatedAt(new Date());
+          setAdminSalesLedgerError("");
+        }
+      } catch (error) {
+        if (active) setAdminSalesLedgerError(error instanceof Error ? error.message : "Could not refresh the sales ledger.");
+      } finally {
+        isLoading = false;
+      }
+    };
+    void refreshSalesLedger();
+    const interval = window.setInterval(() => void refreshSalesLedger(), 60_000);
+    const removeResumeListener = onBrowserResume(refreshSalesLedger);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -2426,6 +2519,18 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       }).format(amount),
       currency,
     );
+    const salesPeriods = [
+      { key: "today", label: "Today" },
+      { key: "thisWeek", label: "This week" },
+      { key: "thisMonth", label: "This month" },
+      { key: "thisYear", label: "This year" },
+    ] as const;
+    const salesHistoryPeriods = [
+      { key: "daily", label: "Daily totals" },
+      { key: "weekly", label: "Weekly totals" },
+      { key: "monthly", label: "Monthly totals" },
+      { key: "yearly", label: "Yearly totals" },
+    ] as const;
     const exportLedger = async (format: "pdf" | "excel") => {
       try {
         const { downloadLedgerExcel, downloadLedgerPdf } = await import("@/lib/ledger-report");
@@ -2458,7 +2563,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
               <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
               <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
-              <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders</button>
+              <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${pendingMarketplacePayments} payments awaiting verification`}>{pendingMarketplacePayments}</span></button>
               <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>
               <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
               <div className="admin-menu-currency">
@@ -2682,6 +2787,76 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             </table>
           </div>
           <p className="admin-ledger-updated">{adminLedgerUpdatedAt ? `Last updated ${adminLedgerUpdatedAt.toLocaleTimeString()}` : "Loading listing prices…"}</p>
+          <section className="admin-sales-ledger" aria-labelledby="admin-sales-ledger-heading">
+            <div className="admin-queue-heading">
+              <div><span>VERIFIED MARKETPLACE ORDERS</span><h2 id="admin-sales-ledger-heading">Sales and Madinimarket fees</h2></div>
+              <strong>{adminSalesLedger?.transactions.length ?? 0}</strong>
+            </div>
+            <p className="admin-ledger-note">Sales are recorded when admin verifies the buyer’s payment. Refunded items are excluded, so historical totals adjust if an item is refunded. Madinimarket fee totals are calculated from verified order records; reconcile them against your bank/mobile-money statements to confirm actual deposits.</p>
+            {adminSalesLedgerError && <p className="admin-ledger-error" role="alert">{adminSalesLedgerError}</p>}
+            {adminSalesLedger
+              ? <>
+                <div className="admin-sales-period-grid">
+                  {salesPeriods.map(({ key, label }) => <article className="admin-sales-period" key={key}>
+                    <h3>{label}</h3>
+                    {(["TZS", "USD"] as const).map((currency) => {
+                      const totals = adminSalesLedger.periods[key][currency];
+                      return <div className="admin-sales-currency" key={currency}>
+                        <div className="admin-sales-currency-heading"><strong>{currency}</strong><span>{totals.transactions} item{totals.transactions === 1 ? "" : "s"}</span></div>
+                        <dl>
+                          <div><dt>Gross sales</dt><dd>{formatLedgerMoney(totals.grossSales, currency)}</dd></div>
+                          <div><dt>Seller amount</dt><dd>{formatLedgerMoney(totals.sellerAmount, currency)}</dd></div>
+                          <div><dt>Madinimarket fee</dt><dd>{formatLedgerMoney(totals.marketplaceFee, currency)}</dd></div>
+                        </dl>
+                      </div>;
+                    })}
+                  </article>)}
+                </div>
+                <div className="admin-sales-history">
+                  {salesHistoryPeriods.map(({ key, label }) => <details key={key}>
+                    <summary>{label}<span>{adminSalesLedger.history[key].length} periods</span></summary>
+                    <div className="admin-ledger-table-wrap">
+                      <table className="admin-ledger-table admin-sales-history-table">
+                        <thead><tr><th>Period ({adminSalesLedger.timeZone})</th><th>Currency</th><th>Items</th><th>Gross sales</th><th>Seller amount</th><th>Madinimarket fee</th></tr></thead>
+                        <tbody>
+                          {adminSalesLedger.history[key].flatMap(({ period, totals }) =>
+                            (["TZS", "USD"] as const)
+                              .filter((currency) => totals[currency].transactions > 0)
+                              .map((currency) => <tr key={`${period}-${currency}`}>
+                                <td>{period}</td>
+                                <td>{currency}</td>
+                                <td>{totals[currency].transactions}</td>
+                                <td>{formatLedgerMoney(totals[currency].grossSales, currency)}</td>
+                                <td>{formatLedgerMoney(totals[currency].sellerAmount, currency)}</td>
+                                <td><strong>{formatLedgerMoney(totals[currency].marketplaceFee, currency)}</strong></td>
+                              </tr>))}
+                          {!adminSalesLedger.history[key].length && <tr><td className="admin-ledger-empty" colSpan={6}>No verified sales in this period yet.</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>)}
+                </div>
+                <div className="admin-ledger-table-wrap">
+                  <table className="admin-ledger-table admin-sales-table">
+                    <thead><tr><th>Payment verified (Tanzania time)</th><th>Order</th><th>Product</th><th>Status</th><th>Gross sale</th><th>Seller amount</th><th>Madinimarket fee</th></tr></thead>
+                    <tbody>
+                      {adminSalesLedger.transactions.map((transaction) => <tr key={transaction.itemId}>
+                        <td>{new Date(transaction.verifiedAt).toLocaleString("en-GB", { timeZone: adminSalesLedger.timeZone })}</td>
+                        <td>{transaction.controlNumber}</td>
+                        <td>{transaction.mineralName}</td>
+                        <td><span className="admin-ledger-status is-approved">{transaction.status.replaceAll("_", " ")}</span></td>
+                        <td><strong>{formatLedgerMoney(transaction.grossSales, transaction.currency)}</strong></td>
+                        <td>{formatLedgerMoney(transaction.sellerAmount, transaction.currency)}</td>
+                        <td>{formatLedgerMoney(transaction.marketplaceFee, transaction.currency)}<small>{(transaction.feeRate * 100).toFixed(0)}%</small></td>
+                      </tr>)}
+                      {!adminSalesLedger.transactions.length && <tr><td className="admin-ledger-empty" colSpan={7}>No verified marketplace sales yet.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="admin-ledger-updated">Sales report timezone: {adminSalesLedger.timeZone}. {adminSalesLedgerUpdatedAt ? `Last updated ${adminSalesLedgerUpdatedAt.toLocaleTimeString()}` : ""}</p>
+              </>
+              : !adminSalesLedgerError && <p className="admin-ledger-updated">Loading verified sales…</p>}
+          </section>
         </section>}
         {activeAdminPanel === "translations" && <section className="admin-translations" aria-labelledby="admin-translations-heading">
           <div className="admin-queue-heading"><div><span>LANGUAGE SETTINGS</span><h2 id="admin-translations-heading">English–Swahili translations</h2></div><strong>{translationPairs.length}</strong></div>
@@ -2762,7 +2937,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             </article>;
           })}</div></div> : <p className="admin-empty">No accounts match “{accountSearch.trim()}”.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
-        {activeAdminPanel === "orders" && <AdminMarketplaceOrders onNotice={setNotice} />}
+        {activeAdminPanel === "orders" && <AdminMarketplaceOrders onNotice={setNotice} pendingPaymentCount={pendingMarketplacePayments} />}
         {activeAdminPanel === "order-time-limits" && <AdminOrderTimeLimits onNotice={setNotice} />}
         {activeAdminPanel === "payment-instructions" && <AdminPaymentInstructions onNotice={setNotice} />}
         {activeAdminPanel === "subscriptions" && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">

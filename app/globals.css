@@ -212,6 +212,31 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-ledger-status.is-rejected { background: #f5e9e5; color: #8b4b3d; }
 .admin-ledger-empty { padding: 24px !important; color: #798278 !important; text-align: center; }
 .admin-ledger-updated { margin: 8px 0 0; text-align: right; }
+.admin-sales-ledger { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
+.admin-sales-ledger > .admin-queue-heading { align-items: flex-end; }
+.admin-sales-ledger > .admin-queue-heading h2 { margin: 4px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 22px; font-weight: 500; }
+.admin-sales-ledger > .admin-queue-heading > strong { min-width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid #d9e0d5; border-radius: 50%; color: #526451; font-size: 10px; }
+.admin-sales-period-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.admin-sales-period { min-width: 0; padding: 12px; border: 1px solid #e1e5dd; background: #fff; }
+.admin-sales-period > h3 { margin: 0 0 12px; color: #354b39; font-size: 12px; }
+.admin-sales-currency + .admin-sales-currency { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e8ebe5; }
+.admin-sales-currency-heading { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: #71806f; font-size: 9px; }
+.admin-sales-currency-heading strong { color: var(--forest); }
+.admin-sales-currency dl { display: grid; gap: 6px; margin: 0; }
+.admin-sales-currency dl > div { display: flex; justify-content: space-between; gap: 8px; font-size: 9px; }
+.admin-sales-currency dt { color: #7b847a; }
+.admin-sales-currency dd { margin: 0; color: #314d3a; font-weight: 650; text-align: right; }
+.admin-sales-table { min-width: 920px; }
+.admin-sales-table td:nth-last-child(-n+3) { text-align: right; }
+.admin-sales-history { display: grid; gap: 8px; margin: 0 0 16px; }
+.admin-sales-history > details { border: 1px solid #e1e5dd; background: #fff; }
+.admin-sales-history > details > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 42px; padding: 0 12px; color: #354b39; font-size: 11px; font-weight: 650; cursor: pointer; list-style: none; }
+.admin-sales-history > details > summary::-webkit-details-marker { display: none; }
+.admin-sales-history > details > summary::after { content: "+"; color: #667064; font-size: 16px; }
+.admin-sales-history > details[open] > summary::after { content: "−"; }
+.admin-sales-history > details > summary > span { margin-left: auto; color: #778075; font-size: 9px; font-weight: 400; }
+.admin-sales-history-table { min-width: 760px; }
+.admin-sales-history-table td:nth-last-child(-n+3) { text-align: right; }
 .admin-queues { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 34px; padding-top: 26px; }
 .admin-queue-list { max-height: 292px; overflow-y: auto; overscroll-behavior: contain; padding-right: 8px; }
 .admin-queue-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -599,6 +624,7 @@ h1, h2, h3, p { margin-top: 0; }
 @keyframes pop-in { from { transform: translateY(-4px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @media (max-width: 900px) {
   .admin-queues { gap: 20px; }
+  .admin-sales-period-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-subscription-plan-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-subscription-plan-actions { grid-column: 1 / -1; }
   .admin-account-row { grid-template-columns: minmax(160px, 1fr) minmax(260px, 1.5fr) auto; gap: 12px; }
@@ -614,6 +640,7 @@ h1, h2, h3, p { margin-top: 0; }
   .username-banner { margin-right: 24px; margin-left: 24px; }
 }
 @media (max-width: 650px) {
+  .admin-sales-period-grid { grid-template-columns: 1fr; }
   .admin-market-days > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-market-time-fields { grid-template-columns: 1fr; }
   .admin-translation-form { grid-template-columns: 1fr; }

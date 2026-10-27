@@ -50,7 +50,10 @@ const money = (value: string | number, currency: Currency) =>
     maximumFractionDigits: currency === "USD" ? 2 : 0,
   }).format(Number(value))}`;
 
-export default function AdminMarketplaceOrders({ onNotice }: { onNotice: (message: string) => void }) {
+export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }: {
+  onNotice: (message: string) => void;
+  pendingPaymentCount: number;
+}) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -117,7 +120,7 @@ export default function AdminMarketplaceOrders({ onNotice }: { onNotice: (messag
   return <section className="admin-overview admin-commerce-orders">
     <div className="admin-page-heading">
       <div><div className="dialog-kicker">BUYER PAYMENTS & SELLER PAYOUTS</div><h1>Marketplace orders</h1>
-        <p>Verify buyer payments, confirm carrier delivery, resolve disputes, and record manual seller payouts/refunds.</p></div>
+        <p>{pendingPaymentCount} payment{pendingPaymentCount === 1 ? "" : "s"} awaiting verification. Verify buyer payments, confirm carrier delivery, resolve disputes, and record manual seller payouts/refunds.</p></div>
       <button className="button button-outline" type="button" disabled={busy === "refresh"} onClick={() => {
         setBusy("refresh");
         void load().then(() => onNotice("Marketplace orders refreshed.")).catch((error: unknown) => onNotice(error instanceof Error ? error.message : "Could not refresh orders.")).finally(() => setBusy(""));
