@@ -118,6 +118,7 @@ type CommerceData = {
   privateOffersCount: number;
   sellingCount: number;
   buyingCount: number;
+  paymentMethods: { method: string; accountNumber: string }[];
   paymentInstructions: string;
   privateOffers: { threads: PrivateOfferThread[]; feeRate: number | null; usdEnabled: boolean };
 };
@@ -427,7 +428,16 @@ export default function CommercePanel({ onNotice, onCounters }: {
             }
           }}>{busy === `delete-order-${order.id}` ? "Deleting…" : "Delete expired order"}</button>}
           {order.payment_status === "awaiting_payment" && <form className="commerce-payment-form" onSubmit={(event) => void submitPaymentProof(event, order.id)}>
-            <p>{data.paymentInstructions || "Payment instructions are not configured. Contact Madinimarket support before sending money."}</p>
+            {data.paymentMethods.length
+              ? <div className="commerce-payment-methods">
+                <strong>Choose one of these payment methods</strong>
+                {data.paymentMethods.map((method, index) => <div className="commerce-payment-method" key={`${method.method}-${index}`}>
+                  <strong>{method.method}</strong><span>Account number / payment number: {method.accountNumber}</span>
+                </div>)}
+                {data.paymentInstructions && <p>{data.paymentInstructions}</p>}
+                <p>Pay the order total shown above. After payment, enter the transaction reference and upload the receipt. Wait for Madinimarket to verify payment before expecting dispatch.</p>
+              </div>
+              : <p>Payment methods are not configured. Contact Madinimarket support before sending money.</p>}
             <label className="field-label">Payment transaction reference<input className="text-input" name="reference" required minLength={3} maxLength={120} value={paymentReferences[order.id] ?? ""} onChange={(event) => setPaymentReferences((current) => ({ ...current, [order.id]: event.target.value }))} /></label>
             <label className="field-label">Optional note<input className="text-input" name="note" maxLength={500} value={paymentNotes[order.id] ?? ""} onChange={(event) => setPaymentNotes((current) => ({ ...current, [order.id]: event.target.value }))} /></label>
             <label className="field-label">Payment receipt (PDF, JPEG, PNG · max 10 MB)<input className="text-input" name="proof" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" required onChange={(event) => {
@@ -435,7 +445,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
               setPaymentProofFiles((current) => ({ ...current, [order.id]: fileName }));
             }} /><small>{paymentProofFiles[order.id] || "Choose a receipt image or PDF"}</small></label>
             <input type="hidden" name="orderId" value={order.id} />
-            <button className="button button-dark" type="submit" disabled={busy === `payment-${order.id}` || !data.paymentInstructions}>{busy === `payment-${order.id}` ? "Submitting…" : !data.paymentInstructions ? "Payment details unavailable" : "Submit proof for verification"}</button>
+            <button className="button button-dark" type="submit" disabled={busy === `payment-${order.id}` || !data.paymentMethods.length}>{busy === `payment-${order.id}` ? "Submitting…" : !data.paymentMethods.length ? "Payment details unavailable" : "Submit proof for verification"}</button>
           </form>}
           {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
             <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>{statusLabel(item.status)} · Total {amount(item.total_price, item.currency)}</small></div>

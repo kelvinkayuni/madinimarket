@@ -5,15 +5,23 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 
 type PaymentInstructionsSettings = {
+  paymentMethods: PaymentMethod[];
   instructions: string;
   updatedAt: string | null;
   awaitingPaymentOrderCount: number;
 };
 
+type PaymentMethod = { method: string; accountNumber: string };
+
 function isSettings(value: unknown): value is PaymentInstructionsSettings {
   if (typeof value !== "object" || value === null) return false;
   const settings = value as Record<string, unknown>;
-  return typeof settings.instructions === "string" &&
+  return Array.isArray(settings.paymentMethods) &&
+    settings.paymentMethods.every((method) =>
+      typeof method === "object" && method !== null &&
+      "method" in method && typeof method.method === "string" &&
+      "accountNumber" in method && typeof method.accountNumber === "string") &&
+    typeof settings.instructions === "string" &&
     (settings.updatedAt === null || typeof settings.updatedAt === "string") &&
     Number.isInteger(settings.awaitingPaymentOrderCount) &&
     typeof settings.awaitingPaymentOrderCount === "number" &&
@@ -22,10 +30,12 @@ function isSettings(value: unknown): value is PaymentInstructionsSettings {
 
 export default function AdminPaymentInstructions({ onNotice }: { onNotice: (message: string) => void }) {
   const [savedSettings, setSavedSettings] = useState<PaymentInstructionsSettings>({
+    paymentMethods: [],
     instructions: "",
     updatedAt: null,
     awaitingPaymentOrderCount: 0,
   });
+  const [draftMethods, setDraftMethods] = useState<PaymentMethod[]>([]);
   const [draft, setDraft] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -45,6 +55,7 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
     if (!response.ok) throw new Error(result.error ?? "Could not load payment instructions.");
     if (!isSettings(result)) throw new Error("Saved payment instructions are invalid.");
     setSavedSettings(result);
+    setDraftMethods(result.paymentMethods);
     setDraft(result.instructions);
     setLoaded(true);
   }, []);
@@ -71,6 +82,15 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
       onNotice("Payment instructions must be 5,000 characters or fewer.");
       return;
     }
+    if (draftMethods.length > 10) {
+      onNotice("Add no more than 10 payment methods.");
+      return;
+    }
+    if (draftMethods.some(({ method, accountNumber }) =>
+      !method.trim() || method.trim().length > 80 || !accountNumber.trim() || accountNumber.trim().length > 200)) {
+      onNotice("Complete every payment method and account number, or remove the empty row.");
+      return;
+    }
     setBusy(true);
     try {
       const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
@@ -84,7 +104,7 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
             Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ instructions: draft, confirmUpdateExisting }),
+          body: JSON.stringify({ paymentMethods: draftMethods, instructions: draft, confirmUpdateExisting }),
         });
         const result: unknown = await response.json();
         if (response.status === 409 && typeof result === "object" && result !== null &&
@@ -107,17 +127,24 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
 
       const result = await update(false);
       if (!result) return;
-      if (typeof result.instructions !== "string" ||
+      if (!Array.isArray(result.paymentMethods) ||
+        !result.paymentMethods.every((method) =>
+          typeof method === "object" && method !== null &&
+          "method" in method && typeof method.method === "string" &&
+          "accountNumber" in method && typeof method.accountNumber === "string") ||
+        typeof result.instructions !== "string" ||
         (result.updatedAt !== null && typeof result.updatedAt !== "string") ||
         typeof result.affectedOrders !== "number") {
         throw new Error("The saved payment instructions are invalid.");
       }
       const next = {
+        paymentMethods: result.paymentMethods as PaymentMethod[],
         instructions: result.instructions,
         updatedAt: result.updatedAt,
         awaitingPaymentOrderCount: result.affectedOrders,
       };
       setSavedSettings(next);
+      setDraftMethods(next.paymentMethods);
       setDraft(next.instructions);
       onNotice(`Payment instructions saved. They now apply to ${result.affectedOrders} order${result.affectedOrders === 1 ? "" : "s"} awaiting payment.`);
     } catch (error) {
@@ -127,35 +154,69 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
     }
   };
 
-  const changed = draft !== savedSettings.instructions;
+  const changed = draft !== savedSettings.instructions ||
+    JSON.stringify(draftMethods) !== JSON.stringify(savedSettings.paymentMethods);
 
   return <section className="admin-listing-fee-panel" aria-labelledby="admin-payment-instructions-heading">
     <div className="admin-page-heading">
       <div><div className="dialog-kicker">MARKETPLACE SETTINGS</div><h1 id="admin-payment-instructions-heading">Buyer payment instructions</h1>
-        <p>Set the payment destination and steps buyers see when their orders are ready for payment.</p></div>
+        <p>Save reusable payment method and account details, then add any general notes buyers need before paying.</p></div>
     </div>
     <div className="admin-listing-fee-editor admin-payment-instructions-editor">
-      <label className="field-label" htmlFor="marketplace-payment-instructions">Instructions shown to buyers</label>
+      <div className="admin-payment-methods-heading">
+        <div><strong>Payment methods and accounts</strong><small>Each method is saved with its matching account number and reused for all orders.</small></div>
+        <button className="button button-outline" type="button" disabled={!loaded || busy || draftMethods.length >= 10}
+          onClick={() => setDraftMethods((current) => [...current, { method: "", accountNumber: "" }])}>Add method</button>
+      </div>
+      {draftMethods.map((paymentMethod, index) => <div className="admin-payment-method-row" key={`payment-method-${index}`}>
+        <label className="field-label">Payment method
+          <input className="text-input" value={paymentMethod.method} maxLength={80} disabled={!loaded || busy}
+            placeholder="For example, mobile money or bank transfer"
+            onChange={(event) => setDraftMethods((current) => current.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, method: event.target.value } : item))} />
+        </label>
+        <label className="field-label">Account number / payment number
+          <input className="text-input" value={paymentMethod.accountNumber} maxLength={200} disabled={!loaded || busy}
+            onChange={(event) => setDraftMethods((current) => current.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, accountNumber: event.target.value } : item))} />
+        </label>
+        <button className="button button-outline" type="button" disabled={!loaded || busy}
+          aria-label={`Remove payment method ${index + 1}`}
+          onClick={() => setDraftMethods((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+      </div>)}
+      {!draftMethods.length && <p>No payment methods added. Buyers will not be able to submit payment proof.</p>}
+      <label className="field-label" htmlFor="marketplace-payment-instructions">General instructions for buyers</label>
       <textarea id="marketplace-payment-instructions" className="admin-payment-instructions-textarea"
         value={draft} maxLength={5000} disabled={!loaded || busy}
         onChange={(event) => setDraft(event.target.value)} />
-      <p>Use clear, buyer-facing steps and the official payment destination. Never include a PIN, password, one-time code, or private admin instructions. Leave blank to disable payment submissions until instructions are configured.</p>
+      <p>For example, explain how to include an order number or what receipt to upload. Never include a PIN, password, one-time code, or private admin instructions. General instructions are optional; at least one complete method/account pair is required to enable payment submissions.</p>
       <p><strong>{draft.length.toLocaleString()} / 5,000 characters</strong></p>
       <div className="admin-listing-fee-actions">
         <button className="button button-dark" type="button" disabled={!loaded || busy || !changed} onClick={() => void save()}>
           {busy ? "Saving…" : "Save payment instructions"}
         </button>
         <button className="button button-outline" type="button" disabled={!loaded || busy || !changed}
-          onClick={() => setDraft(savedSettings.instructions)}>Cancel</button>
+          onClick={() => {
+            setDraftMethods(savedSettings.paymentMethods);
+            setDraft(savedSettings.instructions);
+          }}>Cancel</button>
       </div>
     </div>
     <div className="admin-listing-fee-current" aria-live="polite">
       <div className="admin-listing-fee-current-heading">
         <div><span>CURRENT SAVED INSTRUCTIONS</span><h2>Buyer preview</h2></div>
-        <span className="admin-listing-fee-status">{savedSettings.instructions ? "Active" : "Not configured"}</span>
+        <span className="admin-listing-fee-status">{savedSettings.paymentMethods.length ? "Active" : "Not configured"}</span>
       </div>
       {loaded
-        ? <><div className="admin-payment-instructions-preview">{savedSettings.instructions || "Buyers cannot submit payment proof until instructions are configured."}</div>
+        ? <><div className="admin-payment-instructions-preview">
+          {savedSettings.paymentMethods.length
+            ? <><strong>Payment methods</strong>{savedSettings.paymentMethods.map((method, index) =>
+              <div className="admin-payment-method-preview" key={`saved-method-${index}`}>
+                <strong>{method.method}</strong><span>Account number / payment number: {method.accountNumber}</span>
+              </div>)}</>
+            : <p>Buyers cannot submit payment proof until at least one payment method and account number are configured.</p>}
+          {savedSettings.instructions && <><strong>General instructions</strong><p>{savedSettings.instructions}</p></>}
+        </div>
           <small>{savedSettings.updatedAt ? `Updated on ${new Date(savedSettings.updatedAt).toLocaleString()}` : "No instructions saved yet"}</small>
           <small>{savedSettings.awaitingPaymentOrderCount} order{savedSettings.awaitingPaymentOrderCount === 1 ? "" : "s"} currently awaiting payment. Saving changes updates instructions for those orders as well as future payment-ready orders. Buyer panels refresh automatically while open.</small></>
         : <><small>{loadError || "Loading saved payment instructions…"}</small>{loadError && <button className="button button-outline" type="button" onClick={() => void load().catch((error: unknown) => {

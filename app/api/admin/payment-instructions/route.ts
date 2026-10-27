@@ -4,6 +4,9 @@ import { getAdminClient } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 const MAX_INSTRUCTIONS_LENGTH = 5000;
+const MAX_PAYMENT_METHODS = 10;
+
+type PaymentMethod = { method: string; accountNumber: string };
 
 export async function GET(request: Request) {
   const authorized = await getAdminClient(request);
@@ -13,7 +16,7 @@ export async function GET(request: Request) {
     const admin = createSupabaseAdminClient();
     const [{ data, error }, { count, error: countError }] = await Promise.all([
       admin.from("marketplace_settings")
-        .select("payment_instructions, payment_instructions_updated_at")
+        .select("payment_methods, payment_instructions, payment_instructions_updated_at")
         .eq("id", true)
         .single(),
       admin.from("marketplace_orders")
@@ -23,6 +26,7 @@ export async function GET(request: Request) {
     if (error) throw error;
     if (countError) throw countError;
     return NextResponse.json({
+      paymentMethods: data.payment_methods,
       instructions: data.payment_instructions,
       updatedAt: data.payment_instructions_updated_at,
       awaitingPaymentOrderCount: count ?? 0,
@@ -55,12 +59,32 @@ export async function PATCH(request: Request) {
   if (typeof values.instructions !== "string" || values.instructions.length > MAX_INSTRUCTIONS_LENGTH) {
     return NextResponse.json({ error: `Payment instructions must be ${MAX_INSTRUCTIONS_LENGTH} characters or fewer.` }, { status: 400 });
   }
+  if (!Array.isArray(values.paymentMethods) || values.paymentMethods.length > MAX_PAYMENT_METHODS) {
+    return NextResponse.json({ error: `Add no more than ${MAX_PAYMENT_METHODS} payment methods.` }, { status: 400 });
+  }
+  const paymentMethods: PaymentMethod[] = [];
+  for (const value of values.paymentMethods) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return NextResponse.json({ error: "Each payment method needs a method name and account number." }, { status: 400 });
+    }
+    const pair = value as Record<string, unknown>;
+    if (typeof pair.method !== "string" || typeof pair.accountNumber !== "string") {
+      return NextResponse.json({ error: "Each payment method needs a method name and account number." }, { status: 400 });
+    }
+    const method = pair.method.trim();
+    const accountNumber = pair.accountNumber.trim();
+    if (!method || method.length > 80 || !accountNumber || accountNumber.length > 200) {
+      return NextResponse.json({ error: "Enter a payment method (up to 80 characters) and account number (up to 200 characters) for every row." }, { status: 400 });
+    }
+    paymentMethods.push({ method, accountNumber });
+  }
   if (typeof values.confirmUpdateExisting !== "boolean") {
     return NextResponse.json({ error: "Confirm whether existing payment orders should receive the changed instructions." }, { status: 400 });
   }
 
   try {
     const { data, error } = await createSupabaseAdminClient().rpc("update_marketplace_payment_instructions", {
+      p_payment_methods: paymentMethods,
       p_instructions: values.instructions.trim(),
       p_admin_id: user.id,
       p_confirm_update_existing: values.confirmUpdateExisting,
@@ -73,6 +97,7 @@ export async function PATCH(request: Request) {
       }, { status: 409 });
     }
     return NextResponse.json({
+      paymentMethods: data.payment_methods,
       instructions: data.payment_instructions,
       updatedAt: data.payment_instructions_updated_at,
       affectedOrders: Number(data.affected_order_count) || 0,
