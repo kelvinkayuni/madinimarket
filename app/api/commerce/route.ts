@@ -129,6 +129,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === "delete_expired_order") {
+      const orderId = text(body.orderId, 36);
+      if (!/^[0-9a-f-]{36}$/i.test(orderId)) return NextResponse.json({ error: "Choose a valid expired order." }, { status: 400 });
+      const { data: order, error: orderError } = await admin.from("marketplace_orders")
+        .select("id, payment_status").eq("id", orderId).eq("buyer_id", accountId).maybeSingle();
+      if (orderError) throw orderError;
+      if (!order) return NextResponse.json({ error: "This order could not be found in your account." }, { status: 404 });
+      if (order.payment_status !== "expired") {
+        return NextResponse.json({ error: "Only expired orders can be deleted." }, { status: 409 });
+      }
+      const { error: itemsError } = await admin.from("marketplace_order_items").delete().eq("order_id", orderId);
+      if (itemsError) throw itemsError;
+      const { data: deletedOrder, error: deleteError } = await admin.from("marketplace_orders")
+        .delete().eq("id", orderId).eq("buyer_id", accountId).eq("payment_status", "expired")
+        .select("id").maybeSingle();
+      if (deleteError) throw deleteError;
+      if (!deletedOrder) return NextResponse.json({ error: "This expired order has already been deleted." }, { status: 404 });
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "checkout") {
       const { data: buyer, error: buyerError } = await admin.from("website_accounts")
         .select("display_name, email, phone").eq("id", accountId).single();

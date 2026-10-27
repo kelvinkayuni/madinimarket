@@ -157,6 +157,23 @@ export async function GET(request: Request) {
       }
     }
 
+    const cleanupCutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const { data: expiredOrdersForCleanup, error: cleanupQueryError } = await admin.from("marketplace_orders")
+      .select("id")
+      .eq("payment_status", "expired")
+      .lte("payment_deadline", cleanupCutoff)
+      .limit(100);
+    if (cleanupQueryError) throw cleanupQueryError;
+    for (const order of expiredOrdersForCleanup ?? []) {
+      const { error: itemDeleteError } = await admin.from("marketplace_order_items")
+        .delete().eq("order_id", order.id);
+      if (itemDeleteError) throw itemDeleteError;
+      const { error: orderDeleteError } = await admin.from("marketplace_orders")
+        .delete().eq("id", order.id).eq("payment_status", "expired")
+        .lte("payment_deadline", cleanupCutoff);
+      if (orderDeleteError) throw orderDeleteError;
+    }
+
     const { data: dispatchItems, error: dispatchError } = await admin.from("marketplace_order_items")
       .select("id, seller_email, mineral_name, weight, unit, seller_amount, currency, order:marketplace_orders!inner(control_number, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)")
       .eq("status", "paid").is("dispatch_email_sent_at", null).limit(5);

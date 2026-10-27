@@ -212,6 +212,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
       if (!response.ok) throw new Error(result.error ?? "The request could not be completed.");
       if (result.warning) onNotice(result.warning);
       if (action === "relist_unavailable") onNotice("You confirmed the mineral is in stock and relisted it on the market.");
+      if (action === "delete_expired_order") onNotice("The expired order was deleted.");
       await refresh();
       return result;
     } catch (error) {
@@ -407,6 +408,11 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
         {data.buyerOrders.map((order) => <article className="commerce-order" key={order.id}>
           <div className="commerce-order-heading"><strong>Order {order.control_number}</strong><span>{statusLabel(order.payment_status)}</span></div>
           <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
+          {order.payment_status === "expired" && <button className="button button-outline" type="button" disabled={busy === `delete-order-${order.id}`} onClick={() => {
+            if (window.confirm(`Permanently delete expired order ${order.control_number}?`)) {
+              void perform(`delete-order-${order.id}`, "delete_expired_order", { orderId: order.id });
+            }
+          }}>{busy === `delete-order-${order.id}` ? "Deleting…" : "Delete expired order"}</button>}
           {order.payment_status === "awaiting_payment" && <form className="commerce-payment-form" onSubmit={(event) => void submitPaymentProof(event, order.id)}>
             <p>{data.paymentInstructions || "Payment instructions are not configured. Contact Madinimarket support before sending money."}</p>
             <label className="field-label">Payment transaction reference<input className="text-input" name="reference" required minLength={3} maxLength={120} value={paymentReferences[order.id] ?? ""} onChange={(event) => setPaymentReferences((current) => ({ ...current, [order.id]: event.target.value }))} /></label>
