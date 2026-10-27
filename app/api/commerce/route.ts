@@ -36,6 +36,7 @@ export async function GET(request: Request) {
       { count: buyerOrdersCount, error: buyerOrdersCountError },
       { count: privateOffersCount, error: privateOffersCountError },
       { data: activeSubscription, error: activeSubscriptionError },
+      { data: marketplaceSettings, error: marketplaceSettingsError },
     ] = await Promise.all([
       admin.from("website_accounts").select("id, display_name, email, phone, delivery_country, delivery_region, delivery_district, delivery_address, is_active").eq("id", accountId).single(),
       admin.from("marketplace_cart_items").select("id, listing_id, created_at, listing:listings(id, mineral_name, listing_type, weight, unit, price, seller_price, platform_fee_amount, currency, image_path, website_user_id, seller_name, status, is_active, marketplace_state)").eq("buyer_id", accountId).order("created_at"),
@@ -48,9 +49,10 @@ export async function GET(request: Request) {
       admin.from("marketplace_private_offer_threads").select("id", { count: "exact", head: true })
         .or(`buyer_id.eq.${accountId},seller_id.eq.${accountId}`),
       admin.from("account_subscriptions").select("id").eq("website_user_id", accountId).eq("status", "active").lte("starts_at", new Date().toISOString()).gt("expires_at", new Date().toISOString()).limit(1).maybeSingle(),
+      admin.from("marketplace_settings").select("payment_instructions").eq("id", true).single(),
     ]);
-    if (profileError || cartError || buyerOrdersError || sellerItemsError || sellerRequestsCountError || sellingCountError || buyingCountError || buyerOrdersCountError || privateOffersCountError || activeSubscriptionError) {
-      console.error("Failed to load commerce account data", profileError ?? cartError ?? buyerOrdersError ?? sellerItemsError ?? sellerRequestsCountError ?? sellingCountError ?? buyingCountError ?? buyerOrdersCountError ?? privateOffersCountError ?? activeSubscriptionError);
+    if (profileError || cartError || buyerOrdersError || sellerItemsError || sellerRequestsCountError || sellingCountError || buyingCountError || buyerOrdersCountError || privateOffersCountError || activeSubscriptionError || marketplaceSettingsError) {
+      console.error("Failed to load commerce account data", profileError ?? cartError ?? buyerOrdersError ?? sellerItemsError ?? sellerRequestsCountError ?? sellingCountError ?? buyingCountError ?? buyerOrdersCountError ?? privateOffersCountError ?? activeSubscriptionError ?? marketplaceSettingsError);
       return NextResponse.json({ error: "Could not load your cart and orders." }, { status: 503 });
     }
 
@@ -98,7 +100,7 @@ export async function GET(request: Request) {
       privateOffersCount: privateOffersCount ?? 0,
       sellingCount: profile.is_active && activeSubscription ? sellingCount ?? 0 : 0,
       buyingCount: profile.is_active && activeSubscription ? buyingCount ?? 0 : 0,
-      paymentInstructions: process.env.MARKETPLACE_PAYMENT_INSTRUCTIONS?.trim() ?? "",
+      paymentInstructions: marketplaceSettings.payment_instructions.trim(),
     });
   } catch (error) {
     console.error("Commerce account request failed", error);

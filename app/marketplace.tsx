@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, use
 import type { Session } from "@supabase/supabase-js";
 
 import AdminMarketplaceOrders from "./admin-marketplace-orders";
+import AdminPaymentInstructions from "./admin-payment-instructions";
 import AdminOrderTimeLimits from "./admin-order-time-limits";
 import CommercePanel from "./commerce-panel";
 import PrivateOfferForm from "./private-offer-form";
@@ -19,7 +20,7 @@ type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-time-limits";
+type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-time-limits" | "payment-instructions";
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
@@ -2459,6 +2460,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
               <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
               <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders</button>
               <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>
+              <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
               <div className="admin-menu-currency">
                 <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                 <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
@@ -2762,6 +2764,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         </section>}
         {activeAdminPanel === "orders" && <AdminMarketplaceOrders onNotice={setNotice} />}
         {activeAdminPanel === "order-time-limits" && <AdminOrderTimeLimits onNotice={setNotice} />}
+        {activeAdminPanel === "payment-instructions" && <AdminPaymentInstructions onNotice={setNotice} />}
         {activeAdminPanel === "subscriptions" && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">
           <div className="admin-queue-heading"><div><span>SELLER AND BUYER ACCESS</span><h2 id="admin-subscriptions-heading">Seller/buyer subscription</h2></div><button className="button button-outline" type="button" disabled={busyActions.has("subscription-refresh")} onClick={() => void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not refresh subscriptions."); } })}><RefreshCw size={14} /> Refresh</button></div>
           <p className="admin-subscription-help">Plans use 30-day months. Saving a duration that already exists updates its price; previous subscriptions keep their original price and duration.</p>

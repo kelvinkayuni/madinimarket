@@ -66,6 +66,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-listing-fee-status { padding: 5px 9px; border-radius: 12px; background: #e5efe3; color: #3f6a48; font-size: 9px; font-weight: 700; }
 .admin-listing-fee-current-value { color: var(--forest); font-size: 24px; font-weight: 650; }
 .admin-listing-fee-current > small { color: #778075; font-size: 10px; line-height: 1.5; }
+.admin-payment-instructions-editor { max-width: 720px; }
+.admin-payment-instructions-textarea { width: 100%; min-height: 190px; padding: 11px; resize: vertical; border: 1px solid #d8ded5; border-radius: 2px; background: #fff; color: #263128; font: inherit; font-size: 12px; line-height: 1.6; }
+.admin-payment-instructions-textarea:disabled { opacity: .6; cursor: not-allowed; }
+.admin-payment-instructions-preview { padding: 12px; border: 1px solid #e1e5dd; background: #fff; color: #465148; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .admin-market-hours-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; max-width: 720px; margin-top: 22px; padding: 14px 16px; border: 1px solid #dfe6dc; background: #f7f9f4; }
 .admin-market-hours-status > div { display: grid; gap: 5px; }
 .admin-market-hours-status > div > span { color: #859084; font-size: 8px; font-weight: 700; letter-spacing: .1em; }
