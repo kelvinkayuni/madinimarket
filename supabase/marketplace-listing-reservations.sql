@@ -209,6 +209,21 @@ create trigger hide_reserved_marketplace_listings
 after insert or update of status or delete on public.marketplace_order_items
 for each row execute function private.hide_reserved_marketplace_listings();
 
+update public.listings as listing
+set marketplace_state = 'available',
+    is_active = true
+where listing.status = 'approved'
+  and listing.marketplace_state = 'reserved'
+  and not exists (
+    select 1
+    from public.marketplace_order_items as item
+    where item.listing_id = listing.id
+      and item.status in (
+        'awaiting_seller', 'awaiting_payment', 'payment_submitted', 'paid',
+        'shipped', 'delivered', 'disputed', 'payout_due', 'refund_due'
+      )
+  );
+
 create or replace function public.process_marketplace_orders()
 returns jsonb
 language plpgsql
