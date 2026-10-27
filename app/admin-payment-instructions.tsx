@@ -164,7 +164,10 @@ export default function AdminPaymentInstructions({ onNotice }: { onNotice: (mess
     </div>
     <div className="admin-listing-fee-editor admin-payment-instructions-editor">
       <div className="admin-payment-methods-heading">
-        <div><strong>Payment methods and accounts</strong><small>Each method is saved with its matching account number and reused for all orders.</small></div>
+        <div><strong>Payment methods and accounts</strong><small>Each method is saved with its matching account number and reused for all orders. Save all changes to publish your methods and general note.</small></div>
+        <button className="button button-dark" type="button" disabled={!loaded || busy || !changed} onClick={() => void save()}>
+          {busy ? "Saving…" : "Save all changes"}
+        </button>
         <button className="button button-outline" type="button" disabled={!loaded || busy || draftMethods.length >= 10}
           onClick={() => setDraftMethods((current) => [...current, { method: "", accountNumber: "" }])}>Add method</button>
       </div>

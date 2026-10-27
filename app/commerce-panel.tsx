@@ -435,7 +435,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
                   <strong>{method.method}</strong><span>Account number / payment number: {method.accountNumber}</span>
                 </div>)}
                 {data.paymentInstructions && <p>{data.paymentInstructions}</p>}
-                <p>Pay the order total shown above. After payment, enter the transaction reference and upload the receipt. Wait for Madinimarket to verify payment before expecting dispatch.</p>
               </div>
               : <p>Payment methods are not configured. Contact Madinimarket support before sending money.</p>}
             <label className="field-label">Payment transaction reference<input className="text-input" name="reference" required minLength={3} maxLength={120} value={paymentReferences[order.id] ?? ""} onChange={(event) => setPaymentReferences((current) => ({ ...current, [order.id]: event.target.value }))} /></label>
