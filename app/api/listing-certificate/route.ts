@@ -2,14 +2,26 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getWebsiteAccountId } from "@/lib/website-session";
 
 export async function GET(request: Request) {
-  const id = Number(new URL(request.url).searchParams.get("id"));
+  const requestUrl = new URL(request.url);
+  const id = Number(requestUrl.searchParams.get("id"));
   if (!Number.isSafeInteger(id) || id < 1) {
     return NextResponse.json({ error: "A valid listing ID is required." }, { status: 400 });
   }
 
   try {
+    if (!await getWebsiteAccountId()) {
+      const signInUrl = new URL("/", requestUrl);
+      signInUrl.searchParams.set("signin", "1");
+      signInUrl.searchParams.set("returnTo", "certificate");
+      signInUrl.searchParams.set("listingId", String(id));
+      return NextResponse.redirect(signInUrl, {
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const publicKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!supabaseUrl || !publicKey) throw new Error("Supabase public credentials are not configured.");
@@ -28,14 +40,23 @@ export async function GET(request: Request) {
     }
 
     const admin = createSupabaseAdminClient();
-    const { data: signed, error: signedUrlError } = await admin.storage
+    const { data: certificate, error: downloadError } = await admin.storage
       .from("stone-certificates")
-      .createSignedUrl(listing.stone_certificate_path, 3600);
-    if (signedUrlError || !signed?.signedUrl) {
-      throw signedUrlError ?? new Error("Could not open the stone certificate.");
+      .download(listing.stone_certificate_path);
+    if (downloadError || !certificate) {
+      throw downloadError ?? new Error("Could not download the stone certificate.");
     }
-    return NextResponse.redirect(signed.signedUrl, {
-      headers: { "Cache-Control": "no-store" },
+    const contentType = ["application/pdf", "image/jpeg"].includes(certificate.type)
+      ? certificate.type
+      : "application/octet-stream";
+    return new NextResponse(certificate, {
+      headers: {
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": "inline",
+        "Content-Type": contentType,
+        "X-Content-Type-Options": "nosniff",
+        "Vary": "Cookie",
+      },
     });
   } catch (error) {
     console.error("Could not open listing stone certificate", error);

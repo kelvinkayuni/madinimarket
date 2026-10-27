@@ -446,6 +446,7 @@ export default function Marketplace() {
   const [busyActions, setBusyActions] = useState<Set<string>>(() => new Set());
   const [dialog, setDialog] = useState<Dialog>(null);
   const returnToOrdersAfterSignIn = useRef(false);
+  const returnToCertificateAfterSignIn = useRef<number | null>(null);
   const [privateOfferRequest, setPrivateOfferRequest] = useState<Buyer | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
@@ -479,8 +480,13 @@ export default function Marketplace() {
     const url = new URL(window.location.href);
     if (url.searchParams.get("signin") !== "1") return;
     returnToOrdersAfterSignIn.current = url.searchParams.get("returnTo") === "orders";
+    const certificateId = Number(url.searchParams.get("listingId"));
+    if (url.searchParams.get("returnTo") === "certificate" && Number.isSafeInteger(certificateId) && certificateId > 0) {
+      returnToCertificateAfterSignIn.current = certificateId;
+    }
     url.searchParams.delete("signin");
     url.searchParams.delete("returnTo");
+    url.searchParams.delete("listingId");
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     const frame = window.requestAnimationFrame(() => setDialog("signin"));
     return () => window.cancelAnimationFrame(frame);
@@ -595,6 +601,14 @@ export default function Marketplace() {
         setNotice(error instanceof Error ? error.message : "Could not add this mineral to your cart.");
       }
     });
+  };
+
+  const openStoneCertificate = (event: React.MouseEvent<HTMLAnchorElement>, listingId: number) => {
+    if (role === "user") return;
+    event.preventDefault();
+    returnToCertificateAfterSignIn.current = listingId;
+    setNotice("Sign in to view this mineral's certificate.");
+    setDialog("signin");
   };
 
   const openPrivateOfferForm = (request: Buyer) => {
@@ -1994,8 +2008,14 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
   const pendingSellers = role === "admin" ? sellers.filter((item) => item.status === "pending") : [];
   const pendingBuyers = role === "admin" ? buyers.filter((item) => item.status === "pending") : [];
 
+  const openAccountCreation = () => {
+    returnToCertificateAfterSignIn.current = null;
+    setDialog("create");
+  };
+
   const createAccount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    returnToCertificateAfterSignIn.current = null;
     const formElement = event.currentTarget;
     await withProgress("account-create", async () => {
       const form = new FormData(formElement);
@@ -2051,6 +2071,12 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             await refreshRemoteListings(true);
             setNotice("Signed in successfully.");
             formElement.reset();
+            const certificateListingId = returnToCertificateAfterSignIn.current;
+            if (certificateListingId !== null) {
+              returnToCertificateAfterSignIn.current = null;
+              window.open(`/api/listing-certificate?id=${certificateListingId}`, "_self");
+              return;
+            }
             const shouldOpenOrders = returnToOrdersAfterSignIn.current;
             returnToOrdersAfterSignIn.current = false;
             setDialog(shouldOpenOrders ? "commerce" : null);
@@ -2092,6 +2118,12 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         setNotice(`Local demo session started as ${username}.`);
       }
       formElement.reset();
+      const certificateListingId = signedInRole === "user" ? returnToCertificateAfterSignIn.current : null;
+      returnToCertificateAfterSignIn.current = null;
+      if (certificateListingId !== null) {
+        window.open(`/api/listing-certificate?id=${certificateListingId}`, "_self");
+        return;
+      }
       const shouldOpenOrders = signedInRole === "user" && returnToOrdersAfterSignIn.current;
       returnToOrdersAfterSignIn.current = false;
       setDialog(shouldOpenOrders ? "commerce" : null);
@@ -2747,7 +2779,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           const reservationLabel = listing.reservation_status === "availability_pending"
             ? "Temporarily reserved — availability being confirmed"
             : "Reserved for a buyer";
-          return <article className="seller-card" key={listing.id}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer">See certificate</a>}</div><button className="button button-dark add-to-cart-button" type="button" disabled={isReserved || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved ? "Temporarily unavailable" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
+          return <article className="seller-card" key={listing.id}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer" onClick={(event) => openStoneCertificate(event, listing.id)}>See certificate</a>}</div><button className="button button-dark add-to-cart-button" type="button" disabled={isReserved || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved ? "Temporarily unavailable" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
         })}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
@@ -2768,7 +2800,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button><div className="dialog-brand"><Gem size={19} /> MADINIMARKET</div>
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" disabled={busyActions.has("account-signout")} onClick={() => void withProgress("account-signout", signOut)}>{busyActions.has("account-signout") ? "Signing out…" : "Sign out"}</button></div></>}
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both. Your delivery address is shared with a seller only after payment is verified for an order.</p><form className="form-stack form-scroll" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><div className="field-row"><Field label="Country" name="deliveryCountry" required autoComplete="country-name" /><Field label="Region" name="deliveryRegion" required autoComplete="address-level1" /></div><div className="field-row"><Field label="District" name="deliveryDistrict" required autoComplete="address-level2" /><Field label="Street / delivery address" name="deliveryAddress" required autoComplete="street-address" /></div><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
-      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("forgot-password")}>Forgot your password?</button><button className="switch-dialog" type="button" onClick={() => setDialog("create")}>New to the market? <strong>Create account</strong></button></>}
+      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("forgot-password")}>Forgot your password?</button><button className="switch-dialog" type="button" onClick={openAccountCreation}>New to the market? <strong>Create account</strong></button></>}
       {dialog === "forgot-password" && <><div className="dialog-kicker">ACCOUNT RECOVERY</div><h2 id="dialog-title">Reset your password.</h2><p className="dialog-copy">Enter the email address registered to your account. If it matches an active account, we’ll email a secure, one-time reset link. We never email passwords.</p><form className="form-stack" onSubmit={requestPasswordReset}><Field label="Registered email address" name="email" type="email" required autoComplete="email" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("password-reset-request")}>{busyActions.has("password-reset-request") ? "Sending link…" : <>Email reset link <ArrowUpRight size={16} /></>}</button></form><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Remembered your password? <strong>Sign in</strong></button></>}
       {dialog === "sell" && <>
         <div className="dialog-kicker">SELL A MINERAL</div>
