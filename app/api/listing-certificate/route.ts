@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
@@ -9,21 +10,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const admin = createSupabaseAdminClient();
-    const { data: visibleListing, error: visibleListingError } = await admin
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const publicKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !publicKey) throw new Error("Supabase public credentials are not configured.");
+    const publicClient = createClient(supabaseUrl, publicKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: listing, error: listingError } = await publicClient
       .from("market_listing_feed")
-      .select("id")
-      .eq("id", id)
-      .maybeSingle();
-    if (visibleListingError) throw visibleListingError;
-    if (!visibleListing) return NextResponse.json({ error: "This listing is not available." }, { status: 404 });
-
-    const { data: listing, error: listingError } = await admin
-      .from("listings")
       .select("stone_certificate_path")
       .eq("id", id)
-      .eq("status", "approved")
-      .eq("is_active", true)
       .maybeSingle();
     if (listingError) throw listingError;
     if (!listing) return NextResponse.json({ error: "This listing is not available." }, { status: 404 });
@@ -31,6 +27,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "No certificate was uploaded for this listing." }, { status: 404 });
     }
 
+    const admin = createSupabaseAdminClient();
     const { data: signed, error: signedUrlError } = await admin.storage
       .from("stone-certificates")
       .createSignedUrl(listing.stone_certificate_path, 3600);
