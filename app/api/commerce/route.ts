@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getWebsiteAccountId } from "@/lib/website-session";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { sendPendingSellerAvailabilityEmails } from "@/lib/marketplace-availability-email";
 
 type Body = Record<string, unknown>;
 
@@ -193,6 +194,14 @@ export async function POST(request: Request) {
         throw createError;
       }
       if (!createdOrder || !buyer) throw new Error("Order creation returned incomplete data.");
+      try {
+        const notificationResult = await sendPendingSellerAvailabilityEmails(createdOrder.id);
+        if (notificationResult.emailFailures > 0) {
+          console.error(`Seller availability emails for order ${createdOrder.control_number} had ${notificationResult.emailFailures} failure(s); the order cron will retry.`);
+        }
+      } catch (notificationError) {
+        console.error(`Could not send immediate seller availability emails for order ${createdOrder.control_number}; the order cron will retry.`, notificationError);
+      }
       return NextResponse.json({ order: { id: createdOrder.id, control_number: createdOrder.control_number } }, { status: 201 });
     }
 

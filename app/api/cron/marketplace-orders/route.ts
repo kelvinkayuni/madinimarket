@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { sendGmailEmail } from "@/lib/gmail";
+import { sendPendingSellerAvailabilityEmails } from "@/lib/marketplace-availability-email";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const maxDuration = 300;
@@ -24,27 +25,9 @@ export async function GET(request: Request) {
     let sentCount = 0;
     let emailFailures = 0;
 
-    const { data: availabilityItems, error: availabilityError } = await admin.from("marketplace_order_items")
-      .select("id, seller_email, mineral_name, weight, unit, total_price, currency, order:marketplace_orders!inner(control_number, seller_response_deadline)")
-      .eq("status", "awaiting_seller").is("availability_email_sent_at", null).limit(5);
-    if (availabilityError) throw availabilityError;
-    for (const item of availabilityItems ?? []) {
-      const order = Array.isArray(item.order) ? item.order[0] : item.order;
-      try {
-        await sendGmailEmail({
-          to: item.seller_email,
-          subject: `Availability needed for order ${order.control_number}`,
-          text: `Please sign in to Madinimarket and respond Available or Unavailable within 6 hours.\n\nOrder: ${order.control_number}\nMineral: ${item.mineral_name}\nWeight: ${item.weight} ${item.unit}\nTotal: ${item.currency} ${Number(item.total_price).toLocaleString()}\n\nOpen ${process.env.NEXT_PUBLIC_APP_URL ?? "https://madinimarket.com"} and choose My orders.`,
-        });
-        const { error } = await admin.from("marketplace_order_items")
-          .update({ availability_email_sent_at: new Date().toISOString() }).eq("id", item.id).is("availability_email_sent_at", null);
-        if (error) throw error;
-        sentCount += 1;
-      } catch (error) {
-        emailFailures += 1;
-        console.error(`Availability notification failed for order item ${item.id}`, error);
-      }
-    }
+    const availabilityNotifications = await sendPendingSellerAvailabilityEmails();
+    sentCount += availabilityNotifications.sentCount;
+    emailFailures += availabilityNotifications.emailFailures;
 
     const { data: expiredAvailabilityItems, error: expiredAvailabilityError } = await admin.from("marketplace_order_items")
       .select("id, seller_email, mineral_name, order:marketplace_orders!inner(control_number)")

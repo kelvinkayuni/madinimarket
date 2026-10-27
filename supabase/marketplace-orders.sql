@@ -64,6 +64,7 @@ create table if not exists public.marketplace_order_items (
   seller_response_deadline timestamptz not null,
   seller_responded_at timestamptz,
   availability_email_sent_at timestamptz,
+  availability_email_claimed_at timestamptz,
   dispatch_email_sent_at timestamptz,
   buyer_shipped_email_sent_at timestamptz,
   buyer_delivered_email_sent_at timestamptz,
@@ -84,6 +85,9 @@ create table if not exists public.marketplace_order_items (
   refund_reference text,
   created_at timestamptz not null default now()
 );
+
+alter table public.marketplace_order_items
+  add column if not exists availability_email_claimed_at timestamptz;
 
 alter table public.marketplace_order_items drop constraint if exists marketplace_order_items_status_check;
 alter table public.marketplace_order_items add constraint marketplace_order_items_status_check check (

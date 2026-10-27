@@ -445,6 +445,7 @@ export default function Marketplace() {
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [busyActions, setBusyActions] = useState<Set<string>>(() => new Set());
   const [dialog, setDialog] = useState<Dialog>(null);
+  const returnToOrdersAfterSignIn = useRef(false);
   const [privateOfferRequest, setPrivateOfferRequest] = useState<Buyer | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
@@ -473,6 +474,17 @@ export default function Marketplace() {
   const [sellerImagePreview, setSellerImagePreview] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("signin") !== "1") return;
+    returnToOrdersAfterSignIn.current = url.searchParams.get("returnTo") === "orders";
+    url.searchParams.delete("signin");
+    url.searchParams.delete("returnTo");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    const frame = window.requestAnimationFrame(() => setDialog("signin"));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
   const [websiteDrafts, setWebsiteDrafts] = useState<{ seller: WebsiteDraft | null; buyer: WebsiteDraft | null }>({ seller: null, buyer: null });
   const [editingSubmission, setEditingSubmission] = useState<EditingSubmission>(null);
   const [sellerListingType, setSellerListingType] = useState<ListingType>("single");
@@ -2039,7 +2051,9 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             await refreshRemoteListings(true);
             setNotice("Signed in successfully.");
             formElement.reset();
-            setDialog(null);
+            const shouldOpenOrders = returnToOrdersAfterSignIn.current;
+            returnToOrdersAfterSignIn.current = false;
+            setDialog(shouldOpenOrders ? "commerce" : null);
             return;
           }
           const response = await fetch("/api/auth/username-login", {
@@ -2078,7 +2092,9 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         setNotice(`Local demo session started as ${username}.`);
       }
       formElement.reset();
-      setDialog(null);
+      const shouldOpenOrders = signedInRole === "user" && returnToOrdersAfterSignIn.current;
+      returnToOrdersAfterSignIn.current = false;
+      setDialog(shouldOpenOrders ? "commerce" : null);
     });
   };
   const requestPasswordReset = async (event: FormEvent<HTMLFormElement>) => {
