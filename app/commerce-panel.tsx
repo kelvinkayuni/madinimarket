@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import PrivateOfferForm, { FinalizePrivateOfferForm } from "./private-offer-form";
+import { fetchWithWebsiteSession } from "@/lib/client-website-session";
 
 type Currency = "TZS" | "USD";
 type CartListing = {
@@ -158,8 +159,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
 
   const refresh = useCallback(async () => {
     const [response, offersResponse] = await Promise.all([
-      fetch("/api/commerce", { cache: "no-store" }),
-      fetch("/api/marketplace-offers", { cache: "no-store" }),
+      fetchWithWebsiteSession("/api/commerce", { cache: "no-store" }),
+      fetchWithWebsiteSession("/api/marketplace-offers", { cache: "no-store" }),
     ]);
     const [result, offersResult] = await Promise.all([response.json(), offersResponse.json()]);
     if (!response.ok) throw new Error(result.error ?? "Could not load your cart and orders.");
@@ -179,8 +180,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
   useEffect(() => {
     let active = true;
     void Promise.all([
-      fetch("/api/commerce", { cache: "no-store" }),
-      fetch("/api/marketplace-offers", { cache: "no-store" }),
+      fetchWithWebsiteSession("/api/commerce", { cache: "no-store" }),
+      fetchWithWebsiteSession("/api/marketplace-offers", { cache: "no-store" }),
     ]).then(async ([response, offersResponse]) => {
       const [result, offersResult] = await Promise.all([response.json(), offersResponse.json()]);
       if (!response.ok) throw new Error(result.error ?? "Could not load your cart and orders.");
@@ -215,7 +216,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const perform = async (key: string, action: string, values: Record<string, unknown>) => {
     setBusy(key);
     try {
-      const response = await fetch("/api/commerce", {
+      const response = await fetchWithWebsiteSession("/api/commerce", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...values }),
@@ -238,7 +239,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const performPrivateOffer = async (key: string, values: Record<string, unknown>) => {
     setBusy(key);
     try {
-      const response = await fetch("/api/marketplace-offers", {
+      const response = await fetchWithWebsiteSession("/api/marketplace-offers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -277,7 +278,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     const formElement = event.currentTarget;
     setBusy(`payment-${orderId}`);
     try {
-      const response = await fetch("/api/commerce/payment-proof", {
+      const response = await fetchWithWebsiteSession("/api/commerce/payment-proof", {
         method: "POST",
         body: new FormData(formElement),
       });

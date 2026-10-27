@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
-import { clearWebsiteSession, getWebsiteAccountId } from "@/lib/website-session";
+import { getWebsiteAccountId } from "@/lib/website-session";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const id = await getWebsiteAccountId();
+    const id = await getWebsiteAccountId(request);
     if (!id) return NextResponse.json({ account: null }, { headers: { "Cache-Control": "no-store" } });
     const { data, error } = await createSupabaseAdminClient().from("website_accounts")
       .select("id, username, display_name")
@@ -19,7 +19,5 @@ export async function GET() {
 }
 
 export async function DELETE() {
-  const response = NextResponse.json({ signedOut: true });
-  clearWebsiteSession(response);
-  return response;
+  return NextResponse.json({ signedOut: true });
 }

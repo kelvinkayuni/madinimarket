@@ -19,9 +19,9 @@ function identifyFile(bytes: Buffer) {
   return null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const accountId = await getWebsiteAccountId();
+    const accountId = await getWebsiteAccountId(request);
     if (!accountId) return NextResponse.json({ error: "Sign in to view your licences." }, { status: 401 });
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin.from("website_account_certificates")
@@ -39,7 +39,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const accountId = await getWebsiteAccountId();
+  const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in again before submitting a licence." }, { status: 401 });
 
   let form: FormData;

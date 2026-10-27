@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
-import { setWebsiteSession, verifyWebsitePassword } from "@/lib/website-session";
+import { createWebsiteSessionToken, verifyWebsitePassword } from "@/lib/website-session";
 
 export async function POST(request: Request) {
   let username = "";
@@ -30,9 +30,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
     }
 
-    const response = NextResponse.json({ id: account.id, username: account.username, displayName: account.display_name }, { headers: { "Cache-Control": "no-store" } });
-    setWebsiteSession(response, account.id, account.session_version);
-    return response;
+    return NextResponse.json({
+      id: account.id,
+      username: account.username,
+      displayName: account.display_name,
+      accessToken: createWebsiteSessionToken(account.id, account.session_version),
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 503 });
   }

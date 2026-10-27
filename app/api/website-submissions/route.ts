@@ -75,9 +75,9 @@ async function websiteAccountHasMarketAccess(admin: ReturnType<typeof createSupa
   return accountResult.data?.is_active === true && Boolean(subscriptionResult.data);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const accountId = await getWebsiteAccountId();
+    const accountId = await getWebsiteAccountId(request);
     if (!accountId) return NextResponse.json({ error: "Sign in to view your submissions." }, { status: 401 });
     const admin = createSupabaseAdminClient();
     const [sellers, buyers, hasMarketAccess] = await Promise.all([
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
 
   const kind = body.kind === "seller" || body.kind === "buyer" ? body.kind : null;
   const values = typeof body.values === "object" && body.values !== null ? body.values as Record<string, unknown> : null;
-  const accountId = await getWebsiteAccountId();
+  const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in again before submitting." }, { status: 401 });
   if (!kind || !values) return NextResponse.json({ error: "Invalid submission details." }, { status: 400 });
   if (kind !== "seller" && stoneCertificate) return NextResponse.json({ error: "Stone certificates can only be attached to mineral listings." }, { status: 400 });
@@ -331,7 +331,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Invalid submission details." }, { status: 400 });
   }
 
-  const accountId = await getWebsiteAccountId();
+  const accountId = await getWebsiteAccountId(request);
   const kind = values.kind === "seller" || values.kind === "buyer" ? values.kind : null;
   const id = Number(values.id);
   if (!accountId) return NextResponse.json({ error: "Sign in again before deleting." }, { status: 401 });

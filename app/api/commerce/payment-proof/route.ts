@@ -14,7 +14,7 @@ function validSignature(type: string, bytes: Buffer) {
 }
 
 export async function POST(request: Request) {
-  const buyerId = await getWebsiteAccountId();
+  const buyerId = await getWebsiteAccountId(request);
   if (!buyerId) return NextResponse.json({ error: "Sign in to submit payment proof." }, { status: 401 });
 
   let form: FormData;

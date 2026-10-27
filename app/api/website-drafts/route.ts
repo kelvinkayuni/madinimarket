@@ -40,9 +40,9 @@ async function withImageUrl(admin: ReturnType<typeof createSupabaseAdminClient>,
   return { ...draft, image_url: data?.signedUrl ?? "" };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const accountId = await getWebsiteAccountId();
+    const accountId = await getWebsiteAccountId(request);
     if (!accountId) return NextResponse.json({ error: "Sign in to load your saved drafts." }, { status: 401 });
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin.from("website_account_drafts")
@@ -66,7 +66,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid draft data." }, { status: 400 });
   }
 
-  const accountId = await getWebsiteAccountId();
+  const accountId = await getWebsiteAccountId(request);
   const kind = getKind(body.kind);
   const payload = kind ? getPayload(kind, body.payload) : null;
   if (!accountId) return NextResponse.json({ error: "Sign in again to save your draft." }, { status: 401 });
@@ -122,7 +122,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Invalid draft data." }, { status: 400 });
   }
 
-  const accountId = await getWebsiteAccountId();
+  const accountId = await getWebsiteAccountId(request);
   const kind = getKind(body.kind);
   if (!accountId) return NextResponse.json({ error: "Sign in again to clear your draft." }, { status: 401 });
   if (!kind) return NextResponse.json({ error: "Invalid draft data." }, { status: 400 });

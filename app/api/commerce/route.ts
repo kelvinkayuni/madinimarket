@@ -19,8 +19,8 @@ async function readBody(request: Request): Promise<Body | null> {
   }
 }
 
-export async function GET() {
-  const accountId = await getWebsiteAccountId();
+export async function GET(request: Request) {
+  const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in to view your cart and orders." }, { status: 401 });
 
   try {
@@ -107,7 +107,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const accountId = await getWebsiteAccountId();
+  const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });

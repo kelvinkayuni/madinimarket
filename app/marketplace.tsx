@@ -10,6 +10,7 @@ import AdminOrderTimeLimits from "./admin-order-time-limits";
 import CommercePanel from "./commerce-panel";
 import PrivateOfferForm from "./private-offer-form";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { clearWebsiteSessionToken, fetchWithWebsiteSession, setWebsiteSessionToken } from "@/lib/client-website-session";
 import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 import { calculateListingPrice } from "@/lib/listing-pricing";
 import { MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
@@ -255,7 +256,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
   }
   if (includeOwnSubmissions) {
     try {
-      const response = await fetch("/api/website-submissions", { cache: "no-store" });
+      const response = await fetchWithWebsiteSession("/api/website-submissions", { cache: "no-store" });
       if (response.ok) {
         const ownSubmissions = await response.json();
         sellerRows = [...sellerRows, ...(ownSubmissions.sellers ?? [])];
@@ -552,7 +553,7 @@ export default function Marketplace() {
       if (loading || document.visibilityState !== "visible") return;
       loading = true;
       try {
-        const response = await fetch("/api/commerce", { cache: "no-store" });
+        const response = await fetchWithWebsiteSession("/api/commerce", { cache: "no-store" });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? "Could not load account counts.");
         if (active) {
@@ -596,7 +597,7 @@ export default function Marketplace() {
     }
     await withProgress(`cart-add-${listing.id}`, async () => {
       try {
-        const response = await fetch("/api/commerce", {
+        const response = await fetchWithWebsiteSession("/api/commerce", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "add_to_cart", listingId: listing.id }),
@@ -605,7 +606,7 @@ export default function Marketplace() {
         if (!response.ok) throw new Error(result.error ?? "Could not add this mineral to your cart.");
         setCartListingIds((current) => new Set(current).add(listing.id));
         setCartListingAccountId(userId);
-        const cartResponse = await fetch("/api/commerce", { cache: "no-store" });
+        const cartResponse = await fetchWithWebsiteSession("/api/commerce", { cache: "no-store" });
         const cartResult = await cartResponse.json();
         if (!cartResponse.ok) throw new Error(cartResult.error ?? "The item was added, but your cart could not be refreshed.");
         const nextCartListingIds = new Set<number>((cartResult.cartItems ?? []).map((item: { listing_id: number }) => Number(item.listing_id)).filter(Number.isSafeInteger));
@@ -619,8 +620,29 @@ export default function Marketplace() {
   };
 
   const openStoneCertificate = (event: React.MouseEvent<HTMLAnchorElement>, listingId: number) => {
-    if (role === "user") return;
     event.preventDefault();
+    if (role === "user") {
+      const certificateTab = window.open("about:blank", "_blank");
+      if (!certificateTab) {
+        setNotice("Allow pop-ups to open this certificate.");
+        return;
+      }
+      void fetchWithWebsiteSession(`/api/listing-certificate?id=${listingId}`)
+        .then(async (response) => {
+          if (!response.ok) {
+            const result = await response.json();
+            throw new Error(result.error ?? "Could not open this certificate.");
+          }
+          const certificateUrl = URL.createObjectURL(await response.blob());
+          certificateTab.location.href = certificateUrl;
+          window.setTimeout(() => URL.revokeObjectURL(certificateUrl), 60_000);
+        })
+        .catch((error: unknown) => {
+          certificateTab.close();
+          setNotice(error instanceof Error ? error.message : "Could not open this certificate.");
+        });
+      return;
+    }
     returnToCertificateAfterSignIn.current = listingId;
     setNotice("Sign in to view this mineral's certificate.");
     setDialog("signin");
@@ -649,7 +671,7 @@ export default function Marketplace() {
   const sendPrivateOffer = async (details: Record<string, string | number | null>) => {
     await withProgress("private-offer-submit", async () => {
       try {
-        const response = await fetch("/api/marketplace-offers", {
+        const response = await fetchWithWebsiteSession("/api/marketplace-offers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(details),
@@ -951,9 +973,10 @@ export default function Marketplace() {
             if (!isAdmin) await supabase.auth.signOut({ scope: "local" });
           }
           if (!isAdmin) {
-            const response = await fetch("/api/auth/website-session", { cache: "no-store" });
+            const response = await fetchWithWebsiteSession("/api/auth/website-session", { cache: "no-store" });
             const result = response.ok ? await response.json() : null;
             hasWebsiteAccount = Boolean(result?.account);
+            if (!result?.account) clearWebsiteSessionToken();
             if (active) {
               setUser(result?.account?.username ?? "");
               setDisplayName(result?.account?.display_name ?? "");
@@ -962,7 +985,7 @@ export default function Marketplace() {
               if (!result?.account) setCertificates({});
             }
             if (result?.account) {
-              const certificateResponse = await fetch("/api/website-certificates", { cache: "no-store" });
+              const certificateResponse = await fetchWithWebsiteSession("/api/website-certificates", { cache: "no-store" });
               if (certificateResponse.ok) {
                 const certificateResult = await certificateResponse.json();
                 const nextCertificates: Partial<Record<CertificateKind, CertificateSubmission>> = {};
@@ -1107,7 +1130,7 @@ export default function Marketplace() {
     await withProgress(`load-${next}`, async () => {
       try {
         if (isSupabaseConfigured && role === "user") {
-          const response = await fetch("/api/website-submissions", { cache: "no-store" });
+          const response = await fetchWithWebsiteSession("/api/website-submissions", { cache: "no-store" });
           const result = await response.json();
           if (!response.ok) throw new Error(result.error ?? "Could not load your approved market items.");
           setMyMarketMinerals((result.marketSellers ?? []).map((item: {
@@ -1156,7 +1179,7 @@ export default function Marketplace() {
     });
   };
   const refreshCertificates = async () => {
-    const response = await fetch("/api/website-certificates", { cache: "no-store" });
+    const response = await fetchWithWebsiteSession("/api/website-certificates", { cache: "no-store" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error ?? "Could not load your licences.");
     const nextCertificates: Partial<Record<CertificateKind, CertificateSubmission>> = {};
@@ -1239,7 +1262,7 @@ export default function Marketplace() {
     };
   }, []);
   const refreshWebsiteDrafts = async () => {
-    const response = await fetch("/api/website-drafts", { cache: "no-store" });
+    const response = await fetchWithWebsiteSession("/api/website-drafts", { cache: "no-store" });
     if (!response.ok) return;
     const result = await response.json();
     const next = { seller: null, buyer: null } as { seller: WebsiteDraft | null; buyer: WebsiteDraft | null };
@@ -1263,7 +1286,7 @@ export default function Marketplace() {
       }
     }
     try {
-      const response = await fetch("/api/website-drafts", {
+      const response = await fetchWithWebsiteSession("/api/website-drafts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind, payload, imageData }),
@@ -1721,7 +1744,7 @@ export default function Marketplace() {
       setUserSubscriptionError("");
     }
     try {
-      const response = await fetch("/api/subscriptions", { cache: "no-store" });
+      const response = await fetchWithWebsiteSession("/api/subscriptions", { cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load subscription options.");
       setUserSubscriptionPlans(result.plans as SubscriptionPlan[]);
@@ -1803,7 +1826,7 @@ export default function Marketplace() {
   const requestSubscription = async (plan: SubscriptionPlan, currency: Currency) => {
     await withProgress(`subscription-request-${plan.id}`, async () => {
       try {
-        const response = await fetch("/api/subscriptions", {
+        const response = await fetchWithWebsiteSession("/api/subscriptions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ planId: plan.id, currency }),
@@ -1872,7 +1895,7 @@ export default function Marketplace() {
       const form = new FormData();
       form.set("kind", kind);
       form.set("file", file);
-      const response = await fetch("/api/website-certificates", { method: "POST", body: form });
+      const response = await fetchWithWebsiteSession("/api/website-certificates", { method: "POST", body: form });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not submit the licence.");
       setCertificates((current) => ({ ...current, [kind]: result.certificate as CertificateSubmission }));
@@ -1952,7 +1975,7 @@ export default function Marketplace() {
   };
   const deleteSubmission = async (kind: "seller" | "buyer", item: Seller | Buyer) => {
     if (isSupabaseConfigured && role === "user") {
-      const response = await fetch("/api/website-submissions", {
+      const response = await fetchWithWebsiteSession("/api/website-submissions", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind, id: item.id }),
@@ -2068,7 +2091,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       let signedInRole: "user" | "admin" = "user";
       if (isSupabaseConfigured) {
         try {
-          let websiteAccount: { id: string; username: string; displayName: string } | null = null;
+          let websiteAccount: { id: string; username: string; displayName: string; accessToken: string } | null = null;
           if (/^MM-\d{4}$/i.test(username)) {
             const websiteResponse = await fetch("/api/auth/website-login", {
               method: "POST",
@@ -2078,6 +2101,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
             if (websiteResponse.ok) websiteAccount = await websiteResponse.json();
           }
           if (websiteAccount) {
+            setWebsiteSessionToken(websiteAccount.accessToken);
             setUser(websiteAccount.username);
             setDisplayName(websiteAccount.displayName);
             setUserId(websiteAccount.id);
@@ -2170,8 +2194,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
   const signOut = async () => {
     if (isSupabaseConfigured) {
       if (role === "admin") await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
-      else await fetch("/api/auth/website-session", { method: "DELETE" });
     }
+    clearWebsiteSessionToken();
     setUser("");
     setDisplayName("");
     setUserId("");
@@ -2263,7 +2287,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         district: listing.district, street: listing.street, email: listing.email, phone: listing.phone,
       }));
       if (stoneCertificate instanceof File && stoneCertificate.size) submission.set("stoneCertificate", stoneCertificate);
-      const response = await fetch("/api/website-submissions", {
+      const response = await fetchWithWebsiteSession("/api/website-submissions", {
         method: "POST",
         body: submission,
       });
@@ -2334,7 +2358,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     };
     if (isSupabaseConfigured && role === "user") {
       if (!userId) { setNotice("Sign in again before submitting this request."); return; }
-      const response = await fetch("/api/website-submissions", {
+      const response = await fetchWithWebsiteSession("/api/website-submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2823,7 +2847,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2><p className="dialog-copy">Create your account to buy, sell, or both. Your delivery address is shared with a seller only after payment is verified for an order.</p><form className="form-stack form-scroll" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><div className="field-row"><Field label="Country" name="deliveryCountry" required autoComplete="country-name" /><Field label="Region" name="deliveryRegion" required autoComplete="address-level1" /></div><div className="field-row"><Field label="District" name="deliveryDistrict" required autoComplete="address-level2" /><Field label="Street / delivery address" name="deliveryAddress" required autoComplete="street-address" /></div><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Already registered? <strong>Sign in</strong></button></>}
       {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("forgot-password")}>Forgot your password?</button><button className="switch-dialog" type="button" onClick={openAccountCreation}>New to the market? <strong>Create account</strong></button></>}
       {dialog === "forgot-password" && <><div className="dialog-kicker">ACCOUNT RECOVERY</div><h2 id="dialog-title">Reset your password.</h2><p className="dialog-copy">Enter the email address registered to your account. If it matches an active account, we’ll email a secure, one-time reset link. We never email passwords.</p><form className="form-stack" onSubmit={requestPasswordReset}><Field label="Registered email address" name="email" type="email" required autoComplete="email" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("password-reset-request")}>{busyActions.has("password-reset-request") ? "Sending link…" : <>Email reset link <ArrowUpRight size={16} /></>}</button></form><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Remembered your password? <strong>Sign in</strong></button></>}
-      {dialog === "certificate-ready" && <><div className="dialog-kicker">SIGN-IN COMPLETE</div><h2 id="dialog-title">Your certificate is ready.</h2><p className="dialog-copy">The certificate will open in a new tab. Your marketplace dashboard will stay open here.</p><button className="button button-dark form-submit" type="button" onClick={() => { if (certificateReadyListingId !== null) window.open(`/api/listing-certificate?id=${certificateReadyListingId}`, "_blank", "noopener,noreferrer"); setCertificateReadyListingId(null); setDialog(null); }}>Open certificate <ArrowUpRight size={16} /></button></>}
+      {dialog === "certificate-ready" && <><div className="dialog-kicker">SIGN-IN COMPLETE</div><h2 id="dialog-title">Your certificate is ready.</h2><p className="dialog-copy">The certificate will open in a new tab. Your marketplace dashboard will stay open here.</p><button className="button button-dark form-submit" type="button" onClick={() => { if (certificateReadyListingId !== null) { const certificateTab = window.open("about:blank", "_blank"); if (!certificateTab) setNotice("Allow pop-ups to open this certificate."); else void fetchWithWebsiteSession(`/api/listing-certificate?id=${certificateReadyListingId}`).then(async (response) => { if (!response.ok) throw new Error("Could not open this certificate."); const url = URL.createObjectURL(await response.blob()); certificateTab.location.href = url; window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }).catch((error: unknown) => { certificateTab.close(); setNotice(error instanceof Error ? error.message : "Could not open this certificate."); }); } setCertificateReadyListingId(null); setDialog(null); }}>Open certificate <ArrowUpRight size={16} /></button></>}
       {dialog === "sell" && <>
         <div className="dialog-kicker">SELL A MINERAL</div>
         <h2 id="dialog-title">{editingSeller ? "Edit your listing." : "Submit a listing."}</h2>

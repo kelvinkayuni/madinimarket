@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    if (!await getWebsiteAccountId()) {
+    if (!await getWebsiteAccountId(request)) {
       const signInUrl = new URL("/", requestUrl);
       signInUrl.searchParams.set("signin", "1");
       signInUrl.searchParams.set("returnTo", "certificate");
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
         "Content-Disposition": "inline",
         "Content-Type": contentType,
         "X-Content-Type-Options": "nosniff",
-        "Vary": "Cookie",
+        "Vary": "Authorization",
       },
     });
   } catch (error) {

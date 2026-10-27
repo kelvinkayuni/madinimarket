@@ -9,9 +9,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const accountId = await getWebsiteAccountId();
+    const accountId = await getWebsiteAccountId(request);
     if (!accountId) return NextResponse.json({ error: "Sign in to view subscriptions." }, { status: 401 });
     const admin = createSupabaseAdminClient();
     const now = new Date().toISOString();
@@ -58,7 +58,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const accountId = await getWebsiteAccountId();
+  const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in again before choosing a subscription." }, { status: 401 });
 
   let body: unknown;

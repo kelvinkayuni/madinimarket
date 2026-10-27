@@ -34,8 +34,8 @@ function fail(error: { message: string; code?: string }) {
   );
 }
 
-export async function GET() {
-  const accountId = await getWebsiteAccountId();
+export async function GET(request: Request) {
+  const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in to view private offers." }, { status: 401 });
 
   try {
@@ -120,7 +120,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const accountId = await getWebsiteAccountId();
+  const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
