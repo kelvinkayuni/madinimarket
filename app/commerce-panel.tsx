@@ -430,11 +430,16 @@ export default function CommercePanel({ onNotice, onCounters }: {
           {order.payment_status === "awaiting_payment" && <form className="commerce-payment-form" onSubmit={(event) => void submitPaymentProof(event, order.id)}>
             {data.paymentMethods.length
               ? <div className="commerce-payment-methods">
-                <strong>Choose one of these payment methods</strong>
-                {data.paymentMethods.map((method, index) => <div className="commerce-payment-method" key={`${method.method}-${index}`}>
-                  <strong>{method.method}</strong><span>Account number / payment number: {method.accountNumber}</span>
-                </div>)}
-                {data.paymentInstructions && <p>{data.paymentInstructions}</p>}
+                <strong>Choose a payment method to view its details</strong>
+                <div className="commerce-payment-method-list">
+                  {data.paymentMethods.map((method, index) => <details className="commerce-payment-method" key={`${method.method}-${index}`}>
+                    <summary>{method.method}</summary>
+                    <span>Account number / payment number: {method.accountNumber}</span>
+                  </details>)}
+                </div>
+                {data.paymentInstructions && <div className="commerce-payment-general-instructions">
+                  <strong>General instructions</strong><p>{data.paymentInstructions}</p>
+                </div>}
               </div>
               : <p>Payment methods are not configured. Contact Madinimarket support before sending money.</p>}
             <label className="field-label">Payment transaction reference<input className="text-input" name="reference" required minLength={3} maxLength={120} value={paymentReferences[order.id] ?? ""} onChange={(event) => setPaymentReferences((current) => ({ ...current, [order.id]: event.target.value }))} /></label>

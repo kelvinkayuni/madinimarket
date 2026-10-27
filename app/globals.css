@@ -76,11 +76,21 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-payment-method-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 10px; padding: 12px; border: 1px solid #e1e5dd; background: #fff; }
 .admin-payment-method-row .field-label { min-width: 0; }
 .admin-payment-method-row .button { min-height: 40px; }
-.admin-payment-method-preview, .commerce-payment-method { display: grid; gap: 4px; padding: 9px 0; }
-.admin-payment-method-preview + .admin-payment-method-preview, .commerce-payment-method + .commerce-payment-method { border-top: 1px solid #e1e5dd; }
-.admin-payment-method-preview > span, .commerce-payment-method > span { overflow-wrap: anywhere; }
+.admin-payment-method-preview { display: grid; gap: 4px; padding: 9px 0; }
+.admin-payment-method-preview + .admin-payment-method-preview { border-top: 1px solid #e1e5dd; }
+.admin-payment-method-preview > span { overflow-wrap: anywhere; }
 .commerce-payment-methods { display: grid; gap: 6px; padding: 10px; border: 1px solid #e1e5dd; background: #fff; color: #465148; font-size: 11px; line-height: 1.5; }
 .commerce-payment-methods > p { margin: 0; }
+.commerce-payment-method-list { display: grid; gap: 6px; }
+.commerce-payment-method { border: 1px solid #e1e5dd; background: #fff; }
+.commerce-payment-method > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; color: #354b39; font-weight: 650; cursor: pointer; list-style: none; }
+.commerce-payment-method > summary::-webkit-details-marker { display: none; }
+.commerce-payment-method > summary::after { content: "+"; color: #667064; font-size: 16px; line-height: 1; }
+.commerce-payment-method[open] > summary::after { content: "−"; }
+.commerce-payment-method > span { display: block; padding: 0 10px 10px; overflow-wrap: anywhere; }
+.commerce-payment-general-instructions { padding-top: 6px; }
+.commerce-payment-general-instructions > strong { color: #354b39; }
+.commerce-payment-general-instructions > p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .admin-market-hours-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; max-width: 720px; margin-top: 22px; padding: 14px 16px; border: 1px solid #dfe6dc; background: #f7f9f4; }
 .admin-market-hours-status > div { display: grid; gap: 5px; }
 .admin-market-hours-status > div > span { color: #859084; font-size: 8px; font-weight: 700; letter-spacing: .1em; }
