@@ -112,6 +112,9 @@ type CommerceData = {
   cartItems: CartItem[];
   buyerOrders: BuyerOrder[];
   sellerItems: OrderItem[];
+  sellerRequestsCount: number;
+  sellingCount: number;
+  buyingCount: number;
   paymentInstructions: string;
   privateOffers: { threads: PrivateOfferThread[]; feeRate: number | null; usdEnabled: boolean };
 };
@@ -128,7 +131,10 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
-export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (message: string) => void; onCartCount: (count: number) => void }) {
+export default function CommercePanel({ onNotice, onCounters }: {
+  onNotice: (message: string) => void;
+  onCounters: (counts: Pick<CommerceData, "sellerRequestsCount" | "sellingCount" | "buyingCount">) => void;
+}) {
   const [data, setData] = useState<CommerceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -154,7 +160,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
     if (!offersResponse.ok) throw new Error(offersResult.error ?? "Could not load private offers.");
     const commerce = { ...result, privateOffers: offersResult } as CommerceData;
     setData(commerce);
-    onCartCount(commerce.cartItems.length);
+    onCounters(commerce);
     setBuyerName((current) => current || commerce.profile.display_name || "");
     setBuyerPhone((current) => current || commerce.profile.phone || "");
     setCountry((current) => current || commerce.profile.delivery_country || "");
@@ -162,7 +168,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
     setDistrict((current) => current || commerce.profile.delivery_district || "");
     setAddress((current) => current || commerce.profile.delivery_address || "");
     setLoading(false);
-  }, [onCartCount]);
+  }, [onCounters]);
 
   useEffect(() => {
     let active = true;
@@ -177,7 +183,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
     }).then((commerce) => {
       if (!active) return;
       setData(commerce);
-      onCartCount(commerce.cartItems.length);
+      onCounters(commerce);
       setBuyerName(commerce.profile.display_name || "");
       setBuyerPhone(commerce.profile.phone || "");
       setCountry(commerce.profile.delivery_country || "");
@@ -198,7 +204,7 @@ export default function CommercePanel({ onNotice, onCartCount }: { onNotice: (me
       active = false;
       window.clearInterval(interval);
     };
-  }, [onCartCount, onNotice, refresh]);
+  }, [onCounters, onNotice, refresh]);
 
   const perform = async (key: string, action: string, values: Record<string, unknown>) => {
     setBusy(key);

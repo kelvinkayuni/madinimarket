@@ -24,14 +24,27 @@ export async function GET() {
 
   try {
     const admin = createSupabaseAdminClient();
-    const [{ data: profile, error: profileError }, { data: cart, error: cartError }, { data: buyerOrders, error: buyerOrdersError }, { data: sellerItems, error: sellerItemsError }] = await Promise.all([
-      admin.from("website_accounts").select("id, display_name, email, phone, delivery_country, delivery_region, delivery_district, delivery_address").eq("id", accountId).single(),
+    const [
+      { data: profile, error: profileError },
+      { data: cart, error: cartError },
+      { data: buyerOrders, error: buyerOrdersError },
+      { data: sellerItems, error: sellerItemsError },
+      { count: sellerRequestsCount, error: sellerRequestsCountError },
+      { count: sellingCount, error: sellingCountError },
+      { count: buyingCount, error: buyingCountError },
+      { data: activeSubscription, error: activeSubscriptionError },
+    ] = await Promise.all([
+      admin.from("website_accounts").select("id, display_name, email, phone, delivery_country, delivery_region, delivery_district, delivery_address, is_active").eq("id", accountId).single(),
       admin.from("marketplace_cart_items").select("id, listing_id, created_at, listing:listings(id, mineral_name, listing_type, weight, unit, price, seller_price, platform_fee_amount, currency, image_path, website_user_id, seller_name, status, is_active, marketplace_state)").eq("buyer_id", accountId).order("created_at"),
       admin.from("marketplace_orders").select("*, items:marketplace_order_items(*)").eq("buyer_id", accountId).order("created_at", { ascending: false }).limit(50),
       admin.from("marketplace_order_items").select("*, order:marketplace_orders!inner(id, control_number, payment_status, payment_deadline, currency, created_at, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)").eq("seller_id", accountId).order("created_at", { ascending: false }).limit(100),
+      admin.from("marketplace_order_items").select("id", { count: "exact", head: true }).eq("seller_id", accountId).eq("status", "awaiting_seller"),
+      admin.from("listings").select("id", { count: "exact", head: true }).eq("website_user_id", accountId).eq("status", "approved").eq("is_active", true),
+      admin.from("buy_requests").select("id", { count: "exact", head: true }).eq("website_user_id", accountId).eq("status", "approved").eq("is_active", true),
+      admin.from("account_subscriptions").select("id").eq("website_user_id", accountId).eq("status", "active").lte("starts_at", new Date().toISOString()).gt("expires_at", new Date().toISOString()).limit(1).maybeSingle(),
     ]);
-    if (profileError || cartError || buyerOrdersError || sellerItemsError) {
-      console.error("Failed to load commerce account data", profileError ?? cartError ?? buyerOrdersError ?? sellerItemsError);
+    if (profileError || cartError || buyerOrdersError || sellerItemsError || sellerRequestsCountError || sellingCountError || buyingCountError || activeSubscriptionError) {
+      console.error("Failed to load commerce account data", profileError ?? cartError ?? buyerOrdersError ?? sellerItemsError ?? sellerRequestsCountError ?? sellingCountError ?? buyingCountError ?? activeSubscriptionError);
       return NextResponse.json({ error: "Could not load your cart and orders." }, { status: 503 });
     }
 
@@ -74,6 +87,9 @@ export async function GET() {
         cartItems: cart ?? [],
         buyerOrders: safeBuyerOrders,
       sellerItems: safeSellerItems,
+      sellerRequestsCount: sellerRequestsCount ?? 0,
+      sellingCount: profile.is_active && activeSubscription ? sellingCount ?? 0 : 0,
+      buyingCount: profile.is_active && activeSubscription ? buyingCount ?? 0 : 0,
       paymentInstructions: process.env.MARKETPLACE_PAYMENT_INSTRUCTIONS?.trim() ?? "",
     });
   } catch (error) {
