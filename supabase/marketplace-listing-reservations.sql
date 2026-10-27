@@ -122,30 +122,83 @@ language plpgsql
 security definer
 set search_path = ''
 as $hide_reserved_marketplace_listings$
+declare
+  affected_listing_id bigint;
 begin
-  if new.status in ('awaiting_seller', 'awaiting_payment', 'payment_submitted', 'paid', 'shipped', 'delivered', 'disputed', 'payout_due', 'refund_due') then
+  if tg_op = 'DELETE' then
+    affected_listing_id := old.listing_id;
+    if affected_listing_id is null or old.status not in (
+      'awaiting_seller', 'awaiting_payment', 'payment_submitted', 'paid',
+      'shipped', 'delivered', 'disputed', 'payout_due', 'refund_due'
+    ) then
+      return old;
+    end if;
+
+    if exists (
+      select 1
+      from public.marketplace_order_items as item
+      where item.listing_id = affected_listing_id
+        and item.status in (
+          'awaiting_seller', 'awaiting_payment', 'payment_submitted', 'paid',
+          'shipped', 'delivered', 'disputed', 'payout_due', 'refund_due'
+        )
+    ) then
+      update public.listings
+      set marketplace_state = 'reserved', is_active = true
+      where id = affected_listing_id and status = 'approved';
+    else
+      update public.listings
+      set marketplace_state = 'available', is_active = true
+      where id = affected_listing_id
+        and status = 'approved'
+        and marketplace_state = 'reserved';
+    end if;
+
+    return old;
+  end if;
+
+  affected_listing_id := new.listing_id;
+  if affected_listing_id is null then
+    return new;
+  end if;
+
+  if exists (
+    select 1
+    from public.marketplace_order_items as item
+    where item.listing_id = affected_listing_id
+      and item.status in (
+        'awaiting_seller', 'awaiting_payment', 'payment_submitted', 'paid',
+        'shipped', 'delivered', 'disputed', 'payout_due', 'refund_due'
+      )
+  ) then
     update public.listings
     set marketplace_state = 'reserved', is_active = true
-    where id = new.listing_id;
-  elsif new.status = 'unavailable' then
-    update public.listings
-    set marketplace_state = 'seller_unavailable', is_active = false
-    where id = new.listing_id and status = 'approved';
-  elsif new.status = 'payout_paid' then
-    update public.listings
-    set marketplace_state = 'sold', is_active = false
-    where id = new.listing_id and status = 'approved';
-  elsif new.status = 'refunded' then
-    update public.listings
-    set marketplace_state = 'seller_unavailable', is_active = false
-    where id = new.listing_id and status = 'approved';
-  elsif new.status in ('expired', 'cancelled') then
-    update public.listings
-    set marketplace_state = 'available', is_active = true
-    where id = new.listing_id
-      and status = 'approved'
-      and marketplace_state = 'reserved';
+    where id = affected_listing_id and status = 'approved';
+  elsif tg_op = 'UPDATE' then
+    if old.status in (
+      'awaiting_seller', 'awaiting_payment', 'payment_submitted', 'paid',
+      'shipped', 'delivered', 'disputed', 'payout_due', 'refund_due'
+    ) then
+      if new.status = 'unavailable' then
+        update public.listings
+        set marketplace_state = 'seller_unavailable', is_active = false
+        where id = affected_listing_id and status = 'approved' and marketplace_state = 'reserved';
+      elsif new.status = 'payout_paid' then
+        update public.listings
+        set marketplace_state = 'sold', is_active = false
+        where id = affected_listing_id and status = 'approved' and marketplace_state = 'reserved';
+      elsif new.status = 'refunded' then
+        update public.listings
+        set marketplace_state = 'seller_unavailable', is_active = false
+        where id = affected_listing_id and status = 'approved' and marketplace_state = 'reserved';
+      elsif new.status in ('expired', 'cancelled') then
+        update public.listings
+        set marketplace_state = 'available', is_active = true
+        where id = affected_listing_id and status = 'approved' and marketplace_state = 'reserved';
+      end if;
+    end if;
   end if;
+
   return new;
 end;
 $hide_reserved_marketplace_listings$;
@@ -153,7 +206,7 @@ $hide_reserved_marketplace_listings$;
 revoke all on function private.hide_reserved_marketplace_listings() from public, anon, authenticated;
 drop trigger if exists hide_reserved_marketplace_listings on public.marketplace_order_items;
 create trigger hide_reserved_marketplace_listings
-after insert or update of status on public.marketplace_order_items
+after insert or update of status or delete on public.marketplace_order_items
 for each row execute function private.hide_reserved_marketplace_listings();
 
 create or replace function public.process_marketplace_orders()
