@@ -25,7 +25,7 @@ type CertificateStatus = "pending" | "approved" | "rejected";
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
 type Seller = { id: number; user_id?: string; website_account_seller?: boolean; reservation_status?: string | null; mineral: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
-type Buyer = { id: number; user_id?: string; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
+type Buyer = { id: number; user_id?: string; is_own?: boolean; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type AccountMarketListing = Pick<Seller, "id" | "mineral" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image">;
 type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location">;
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
@@ -236,6 +236,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
 
   let sellerRows = sellerResult;
   let buyerRows = buyerResult;
+  const ownedBuyerRequestIds = new Set<number>();
   if (adminAccessToken) {
     try {
       const response = await fetch("/api/admin/review-queue", {
@@ -258,6 +259,10 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
         const ownSubmissions = await response.json();
         sellerRows = [...sellerRows, ...(ownSubmissions.sellers ?? [])];
         buyerRows = [...buyerRows, ...(ownSubmissions.buyers ?? [])];
+        for (const request of ownSubmissions.marketBuyers ?? []) {
+          const id = Number(request.id);
+          if (Number.isSafeInteger(id) && id > 0) ownedBuyerRequestIds.add(id);
+        }
       }
     } catch {
       // Public listings remain available if a website account session has expired.
@@ -290,7 +295,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
     } satisfies Seller;
   }));
   const buyers = buyerRows.map((row) => ({
-    id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
+    id: Number(row.id), user_id: row.website_user_id ?? row.user_id, is_own: ownedBuyerRequestIds.has(Number(row.id)), mineral: row.mineral_name, weight: String(row.weight),
     unit: row.unit as Unit, color: row.color, shape: row.shape as Buyer["shape"], quality: row.quality,
     offer: String(row.offer), currency: row.currency as Currency, buyer: row.buyer_name, location: row.location,
     email: row.email ?? "", phone: row.phone ?? "", status: row.status as SubmissionStatus, review_message: row.review_message,
@@ -554,7 +559,7 @@ export default function Marketplace() {
   };
 
   const openPrivateOfferForm = (request: Buyer) => {
-    if (request.user_id === userId) {
+    if (request.is_own || request.user_id === userId) {
       setNotice("You cannot send a private offer to your own buying request.");
       return;
     }
