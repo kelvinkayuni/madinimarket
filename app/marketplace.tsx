@@ -455,18 +455,22 @@ export default function Marketplace() {
   const [user, setUser] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [userId, setUserId] = useState("");
+  const [cartListingIds, setCartListingIds] = useState<Set<number>>(() => new Set());
+  const [cartListingAccountId, setCartListingAccountId] = useState("");
   const [sellerRequestsCount, setSellerRequestsCount] = useState(0);
   const [buyerOrdersCount, setBuyerOrdersCount] = useState(0);
   const [privateOffersCount, setPrivateOffersCount] = useState(0);
   const [sellingCount, setSellingCount] = useState(0);
   const [buyingCount, setBuyingCount] = useState(0);
-  const updateAccountMenuCounts = useCallback((counts: { sellerRequestsCount: number; buyerOrdersCount: number; privateOffersCount: number; sellingCount: number; buyingCount: number }) => {
+  const updateAccountMenuCounts = useCallback((counts: { sellerRequestsCount: number; buyerOrdersCount: number; privateOffersCount: number; sellingCount: number; buyingCount: number; cartListingIds: number[] }) => {
     setSellerRequestsCount(counts.sellerRequestsCount);
     setBuyerOrdersCount(counts.buyerOrdersCount);
     setPrivateOffersCount(counts.privateOffersCount);
     setSellingCount(counts.sellingCount);
     setBuyingCount(counts.buyingCount);
-  }, []);
+    setCartListingIds(new Set(counts.cartListingIds));
+    setCartListingAccountId(userId);
+  }, [userId]);
   const [role, setRole] = useState<"user" | "admin" | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
@@ -554,6 +558,8 @@ export default function Marketplace() {
           setPrivateOffersCount(Number(result.privateOffersCount) || 0);
           setSellingCount(Number(result.sellingCount) || 0);
           setBuyingCount(Number(result.buyingCount) || 0);
+          setCartListingIds(new Set((result.cartItems ?? []).map((item: { listing_id: number }) => Number(item.listing_id)).filter(Number.isSafeInteger)));
+          setCartListingAccountId(userId);
         }
       } catch (error) {
         if (active) console.error("Could not refresh account counts.", error);
@@ -594,9 +600,14 @@ export default function Marketplace() {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? "Could not add this mineral to your cart.");
+        setCartListingIds((current) => new Set(current).add(listing.id));
+        setCartListingAccountId(userId);
         const cartResponse = await fetch("/api/commerce", { cache: "no-store" });
         const cartResult = await cartResponse.json();
         if (!cartResponse.ok) throw new Error(cartResult.error ?? "The item was added, but your cart could not be refreshed.");
+        const nextCartListingIds = new Set<number>((cartResult.cartItems ?? []).map((item: { listing_id: number }) => Number(item.listing_id)).filter(Number.isSafeInteger));
+        setCartListingIds(nextCartListingIds);
+        setCartListingAccountId(userId);
         setNotice(`${listing.mineral} added to your cart.`);
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not add this mineral to your cart.");
@@ -2782,7 +2793,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           const reservationLabel = listing.reservation_status === "availability_pending"
             ? "Temporarily reserved — availability being confirmed"
             : "Reserved for a buyer";
-          return <article className="seller-card" key={listing.id}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer" onClick={(event) => openStoneCertificate(event, listing.id)}>See certificate</a>}</div><button className="button button-dark add-to-cart-button" type="button" disabled={isReserved || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved ? "Temporarily unavailable" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
+          const isInCart = role === "user" && cartListingAccountId === userId && cartListingIds.has(listing.id);
+          return <article className="seller-card" key={listing.id}><div className="seller-photo" style={{ backgroundImage: listing.image ? `url("${listing.image}")` : undefined, backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!listing.image && <Gem size={38} strokeWidth={1.2} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}</div><div className="seller-card-info"><div className="seller-name-row"><h3 data-no-translate>{listing.mineral}</h3><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price">{money(listing.price, listing.currency)}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer" onClick={(event) => openStoneCertificate(event, listing.id)}>See certificate</a>}</div><button className="button button-dark add-to-cart-button" type="button" disabled={isReserved || isInCart || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved ? "Temporarily unavailable" : isInCart ? "In your cart" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
         })}</div> : <div className="empty-search">{query ? `No minerals match “${query}”.` : "No mineral listings yet."}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>

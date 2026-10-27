@@ -121,6 +121,10 @@ type CommerceData = {
   privateOffers: { threads: PrivateOfferThread[]; feeRate: number | null; usdEnabled: boolean };
 };
 
+type CommerceCounters = Pick<CommerceData, "sellerRequestsCount" | "buyerOrdersCount" | "privateOffersCount" | "sellingCount" | "buyingCount"> & {
+  cartListingIds: number[];
+};
+
 function amount(value: number | string, currency: Currency) {
   const formatted = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: currency === "USD" ? 2 : 0,
@@ -135,7 +139,7 @@ function statusLabel(status: string) {
 
 export default function CommercePanel({ onNotice, onCounters }: {
   onNotice: (message: string) => void;
-  onCounters: (counts: Pick<CommerceData, "sellerRequestsCount" | "buyerOrdersCount" | "privateOffersCount" | "sellingCount" | "buyingCount">) => void;
+  onCounters: (counts: CommerceCounters) => void;
 }) {
   const [data, setData] = useState<CommerceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,7 +166,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     if (!offersResponse.ok) throw new Error(offersResult.error ?? "Could not load private offers.");
     const commerce = { ...result, privateOffers: offersResult } as CommerceData;
     setData(commerce);
-    onCounters(commerce);
+    onCounters({ ...commerce, cartListingIds: commerce.cartItems.map((item) => item.listing_id) });
     setBuyerName((current) => current || commerce.profile.display_name || "");
     setBuyerPhone((current) => current || commerce.profile.phone || "");
     setCountry((current) => current || commerce.profile.delivery_country || "");
@@ -185,7 +189,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     }).then((commerce) => {
       if (!active) return;
       setData(commerce);
-      onCounters(commerce);
+      onCounters({ ...commerce, cartListingIds: commerce.cartItems.map((item) => item.listing_id) });
       setBuyerName(commerce.profile.display_name || "");
       setBuyerPhone(commerce.profile.phone || "");
       setCountry(commerce.profile.delivery_country || "");
