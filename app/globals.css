@@ -401,10 +401,14 @@ h1, h2, h3, p { margin-top: 0; }
 .account-menu-count { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: #68766a; }
 .account-menu-count strong { min-width: 20px; height: 20px; display: inline-grid; place-items: center; border-radius: 50%; background: #e6eddf; color: #355443; font-size: 9px; }
 .account-menu-count small { font-size: 9px; }
+.account-menu-counts { display: grid; justify-items: end; gap: 2px; margin-left: auto; color: #68766a; }
+.account-menu-counts small { font-size: 9px; white-space: nowrap; }
+.account-menu-counts strong { color: #355443; font-size: 10px; }
 .commerce-panel { display: grid; gap: 21px; }
 .commerce-panel > h2 { margin: -15px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 26px; font-weight: 500; }
 .commerce-section { display: grid; gap: 12px; }
 .commerce-section > h3 { margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-family: var(--font-display), Georgia, serif; font-size: 18px; font-weight: 600; }
+.commerce-section-count { min-width: 21px; height: 21px; display: inline-grid; place-items: center; margin-left: 5px; border-radius: 50%; background: #e6eddf; color: #355443; font: 600 10px var(--font-body), sans-serif; vertical-align: 2px; }
 .commerce-private-thread { display: grid; gap: 10px; padding: 13px; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-private-thread > p, .commerce-private-offer > p { margin: 0; color: #667366; font-size: 10px; line-height: 1.55; }
 .commerce-private-offer { display: grid; gap: 6px; padding: 11px; border: 1px solid #e8ece5; background: white; }

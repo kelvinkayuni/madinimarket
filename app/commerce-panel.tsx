@@ -113,6 +113,8 @@ type CommerceData = {
   buyerOrders: BuyerOrder[];
   sellerItems: OrderItem[];
   sellerRequestsCount: number;
+  buyerOrdersCount: number;
+  privateOffersCount: number;
   sellingCount: number;
   buyingCount: number;
   paymentInstructions: string;
@@ -133,7 +135,7 @@ function statusLabel(status: string) {
 
 export default function CommercePanel({ onNotice, onCounters }: {
   onNotice: (message: string) => void;
-  onCounters: (counts: Pick<CommerceData, "sellerRequestsCount" | "sellingCount" | "buyingCount">) => void;
+  onCounters: (counts: Pick<CommerceData, "sellerRequestsCount" | "buyerOrdersCount" | "privateOffersCount" | "sellingCount" | "buyingCount">) => void;
 }) {
   const [data, setData] = useState<CommerceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -299,7 +301,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     <div className="dialog-kicker">BUYER & SELLER ORDERS</div>
     <h2 id="dialog-title">My cart and orders.</h2>
     <section className="commerce-section">
-      <h3>Private mineral offers</h3>
+      <h3>Private mineral offers <span className="commerce-section-count">{data.privateOffersCount}</span></h3>
       {data.privateOffers.threads.length ? <div className="commerce-list">
         {data.privateOffers.threads.map((thread) => {
           const latestOffer = thread.offers[thread.offers.length - 1];
@@ -409,7 +411,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     </section>
 
     <section className="commerce-section">
-      <h3>Orders I placed</h3>
+      <h3>Orders I placed <span className="commerce-section-count">{data.buyerOrdersCount}</span></h3>
       {data.buyerOrders.length ? <div className="commerce-list">
         {data.buyerOrders.map((order) => <article className="commerce-order" key={order.id}>
           <div className="commerce-order-heading"><strong>Order {order.control_number}</strong><span>{statusLabel(order.payment_status)}</span></div>
@@ -443,7 +445,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     </section>
 
     <section className="commerce-section">
-      <h3>Seller order requests</h3>
+      <h3>Seller order requests <span className="commerce-section-count">{data.sellerRequestsCount}</span></h3>
       {data.sellerItems.length ? <div className="commerce-list">
         {data.sellerItems.map((item) => <article className="commerce-order-item" key={item.id}>
           <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>

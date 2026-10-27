@@ -453,10 +453,14 @@ export default function Marketplace() {
   const [displayName, setDisplayName] = useState("");
   const [userId, setUserId] = useState("");
   const [sellerRequestsCount, setSellerRequestsCount] = useState(0);
+  const [buyerOrdersCount, setBuyerOrdersCount] = useState(0);
+  const [privateOffersCount, setPrivateOffersCount] = useState(0);
   const [sellingCount, setSellingCount] = useState(0);
   const [buyingCount, setBuyingCount] = useState(0);
-  const updateAccountMenuCounts = useCallback((counts: { sellerRequestsCount: number; sellingCount: number; buyingCount: number }) => {
+  const updateAccountMenuCounts = useCallback((counts: { sellerRequestsCount: number; buyerOrdersCount: number; privateOffersCount: number; sellingCount: number; buyingCount: number }) => {
     setSellerRequestsCount(counts.sellerRequestsCount);
+    setBuyerOrdersCount(counts.buyerOrdersCount);
+    setPrivateOffersCount(counts.privateOffersCount);
     setSellingCount(counts.sellingCount);
     setBuyingCount(counts.buyingCount);
   }, []);
@@ -527,6 +531,8 @@ export default function Marketplace() {
         if (!response.ok) throw new Error(result.error ?? "Could not load account counts.");
         if (active) {
           setSellerRequestsCount(Number(result.sellerRequestsCount) || 0);
+          setBuyerOrdersCount(Number(result.buyerOrdersCount) || 0);
+          setPrivateOffersCount(Number(result.privateOffersCount) || 0);
           setSellingCount(Number(result.sellingCount) || 0);
           setBuyingCount(Number(result.buyingCount) || 0);
         }
@@ -2106,6 +2112,8 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     setUserId("");
     setRole(null);
     setSellerRequestsCount(0);
+    setBuyerOrdersCount(0);
+    setPrivateOffersCount(0);
     setSellingCount(0);
     setBuyingCount(0);
     setCertificates({});
@@ -2706,7 +2714,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders <span className="account-menu-count"><strong>{sellerRequestsCount}</strong><small>to confirm</small></span></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOrdersCount}</strong> placed</small><small><strong>{sellerRequestsCount}</strong> seller</small></span></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" onClick={() => openDialog("create")}>Create account <ArrowUpRight size={15} /></button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} priority /><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
       {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
