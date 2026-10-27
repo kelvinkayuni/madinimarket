@@ -17,16 +17,7 @@ type AvailabilityItem = {
 };
 
 function getSellerSignInUrl() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.madinimarket.co.tz";
-  const url = new URL("/", baseUrl);
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("The configured Madinimarket URL must use HTTP or HTTPS.");
-  }
-  if (["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
-    url.hostname = "www.madinimarket.co.tz";
-    url.protocol = "https:";
-    url.port = "";
-  }
+  const url = new URL("https://www.madinimarket.co.tz/");
   url.searchParams.set("signin", "1");
   url.searchParams.set("returnTo", "orders");
   return url.toString();
