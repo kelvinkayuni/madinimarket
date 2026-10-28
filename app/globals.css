@@ -558,16 +558,24 @@ h1, h2, h3, p { margin-top: 0; }
 .private-offer-request-summary { display: grid; gap: 4px; padding: 11px; background: #f1f4ee; color: #536353; font-size: 10px; }
 .private-offer-request-summary strong { color: #304b39; font-size: 12px; }
 .commerce-list { display: grid; gap: 11px; }
-.commerce-private-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; max-height: 520px; overflow-y: auto; padding-right: 6px; }
-.commerce-private-role-group { min-width: 0; padding: 10px; border: 1px solid #e2e8df; background: #fbfcf9; }
-.commerce-private-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
-.commerce-private-group-heading h4 { margin: 0; color: #355443; font-size: 12px; }
-.commerce-private-group-heading span { min-width: 22px; padding: 3px 7px; border-radius: 999px; background: #edf1e9; text-align: center; font-size: 9px; }
-.commerce-private-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.commerce-private-card { min-width: 0; min-height: 150px; display: grid; align-content: start; gap: 4px; padding: 9px; border: 1px solid #dde4da; border-radius: 4px; background: #fff; color: #536353; text-align: left; cursor: pointer; font: inherit; }
+.commerce-private-board { display: grid; gap: 12px; }
+.commerce-private-role-group { min-width: 0; border: 1px solid #e2e8df; border-radius: 6px; background: #fbfcf9; }
+.commerce-private-group-heading { min-height: 54px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 9px 12px; list-style: none; cursor: pointer; }
+.commerce-private-group-heading::-webkit-details-marker { display: none; }
+.commerce-private-group-heading > span:first-child { display: grid; gap: 3px; }
+.commerce-private-group-heading strong { color: #355443; font-size: 12px; }
+.commerce-private-group-heading small { color: #788277; font-size: 9px; }
+.commerce-private-group-count { min-width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: #edf1e9; color: #355443; font-size: 9px; font-weight: 800; }
+.commerce-private-role-group[open] > .commerce-private-group-heading { border-bottom: 1px solid #e2e8df; }
+.commerce-private-role-group[open] > .commerce-private-group-heading .commerce-disclosure-chevron { transform: rotate(180deg); }
+.commerce-private-card-list { max-height: 360px; display: grid; align-content: start; gap: 7px; overflow-y: auto; padding: 8px; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.commerce-private-card { min-width: 0; min-height: 62px; display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 7px; border: 1px solid #dde4da; border-radius: 4px; background: #fff; color: #536353; text-align: left; cursor: pointer; font: inherit; }
 .commerce-private-card:hover { border-color: #789c68; box-shadow: 0 3px 12px rgba(48, 75, 57, .08); }
-.commerce-private-card-image { width: 100%; height: 82px; border-radius: 3px; object-fit: cover; }
-.commerce-private-card-role { color: #789c68; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.commerce-private-card-image { width: 54px; height: 54px; border-radius: 3px; object-fit: cover; }
+.commerce-private-card-image-placeholder { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 3px; background: #edf1e9; color: #789c68; font-size: 18px; font-weight: 800; }
+.commerce-private-card-main, .commerce-private-card-side { display: grid; gap: 3px; min-width: 0; }
+.commerce-private-card-side { justify-items: end; text-align: right; }
+.commerce-private-card-role { color: #789c68; font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .commerce-private-card strong { overflow: hidden; color: #304b39; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .commerce-private-card-price { color: #244f3a; font-size: 11px; font-weight: 800; }
 .commerce-private-card-meta, .commerce-private-card-status { color: #69766a; font-size: 9px; }
@@ -672,8 +680,10 @@ h1, h2, h3, p { margin-top: 0; }
   .commerce-pagination > div { width: 100%; justify-content: space-between; }
   .private-offer-form .form-row { grid-template-columns: 1fr; }
   .private-offer-comparison { grid-template-columns: 1fr; }
-  .commerce-private-board { grid-template-columns: 1fr; max-height: 70vh; }
-  .commerce-private-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .commerce-private-board { grid-template-columns: 1fr; }
+  .commerce-private-card { grid-template-columns: 46px minmax(0, 1fr) auto; }
+  .commerce-private-card-image, .commerce-private-card-image-placeholder { width: 46px; height: 46px; }
+  .commerce-private-card-meta { max-width: 120px; }
   .private-offer-difference { grid-column: 1; }
   .commerce-private-list { max-height: 60vh; }
   .commerce-private-thread-content { max-height: 60vh; }

@@ -193,7 +193,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [cartPage, setCartPage] = useState(1);
   const [privateOfferSearch, setPrivateOfferSearch] = useState("");
   const [privateOfferStatusFilter, setPrivateOfferStatusFilter] = useState("all");
-  const [privateOfferPage, setPrivateOfferPage] = useState(1);
   const [selectedPrivateThreadId, setSelectedPrivateThreadId] = useState<string | null>(null);
   const [buyerActivePage, setBuyerActivePage] = useState(1);
   const [buyerHistoryPage, setBuyerHistoryPage] = useState(1);
@@ -436,11 +435,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
       (privateOfferStatusFilter === "closed" ? thread.state === "closed" : thread.state !== "closed");
     return matchesSearch && matchesStatus;
   });
-  const privateOfferPageCount = Math.max(1, Math.ceil(filteredPrivateThreads.length / orderPageSize));
-  const currentPrivateOfferPage = Math.min(privateOfferPage, privateOfferPageCount);
-  const visiblePrivateThreads = filteredPrivateThreads.slice((currentPrivateOfferPage - 1) * orderPageSize, currentPrivateOfferPage * orderPageSize);
-  const visibleBuyerPrivateThreads = visiblePrivateThreads.filter((thread) => thread.side === "buyer");
-  const visibleSellerPrivateThreads = visiblePrivateThreads.filter((thread) => thread.side === "seller");
+  const visibleBuyerPrivateThreads = filteredPrivateThreads.filter((thread) => thread.side === "buyer");
+  const visibleSellerPrivateThreads = filteredPrivateThreads.filter((thread) => thread.side === "seller");
   const selectedPrivateThread = data.privateOffers.threads.find((thread) => thread.id === selectedPrivateThreadId) ?? null;
   const buyerActivePageCount = Math.max(1, Math.ceil(filteredActiveBuyerOrders.length / orderPageSize));
   const buyerHistoryPageCount = Math.max(1, Math.ceil(filteredBuyerHistory.length / orderPageSize));
@@ -565,40 +561,34 @@ export default function CommercePanel({ onNotice, onCounters }: {
     <section className="commerce-section commerce-order-section">
       <h3>Private mineral offers <span className="commerce-section-count">{data.privateOffersCount}</span></h3>
       {data.privateOffers.threads.length > 0 && <div className="commerce-collection-tools">
-        <label className="commerce-order-search">Search private offers<input className="text-input" type="search" value={privateOfferSearch} placeholder="Mineral, seller, or request number" onChange={(event) => { setPrivateOfferSearch(event.target.value); setPrivateOfferPage(1); }} /></label>
-        <label className="commerce-order-filter">Offer status<select className="text-input" value={privateOfferStatusFilter} onChange={(event) => { setPrivateOfferStatusFilter(event.target.value); setPrivateOfferPage(1); }}><option value="all">All offers</option><option value="open">Open</option><option value="closed">Closed</option></select></label>
+        <label className="commerce-order-search">Search private offers<input className="text-input" type="search" value={privateOfferSearch} placeholder="Mineral, seller, or request number" onChange={(event) => { setPrivateOfferSearch(event.target.value); }} /></label>
+        <label className="commerce-order-filter">Offer status<select className="text-input" value={privateOfferStatusFilter} onChange={(event) => { setPrivateOfferStatusFilter(event.target.value); }}><option value="all">All offers</option><option value="open">Open</option><option value="closed">Closed</option></select></label>
         {data.privateOffers.threads.some((thread) => thread.state === "closed") && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Clear all closed private offers from your view?")) void performPrivateOffer("clear-closed-offers", { action: "clear_closed_offer_threads" }); }}>Clear closed offers</button>}
       </div>}
       {data.privateOffers.threads.length ? <div className="commerce-private-board">
-        <section className="commerce-private-role-group">
-          <div className="commerce-private-group-heading"><h4>Offers as Buyer</h4><span>{visibleBuyerPrivateThreads.length}</span></div>
-          <div className="commerce-private-card-grid">
+        <details className="commerce-private-role-group" open>
+          <summary className="commerce-private-group-heading"><span><strong>Offers as Buyer</strong><small>{visibleBuyerPrivateThreads.length} offer{visibleBuyerPrivateThreads.length === 1 ? "" : "s"}</small></span><span className="commerce-private-group-count">{visibleBuyerPrivateThreads.length}</span><span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
+          <div className="commerce-private-card-list">
             {visibleBuyerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
-              {latest?.signed_image_url && <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={280} height={180} unoptimized />}
-              <span className="commerce-private-card-role">Buyer · Request #{thread.request_id}</span>
-              <strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong>
-              <span>Seller @{thread.seller_username}</span>
-              {latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}
-              <span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {latest?.status === "declined" ? "Declined" : statusLabel(thread.state)}</span>
+              {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
+              <span className="commerce-private-card-main"><span className="commerce-private-card-role">Buyer · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span>Seller @{thread.seller_username}</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{latest?.status === "declined" ? "Declined" : statusLabel(thread.state)}</span><span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span></span>
             </button>; })}
           </div>
           {!visibleBuyerPrivateThreads.length && <p className="commerce-note">No offers received as a buyer match the current filter.</p>}
-        </section>
-        <section className="commerce-private-role-group">
-          <div className="commerce-private-group-heading"><h4>Offers as Seller</h4><span>{visibleSellerPrivateThreads.length}</span></div>
-          <div className="commerce-private-card-grid">
+        </details>
+        <details className="commerce-private-role-group" open>
+          <summary className="commerce-private-group-heading"><span><strong>Offers as Seller</strong><small>{visibleSellerPrivateThreads.length} offer{visibleSellerPrivateThreads.length === 1 ? "" : "s"}</small></span><span className="commerce-private-group-count">{visibleSellerPrivateThreads.length}</span><span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
+          <div className="commerce-private-card-list">
             {visibleSellerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; const remaining = Math.max(0, 3 - thread.attempt_count); return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
-              {latest?.signed_image_url && <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={280} height={180} unoptimized />}
-              <span className="commerce-private-card-role">Seller · Request #{thread.request_id}</span>
-              <strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong>
-              {latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}
-              <span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span>
-              <span className="commerce-private-card-status">{statusLabel(thread.state)}</span>
+              {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
+              <span className="commerce-private-card-main"><span className="commerce-private-card-role">Seller · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span>Buyer request</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{statusLabel(thread.state)}</span><span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span></span>
             </button>; })}
           </div>
           {!visibleSellerPrivateThreads.length && <p className="commerce-note">No offers sent as a seller match the current filter.</p>}
-        </section>
-      </div> : <p className="commerce-note">No private mineral offers yet. You can send offers to buyer requests directly from the market.</p>}      {renderOrderPagination(filteredPrivateThreads.length, currentPrivateOfferPage, privateOfferPageCount, "private offers", setPrivateOfferPage)}
+        </details>
+      </div> : <p className="commerce-note">No private mineral offers yet. You can send offers to buyer requests directly from the market.</p>}
     </section>
     <section className="commerce-section commerce-order-section">
       <h3>My cart ({data.cartItems.length})</h3>
