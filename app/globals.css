@@ -530,10 +530,18 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-private-thread > .commerce-order-summary { padding: 10px 12px; }
 .commerce-private-thread-content { display: grid; gap: 10px; padding: 0 12px 12px; }
 .commerce-private-thread-content > p { margin: 0; color: #667366; font-size: 10px; line-height: 1.55; }
+.commerce-private-list { max-height: 520px; overflow-y: auto; padding-right: 6px; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.commerce-private-thread-content { max-height: 520px; overflow-y: auto; padding-right: 12px; overscroll-behavior: contain; }
+.private-offer-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px; border: 1px solid #dde5d8; background: #f8faf5; }
+.private-offer-compare-column { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px; border: 1px solid #e4e9df; background: #fff; font-size: 10px; color: #667366; }
+.private-offer-compare-title { color: #3b5847; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.private-offer-request-price, .private-offer-total-price { color: #304b39; font-size: 11px; margin-top: 4px; }
+.private-offer-total-price { color: #244f3a; }
+.private-offer-difference { grid-column: 1 / -1; margin: 0; padding: 7px 9px; border-left: 3px solid #789c68; background: #edf4e8; color: #355443; font-size: 10px; font-weight: 700; }
 .commerce-private-thread > p, .commerce-private-offer > p { margin: 0; color: #667366; font-size: 10px; line-height: 1.55; }
 .commerce-private-offer { display: grid; gap: 6px; padding: 11px; border: 1px solid #e8ece5; background: white; }
-.commerce-private-image { max-width: 300px; overflow: hidden; background: #f1f4ee; }
-.commerce-private-image img { width: 100%; height: auto; display: block; object-fit: cover; }
+.commerce-private-image { max-width: 300px; max-height: 300px; overflow: hidden; background: #f1f4ee; }
+.commerce-private-image img { width: 100%; height: 300px; display: block; object-fit: contain; }
 .commerce-private-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .commerce-revised-offer { display: grid; gap: 9px; padding-top: 8px; }
 .commerce-revised-offer h4 { margin: 0; font-size: 12px; }
@@ -645,6 +653,12 @@ h1, h2, h3, p { margin-top: 0; }
   .commerce-pagination { align-items: flex-start; flex-direction: column; }
   .commerce-pagination > div { width: 100%; justify-content: space-between; }
   .private-offer-form .form-row { grid-template-columns: 1fr; }
+  .private-offer-comparison { grid-template-columns: 1fr; }
+  .private-offer-difference { grid-column: 1; }
+  .commerce-private-list { max-height: 60vh; }
+  .commerce-private-thread-content { max-height: 60vh; }
+  .commerce-private-image { max-width: 220px; }
+  .commerce-private-image img { max-height: 220px; }
   .commerce-item { grid-template-columns: 1fr; }
   .commerce-order-heading { align-items: start; flex-direction: column; }
   .user-account-record > summary { grid-template-columns: minmax(0, 1fr) auto; gap: 7px; padding: 8px 0; }

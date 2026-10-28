@@ -149,6 +149,18 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
+function offerDifference(requestOffer: string | number, sellerOffer: string | number, currency: Currency) {
+  const requested = Number(requestOffer);
+  const seller = Number(sellerOffer);
+  if (!Number.isFinite(requested) || !Number.isFinite(seller)) return null;
+  const difference = seller - requested;
+  if (difference === 0) return "Seller offer matches your requested offer.";
+  const absoluteDifference = amount(Math.abs(difference), currency);
+  return difference > 0
+    ? `Seller offer is ${absoluteDifference} higher than your request.`
+    : `Seller offer is ${absoluteDifference} lower than your request.`;
+}
+
 const completedOrderItemStatuses = new Set(["unavailable", "payout_paid", "refunded", "expired", "cancelled"]);
 
 function isBuyerOrderHistory(order: BuyerOrder) {
@@ -198,6 +210,9 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [shipping, setShipping] = useState<Record<string, { carrier: string; tracking: string }>>({});
   const [disputeReasons, setDisputeReasons] = useState<Record<string, string>>({});
   const [acceptOffer, setAcceptOffer] = useState<PrivateOffer | null>(null);
+  const [acceptRequestOffer, setAcceptRequestOffer] = useState<string | number | null>(null);
+  const [acceptRequestCurrency, setAcceptRequestCurrency] = useState<Currency>("TZS");
+  const [acceptRequestDetails, setAcceptRequestDetails] = useState<PrivateOfferThread["request"]>(null);
   const [declineOffer, setDeclineOffer] = useState<PrivateOffer | null>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [declineExplanation, setDeclineExplanation] = useState("");
@@ -543,7 +558,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <label className="commerce-order-search">Search private offers<input className="text-input" type="search" value={privateOfferSearch} placeholder="Mineral, seller, or request number" onChange={(event) => { setPrivateOfferSearch(event.target.value); setPrivateOfferPage(1); }} /></label>
         <label className="commerce-order-filter">Offer status<select className="text-input" value={privateOfferStatusFilter} onChange={(event) => { setPrivateOfferStatusFilter(event.target.value); setPrivateOfferPage(1); }}><option value="all">All offers</option><option value="open">Open</option><option value="closed">Closed</option></select></label>
       </div>}
-      {data.privateOffers.threads.length ? <div className="commerce-list">
+      {data.privateOffers.threads.length ? <div className="commerce-list commerce-private-list">
         {visiblePrivateThreads.map((thread) => {
           const latestOffer = thread.offers[thread.offers.length - 1];
           const buyerRequest = thread.request;
@@ -558,12 +573,20 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {thread.offers.map((offer) => <div className="commerce-private-offer" key={offer.id}>
               <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{statusLabel(offer.status)}</span></div>
               {offer.signed_image_url && <div className="commerce-private-image"><Image src={offer.signed_image_url} alt={`${offer.mineral_name} private offer`} width={800} height={800} unoptimized /></div>}
-              <p>{offer.listing_type === "batch" ? "Batch · " : ""}{offer.weight} {offer.unit}{offer.listing_type === "batch" && ` · Stone sizes ${offer.smallest_stone_weight}–${offer.largest_stone_weight} ${offer.stone_weight_unit}`}</p>
-              <p>{offer.color} · {offer.shape} · {offer.quality}</p>
-              <p>Location: {offer.district}, {offer.region}, {offer.country}</p>
-              {thread.side === "seller" && offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined
-                ? <p>Your price {amount(offer.seller_amount, offer.currency)} + Madinimarket fee {amount(offer.platform_fee_amount, offer.currency)} = <strong>Buyer total {amount(offer.total_price, offer.currency)}</strong></p>
-                : <p>Total price: <strong>{amount(offer.total_price, offer.currency)}</strong></p>}
+              {thread.side === "seller" && <>
+                <p>{offer.listing_type === "batch" ? "Batch · " : ""}{offer.weight} {offer.unit}{offer.listing_type === "batch" && ` · Stone sizes ${offer.smallest_stone_weight}–${offer.largest_stone_weight} ${offer.stone_weight_unit}`}</p>
+                <p>{offer.color} · {offer.shape} · {offer.quality}</p>
+                <p>Location: {offer.district}, {offer.region}, {offer.country}</p>
+              </>}
+              {thread.side === "buyer" && buyerRequest
+                ? <div className="private-offer-comparison">
+                    <div className="private-offer-compare-column"><span className="private-offer-compare-title">Your original request</span><strong>{buyerRequest.mineral_name}</strong><span>{buyerRequest.weight} {buyerRequest.unit}</span><span>{buyerRequest.color} · {buyerRequest.shape} · {buyerRequest.quality}</span><span>Location: {buyerRequest.location}</span><strong className="private-offer-request-price">Your requested offer: {amount(buyerRequest.offer, buyerRequest.currency)}</strong></div>
+                    <div className="private-offer-compare-column"><span className="private-offer-compare-title">Seller’s offer</span><strong>{offer.mineral_name}</strong><span>{offer.listing_type === "batch" ? "Batch · " : "Single · "}{offer.weight} {offer.unit}{offer.listing_type === "batch" && ` · ${offer.smallest_stone_weight}–${offer.largest_stone_weight} ${offer.stone_weight_unit}`}</span><span>{offer.color} · {offer.shape} · {offer.quality}</span><span>Location: {offer.district}, {offer.region}, {offer.country}</span><strong className="private-offer-total-price">Seller’s offer / Total to pay: {amount(offer.total_price, offer.currency)}</strong></div>
+                    {buyerRequest.currency === offer.currency && <p className="private-offer-difference">{offerDifference(buyerRequest.offer, offer.total_price, offer.currency)}</p>}
+                  </div>
+                : thread.side === "seller" && offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined
+                  ? <p>Seller price {amount(offer.seller_amount, offer.currency)} + Madinimarket fee {amount(offer.platform_fee_amount, offer.currency)} = <strong>Total sent to buyer {amount(offer.total_price, offer.currency)}</strong></p>
+                  : <p>Seller’s offer / Total to pay: <strong>{amount(offer.total_price, offer.currency)}</strong></p>}
               {thread.side === "seller" ? (offer.signed_certificate_url
                 ? <p><strong>Your uploaded certificate:</strong> <a className="certificate-file-link" href={offer.signed_certificate_url} target="_blank" rel="noreferrer">View mineral certificate{offer.certificate_file_name ? `: ${offer.certificate_file_name}` : ""}</a></p>
                 : <p className="commerce-note"><strong>No mineral certificate was uploaded with this offer.</strong></p>)
@@ -573,7 +596,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
               {thread.side === "buyer" && offer.status === "pending" && <div>
                 <p className="commerce-note"><strong>No money is paid yet. Accepting starts the next checkout stage.</strong></p>
                 <div className="commerce-private-actions">
-                  <button className="button button-dark" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => setAcceptOffer(offer)}>Accept to buy</button>
+                  <button className="button button-dark" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => { setAcceptOffer(offer); setAcceptRequestOffer(buyerRequest?.offer ?? null); setAcceptRequestCurrency(buyerRequest?.currency ?? offer.currency); setAcceptRequestDetails(buyerRequest); }}>Accept to buy</button>
                   <button className="button button-outline" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => { setDeclineOffer(offer); setDeclineReason(""); setDeclineExplanation(""); }}>Decline offer</button>
                 </div>
               </div>}
@@ -720,10 +743,12 @@ export default function CommercePanel({ onNotice, onCounters }: {
       {acceptOffer && <div className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="accept-offer-title">
         <div className="dialog-kicker">CONFIRM PURCHASE</div>
         <h2 id="accept-offer-title">Accept this offer to buy?</h2>
-        <p><strong>Listing fee:</strong> {acceptOffer.platform_fee_amount !== undefined ? amount(acceptOffer.platform_fee_amount, acceptOffer.currency) : "Included in buyer total"}</p>
-        <p><strong>Mineral price:</strong> {acceptOffer.platform_fee_amount !== undefined ? amount(Number(acceptOffer.total_price) - Number(acceptOffer.platform_fee_amount), acceptOffer.currency) : amount(acceptOffer.total_price, acceptOffer.currency)}</p>
-        <p><strong>Total buyer amount:</strong> {amount(acceptOffer.total_price, acceptOffer.currency)}</p>
-        {!acceptOffer.signed_certificate_url && <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>}
+        {acceptRequestOffer !== null && <p><strong>Your requested offer:</strong> {amount(acceptRequestOffer, acceptRequestCurrency)}</p>}
+        <p><strong>Seller’s offer / Total to pay:</strong> {amount(acceptOffer.total_price, acceptOffer.currency)}</p>
+        {acceptRequestDetails && <div className="commerce-note"><strong>Compared mineral details</strong><br />Your request: {acceptRequestDetails.mineral_name}, {acceptRequestDetails.weight} {acceptRequestDetails.unit}, {acceptRequestDetails.color}, {acceptRequestDetails.shape}, {acceptRequestDetails.quality}, {acceptRequestDetails.location}<br />Seller offer: {acceptOffer.mineral_name}, {acceptOffer.weight} {acceptOffer.unit}, {acceptOffer.color}, {acceptOffer.shape}, {acceptOffer.quality}, {acceptOffer.district}, {acceptOffer.region}, {acceptOffer.country}</div>}
+        {acceptOffer.signed_certificate_url
+          ? <p><strong>Mineral certificate:</strong> Available to view privately.</p>
+          : <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>}
         <p className="commerce-note"><strong>You will not pay until checkout.</strong> Accepting starts the next checkout stage.</p>
         <div className="dialog-actions"><button type="button" className="button button-outline" onClick={() => setAcceptOffer(null)}>Cancel</button><button type="button" className="button button-dark" disabled={busy !== ""} onClick={() => { const offer = acceptOffer; setAcceptOffer(null); void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: true }); }}>Accept to buy</button></div>
       </div>}
