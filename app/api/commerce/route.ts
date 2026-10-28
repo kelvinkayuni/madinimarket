@@ -25,15 +25,81 @@ export async function GET(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
+    const url = new URL(request.url);
+    const historyType = url.searchParams.get("history");
+    if (historyType === "buyer" || historyType === "seller") {
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const pageSize = historyType === "buyer" ? 50 : 100;
+      if (!Number.isSafeInteger(offset) || offset < 0) {
+        return NextResponse.json({ error: "Invalid order history page." }, { status: 400 });
+      }
+      if (historyType === "buyer") {
+        const { data: orders, error } = await admin.from("marketplace_orders")
+          .select("*, items:marketplace_order_items(*)")
+          .eq("buyer_id", accountId)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
+        if (error) {
+          console.error("Failed to load buyer order history", error);
+          return NextResponse.json({ error: "Could not load buyer order history." }, { status: 503 });
+        }
+        const safeOrders = (orders ?? []).map((order) => ({
+          ...order,
+          items: ((order.items ?? []) as Record<string, unknown>[]).map((item) => Object.fromEntries(
+            Object.entries(item).filter(([key]) => ![
+              "seller_email", "seller_id", "payment_proof_path",
+              "availability_email_sent_at", "availability_expired_at",
+              "seller_availability_timeout_email_sent_at", "dispatch_email_sent_at",
+            ].includes(key)),
+          )),
+        }));
+        return NextResponse.json({ buyerOrders: safeOrders, hasMore: safeOrders.length === pageSize });
+      }
+
+      const { data: items, error } = await admin.from("marketplace_order_items")
+        .select("*, order:marketplace_orders!inner(id, control_number, payment_status, payment_deadline, currency, created_at, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)")
+        .eq("seller_id", accountId)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      if (error) {
+        console.error("Failed to load seller order history", error);
+        return NextResponse.json({ error: "Could not load seller order history." }, { status: 503 });
+      }
+      const safeItems = (items ?? []).map((item) => {
+        const order = Array.isArray(item.order) ? item.order[0] : item.order;
+        const canSeeDelivery = ["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status);
+        return {
+          ...item,
+          order: order ? {
+            id: order.id,
+            control_number: order.control_number,
+            payment_status: order.payment_status,
+            payment_deadline: order.payment_deadline,
+            currency: order.currency,
+            created_at: order.created_at,
+            ...(canSeeDelivery ? {
+              buyer_name: order.buyer_name,
+              buyer_phone: order.buyer_phone,
+              delivery_country: order.delivery_country,
+              delivery_region: order.delivery_region,
+              delivery_district: order.delivery_district,
+              delivery_address: order.delivery_address,
+            } : {}),
+          } : null,
+        };
+      });
+      return NextResponse.json({ sellerItems: safeItems, hasMore: safeItems.length === pageSize });
+    }
+
     const [
       { data: profile, error: profileError },
       { data: cart, error: cartError },
       { data: buyerOrders, error: buyerOrdersError },
       { data: sellerItems, error: sellerItemsError },
-      { count: sellerRequestsCount, error: sellerRequestsCountError },
+      { data: buyerOrderStates, error: buyerOrderStatesError },
+      { data: sellerOrderStates, error: sellerOrderStatesError },
       { count: sellingCount, error: sellingCountError },
       { count: buyingCount, error: buyingCountError },
-      { count: buyerOrdersCount, error: buyerOrdersCountError },
       { count: privateOffersCount, error: privateOffersCountError },
       { data: activeSubscription, error: activeSubscriptionError },
       { data: marketplaceSettings, error: marketplaceSettingsError },
@@ -42,19 +108,32 @@ export async function GET(request: Request) {
       admin.from("marketplace_cart_items").select("id, listing_id, created_at, listing:listings(id, mineral_name, listing_type, weight, unit, price, seller_price, platform_fee_amount, currency, image_path, website_user_id, seller_name, status, is_active, marketplace_state)").eq("buyer_id", accountId).order("created_at"),
       admin.from("marketplace_orders").select("*, items:marketplace_order_items(*)").eq("buyer_id", accountId).order("created_at", { ascending: false }).limit(50),
       admin.from("marketplace_order_items").select("*, order:marketplace_orders!inner(id, control_number, payment_status, payment_deadline, currency, created_at, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)").eq("seller_id", accountId).order("created_at", { ascending: false }).limit(100),
-      admin.from("marketplace_order_items").select("id", { count: "exact", head: true }).eq("seller_id", accountId),
+      admin.from("marketplace_orders").select("id, payment_status, items:marketplace_order_items(status)").eq("buyer_id", accountId),
+      admin.from("marketplace_order_items").select("order_id, status").eq("seller_id", accountId),
       admin.from("listings").select("id", { count: "exact", head: true }).eq("website_user_id", accountId).eq("status", "approved").eq("is_active", true),
       admin.from("buy_requests").select("id", { count: "exact", head: true }).eq("website_user_id", accountId).eq("status", "approved").eq("is_active", true),
-      admin.from("marketplace_orders").select("id", { count: "exact", head: true }).eq("buyer_id", accountId),
       admin.from("marketplace_private_offer_threads").select("id", { count: "exact", head: true })
         .or(`buyer_id.eq.${accountId},seller_id.eq.${accountId}`),
       admin.from("account_subscriptions").select("id").eq("website_user_id", accountId).eq("status", "active").lte("starts_at", new Date().toISOString()).gt("expires_at", new Date().toISOString()).limit(1).maybeSingle(),
       admin.from("marketplace_settings").select("payment_methods, payment_instructions").eq("id", true).single(),
     ]);
-    if (profileError || cartError || buyerOrdersError || sellerItemsError || sellerRequestsCountError || sellingCountError || buyingCountError || buyerOrdersCountError || privateOffersCountError || activeSubscriptionError || marketplaceSettingsError) {
-      console.error("Failed to load commerce account data", profileError ?? cartError ?? buyerOrdersError ?? sellerItemsError ?? sellerRequestsCountError ?? sellingCountError ?? buyingCountError ?? buyerOrdersCountError ?? privateOffersCountError ?? activeSubscriptionError ?? marketplaceSettingsError);
+    if (profileError || cartError || buyerOrdersError || sellerItemsError || buyerOrderStatesError || sellerOrderStatesError || sellingCountError || buyingCountError || privateOffersCountError || activeSubscriptionError || marketplaceSettingsError) {
+      console.error("Failed to load commerce account data", profileError ?? cartError ?? buyerOrdersError ?? sellerItemsError ?? buyerOrderStatesError ?? sellerOrderStatesError ?? sellingCountError ?? buyingCountError ?? privateOffersCountError ?? activeSubscriptionError ?? marketplaceSettingsError);
       return NextResponse.json({ error: "Could not load your cart and orders." }, { status: 503 });
     }
+
+    const completedItemStatuses = new Set(["unavailable", "payout_paid", "refunded", "expired", "cancelled"]);
+    const closedPaymentStatuses = new Set(["expired", "cancelled"]);
+    const buyerOpenOrderIds = new Set((buyerOrderStates ?? []).filter((order) => {
+      if (closedPaymentStatuses.has(order.payment_status)) return false;
+      const items = Array.isArray(order.items) ? order.items : [];
+      return order.payment_status !== "paid" || items.length === 0 || items.some((item) => !completedItemStatuses.has(item.status));
+    }).map((order) => order.id));
+    const sellerOpenOrderIds = new Set((sellerOrderStates ?? [])
+      .filter((item) => !completedItemStatuses.has(item.status))
+      .map((item) => item.order_id));
+    const buyerHistoryCount = (buyerOrderStates ?? []).length - buyerOpenOrderIds.size;
+    const sellerHistoryItemCount = (sellerOrderStates ?? []).filter((item) => completedItemStatuses.has(item.status)).length;
 
     const safeSellerItems = (sellerItems ?? []).map((item) => {
       const order = Array.isArray(item.order) ? item.order[0] : item.order;
@@ -94,9 +173,13 @@ export async function GET(request: Request) {
         profile,
         cartItems: cart ?? [],
         buyerOrders: safeBuyerOrders,
-      sellerItems: safeSellerItems,
-      sellerRequestsCount: sellerRequestsCount ?? 0,
-      buyerOrdersCount: buyerOrdersCount ?? 0,
+        buyerOrdersHasMore: (buyerOrders ?? []).length === 50,
+        sellerItems: safeSellerItems,
+        sellerItemsHasMore: (sellerItems ?? []).length === 100,
+        sellerOpenOrdersCount: sellerOpenOrderIds.size,
+        buyerOpenOrdersCount: buyerOpenOrderIds.size,
+        buyerHistoryCount,
+        sellerHistoryItemCount,
       privateOffersCount: privateOffersCount ?? 0,
       sellingCount: profile.is_active && activeSubscription ? sellingCount ?? 0 : 0,
       buyingCount: profile.is_active && activeSubscription ? buyingCount ?? 0 : 0,

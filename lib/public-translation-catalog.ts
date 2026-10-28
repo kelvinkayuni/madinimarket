@@ -179,6 +179,7 @@ export const publicTranslationPhrases = [
   "Your previous subscription has expired",
   "Your previous subscription request was rejected",
   "Your submissions",
+  "buyer active",
   "e.g. 25–50",
   "e.g. Blue sapphire",
   "e.g. Deep blue",
@@ -189,10 +190,9 @@ export const publicTranslationPhrases = [
   "market",
   "month",
   "offers",
-  "placed",
   "requests",
   "s",
-  "seller",
+  "seller active",
   "· Expires",
   "· Requested"
 ] as const;

@@ -113,8 +113,12 @@ type CommerceData = {
   cartItems: CartItem[];
   buyerOrders: BuyerOrder[];
   sellerItems: OrderItem[];
-  sellerRequestsCount: number;
-  buyerOrdersCount: number;
+  buyerOrdersHasMore: boolean;
+  sellerItemsHasMore: boolean;
+  sellerOpenOrdersCount: number;
+  buyerOpenOrdersCount: number;
+  buyerHistoryCount: number;
+  sellerHistoryItemCount: number;
   privateOffersCount: number;
   sellingCount: number;
   buyingCount: number;
@@ -123,7 +127,7 @@ type CommerceData = {
   privateOffers: { threads: PrivateOfferThread[]; feeRate: number | null; usdEnabled: boolean };
 };
 
-type CommerceCounters = Pick<CommerceData, "sellerRequestsCount" | "buyerOrdersCount" | "privateOffersCount" | "sellingCount" | "buyingCount"> & {
+type CommerceCounters = Pick<CommerceData, "sellerOpenOrdersCount" | "buyerOpenOrdersCount" | "privateOffersCount" | "sellingCount" | "buyingCount"> & {
   cartListingIds: number[];
 };
 
@@ -139,6 +143,18 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
+const completedOrderItemStatuses = new Set(["unavailable", "payout_paid", "refunded", "expired", "cancelled"]);
+
+function isBuyerOrderHistory(order: BuyerOrder) {
+  if (["expired", "cancelled"].includes(order.payment_status)) return true;
+  return order.payment_status === "paid" && order.items.length > 0 &&
+    order.items.every((item) => completedOrderItemStatuses.has(item.status));
+}
+
+function buyerOrderHistoryLabel(order: BuyerOrder) {
+  return ["expired", "cancelled"].includes(order.payment_status) ? statusLabel(order.payment_status) : "completed";
+}
+
 export default function CommercePanel({ onNotice, onCounters }: {
   onNotice: (message: string) => void;
   onCounters: (counts: CommerceCounters) => void;
@@ -146,6 +162,11 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [data, setData] = useState<CommerceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
+  const [buyerOlderOrders, setBuyerOlderOrders] = useState<BuyerOrder[]>([]);
+  const [sellerOlderItems, setSellerOlderItems] = useState<OrderItem[]>([]);
+  const [buyerHistoryHasMore, setBuyerHistoryHasMore] = useState(false);
+  const [sellerHistoryHasMore, setSellerHistoryHasMore] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState<"buyer" | "seller" | "">("");
   const [buyerName, setBuyerName] = useState("");
   const [buyerPhone, setBuyerPhone] = useState("");
   const [country, setCountry] = useState("");
@@ -168,6 +189,10 @@ export default function CommercePanel({ onNotice, onCounters }: {
     if (!offersResponse.ok) throw new Error(offersResult.error ?? "Could not load private offers.");
     const commerce = { ...result, privateOffers: offersResult } as CommerceData;
     setData(commerce);
+    setBuyerOlderOrders([]);
+    setSellerOlderItems([]);
+    setBuyerHistoryHasMore(commerce.buyerOrdersHasMore);
+    setSellerHistoryHasMore(commerce.sellerItemsHasMore);
     onCounters({ ...commerce, cartListingIds: commerce.cartItems.map((item) => item.listing_id) });
     setBuyerName((current) => current || commerce.profile.display_name || "");
     setBuyerPhone((current) => current || commerce.profile.phone || "");
@@ -191,6 +216,10 @@ export default function CommercePanel({ onNotice, onCounters }: {
     }).then((commerce) => {
       if (!active) return;
       setData(commerce);
+      setBuyerOlderOrders([]);
+      setSellerOlderItems([]);
+      setBuyerHistoryHasMore(commerce.buyerOrdersHasMore);
+      setSellerHistoryHasMore(commerce.sellerItemsHasMore);
       onCounters({ ...commerce, cartListingIds: commerce.cartItems.map((item) => item.listing_id) });
       setBuyerName(commerce.profile.display_name || "");
       setBuyerPhone(commerce.profile.phone || "");
@@ -234,6 +263,30 @@ export default function CommercePanel({ onNotice, onCounters }: {
       return null;
     } finally {
       setBusy("");
+    }
+  };
+
+  const loadOlderHistory = async (type: "buyer" | "seller") => {
+    if (!data || historyLoading) return;
+    setHistoryLoading(type);
+    try {
+      const currentLength = type === "buyer"
+        ? data.buyerOrders.length + buyerOlderOrders.length
+        : data.sellerItems.length + sellerOlderItems.length;
+      const response = await fetchWithWebsiteSession(`/api/commerce?history=${type}&offset=${currentLength}`, { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? `Could not load ${type} order history.`);
+      if (type === "buyer") {
+        setBuyerOlderOrders((current) => [...current, ...result.buyerOrders as BuyerOrder[]]);
+        setBuyerHistoryHasMore(Boolean(result.hasMore));
+      } else {
+        setSellerOlderItems((current) => [...current, ...result.sellerItems as OrderItem[]]);
+        setSellerHistoryHasMore(Boolean(result.hasMore));
+      }
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : `Could not load ${type} order history.`);
+    } finally {
+      setHistoryLoading("");
     }
   };
 
@@ -302,6 +355,80 @@ export default function CommercePanel({ onNotice, onCounters }: {
   if (!data) return <p className="dialog-copy">Your order details are unavailable. Close this panel and try again.</p>;
   const total = data.cartItems.reduce((sum, item) => sum + Number(item.listing?.price ?? 0), 0);
   const cartCurrency = data.cartItems[0]?.listing?.currency ?? "TZS";
+  const allBuyerOrders = [...data.buyerOrders, ...buyerOlderOrders];
+  const allSellerItems = [...data.sellerItems, ...sellerOlderItems];
+  const activeBuyerOrders = allBuyerOrders.filter((order) => !isBuyerOrderHistory(order));
+  const buyerOrderHistory = allBuyerOrders.filter(isBuyerOrderHistory);
+  const activeSellerItems = allSellerItems.filter((item) => !completedOrderItemStatuses.has(item.status));
+  const sellerItemHistory = allSellerItems.filter((item) => completedOrderItemStatuses.has(item.status));
+  const renderBuyerOrder = (order: BuyerOrder, history = false) => <article className="commerce-order" key={order.id}>
+    <div className="commerce-order-heading"><strong>Order {order.control_number}</strong><span>{history ? buyerOrderHistoryLabel(order) : statusLabel(order.payment_status)}</span></div>
+    <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
+    {order.payment_status === "expired" && <button className="button button-outline" type="button" disabled={busy === `delete-order-${order.id}`} onClick={() => {
+      if (window.confirm(`Permanently delete expired order ${order.control_number}?`)) {
+        void perform(`delete-order-${order.id}`, "delete_expired_order", { orderId: order.id });
+      }
+    }}>{busy === `delete-order-${order.id}` ? "Deleting…" : "Delete expired order"}</button>}
+    {order.payment_status === "awaiting_payment" && <form className="commerce-payment-form" onSubmit={(event) => void submitPaymentProof(event, order.id)}>
+      {data.paymentMethods.length
+        ? <div className="commerce-payment-methods">
+          <strong>Choose a payment method to view its details</strong>
+          <div className="commerce-payment-method-list">
+            {data.paymentMethods.map((method, index) => <details className="commerce-payment-method" key={`${method.method}-${index}`}>
+              <summary>{method.method}</summary>
+              <span>Account number / payment number: {method.accountNumber}</span>
+            </details>)}
+          </div>
+          {data.paymentInstructions && <div className="commerce-payment-general-instructions">
+            <strong>General instructions</strong><p>{data.paymentInstructions}</p>
+          </div>}
+        </div>
+        : <p>Payment methods are not configured. Contact Madinimarket support before sending money.</p>}
+      <label className="field-label">Payment transaction reference<input className="text-input" name="reference" required minLength={3} maxLength={120} value={paymentReferences[order.id] ?? ""} onChange={(event) => setPaymentReferences((current) => ({ ...current, [order.id]: event.target.value }))} /></label>
+      <label className="field-label">Optional note<input className="text-input" name="note" maxLength={500} value={paymentNotes[order.id] ?? ""} onChange={(event) => setPaymentNotes((current) => ({ ...current, [order.id]: event.target.value }))} /></label>
+      <label className="field-label">Payment receipt (PDF, JPEG, PNG · max 10 MB)<input className="text-input" name="proof" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" required onChange={(event) => {
+        const fileName = event.currentTarget.files?.[0]?.name ?? "";
+        setPaymentProofFiles((current) => ({ ...current, [order.id]: fileName }));
+      }} /><small>{paymentProofFiles[order.id] || "Choose a receipt image or PDF"}</small></label>
+      <input type="hidden" name="orderId" value={order.id} />
+      <button className="button button-dark" type="submit" disabled={busy === `payment-${order.id}` || !data.paymentMethods.length}>{busy === `payment-${order.id}` ? "Submitting…" : !data.paymentMethods.length ? "Payment details unavailable" : "Submit proof for verification"}</button>
+    </form>}
+    {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
+      <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>{statusLabel(item.status)} · Total {amount(item.total_price, item.currency)}</small></div>
+      {item.status === "delivered" && <div className="commerce-item-actions">
+        <button className="button button-dark" type="button" disabled={busy === `receipt-${item.id}`} onClick={() => void perform(`receipt-${item.id}`, "confirm_receipt", { itemId: item.id })}>Confirm receipt</button>
+        <label className="field-label">Report a delivery issue<textarea className="review-message" minLength={10} maxLength={500} value={disputeReasons[item.id] ?? ""} onChange={(event) => setDisputeReasons((current) => ({ ...current, [item.id]: event.target.value }))} /></label>
+        <button className="button button-outline" type="button" disabled={busy === `dispute-${item.id}`} onClick={() => void perform(`dispute-${item.id}`, "dispute_delivery", { itemId: item.id, reason: disputeReasons[item.id] })}>Open dispute</button>
+      </div>}
+    </div>)}
+  </article>;
+  const renderSellerItem = (item: OrderItem, history = false) => <article className="commerce-order-item" key={item.id}>
+    <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
+      <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : statusLabel(item.status)}</small>
+      <small>Seller receives {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
+    </div>
+    {item.status === "awaiting_seller" && <div className="commerce-item-actions">
+      <button className="button button-dark" type="button" disabled={busy === `available-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>Available</button>
+      <button className="button button-outline" type="button" disabled={busy === `unavailable-${item.id}`} onClick={() => void perform(`unavailable-${item.id}`, "seller_availability", { itemId: item.id, available: false })}>Unavailable</button>
+      <small>Respond by {new Date(item.seller_response_deadline).toLocaleString()}</small>
+    </div>}
+    {["unavailable", "refunded"].includes(item.status) && item.listing_id && <div className="commerce-item-actions">
+      <p className="commerce-warning">This mineral is hidden from the public market. Confirm that it is in stock before relisting it.</p>
+      <button className="button button-outline" type="button" disabled={busy === `relist-${item.id}`} onClick={() => void perform(`relist-${item.id}`, "relist_unavailable", { itemId: item.id })}>{busy === `relist-${item.id}` ? "Relisting…" : "Confirm stock and relist"}</button>
+    </div>}
+    {["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status) && item.order?.buyer_name && <div className="commerce-delivery-details">
+      <strong>Deliver to</strong>
+      <span>{item.order.buyer_name} · {item.order.buyer_phone}</span>
+      <span>{item.order.delivery_address}, {item.order.delivery_district}, {item.order.delivery_region}, {item.order.delivery_country}</span>
+      {item.shipping_carrier && <span>Carrier: {item.shipping_carrier} · Tracking: {item.tracking_number}</span>}
+    </div>}
+    {item.status === "paid" && <div className="commerce-item-actions">
+      <label className="field-label">Carrier<input className="text-input" value={shipping[item.id]?.carrier ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [item.id]: { carrier: event.target.value, tracking: current[item.id]?.tracking ?? "" } }))} /></label>
+      <label className="field-label">Tracking number<input className="text-input" value={shipping[item.id]?.tracking ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [item.id]: { carrier: current[item.id]?.carrier ?? "", tracking: event.target.value } }))} /></label>
+      <button className="button button-dark" type="button" disabled={busy === `dispatch-${item.id}`} onClick={() => void perform(`dispatch-${item.id}`, "seller_dispatch", { itemId: item.id, carrier: shipping[item.id]?.carrier, trackingNumber: shipping[item.id]?.tracking })}>Mark sent</button>
+    </div>}
+    {item.status === "disputed" && <p className="commerce-warning">Buyer dispute: {item.dispute_reason ?? "Awaiting admin review."}</p>}
+  </article>;
 
   return <div className="commerce-panel">
     <div className="dialog-kicker">BUYER & SELLER ORDERS</div>
@@ -417,83 +544,31 @@ export default function CommercePanel({ onNotice, onCounters }: {
     </section>
 
     <section className="commerce-section">
-      <h3>Orders I placed <span className="commerce-section-count">{data.buyerOrdersCount}</span></h3>
-      {data.buyerOrders.length ? <div className="commerce-list">
-        {data.buyerOrders.map((order) => <article className="commerce-order" key={order.id}>
-          <div className="commerce-order-heading"><strong>Order {order.control_number}</strong><span>{statusLabel(order.payment_status)}</span></div>
-          <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
-          {order.payment_status === "expired" && <button className="button button-outline" type="button" disabled={busy === `delete-order-${order.id}`} onClick={() => {
-            if (window.confirm(`Permanently delete expired order ${order.control_number}?`)) {
-              void perform(`delete-order-${order.id}`, "delete_expired_order", { orderId: order.id });
-            }
-          }}>{busy === `delete-order-${order.id}` ? "Deleting…" : "Delete expired order"}</button>}
-          {order.payment_status === "awaiting_payment" && <form className="commerce-payment-form" onSubmit={(event) => void submitPaymentProof(event, order.id)}>
-            {data.paymentMethods.length
-              ? <div className="commerce-payment-methods">
-                <strong>Choose a payment method to view its details</strong>
-                <div className="commerce-payment-method-list">
-                  {data.paymentMethods.map((method, index) => <details className="commerce-payment-method" key={`${method.method}-${index}`}>
-                    <summary>{method.method}</summary>
-                    <span>Account number / payment number: {method.accountNumber}</span>
-                  </details>)}
-                </div>
-                {data.paymentInstructions && <div className="commerce-payment-general-instructions">
-                  <strong>General instructions</strong><p>{data.paymentInstructions}</p>
-                </div>}
-              </div>
-              : <p>Payment methods are not configured. Contact Madinimarket support before sending money.</p>}
-            <label className="field-label">Payment transaction reference<input className="text-input" name="reference" required minLength={3} maxLength={120} value={paymentReferences[order.id] ?? ""} onChange={(event) => setPaymentReferences((current) => ({ ...current, [order.id]: event.target.value }))} /></label>
-            <label className="field-label">Optional note<input className="text-input" name="note" maxLength={500} value={paymentNotes[order.id] ?? ""} onChange={(event) => setPaymentNotes((current) => ({ ...current, [order.id]: event.target.value }))} /></label>
-            <label className="field-label">Payment receipt (PDF, JPEG, PNG · max 10 MB)<input className="text-input" name="proof" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" required onChange={(event) => {
-              const fileName = event.currentTarget.files?.[0]?.name ?? "";
-              setPaymentProofFiles((current) => ({ ...current, [order.id]: fileName }));
-            }} /><small>{paymentProofFiles[order.id] || "Choose a receipt image or PDF"}</small></label>
-            <input type="hidden" name="orderId" value={order.id} />
-            <button className="button button-dark" type="submit" disabled={busy === `payment-${order.id}` || !data.paymentMethods.length}>{busy === `payment-${order.id}` ? "Submitting…" : !data.paymentMethods.length ? "Payment details unavailable" : "Submit proof for verification"}</button>
-          </form>}
-          {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
-            <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>{statusLabel(item.status)} · Total {amount(item.total_price, item.currency)}</small></div>
-            {item.status === "delivered" && <div className="commerce-item-actions">
-              <button className="button button-dark" type="button" disabled={busy === `receipt-${item.id}`} onClick={() => void perform(`receipt-${item.id}`, "confirm_receipt", { itemId: item.id })}>Confirm receipt</button>
-              <label className="field-label">Report a delivery issue<textarea className="review-message" minLength={10} maxLength={500} value={disputeReasons[item.id] ?? ""} onChange={(event) => setDisputeReasons((current) => ({ ...current, [item.id]: event.target.value }))} /></label>
-              <button className="button button-outline" type="button" disabled={busy === `dispute-${item.id}`} onClick={() => void perform(`dispute-${item.id}`, "dispute_delivery", { itemId: item.id, reason: disputeReasons[item.id] })}>Open dispute</button>
-            </div>}
-          </div>)}
-        </article>)}
-      </div> : <p className="commerce-note">No purchases yet.</p>}
+      <h3>Buyer orders · active <span className="commerce-section-count">{data.buyerOpenOrdersCount}</span></h3>
+      {activeBuyerOrders.length
+        ? <div className="commerce-list">{activeBuyerOrders.map((order) => renderBuyerOrder(order))}</div>
+        : <p className="commerce-note">{data.buyerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Order history and load older orders to find them." : "No active buyer orders."}</p>}
+      <details className="commerce-history">
+        <summary>Order history <span className="commerce-section-count">{data.buyerHistoryCount}</span></summary>
+        {buyerOrderHistory.length
+          ? <div className="commerce-list">{buyerOrderHistory.map((order) => renderBuyerOrder(order, true))}</div>
+          : <p className="commerce-note">No completed or closed orders yet.</p>}
+        {buyerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("buyer")}>{historyLoading === "buyer" ? "Loading…" : "Load older orders"}</button>}
+      </details>
     </section>
 
     <section className="commerce-section">
-      <h3>Seller order requests <span className="commerce-section-count">{data.sellerRequestsCount}</span></h3>
-      {data.sellerItems.length ? <div className="commerce-list">
-        {data.sellerItems.map((item) => <article className="commerce-order-item" key={item.id}>
-          <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-            <small>Order {item.order?.control_number} · {statusLabel(item.status)}</small>
-            <small>Seller receives {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
-          </div>
-          {item.status === "awaiting_seller" && <div className="commerce-item-actions">
-            <button className="button button-dark" type="button" disabled={busy === `available-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>Available</button>
-            <button className="button button-outline" type="button" disabled={busy === `unavailable-${item.id}`} onClick={() => void perform(`unavailable-${item.id}`, "seller_availability", { itemId: item.id, available: false })}>Unavailable</button>
-            <small>Respond by {new Date(item.seller_response_deadline).toLocaleString()}</small>
-          </div>}
-          {["unavailable", "refunded"].includes(item.status) && item.listing_id && <div className="commerce-item-actions">
-            <p className="commerce-warning">This mineral is hidden from the public market. Confirm that it is in stock before relisting it.</p>
-            <button className="button button-outline" type="button" disabled={busy === `relist-${item.id}`} onClick={() => void perform(`relist-${item.id}`, "relist_unavailable", { itemId: item.id })}>{busy === `relist-${item.id}` ? "Relisting…" : "Confirm stock and relist"}</button>
-          </div>}
-          {["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status) && item.order?.buyer_name && <div className="commerce-delivery-details">
-            <strong>Deliver to</strong>
-            <span>{item.order.buyer_name} · {item.order.buyer_phone}</span>
-            <span>{item.order.delivery_address}, {item.order.delivery_district}, {item.order.delivery_region}, {item.order.delivery_country}</span>
-            {item.shipping_carrier && <span>Carrier: {item.shipping_carrier} · Tracking: {item.tracking_number}</span>}
-          </div>}
-          {item.status === "paid" && <div className="commerce-item-actions">
-            <label className="field-label">Carrier<input className="text-input" value={shipping[item.id]?.carrier ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [item.id]: { carrier: event.target.value, tracking: current[item.id]?.tracking ?? "" } }))} /></label>
-            <label className="field-label">Tracking number<input className="text-input" value={shipping[item.id]?.tracking ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [item.id]: { carrier: current[item.id]?.carrier ?? "", tracking: event.target.value } }))} /></label>
-            <button className="button button-dark" type="button" disabled={busy === `dispatch-${item.id}`} onClick={() => void perform(`dispatch-${item.id}`, "seller_dispatch", { itemId: item.id, carrier: shipping[item.id]?.carrier, trackingNumber: shipping[item.id]?.tracking })}>Mark sent</button>
-          </div>}
-          {item.status === "disputed" && <p className="commerce-warning">Buyer dispute: {item.dispute_reason ?? "Awaiting admin review."}</p>}
-        </article>)}
-      </div> : <p className="commerce-note">No seller order requests.</p>}
+      <h3>Seller orders · active <span className="commerce-section-count">{data.sellerOpenOrdersCount}</span></h3>
+      {activeSellerItems.length
+        ? <div className="commerce-list">{activeSellerItems.map((item) => renderSellerItem(item))}</div>
+        : <p className="commerce-note">{data.sellerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Order history and load older orders to find them." : "No active seller orders."}</p>}
+      <details className="commerce-history">
+        <summary>Order history · items <span className="commerce-section-count">{data.sellerHistoryItemCount}</span></summary>
+        {sellerItemHistory.length
+          ? <div className="commerce-list">{sellerItemHistory.map((item) => renderSellerItem(item, true))}</div>
+          : <p className="commerce-note">No completed or closed orders yet.</p>}
+        {sellerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("seller")}>{historyLoading === "seller" ? "Loading…" : "Load older orders"}</button>}
+      </details>
     </section>
   </div>;
 }
