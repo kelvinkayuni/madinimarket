@@ -345,6 +345,12 @@ export default function CommercePanel({ onNotice, onCounters }: {
         onNotice(values.agree ? "Offer accepted. The seller will confirm the mineral details." : "Offer declined. The seller may send a revised offer if attempts remain.");
       } else if (values.action === "confirm_offer") {
         onNotice("Mineral details confirmed and sent to the buyer for checkout.");
+      } else if (values.action === "close_offer_thread") {
+        onNotice("Private offer closed. No more offers or revised attempts can be sent.");
+      } else if (values.action === "delete_closed_offer_thread") {
+        onNotice("The closed private offer was deleted from your view.");
+      } else if (values.action === "clear_closed_offer_threads") {
+        onNotice("All closed private offers were cleared from your view.");
       } else {
         onNotice("Private offer sent. The buyer can review it in their account.");
       }
@@ -557,6 +563,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       {data.privateOffers.threads.length > 0 && <div className="commerce-collection-tools">
         <label className="commerce-order-search">Search private offers<input className="text-input" type="search" value={privateOfferSearch} placeholder="Mineral, seller, or request number" onChange={(event) => { setPrivateOfferSearch(event.target.value); setPrivateOfferPage(1); }} /></label>
         <label className="commerce-order-filter">Offer status<select className="text-input" value={privateOfferStatusFilter} onChange={(event) => { setPrivateOfferStatusFilter(event.target.value); setPrivateOfferPage(1); }}><option value="all">All offers</option><option value="open">Open</option><option value="closed">Closed</option></select></label>
+        {data.privateOffers.threads.some((thread) => thread.state === "closed") && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Clear all closed private offers from your view?")) void performPrivateOffer("clear-closed-offers", { action: "clear_closed_offer_threads" }); }}>Clear closed offers</button>}
       </div>}
       {data.privateOffers.threads.length ? <div className="commerce-list commerce-private-list">
         {visiblePrivateThreads.map((thread) => {
@@ -648,7 +655,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
               <h4>Send a revised offer ({thread.attempt_count}/3 used)</h4>
               <PrivateOfferForm requestId={thread.request_id} threadId={thread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? buyerRequest.currency : "TZS"} submitting={busy === `revise-offer-${thread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${thread.id}`, details)} />
             </div>}
-            {thread.state === "closed" && <p className="commerce-note">This offer thread is closed. No more offers can be sent for this request.</p>}
+            {thread.state === "open" && <div className="commerce-private-actions"><button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Close this private offer? No more offers or revised attempts can be sent.")) void performPrivateOffer(`close-offer-${thread.id}`, { action: "close_offer_thread", threadId: thread.id }); }}>Close offer</button></div>}
+            {thread.state === "closed" && <div className="commerce-private-actions"><p className="commerce-note">This offer thread is closed. No more offers can be sent for this request.</p><button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Delete this closed private offer from your view?")) void performPrivateOffer(`delete-offer-${thread.id}`, { action: "delete_closed_offer_thread", threadId: thread.id }); }}>Delete closed offer</button></div>}
             </div>
           </details>;
         })}

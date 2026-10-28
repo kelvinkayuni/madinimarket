@@ -115,7 +115,7 @@ export async function GET(request: Request) {
       { data: sellerOrderStates, error: sellerOrderStatesError },
       { count: sellingCount, error: sellingCountError },
       { count: buyingCount, error: buyingCountError },
-      { count: privateOffersCount, error: privateOffersCountError },
+      { data: privateOfferThreads, error: privateOffersCountError },
       { data: activeSubscription, error: activeSubscriptionError },
       { data: marketplaceSettings, error: marketplaceSettingsError },
     ] = await Promise.all([
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
       admin.from("marketplace_order_items").select("order_id, status").eq("seller_id", accountId),
       admin.from("listings").select("id", { count: "exact", head: true }).eq("website_user_id", accountId).eq("status", "approved").eq("is_active", true),
       admin.from("buy_requests").select("id", { count: "exact", head: true }).eq("website_user_id", accountId).eq("status", "approved").eq("is_active", true),
-      admin.from("marketplace_private_offer_threads").select("id", { count: "exact", head: true })
+      admin.from("marketplace_private_offer_threads").select("id, buyer_id, seller_id, buyer_deleted_at, seller_deleted_at")
         .or(`buyer_id.eq.${accountId},seller_id.eq.${accountId}`),
       admin.from("account_subscriptions").select("id").eq("website_user_id", accountId).eq("status", "active").lte("starts_at", new Date().toISOString()).gt("expires_at", new Date().toISOString()).limit(1).maybeSingle(),
       admin.from("marketplace_settings").select("payment_methods, payment_instructions").eq("id", true).single(),
@@ -195,7 +195,7 @@ export async function GET(request: Request) {
         buyerOpenOrdersCount: buyerOpenOrderIds.size,
         buyerHistoryCount,
         sellerHistoryItemCount,
-      privateOffersCount: privateOffersCount ?? 0,
+      privateOffersCount: (privateOfferThreads ?? []).filter((thread) => thread.buyer_id === accountId ? !thread.buyer_deleted_at : !thread.seller_deleted_at).length,
       sellingCount: profile.is_active && activeSubscription ? sellingCount ?? 0 : 0,
       buyingCount: profile.is_active && activeSubscription ? buyingCount ?? 0 : 0,
       paymentMethods: marketplaceSettings.payment_methods,

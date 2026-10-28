@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const admin = createSupabaseAdminClient();
     const [{ data: threads, error: threadError }, { data: settings, error: settingsError }] = await Promise.all([
       admin.from("marketplace_private_offer_threads")
-        .select("id, request_id, buyer_id, seller_id, state, attempt_count, created_at, updated_at")
+        .select("id, request_id, buyer_id, seller_id, state, attempt_count, buyer_deleted_at, seller_deleted_at, created_at, updated_at")
         .or(`buyer_id.eq.${accountId},seller_id.eq.${accountId}`)
         .order("updated_at", { ascending: false })
         .limit(100),
@@ -117,7 +117,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       feeRate: sellerThreadIds.size > 0 ? Number(settings.listing_fee_rate) : null,
       usdEnabled: settings.usd_enabled,
-      threads: (threads ?? []).map(({ buyer_id: buyerId, seller_id: sellerId, ...thread }) => ({
+      threads: (threads ?? []).filter((thread) =>
+        thread.buyer_id === accountId ? !thread.buyer_deleted_at : !thread.seller_deleted_at
+      ).map(({ buyer_id: buyerId, seller_id: sellerId, ...thread }) => ({
         ...thread,
         side: buyerId === accountId ? "buyer" : "seller",
         seller_username: usernameById.get(sellerId) ?? "Madinimarket seller",
@@ -140,6 +142,69 @@ export async function POST(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
+    if (action === "close_offer_thread") {
+      const threadId = text(body.threadId, 36);
+      if (!uuidPattern.test(threadId)) return NextResponse.json({ error: "Choose a valid private offer." }, { status: 400 });
+      const { data: thread, error: threadError } = await admin.from("marketplace_private_offer_threads")
+        .select("id, buyer_id, seller_id, state")
+        .eq("id", threadId)
+        .maybeSingle();
+      if (threadError) throw threadError;
+      if (!thread || (thread.buyer_id !== accountId && thread.seller_id !== accountId)) {
+        return NextResponse.json({ error: "Private offer not found." }, { status: 404 });
+      }
+      if (!["open", "closed"].includes(thread.state)) {
+        return NextResponse.json({ error: "This private offer cannot be closed manually." }, { status: 409 });
+      }
+      const now = new Date().toISOString();
+      const { error: closeError } = await admin.from("marketplace_private_offer_threads")
+        .update({ state: "closed", closed_at: now, closed_by: accountId, updated_at: now })
+        .eq("id", threadId);
+      if (closeError) throw closeError;
+      const { error: offerCloseError } = await admin.from("marketplace_private_offers")
+        .update({ status: "closed" })
+        .eq("thread_id", threadId)
+        .eq("status", "pending");
+      if (offerCloseError) throw offerCloseError;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_closed_offer_thread") {
+      const threadId = text(body.threadId, 36);
+      if (!uuidPattern.test(threadId)) return NextResponse.json({ error: "Choose a valid private offer." }, { status: 400 });
+      const { data: thread, error: threadError } = await admin.from("marketplace_private_offer_threads")
+        .select("id, buyer_id, seller_id, state")
+        .eq("id", threadId)
+        .maybeSingle();
+      if (threadError) throw threadError;
+      if (!thread || (thread.buyer_id !== accountId && thread.seller_id !== accountId)) {
+        return NextResponse.json({ error: "Private offer not found." }, { status: 404 });
+      }
+      if (thread.state !== "closed") return NextResponse.json({ error: "Only closed private offers can be deleted." }, { status: 409 });
+      const update = thread.buyer_id === accountId
+        ? { buyer_deleted_at: new Date().toISOString() }
+        : { seller_deleted_at: new Date().toISOString() };
+      const { error: deleteError } = await admin.from("marketplace_private_offer_threads").update(update).eq("id", threadId);
+      if (deleteError) throw deleteError;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "clear_closed_offer_threads") {
+      const { data: threads, error: threadsError } = await admin.from("marketplace_private_offer_threads")
+        .select("id, buyer_id, seller_id")
+        .eq("state", "closed")
+        .or(`buyer_id.eq.${accountId},seller_id.eq.${accountId}`);
+      if (threadsError) throw threadsError;
+      for (const thread of threads ?? []) {
+        const update = thread.buyer_id === accountId
+          ? { buyer_deleted_at: new Date().toISOString() }
+          : { seller_deleted_at: new Date().toISOString() };
+        const { error: clearError } = await admin.from("marketplace_private_offer_threads").update(update).eq("id", thread.id);
+        if (clearError) throw clearError;
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "send_offer") {
       const requestId = Number(body.requestId);
       const threadId = body.threadId === null || body.threadId === undefined || body.threadId === ""
