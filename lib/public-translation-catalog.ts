@@ -251,7 +251,7 @@ export const publicTranslationPhrases = [
   "Seller/buyer subscription",
   "Sellers who have matching minerals can submit offers",
   "Seller’s offer",
-  "Seller’s offer / Total to pay:",
+  "Seller’s offer — buyer should pay a total of:",
   "Selling",
   "Selling order history · items",
   "Selling order status",
