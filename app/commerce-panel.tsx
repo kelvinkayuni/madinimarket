@@ -659,21 +659,21 @@ export default function CommercePanel({ onNotice, onCounters }: {
 
     <div className="commerce-order-tools">
       <label className="commerce-order-search">Search orders by order number or mineral<input className="text-input" type="search" value={commerceSearch} placeholder="Order number or mineral" onChange={(event) => { setCommerceSearch(event.target.value); resetOrderPages(); }} /></label>
-      <label className="commerce-order-filter">Buyer order status<select className="text-input" value={buyerStatusFilter} onChange={(event) => { setBuyerStatusFilter(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }}>
+      <label className="commerce-order-filter">Buying order status<select className="text-input" value={buyerStatusFilter} onChange={(event) => { setBuyerStatusFilter(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }}>
         <option value="all">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="awaiting_seller">Awaiting seller</option><option value="paid">Paid</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
-      <label className="commerce-order-filter">Seller order status<select className="text-input" value={sellerStatusFilter} onChange={(event) => { setSellerStatusFilter(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }}>
+      <label className="commerce-order-filter">Selling order status<select className="text-input" value={sellerStatusFilter} onChange={(event) => { setSellerStatusFilter(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }}>
         <option value="all">All statuses</option><option value="awaiting_seller">Awaiting response</option><option value="paid">Ready to dispatch</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
     </div>
     <section className="commerce-section">
-      <h3>Buyer orders · active <span className="commerce-section-count">{data.buyerOpenOrdersCount}</span></h3>
+      <h3>Buying orders · active <span className="commerce-section-count">{data.buyerOpenOrdersCount}</span></h3>
       {filteredActiveBuyerOrders.length
         ? <div className="commerce-list">{visibleActiveBuyerOrders.map((order) => renderBuyerOrder(order))}</div>
-        : <p className="commerce-note">{activeBuyerOrders.length ? "No active buyer orders match your search and status filter." : data.buyerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Order history and load older orders to find them." : "No active buyer orders."}</p>}
+        : <p className="commerce-note">{activeBuyerOrders.length ? "No active buying orders match your search and status filter." : data.buyerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Buying order history and load older orders to find them." : "No active buying orders."}</p>}
       {renderOrderPagination(filteredActiveBuyerOrders.length, currentBuyerActivePage, buyerActivePageCount, "active buyer orders", setBuyerActivePage)}
       <details className="commerce-history">
-        <summary>Order history <span className="commerce-section-count">{data.buyerHistoryCount}</span></summary>
+        <summary>Buying order history <span className="commerce-section-count">{data.buyerHistoryCount}</span></summary>
         {filteredBuyerHistory.length
           ? <div className="commerce-list">{visibleBuyerHistory.map((order) => renderBuyerOrder(order, true))}</div>
           : <p className="commerce-note">{buyerOrderHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
@@ -683,13 +683,13 @@ export default function CommercePanel({ onNotice, onCounters }: {
     </section>
 
     <section className="commerce-section">
-      <h3>Seller orders · active <span className="commerce-section-count">{data.sellerOpenOrdersCount}</span></h3>
+      <h3>Selling orders · active <span className="commerce-section-count">{data.sellerOpenOrdersCount}</span></h3>
       {filteredActiveSellerItems.length
         ? <div className="commerce-list">{visibleActiveSellerItems.map((item) => renderSellerItem(item))}</div>
-        : <p className="commerce-note">{activeSellerItems.length ? "No active seller orders match your search and status filter." : data.sellerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Order history and load older orders to find them." : "No active seller orders."}</p>}
+        : <p className="commerce-note">{activeSellerItems.length ? "No active selling orders match your search and status filter." : data.sellerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Selling order history and load older orders to find them." : "No active selling orders."}</p>}
       {renderOrderPagination(filteredActiveSellerItems.length, currentSellerActivePage, sellerActivePageCount, "active seller orders", setSellerActivePage)}
       <details className="commerce-history">
-        <summary>Order history · items <span className="commerce-section-count">{data.sellerHistoryItemCount}</span></summary>
+        <summary>Selling order history · items <span className="commerce-section-count">{data.sellerHistoryItemCount}</span></summary>
         {filteredSellerHistory.length
           ? <div className="commerce-list">{visibleSellerHistory.map((item) => renderSellerItem(item, true))}</div>
           : <p className="commerce-note">{sellerItemHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
