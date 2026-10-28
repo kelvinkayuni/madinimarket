@@ -373,11 +373,11 @@ begin
   end if;
 
   if p_agree then
-    update public.marketplace_private_offers set status = 'accepted' where id = p_offer_id;
+    update public.marketplace_private_offers set status = 'awaiting_buyer_checkout' where id = p_offer_id;
     update public.marketplace_private_offer_threads
-    set state = 'accepted', updated_at = now()
+    set state = 'awaiting_buyer_checkout', updated_at = now()
     where id = selected_thread.id;
-    next_state := 'accepted';
+    next_state := 'awaiting_buyer_checkout';
   else
     update public.marketplace_private_offers set status = 'declined' where id = p_offer_id;
     next_state := case when selected_thread.attempt_count >= 3 then 'closed' else 'open' end;

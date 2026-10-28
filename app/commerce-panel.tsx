@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import PrivateOfferForm, { FinalizePrivateOfferForm } from "./private-offer-form";
+import PrivateOfferForm from "./private-offer-form";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
 
 type Currency = "TZS" | "USD";
@@ -147,6 +147,14 @@ function amount(value: number | string, currency: Currency) {
 
 function statusLabel(status: string) {
   return status.replaceAll("_", " ");
+}
+
+function privateOfferStatusLabel(status: string, side: "buyer" | "seller") {
+  if (status === "accepted") return side === "buyer" ? "You accepted this offer" : "Buyer accepted your offer";
+  if (status === "declined") return side === "buyer" ? "You declined this offer" : "Buyer declined your offer";
+  if (status === "awaiting_buyer_checkout") return side === "buyer" ? "You accepted this offer" : "Buyer accepted your offer";
+  if (status === "ordered") return "Ordered";
+  return statusLabel(status);
 }
 
 function offerDifference(requestOffer: string | number, sellerOffer: string | number, currency: Currency, side: "buyer" | "seller") {
@@ -579,7 +587,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {visibleBuyerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
               <span className="commerce-private-card-main"><span className="commerce-private-card-role">Buyer · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span>Seller @{thread.seller_username}</span></span>
-              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{latest?.status === "declined" ? "Declined" : statusLabel(thread.state)}</span><span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "buyer")}</span><span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span></span>
             </button>; })}
           </div>
           {!visibleBuyerPrivateThreads.length && <p className="commerce-note">No offers received as a buyer match the current filter.</p>}
@@ -590,7 +598,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {visibleSellerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; const remaining = Math.max(0, 3 - thread.attempt_count); return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
               <span className="commerce-private-card-main"><span className="commerce-private-card-role">Seller · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span>Buyer request</span></span>
-              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{statusLabel(thread.state)}</span><span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "seller")}</span><span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span></span>
             </button>; })}
           </div>
           {!visibleSellerPrivateThreads.length && <p className="commerce-note">No offers sent as a seller match the current filter.</p>}
@@ -685,7 +693,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <div className="dialog-kicker">{selectedPrivateThread.side === "buyer" ? "OFFERS AS BUYER" : "OFFERS AS SELLER"}</div>
         <h2 id="private-thread-title">{selectedPrivateThread.request?.mineral_name ?? "Private mineral offer"} · Request #{selectedPrivateThread.request_id}</h2>
         {selectedPrivateThread.offers.map((offer) => <div className="commerce-private-offer" key={offer.id}>
-          <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{statusLabel(offer.status)}</span></div>
+          <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{privateOfferStatusLabel(offer.status, selectedPrivateThread.side)}</span></div>
           {offer.signed_image_url && <div className="commerce-private-image"><Image src={offer.signed_image_url} alt={`${offer.mineral_name} private offer`} width={800} height={800} unoptimized /></div>}
           {selectedPrivateThread.request
             ? <div className="private-offer-comparison">
@@ -705,7 +713,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
               : <p className="commerce-note"><strong>No mineral certificate was uploaded with this offer.</strong></p>}
           {selectedPrivateThread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions"><button className="button button-dark" type="button" onClick={() => { setAcceptOffer(offer); setAcceptRequestOffer(selectedPrivateThread.request?.offer ?? null); setAcceptRequestCurrency(selectedPrivateThread.request?.currency ?? offer.currency); setAcceptRequestDetails(selectedPrivateThread.request); }}>Accept to buy</button><button className="button button-outline" type="button" onClick={() => { setDeclineOffer(offer); setDeclineReason(""); setDeclineExplanation(""); }}>Decline offer</button></div>}
           {selectedPrivateThread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}<br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</p>}
-          {selectedPrivateThread.side === "seller" && offer.status === "accepted" && <div className="commerce-revised-offer"><h4>Finalize the mineral card</h4><FinalizePrivateOfferForm offer={{ mineralName: offer.mineral_name, listingType: offer.listing_type as "single" | "batch", weight: Number(offer.weight), unit: offer.unit as "carats" | "g" | "kg" | "tons", smallestStoneWeight: offer.smallest_stone_weight, largestStoneWeight: offer.largest_stone_weight, stoneWeightUnit: offer.stone_weight_unit, color: offer.color, shape: offer.shape, quality: offer.quality, country: offer.country, region: offer.region, district: offer.district }} submitting={busy === `confirm-offer-${offer.id}`} onSubmit={(details) => void performPrivateOffer(`confirm-offer-${offer.id}`, { ...details, offerId: offer.id })} /></div>}
+          {selectedPrivateThread.side === "seller" && (offer.status === "accepted" || offer.status === "awaiting_buyer_checkout") && <p className="commerce-note"><strong>Buyer accepted your offer.</strong> The buyer can now enter delivery details.</p>}
         </div>)}
         {selectedPrivateThread.side === "buyer" && selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => { event.preventDefault(); const offer = selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]; void performPrivateOffer(`checkout-offer-${offer.id}`, { action: "checkout_offer", offerId: offer.id, buyerName, buyerPhone, country, region, district, address }); }}>
           <h4>Confirm mineral and delivery details</h4>
