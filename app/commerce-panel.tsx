@@ -149,13 +149,20 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
-function offerDifference(requestOffer: string | number, sellerOffer: string | number, currency: Currency) {
+function offerDifference(requestOffer: string | number, sellerOffer: string | number, currency: Currency, side: "buyer" | "seller") {
   const requested = Number(requestOffer);
   const seller = Number(sellerOffer);
   if (!Number.isFinite(requested) || !Number.isFinite(seller)) return null;
   const difference = seller - requested;
-  if (difference === 0) return "Seller offer matches your requested offer.";
+  if (difference === 0) return side === "seller"
+    ? "Your offer matches the buyer’s original request."
+    : "Seller offer matches your requested offer.";
   const absoluteDifference = amount(Math.abs(difference), currency);
+  if (side === "seller") {
+    return difference > 0
+      ? `Your offer is ${absoluteDifference} higher than the buyer’s original request.`
+      : `Your offer is ${absoluteDifference} lower than the buyer’s original request.`;
+  }
   return difference > 0
     ? `Seller offer is ${absoluteDifference} higher than your request.`
     : `Seller offer is ${absoluteDifference} lower than your request.`;
@@ -688,7 +695,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
                 {selectedPrivateThread.side === "buyer"
                   ? <div className="private-offer-compare-column"><span className="private-offer-compare-title">Seller’s offer</span><strong>{offer.mineral_name}</strong><span>{offer.weight} {offer.unit}</span><span>{offer.color} · {offer.shape} · {offer.quality}</span><span>Location: {offer.district}, {offer.region}, {offer.country}</span><strong className="private-offer-total-price">Seller’s offer — buyer should pay a total of: {amount(offer.total_price, offer.currency)}</strong></div>
                   : <div className="private-offer-compare-column"><span className="private-offer-compare-title">Buyer’s original request</span><strong>{selectedPrivateThread.request.mineral_name}</strong><span>{selectedPrivateThread.request.weight} {selectedPrivateThread.request.unit}</span><span>{selectedPrivateThread.request.color} · {selectedPrivateThread.request.shape} · {selectedPrivateThread.request.quality}</span><span>Location: {selectedPrivateThread.request.location}</span><strong className="private-offer-request-price">Buyer’s requested offer: {amount(selectedPrivateThread.request.offer, selectedPrivateThread.request.currency)}</strong></div>}
-                {selectedPrivateThread.request.currency === offer.currency && <p className="private-offer-difference">{offerDifference(selectedPrivateThread.request.offer, offer.total_price, offer.currency)}</p>}
+                {selectedPrivateThread.request.currency === offer.currency && <p className="private-offer-difference">{offerDifference(selectedPrivateThread.request.offer, offer.total_price, offer.currency, selectedPrivateThread.side)}</p>}
               </div>
             : <p>Seller’s offer — buyer should pay a total of: <strong>{amount(offer.total_price, offer.currency)}</strong>{offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined ? ` · Seller price ${amount(offer.seller_amount, offer.currency)} + Madinimarket fee ${amount(offer.platform_fee_amount, offer.currency)}` : ""}</p>}
           {offer.signed_certificate_url
