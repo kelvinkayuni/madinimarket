@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { sendGmailEmail } from "@/lib/gmail";
 import { sendPendingSellerAvailabilityEmails } from "@/lib/marketplace-availability-email";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const maxDuration = 300;
 
@@ -173,7 +174,7 @@ export async function GET(request: Request) {
         await sendGmailEmail({
           to: item.seller_email,
           subject: `Payment verified: dispatch order ${order.control_number}`,
-          text: `Payment for order ${order.control_number} is verified. Dispatch ${item.mineral_name} (${item.weight} ${item.unit}) and record courier tracking in My orders.\n\nBuyer: ${order.buyer_name}\nPhone: ${order.buyer_phone}\nDelivery: ${order.delivery_address}, ${order.delivery_district}, ${order.delivery_region}, ${order.delivery_country}\nSeller payout (excluding Madinimarket fee): ${item.currency} ${Number(item.seller_amount).toLocaleString()}\n\nThe buyer email is intentionally not included. Sign in at ${process.env.NEXT_PUBLIC_APP_URL ?? "https://madinimarket.com"}.`,
+          text: `Payment for order ${order.control_number} is verified. Dispatch ${item.mineral_name} (${item.weight} ${item.unit}) and record courier tracking in My orders.\n\nBuyer: ${order.buyer_name}\nPhone: ${order.buyer_phone}\nDelivery: ${order.delivery_address}, ${order.delivery_district}, ${order.delivery_region}, ${order.delivery_country}\nSeller payout (excluding Madinimarket fee): ${item.currency} ${Number(item.seller_amount).toLocaleString()}\n\nThe buyer email is intentionally not included. Sign in at ${getPublicAppUrl()}.`,
         });
         const { error } = await admin.from("marketplace_order_items")
           .update({ dispatch_email_sent_at: new Date().toISOString() }).eq("id", item.id).is("dispatch_email_sent_at", null);
