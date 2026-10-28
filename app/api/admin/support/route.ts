@@ -26,6 +26,35 @@ export async function GET(request: Request) {
   return NextResponse.json({ threads: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
 }
 
+export async function DELETE(request: Request) {
+  const admin = await getAdminClient(request);
+  if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  try {
+    const values = await request.json() as Record<string, unknown>;
+    const threadId = typeof values.threadId === "string" ? values.threadId.trim() : "";
+    if (!threadId) return NextResponse.json({ error: "Select a support conversation." }, { status: 400 });
+
+    const { data: thread, error: threadError } = await admin.from("support_threads").select("id,status").eq("id", threadId).maybeSingle();
+    if (threadError) throw threadError;
+    if (!thread) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
+    if (thread.status !== "resolved") return NextResponse.json({ error: "Only resolved support conversations can be deleted." }, { status: 409 });
+
+    const { data: messages, error: messagesError } = await admin.from("support_messages").select("id,support_attachments(file_path)").eq("thread_id", threadId);
+    if (messagesError) throw messagesError;
+    const attachmentPaths = (messages ?? []).flatMap((message: Record<string, unknown>) => ((message.support_attachments as { file_path: string }[] | null) ?? []).map((attachment) => attachment.file_path));
+    if (attachmentPaths.length) {
+      const { error: storageError } = await admin.storage.from("support-attachments").remove(attachmentPaths);
+      if (storageError) throw storageError;
+    }
+
+    const { error: deleteError } = await admin.from("support_threads").delete().eq("id", threadId);
+    if (deleteError) throw deleteError;
+    return NextResponse.json({ deleted: true });
+  } catch {
+    return NextResponse.json({ error: "Could not delete the support conversation." }, { status: 503 });
+  }
+}
+
 export async function PATCH(request: Request) {
   const admin = await getAdminClient(request);
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });

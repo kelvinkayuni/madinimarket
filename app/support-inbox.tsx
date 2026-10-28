@@ -93,6 +93,16 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
       setReply(""); await loadDetail(selectedId); await loadThreads(); onNotice("Reply sent.");
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not send reply."); }
   };
+  const deleteConversation = async () => {
+    if (!admin || !selectedId || thread?.status !== "resolved") return;
+    if (!window.confirm("Permanently delete this resolved support conversation and its attachments? This cannot be undone.")) return;
+    try {
+      const response = await fetch("/api/admin/support", { method: "DELETE", headers: { Authorization: `****** `, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not delete the support conversation.");
+      setSelectedId(null); setThread(null); setMessages([]); await loadThreads(); onNotice("Resolved support conversation deleted.");
+    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not delete the support conversation."); }
+  };
   const updateStatus = async (status: string) => {
     if (!admin || !selectedId) return;
     const response = await fetch("/api/admin/support", { method: "PATCH", headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId, status }) });
@@ -118,7 +128,7 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
       : selectedId && thread ? <>
         <div className="support-detail-heading"><div><span>{thread.ticket_number} · {thread.category}</span><h2>{thread.subject}</h2>{admin && thread.website_accounts && <small>{thread.website_accounts.display_name} · {thread.website_accounts.username} · {thread.website_accounts.email}</small>}</div><span className={`support-status status-${thread.status}`}>{statusLabels[thread.status] ?? thread.status}</span></div>
         <div className="support-message-list">{messages.map((message) => <article className={`support-message ${message.sender_type}`} key={message.id}><span>{message.sender_type === "admin" ? "Administrator" : "You"}</span><p>{message.message}</p>{message.support_attachments?.map((attachment) => attachment.signed_url && <a key={attachment.id} href={attachment.signed_url} target="_blank" rel="noreferrer">{attachment.file_name}</a>)}<small>{new Date(message.created_at).toLocaleString()}</small></article>)}</div>
-        {admin && <div className="support-admin-tools"><label className="field-label">Status<select className="text-input" value={thread.status} onChange={(event) => void updateStatus(event.target.value)}><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label><label className="field-label">Internal admin note<textarea className="text-input" rows={3} maxLength={5000} value={internalNote} onChange={(event) => setInternalNote(event.target.value)} /></label><button className="button button-outline" type="button" onClick={() => void saveNote()}>Save note</button></div>}
+        {admin && <div className="support-admin-tools"><label className="field-label">Status<select className="text-input" value={thread.status} onChange={(event) => void updateStatus(event.target.value)}><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label><label className="field-label">Internal admin note<textarea className="text-input" rows={3} maxLength={5000} value={internalNote} onChange={(event) => setInternalNote(event.target.value)} /></label><button className="button button-outline" type="button" onClick={() => void saveNote()}>Save note</button>{thread.status === "resolved" && <button className="button button-outline" type="button" onClick={() => void deleteConversation()}>Delete conversation</button>}</div>}
         <form className="support-reply form-stack" onSubmit={submitReply}><label className="field-label">Reply<textarea className="text-input" rows={4} maxLength={5000} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a clear response…" required /></label>{thread.status === "resolved" && <p className="support-resolved-note">This conversation is resolved. You can reopen it by replying.</p>}<button className="button button-dark" type="submit" disabled={!reply.trim()}>Send reply</button></form>
       </> : <p className="support-empty">Select a conversation or {admin ? "choose one from the inbox." : "create a new support request."}</p>}
     </section>
