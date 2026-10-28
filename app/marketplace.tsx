@@ -1118,7 +1118,7 @@ export default function Marketplace() {
     return () => window.clearTimeout(hydrationTimer);
   }, []);
   useEffect(() => {
-    if (!isSupabaseConfigured || role !== "admin") return;
+    if (!isSupabaseConfigured || role !== "admin" || activeAdminPanel !== "ledger") return;
     let active = true;
     let isLoading = false;
     const refreshSalesLedger = async () => {
@@ -1141,13 +1141,37 @@ export default function Marketplace() {
     };
     void refreshSalesLedger();
     const interval = window.setInterval(() => void refreshSalesLedger(), 60_000);
+    let realtimeRefreshTimer: number | undefined;
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible" || realtimeRefreshTimer !== undefined) return;
+      realtimeRefreshTimer = window.setTimeout(() => {
+        realtimeRefreshTimer = undefined;
+        void refreshSalesLedger();
+      }, 250);
+    };
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel("marketplace-sales-ledger-updates")
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "marketplace_orders",
+        filter: "payment_status=eq.paid",
+      }, scheduleRefresh)
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`Sales ledger Realtime subscription status: ${status}. Polling remains enabled.`);
+        }
+      });
     const removeResumeListener = onBrowserResume(refreshSalesLedger);
     return () => {
       active = false;
       window.clearInterval(interval);
+      if (realtimeRefreshTimer !== undefined) window.clearTimeout(realtimeRefreshTimer);
+      void supabase.removeChannel(channel);
       removeResumeListener();
     };
-  }, [role]);
+  }, [role, activeAdminPanel]);
   useEffect(() => {
     if (!storageReady || isSupabaseConfigured) return;
     try {
