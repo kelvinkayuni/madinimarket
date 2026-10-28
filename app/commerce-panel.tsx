@@ -549,7 +549,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           const buyerRequest = thread.request;
           return <details className="commerce-private-thread" key={thread.id}>
             <summary className="commerce-order-summary">
-              <span><strong>{thread.side === "buyer" ? `Seller @${thread.seller_username}` : "Your offer"} · Request #${thread.request_id}</strong><small>{latestOffer ? `${latestOffer.mineral_name} · ${amount(latestOffer.total_price, latestOffer.currency)}` : buyerRequest?.mineral_name ?? "Private offer"}</small></span>
+              <span><strong>{thread.side === "buyer" ? `Offer from seller @${thread.seller_username} · Request #${thread.request_id}` : `Your offer to buyer · Request #${thread.request_id}`}</strong><small>{latestOffer ? `${latestOffer.mineral_name} · ${amount(latestOffer.total_price, latestOffer.currency)}` : buyerRequest?.mineral_name ?? "Private offer"}</small></span>
               <span className="commerce-order-summary-status">{statusLabel(thread.state)}</span>
               <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
             </summary>
@@ -564,9 +564,12 @@ export default function CommercePanel({ onNotice, onCounters }: {
               {thread.side === "seller" && offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined
                 ? <p>Your price {amount(offer.seller_amount, offer.currency)} + Madinimarket fee {amount(offer.platform_fee_amount, offer.currency)} = <strong>Buyer total {amount(offer.total_price, offer.currency)}</strong></p>
                 : <p>Total price: <strong>{amount(offer.total_price, offer.currency)}</strong></p>}
-              {offer.signed_certificate_url
-                ? <p><a className="certificate-file-link" href={offer.signed_certificate_url} target="_blank" rel="noreferrer">View mineral certificate{offer.certificate_file_name ? `: ${offer.certificate_file_name}` : ""}</a></p>
-                : <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>}
+              {thread.side === "seller" ? (offer.signed_certificate_url
+                ? <p><strong>Your uploaded certificate:</strong> <a className="certificate-file-link" href={offer.signed_certificate_url} target="_blank" rel="noreferrer">View mineral certificate{offer.certificate_file_name ? `: ${offer.certificate_file_name}` : ""}</a></p>
+                : <p className="commerce-note"><strong>No mineral certificate was uploaded with this offer.</strong></p>)
+                : (offer.signed_certificate_url
+                  ? <p><strong>Seller mineral certificate:</strong> <a className="certificate-file-link" href={offer.signed_certificate_url} target="_blank" rel="noreferrer">View mineral certificate{offer.certificate_file_name ? `: ${offer.certificate_file_name}` : ""}</a></p>
+                  : <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>)}
               {thread.side === "buyer" && offer.status === "pending" && <div>
                 <p className="commerce-note"><strong>No money is paid yet. Accepting starts the next checkout stage.</strong></p>
                 <div className="commerce-private-actions">
@@ -717,8 +720,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
       {acceptOffer && <div className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="accept-offer-title">
         <div className="dialog-kicker">CONFIRM PURCHASE</div>
         <h2 id="accept-offer-title">Accept this offer to buy?</h2>
-        <p><strong>Mineral price:</strong> {amount(acceptOffer.total_price, acceptOffer.currency)}</p>
-        {acceptOffer.platform_fee_amount !== undefined && <p><strong>Listing fee:</strong> {amount(acceptOffer.platform_fee_amount, acceptOffer.currency)}</p>}
+        <p><strong>Listing fee:</strong> {acceptOffer.platform_fee_amount !== undefined ? amount(acceptOffer.platform_fee_amount, acceptOffer.currency) : "Included in buyer total"}</p>
+        <p><strong>Mineral price:</strong> {acceptOffer.platform_fee_amount !== undefined ? amount(Number(acceptOffer.total_price) - Number(acceptOffer.platform_fee_amount), acceptOffer.currency) : amount(acceptOffer.total_price, acceptOffer.currency)}</p>
         <p><strong>Total buyer amount:</strong> {amount(acceptOffer.total_price, acceptOffer.currency)}</p>
         {!acceptOffer.signed_certificate_url && <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>}
         <p className="commerce-note"><strong>You will not pay until checkout.</strong> Accepting starts the next checkout stage.</p>

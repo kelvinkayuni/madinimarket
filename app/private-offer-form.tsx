@@ -228,7 +228,7 @@ export default function PrivateOfferForm({
         <label>District<input name="district" required maxLength={100} /></label>
       </div>
       <label>Mineral photo<input name="image" type="file" accept="image/jpeg,image/png" required /><small>JPG or PNG · square crop · max 5 MB</small></label>
-      <label>Mineral certificate <small>(optional)</small><input name="certificate" type="file" accept="application/pdf,image/jpeg,image/png" /><small>PDF, JPG, or PNG · max 10 MB</small></label>
+      <label>Seller mineral certificate <small>(optional — shown privately to buyer and seller)</small><input name="certificate" type="file" accept="application/pdf,image/jpeg,image/png" /><small>PDF, JPG, or PNG · max 10 MB</small></label>
       {photoError && <p className="commerce-warning" role="alert">{photoError}</p>}
       <div className="form-row">
         <label>Your price<input type="number" min="0.01" step="any" required value={sellerAmount} onChange={(event) => setSellerAmount(event.target.value)} /></label>

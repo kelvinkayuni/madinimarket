@@ -100,8 +100,9 @@ export async function GET(request: Request) {
         offer: {
           ...safeOffer,
           ...(sellerThreadIds.has(offer.thread_id)
-            ? { seller_amount: sellerAmount, platform_fee_rate: platformFeeRate, platform_fee_amount: platformFeeAmount }
+            ? { seller_amount: sellerAmount, platform_fee_rate: platformFeeRate }
             : {}),
+          platform_fee_amount: platformFeeAmount,
           signed_image_url: signedImageUrl,
           signed_certificate_url: signedCertificateUrl,
           certificate_file_name: certificateFileName,
