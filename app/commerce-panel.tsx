@@ -675,7 +675,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <details className="commerce-history">
         <summary>Buying order history <span className="commerce-section-count">{data.buyerHistoryCount}</span></summary>
         {filteredBuyerHistory.length
-          ? <div className="commerce-list">{visibleBuyerHistory.map((order) => renderBuyerOrder(order, true))}</div>
+          ? <div className="commerce-list commerce-history-list">{visibleBuyerHistory.map((order) => renderBuyerOrder(order, true))}</div>
           : <p className="commerce-note">{buyerOrderHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
         {renderOrderPagination(filteredBuyerHistory.length, currentBuyerHistoryPage, buyerHistoryPageCount, "buying history orders", setBuyerHistoryPage)}
         {buyerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("buyer")}>{historyLoading === "buyer" ? "Loading…" : "Load older orders"}</button>}
@@ -691,7 +691,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <details className="commerce-history">
         <summary>Selling order history · items <span className="commerce-section-count">{data.sellerHistoryItemCount}</span></summary>
         {filteredSellerHistory.length
-          ? <div className="commerce-list">{visibleSellerHistory.map((item) => renderSellerItem(item, true))}</div>
+          ? <div className="commerce-list commerce-history-list">{visibleSellerHistory.map((item) => renderSellerItem(item, true))}</div>
           : <p className="commerce-note">{sellerItemHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
         {renderOrderPagination(filteredSellerHistory.length, currentSellerHistoryPage, sellerHistoryPageCount, "selling history items", setSellerHistoryPage)}
         {sellerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("seller")}>{historyLoading === "seller" ? "Loading…" : "Load older orders"}</button>}

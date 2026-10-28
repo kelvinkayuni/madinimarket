@@ -487,6 +487,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-section-count { min-width: 21px; height: 21px; display: inline-grid; place-items: center; margin-left: 5px; border-radius: 50%; background: #e6eddf; color: #355443; font: 600 10px var(--font-body), sans-serif; vertical-align: 2px; }
 .commerce-history { display: grid; gap: 12px; padding-top: 4px; }
 .commerce-order-section > .commerce-history { gap: 10px; padding: 10px 12px; border: 1px solid #e2e8df; background: #fbfcf9; }
+.commerce-history-list { max-height: 390px; padding-right: 5px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .commerce-history > summary { cursor: pointer; color: #526052; font-size: 12px; font-weight: 600; list-style-position: inside; }
 .commerce-history[open] > summary { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .commerce-history-more { justify-self: start; }
