@@ -57,6 +57,8 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
+  const [payoutReferences, setPayoutReferences] = useState<Record<string, string>>({});
+  const [refundReferences, setRefundReferences] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured) throw new Error("The admin service is not connected.");
@@ -109,8 +111,10 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
       if (result.warning) onNotice(result.warning);
       await load();
       onNotice("Marketplace order updated.");
+      return true;
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not update the order.");
+      return false;
     } finally {
       setBusy("");
     }
@@ -157,14 +161,38 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
             <button className="button button-dark" type="button" disabled={busy === `seller-resolution-${item.id}`} onClick={() => void act(`seller-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "seller" })}>Resolve for seller (payout due)</button>
             <button className="button button-outline" type="button" disabled={busy === `buyer-resolution-${item.id}`} onClick={() => void act(`buyer-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "buyer" })}>Resolve for buyer (refund due)</button>
           </div>}
-          {item.status === "payout_due" && <button className="button button-dark" type="button" disabled={busy === `payout-${item.id}`} onClick={() => {
-            const reference = window.prompt("Enter the completed seller payout transaction reference:");
-            if (reference) void act(`payout-${item.id}`, { action: "mark_payout_paid", itemId: item.id, reference });
-          }}>Record seller payout</button>}
-          {item.status === "refund_due" && <button className="button button-outline" type="button" disabled={busy === `refund-${item.id}`} onClick={() => {
-            const reference = window.prompt("Enter the completed buyer refund transaction reference:");
-            if (reference) void act(`refund-${item.id}`, { action: "mark_refunded", itemId: item.id, reference });
-          }}>Record buyer refund</button>}
+          {item.status === "payout_due" && <form className="admin-reference-form" onSubmit={(event) => {
+            event.preventDefault();
+            const reference = payoutReferences[item.id]?.trim() ?? "";
+            if (reference.length < 3) {
+              onNotice("Enter the completed seller payout transaction reference.");
+              return;
+            }
+            void act(`payout-${item.id}`, { action: "mark_payout_paid", itemId: item.id, reference }).then((success) => {
+              if (success) setPayoutReferences((current) => ({ ...current, [item.id]: "" }));
+            });
+          }}>
+            <label className="field-label">Seller payout transaction reference
+              <input className="text-input" required minLength={3} maxLength={120} value={payoutReferences[item.id] ?? ""} onChange={(event) => setPayoutReferences((current) => ({ ...current, [item.id]: event.target.value }))} />
+            </label>
+            <button className="button button-dark" type="submit" disabled={busy === `payout-${item.id}` || (payoutReferences[item.id]?.trim().length ?? 0) < 3}>{busy === `payout-${item.id}` ? "Recording…" : "Record seller payout"}</button>
+          </form>}
+          {item.status === "refund_due" && <form className="admin-reference-form" onSubmit={(event) => {
+            event.preventDefault();
+            const reference = refundReferences[item.id]?.trim() ?? "";
+            if (reference.length < 3) {
+              onNotice("Enter the completed buyer refund transaction reference.");
+              return;
+            }
+            void act(`refund-${item.id}`, { action: "mark_refunded", itemId: item.id, reference }).then((success) => {
+              if (success) setRefundReferences((current) => ({ ...current, [item.id]: "" }));
+            });
+          }}>
+            <label className="field-label">Buyer refund transaction reference
+              <input className="text-input" required minLength={3} maxLength={120} value={refundReferences[item.id] ?? ""} onChange={(event) => setRefundReferences((current) => ({ ...current, [item.id]: event.target.value }))} />
+            </label>
+            <button className="button button-outline" type="submit" disabled={busy === `refund-${item.id}` || (refundReferences[item.id]?.trim().length ?? 0) < 3}>{busy === `refund-${item.id}` ? "Recording…" : "Record buyer refund"}</button>
+          </form>}
         </div>)}
       </article>)}
     </div> : <p className="admin-empty">No mineral purchase orders yet.</p>}

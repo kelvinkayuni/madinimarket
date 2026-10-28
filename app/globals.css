@@ -490,6 +490,9 @@ h1, h2, h3, p { margin-top: 0; }
 .admin-commerce-item { display: grid; gap: 10px; padding: 12px 0; border-top: 1px solid #e8ece5; }
 .admin-commerce-item > div:first-child { display: grid; gap: 5px; }
 .admin-commerce-item small { color: #69766a; font-size: 10px; }
+.admin-reference-form { display: grid; justify-items: start; gap: 8px; max-width: 360px; }
+.admin-reference-form .field-label { width: 100%; margin: 0; font-size: 10px; }
+.admin-reference-form .text-input { min-height: 36px; font-size: 12px; }
 @media (max-width: 560px) {
   .admin-payment-method-row { grid-template-columns: minmax(0, 1fr); }
   .commerce-checkout .field-row { grid-template-columns: 1fr; }
