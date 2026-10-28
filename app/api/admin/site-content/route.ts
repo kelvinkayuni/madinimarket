@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
     const admin = createSupabaseAdminClient();
     const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size").eq("id", true).single(),
+      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, account_creation_disabled, homepage_announcement").eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsError) throw settingsError;
@@ -45,6 +45,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       swahiliEnabled: settings.swahili_enabled,
       headlineFontSize: settings.homepage_headline_font_size,
+      accountCreationDisabled: settings.account_creation_disabled,
+      homepageAnnouncement: settings.homepage_announcement ?? "",
       headlines: headlines ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {
@@ -57,6 +59,25 @@ export async function PATCH(request: Request) {
     const authorized = await getAdminClient(request);
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const values = await readBody(request);
+    if (typeof values?.accountCreationDisabled === "boolean") {
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ account_creation_disabled: values.accountCreationDisabled })
+        .eq("id", true)
+        .select("account_creation_disabled")
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ accountCreationDisabled: data.account_creation_disabled }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (typeof values?.homepageAnnouncement === "string") {
+      const announcement = values.homepageAnnouncement.trim().slice(0, 500);
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ homepage_announcement: announcement })
+        .eq("id", true)
+        .select("homepage_announcement")
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ homepageAnnouncement: data.homepage_announcement ?? "" }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (typeof values?.swahiliEnabled === "boolean") {
       const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
         .update({ swahili_enabled: values.swahiliEnabled })

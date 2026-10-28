@@ -301,6 +301,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-homepage-font-size label { width: min(100%, 240px); }
 .admin-homepage-font-size .button { min-height: 40px; }
 .admin-homepage-font-size > span { align-self: center; color: #778075; font-size: 9px; line-height: 1.5; }
+.admin-account-controls { display: grid; gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid #e1e5dd; border-radius: 8px; background: #fbfcf9; }
+.admin-account-control-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.admin-account-control-row > div { display: grid; gap: 3px; }
+.admin-account-control-row span { color: #738075; font-size: 11px; }
+.admin-homepage-announcement-form { display: grid; gap: 8px; }
+.admin-homepage-announcement-form textarea { resize: vertical; min-height: 76px; }
+.admin-homepage-announcement-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.admin-homepage-announcement-actions > span { margin-right: auto; color: #738075; font-size: 10px; }
 .admin-homepage-headline-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
 .admin-homepage-headline-form > .button { min-height: 40px; }
 .admin-homepage-headline-list { margin-top: 18px; border-top: 1px solid #e1e5dd; }
@@ -436,6 +444,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; }
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
 .market-content { width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0 clamp(18px, 3vw, 48px); }
+.market-announcement { flex: 0 0 auto; margin-top: 12px; border: 1px solid #d9a1a1; border-radius: 5px; background: #fff6f4; padding: 9px 12px; color: #b42318; font-size: 12px; font-weight: 800; line-height: 1.4; text-align: center; animation: madini-homepage-notice 1.2s ease-in-out infinite alternate; }
+@keyframes madini-homepage-notice { from { color: #b42318; border-color: #d9a1a1; background: #fff6f4; } to { color: #ef2b1f; border-color: #ef8b82; background: #fffafa; } }
 .market-intro { flex: 0 0 auto; padding: 12px 0 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .market-intro-tools { display: flex; align-items: center; gap: 8px; width: min(100%, 400px); flex-shrink: 0; }
 .mobile-market-search { display: flex; flex: 0 0 142px; width: 142px; height: 37px; gap: 7px; padding: 0 9px; }

@@ -32,6 +32,12 @@ export async function POST(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
+    const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
+      .select("account_creation_disabled").eq("id", true).maybeSingle();
+    if (settingsError) throw settingsError;
+    if (settings?.account_creation_disabled) {
+      return NextResponse.json({ error: "Account creation is suspended for now. Please try again later." }, { status: 403 });
+    }
     const passwordHash = await hashWebsitePassword(password);
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const username = `MM-${Math.floor(1000 + Math.random() * 9000)}`;
