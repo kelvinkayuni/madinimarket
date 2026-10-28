@@ -78,6 +78,24 @@ export async function PATCH(request: Request) {
       if (error) throw error;
       return NextResponse.json({ nonAdminSignInDisabled: data.non_admin_sign_in_disabled }, { headers: { "Cache-Control": "no-store" } });
     }
+    if (values?.signOutAllUsers === true) {
+      const admin = createSupabaseAdminClient();
+      const { data: accounts, error: accountsError } = await admin.from("website_accounts")
+        .select("id, session_version")
+        .eq("is_active", true);
+      if (accountsError) throw accountsError;
+
+      const updates = (accounts ?? []).map((account) => {
+        const nextVersion = Number.isSafeInteger(account.session_version) ? account.session_version + 1 : 1;
+        return admin.from("website_accounts")
+          .update({ session_version: nextVersion })
+          .eq("id", account.id);
+      });
+      const results = await Promise.all(updates);
+      const failed = results.find((result) => result.error);
+      if (failed?.error) throw failed.error;
+      return NextResponse.json({ signedOutUsers: (accounts ?? []).length }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (typeof values?.homepageAnnouncement === "string") {
       const announcement = values.homepageAnnouncement.trim().slice(0, 500);
       const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")

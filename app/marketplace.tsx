@@ -11,7 +11,7 @@ import AdminOrderTimeLimits from "./admin-order-time-limits";
 import CommercePanel from "./commerce-panel";
 import PrivateOfferForm from "./private-offer-form";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-import { clearWebsiteSessionToken, fetchWithWebsiteSession, setWebsiteSessionToken } from "@/lib/client-website-session";
+import { clearWebsiteSessionToken, fetchWithWebsiteSession, getWebsiteSessionToken, setWebsiteSessionToken } from "@/lib/client-website-session";
 import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 import { calculateListingPrice } from "@/lib/listing-pricing";
 import { MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
@@ -458,6 +458,7 @@ export default function Marketplace() {
   const [swahiliEnabled, setSwahiliEnabled] = useState(true);
   const [accountCreationDisabled, setAccountCreationDisabled] = useState(false);
   const [nonAdminSignInDisabled, setNonAdminSignInDisabled] = useState(false);
+  const [signOutAllUsersAction, setSignOutAllUsersAction] = useState(false);
   const [homepageAnnouncement, setHomepageAnnouncement] = useState("");
   const [homepageAnnouncementDraft, setHomepageAnnouncementDraft] = useState("");
   const [siteContentLoaded, setSiteContentLoaded] = useState(false);
@@ -867,6 +868,43 @@ export default function Marketplace() {
       active = false;
       window.clearInterval(interval);
       removeResumeListener();
+    };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const validateWebsiteSession = async () => {
+      if (!getWebsiteSessionToken()) return;
+      try {
+        const response = await fetchWithWebsiteSession("/api/auth/website-session", { cache: "no-store" });
+        const result = response.ok ? await response.json() : null;
+        if (!active || result?.account) return;
+        clearWebsiteSessionToken();
+        setUser("");
+        setDisplayName("");
+        setUserId("");
+        setRole(null);
+        setCertificates({});
+        setSellerOpenOrdersCount(0);
+        setBuyerOpenOrdersCount(0);
+        setPrivateOffersCount(0);
+        setDialog(null);
+        setNotice("Your session has ended. Please sign in again.");
+      } catch {
+        // Keep the current session until the next validation attempt.
+      }
+    };
+    void validateWebsiteSession();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void validateWebsiteSession();
+    }, 30_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void validateWebsiteSession();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
   useEffect(() => {
@@ -1914,6 +1952,29 @@ export default function Marketplace() {
         setNotice(result.nonAdminSignInDisabled ? "Non-administrator sign-in is now suspended." : "Sign-in access is enabled again.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not update sign-in access.");
+      }
+    });
+  };
+  const signOutAllUsers = async () => {
+    if (!window.confirm("Sign out all currently signed-in users? Administrator accounts will remain signed in.")) return;
+    await withProgress("sign-out-all-users", async () => {
+      try {
+        setSignOutAllUsersAction(true);
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "PATCH",
+          headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
+          body: JSON.stringify({ signOutAllUsers: true }),
+        });
+        const result = await response.json();
+        if (!response.ok || !Number.isInteger(result.signedOutUsers)) throw new Error(result.error ?? "Could not sign out all users.");
+        setNotice(`All ${result.signedOutUsers} signed-in user sessions have been ended.`);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not sign out all users.");
+      } finally {
+        window.setTimeout(() => setSignOutAllUsersAction(false), 500);
       }
     });
   };
@@ -3133,6 +3194,10 @@ export default function Marketplace() {
             <div className="admin-account-control-row">
               <div><strong>User sign-in</strong><span>{!siteContentLoaded ? "Loading sign-in settings…" : nonAdminSignInDisabled ? "Non-administrator sign-in is suspended." : "User sign-in is enabled."}</span></div>
               <button className={`admin-currency-switch${nonAdminSignInDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={nonAdminSignInDisabled} aria-label="Suspend non-administrator sign-in" disabled={!siteContentLoaded || busyActions.has("non-admin-signin-setting")} onClick={() => void updateNonAdminSignInAvailability(!nonAdminSignInDisabled)}><span /></button>
+            </div>
+            <div className="admin-account-control-row">
+              <div><strong>Sign out all users</strong><span>{signOutAllUsersAction ? "Ending all user sessions…" : "Ends every normal user session; admin stays signed in."}</span></div>
+              <button className={`admin-currency-switch${signOutAllUsersAction ? " is-on" : ""}`} type="button" role="switch" aria-checked={signOutAllUsersAction} aria-label="Sign out all users" disabled={!siteContentLoaded || busyActions.has("sign-out-all-users")} onClick={() => void signOutAllUsers()}><span /></button>
             </div>
             <details className="admin-homepage-announcement-disclosure">
               <summary className="admin-homepage-announcement-toggle">
