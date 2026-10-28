@@ -432,7 +432,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
 
   return <div className="commerce-panel">
     <div className="dialog-kicker">BUYER & SELLER ORDERS</div>
-    <h2 id="dialog-title">My cart and orders.</h2>
+    <h2 id="dialog-title">Orders and Cart</h2>
     <section className="commerce-section">
       <h3>Private mineral offers <span className="commerce-section-count">{data.privateOffersCount}</span></h3>
       {data.privateOffers.threads.length ? <div className="commerce-list">
