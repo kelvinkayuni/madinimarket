@@ -1,0 +1,113 @@
+"use client";
+/* eslint-disable react-hooks/set-state-in-effect */
+
+import { FormEvent, useEffect, useState } from "react";
+import { fetchWithWebsiteSession } from "@/lib/client-website-session";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
+
+export type SupportThread = {
+  id: string; ticket_number: string; category: string; subject: string; status: string;
+  unread_by_admin?: boolean; unread_by_user?: boolean; internal_note?: string;
+  created_at: string; updated_at: string; last_message_at: string;
+  website_accounts?: { id: string; display_name: string; username: string; email: string; phone: string | null } | null;
+};
+export type SupportMessage = { id: string; sender_type: "user" | "admin"; message: string; created_at: string; support_attachments: { id: string; file_name: string; file_type: string; file_size: number; signed_url: string | null }[] };
+
+const statusLabels: Record<string, string> = { open: "Open", admin_replied: "Admin replied", pending_user: "Waiting for you", resolved: "Resolved" };
+
+export default function SupportInbox({ admin = false, onNotice }: { admin?: boolean; onNotice: (message: string) => void }) {
+  const [adminAccessToken, setAdminAccessToken] = useState("");
+  const [threads, setThreads] = useState<SupportThread[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [thread, setThread] = useState<SupportThread | null>(null);
+  const [messages, setMessages] = useState<SupportMessage[]>([]);
+  const [reply, setReply] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [creating, setCreating] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [internalNote, setInternalNote] = useState("");
+
+  const headers = admin && adminAccessToken ? { Authorization: `Bearer ${adminAccessToken}` } : undefined;
+  const userFetch = (url: string, init?: RequestInit) => admin ? fetch(url, { ...init, headers: { ...(headers ?? {}), ...(init?.headers ?? {}) }, cache: "no-store" }) : fetchWithWebsiteSession(url, init);
+  const loadThreads = async () => {
+    try {
+      const response = await userFetch(admin ? `/api/admin/support` : `/api/support`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not load support messages.");
+      setThreads(result.threads ?? []);
+    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load support messages."); }
+    finally { setLoading(false); }
+  };
+  const loadDetail = async (id: string) => {
+    try {
+      const response = await userFetch(admin ? `/api/admin/support?threadId=${encodeURIComponent(id)}` : `/api/support/${id}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not load this conversation.");
+      setThread(result.thread); setMessages(result.messages ?? []); setInternalNote(result.thread?.internal_note ?? "");
+    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load this conversation."); }
+  };
+  useEffect(() => {
+    if (!admin) { void loadThreads(); return; }
+    void getSupabaseBrowserClient().auth.getSession().then(({ data }) => {
+      if (data.session?.access_token) setAdminAccessToken(data.session.access_token);
+    });
+  }, [admin]);
+  useEffect(() => { if (admin && !adminAccessToken) return; void loadThreads(); const interval = window.setInterval(() => void loadThreads(), 30_000); return () => window.clearInterval(interval); }, [admin, adminAccessToken]);
+  useEffect(() => { if (selectedId) void loadDetail(selectedId); }, [selectedId]);
+
+
+  const submitTicket = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await fetchWithWebsiteSession("/api/support", { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not submit support request.");
+      event.currentTarget.reset(); setCreating(false); await loadThreads(); if (result.thread?.id) setSelectedId(result.thread.id); onNotice(`Support request ${result.thread.ticket_number} submitted.`);
+    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not submit support request."); }
+  };
+  const submitReply = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); if (!selectedId || !reply.trim()) return;
+    try {
+      if (admin) {
+        const response = await fetch("/api/admin/support", { method: "PATCH", headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId, reply, status: "admin_replied" }) });
+        const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
+      } else {
+        const form = new FormData(); form.set("message", reply);
+        const response = await fetchWithWebsiteSession(`/api/support/${selectedId}`, { method: "POST", body: form });
+        const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
+      }
+      setReply(""); await loadDetail(selectedId); await loadThreads(); onNotice("Reply sent.");
+    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not send reply."); }
+  };
+  const updateStatus = async (status: string) => {
+    if (!admin || !selectedId) return;
+    const response = await fetch("/api/admin/support", { method: "PATCH", headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId, status }) });
+    const result = await response.json(); if (!response.ok) { onNotice(result.error ?? "Could not update status."); return; }
+    await loadDetail(selectedId); await loadThreads(); onNotice("Support status updated.");
+  };
+  const saveNote = async () => {
+    if (!admin || !selectedId) return;
+    const response = await fetch("/api/admin/support", { method: "PATCH", headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId, internalNote }) });
+    const result = await response.json(); if (!response.ok) { onNotice(result.error ?? "Could not save the internal note."); return; }
+    onNotice("Internal note saved.");
+  };
+
+  const visibleThreads = threads.filter((item) => statusFilter === "all" || item.status === statusFilter);
+  return <div className="support-inbox">
+    <aside className="support-thread-list">
+      <div className="support-list-heading"><strong>{admin ? "Support inbox" : "Your support"}</strong>{!admin && <button className="button button-dark" type="button" onClick={() => { setCreating(true); setSelectedId(null); }}>New request</button>}</div>
+      {admin && <label className="field-label">Filter<select className="text-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All</option><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label>}
+      {loading ? <p className="admin-empty">Loading…</p> : visibleThreads.length ? visibleThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(admin ? item.unread_by_admin : item.unread_by_user) && <i>Unread</i>}</button>) : <p className="admin-empty">No support conversations found.</p>}
+    </aside>
+    <section className="support-conversation">
+      {creating && !admin ? <form className="support-form form-stack" onSubmit={submitTicket}><div className="dialog-kicker">CONTACT ADMIN</div><h2>Create a support request</h2><label className="field-label">Category<select className="text-input" name="category" required><option value="">Choose a category</option>{["Account","Subscription","Payment","Product listing","Order","Other"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="field-label">Subject<input className="text-input" name="subject" minLength={3} maxLength={160} required /></label><label className="field-label">Message<textarea className="text-input" name="message" rows={6} maxLength={5000} required /></label><label className="field-label">Attachments (optional)<input className="text-input" name="attachments" type="file" multiple accept="application/pdf,image/jpeg,image/png" /></label><p className="user-subscription-receipt-help">PDF, JPEG, or PNG. Maximum 4 MB per file.</p><div className="support-actions"><button className="button button-dark" type="submit">Submit request</button><button className="button button-outline" type="button" onClick={() => setCreating(false)}>Cancel</button></div></form>
+      : selectedId && thread ? <>
+        <div className="support-detail-heading"><div><span>{thread.ticket_number} · {thread.category}</span><h2>{thread.subject}</h2>{admin && thread.website_accounts && <small>{thread.website_accounts.display_name} · {thread.website_accounts.username} · {thread.website_accounts.email}</small>}</div><span className={`support-status status-${thread.status}`}>{statusLabels[thread.status] ?? thread.status}</span></div>
+        <div className="support-message-list">{messages.map((message) => <article className={`support-message ${message.sender_type}`} key={message.id}><span>{message.sender_type === "admin" ? "Administrator" : "You"}</span><p>{message.message}</p>{message.support_attachments?.map((attachment) => attachment.signed_url && <a key={attachment.id} href={attachment.signed_url} target="_blank" rel="noreferrer">{attachment.file_name}</a>)}<small>{new Date(message.created_at).toLocaleString()}</small></article>)}</div>
+        {admin && <div className="support-admin-tools"><label className="field-label">Status<select className="text-input" value={thread.status} onChange={(event) => void updateStatus(event.target.value)}><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label><label className="field-label">Internal admin note<textarea className="text-input" rows={3} maxLength={5000} value={internalNote} onChange={(event) => setInternalNote(event.target.value)} /></label><button className="button button-outline" type="button" onClick={() => void saveNote()}>Save note</button></div>}
+        <form className="support-reply form-stack" onSubmit={submitReply}><label className="field-label">Reply<textarea className="text-input" rows={4} maxLength={5000} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a clear response…" required /></label>{thread.status === "resolved" && <p className="support-resolved-note">This conversation is resolved. You can reopen it by replying.</p>}<button className="button button-dark" type="submit" disabled={!reply.trim()}>Send reply</button></form>
+      </> : <p className="support-empty">Select a conversation or {admin ? "choose one from the inbox." : "create a new support request."}</p>}
+    </section>
+  </div>;
+}

@@ -907,3 +907,45 @@ h1, h2, h3, p { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.admin-support-panel { min-height: calc(100vh - 68px); }
+.support-inbox { min-height: 520px; max-height: calc(100vh - 160px); display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); overflow: hidden; border: 1px solid var(--line); background: #fff; }
+.support-thread-list { overflow-y: auto; border-right: 1px solid var(--line); background: #fafbf8; }
+.support-list-heading { min-height: 58px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.support-thread-list > .field-label { margin: 10px 12px 0; }
+.support-thread { position: relative; width: 100%; min-height: 92px; padding: 12px; display: grid; gap: 5px; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer; }
+.support-thread:hover, .support-thread.is-selected { background: #edf2e9; }
+.support-thread > span { display: flex; justify-content: space-between; gap: 8px; color: var(--forest); font-size: 11px; }
+.support-thread > span small { color: var(--muted); }
+.support-thread b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.support-thread em { font-size: 10px; color: var(--muted); font-style: normal; }
+.support-thread i { position: absolute; right: 10px; bottom: 9px; padding: 3px 6px; border-radius: 999px; background: var(--red); color: #fff; font-size: 8px; font-style: normal; }
+.support-conversation { min-width: 0; min-height: 520px; display: flex; flex-direction: column; overflow: hidden; }
+.support-empty { margin: auto; color: var(--muted); }
+.support-form { padding: 24px; overflow-y: auto; }
+.support-detail-heading { min-height: 82px; padding: 14px 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); }
+.support-detail-heading span { color: var(--muted); font-size: 10px; }
+.support-detail-heading h2 { margin: 4px 0 2px; font-size: 19px; }
+.support-detail-heading small { color: var(--muted); font-size: 10px; }
+.support-status { padding: 5px 8px; border-radius: 999px; background: #edf2e9; color: var(--forest) !important; white-space: nowrap; }
+.status-resolved { background: #e4ece7; }
+.support-message-list { flex: 1; min-height: 170px; padding: 16px 18px; overflow-y: auto; background: #f7f8f4; }
+.support-message { width: min(78%, 620px); margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.support-message.admin { margin-left: auto; border-color: #cbd9c4; background: #eef4e9; }
+.support-message span { display: block; color: var(--forest); font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.support-message p { margin: 7px 0; line-height: 1.5; white-space: pre-wrap; }
+.support-message small { color: var(--muted); font-size: 9px; }
+.support-message a { display: block; margin: 4px 0; color: var(--forest); font-size: 11px; }
+.support-reply { padding: 12px 18px; border-top: 1px solid var(--line); }
+.support-reply textarea, .support-form textarea, .support-admin-tools textarea { resize: vertical; }
+.support-admin-tools { padding: 10px 18px; display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; align-items: end; gap: 10px; border-top: 1px solid var(--line); }
+.support-resolved-note { color: var(--muted); font-size: 11px; }
+.support-actions { display: flex; gap: 8px; }
+.dialog-panel:has(.support-inbox) { width: min(980px, calc(100vw - 28px)); max-height: calc(100vh - 28px); }
+@media (max-width: 720px) {
+  .support-inbox { grid-template-columns: 1fr; min-height: 560px; }
+  .support-thread-list { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .support-conversation { min-height: 380px; }
+  .support-message { width: 92%; }
+  .support-admin-tools { grid-template-columns: 1fr; align-items: stretch; }
+}

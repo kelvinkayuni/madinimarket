@@ -88,6 +88,7 @@ export const publicTranslationPhrases = [
   "Forgot your password?",
   "Good to see you.",
   "HAVE WHAT THEY NEED?",
+  "Help / Contact admin",
   "In your cart",
   "It expired",
   "Join the market.",
