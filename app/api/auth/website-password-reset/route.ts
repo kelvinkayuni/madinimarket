@@ -23,6 +23,14 @@ export async function POST(request: Request) {
   const genericMessage = "If an active account uses that email, a password reset link will be sent.";
   try {
     const admin = createSupabaseAdminClient();
+    const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
+      .select("non_admin_sign_in_disabled")
+      .eq("id", true)
+      .maybeSingle();
+    if (settingsError) throw settingsError;
+    if (settings?.non_admin_sign_in_disabled === true) {
+      return NextResponse.json({ error: "Password recovery is currently unavailable while user sign-in is not enabled." }, { status: 403 });
+    }
     const { data: account, error: accountError } = await admin.from("website_accounts")
       .select("id, display_name, email")
       .eq("email", email)

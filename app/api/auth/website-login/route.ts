@@ -22,20 +22,20 @@ export async function POST(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
-    const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
-      .select("non_admin_sign_in_disabled")
-      .eq("id", true)
-      .maybeSingle();
-    if (!settingsError && settings?.non_admin_sign_in_disabled === true) {
-      return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
-    }
-
     const { data: account, error } = await admin.from("website_accounts")
       .select("id, username, display_name, password_hash, is_active, session_version")
       .eq("username", username)
       .maybeSingle();
     if (error || !account || !account.is_active || !(await verifyWebsitePassword(password, account.password_hash))) {
       return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
+    }
+
+    const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
+      .select("non_admin_sign_in_disabled")
+      .eq("id", true)
+      .maybeSingle();
+    if (!settingsError && settings?.non_admin_sign_in_disabled === true) {
+      return NextResponse.json({ error: "User sign-in is not enabled right now. Please try again later." }, { status: 403 });
     }
 
     return NextResponse.json({

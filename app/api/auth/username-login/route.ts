@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       .eq("username", username)
       .maybeSingle();
 
-    if (profileError || !profile?.email || profile.role !== "admin") {
+    if (profileError || !profile?.email) {
       return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
     }
 
@@ -48,6 +48,17 @@ export async function POST(request: Request) {
     });
 
     if (error || !data.session) {
+      return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
+    }
+
+    if (profile.role !== "admin") {
+      const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
+        .select("non_admin_sign_in_disabled")
+        .eq("id", true)
+        .maybeSingle();
+      if (!settingsError && settings?.non_admin_sign_in_disabled === true) {
+        return NextResponse.json({ error: "User sign-in is not enabled right now. Please try again later." }, { status: 403 });
+      }
       return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
     }
 

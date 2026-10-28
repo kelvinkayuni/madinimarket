@@ -22,9 +22,19 @@ export async function POST(request: Request) {
   }
 
   try {
+    const admin = createSupabaseAdminClient();
+    const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
+      .select("non_admin_sign_in_disabled")
+      .eq("id", true)
+      .maybeSingle();
+    if (settingsError) throw settingsError;
+    if (settings?.non_admin_sign_in_disabled === true) {
+      return NextResponse.json({ error: "Password recovery is currently unavailable while user sign-in is not enabled." }, { status: 403 });
+    }
+
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const passwordHash = await hashWebsitePassword(password);
-    const { data: updated, error } = await createSupabaseAdminClient().rpc("complete_website_password_reset", {
+    const { data: updated, error } = await admin.rpc("complete_website_password_reset", {
       p_token_hash: tokenHash,
       p_password_hash: passwordHash,
     });
