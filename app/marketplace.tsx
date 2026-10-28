@@ -436,6 +436,8 @@ export default function Marketplace() {
   const [nextMarketOpenAt, setNextMarketOpenAt] = useState<string | null>(null);
   const [marketHoursError, setMarketHoursError] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
+  const [accountFilter, setAccountFilter] = useState<"all" | "active" | "deactivated" | "approvedLicence" | "subscribed" | "notSubscribed" | "noApprovedLicence" | "licencePending">("all");
+  const [accountPage, setAccountPage] = useState(1);
   const accountListRef = useRef<HTMLDivElement>(null);
   const accountListScrollTop = useRef<number | null>(null);
   const [adminSalesLedger, setAdminSalesLedger] = useState<SalesLedgerData | null>(null);
@@ -580,12 +582,40 @@ export default function Marketplace() {
   const draftRestoreDialog = useRef<Dialog>(null);
   const sellerRail = useRef<HTMLDivElement>(null);
   const buyerRail = useRef<HTMLDivElement>(null);
-  const filteredWebsiteAccounts = [...websiteAccounts]
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-    .filter((account) => {
-      const search = accountSearch.trim().toLocaleLowerCase();
-      return !search || account.display_name.toLocaleLowerCase().includes(search) || account.username.toLocaleLowerCase().includes(search);
-    });
+  const filteredWebsiteAccounts = useMemo(() => {
+    const certificatesByAccount = new Map<string, AdminCertificate[]>();
+    for (const certificate of adminCertificates) {
+      const accountCertificates = certificatesByAccount.get(certificate.website_user_id) ?? [];
+      accountCertificates.push(certificate);
+      certificatesByAccount.set(certificate.website_user_id, accountCertificates);
+    }
+    const search = accountSearch.trim().toLocaleLowerCase();
+    return [...websiteAccounts]
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      .filter((account) => {
+        const accountCertificates = certificatesByAccount.get(account.id) ?? [];
+        const hasApprovedLicence = accountCertificates.some((certificate) => certificate.status === "approved");
+        const hasPendingLicence = accountCertificates.some((certificate) => certificate.status === "pending");
+        const matchesFilter = accountFilter === "all" ||
+          (accountFilter === "active" && account.is_active) ||
+          (accountFilter === "deactivated" && !account.is_active) ||
+          (accountFilter === "approvedLicence" && hasApprovedLicence) ||
+          (accountFilter === "subscribed" && Boolean(account.subscription)) ||
+          (accountFilter === "notSubscribed" && !account.subscription) ||
+          (accountFilter === "noApprovedLicence" && !hasApprovedLicence) ||
+          (accountFilter === "licencePending" && hasPendingLicence);
+        const matchesSearch = !search ||
+          `${account.display_name} ${account.username} ${account.email} ${account.id}`.toLocaleLowerCase().includes(search);
+        return matchesFilter && matchesSearch;
+      });
+  }, [accountFilter, accountSearch, adminCertificates, websiteAccounts]);
+  const accountPageSize = 25;
+  const accountPageCount = Math.max(1, Math.ceil(filteredWebsiteAccounts.length / accountPageSize));
+  const activeAccountPage = Math.min(accountPage, accountPageCount);
+  const visibleWebsiteAccounts = filteredWebsiteAccounts.slice(
+    (activeAccountPage - 1) * accountPageSize,
+    activeAccountPage * accountPageSize,
+  );
 
   useLayoutEffect(() => {
     const scrollTop = accountListScrollTop.current;
@@ -2890,14 +2920,38 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         </section>}
         {activeAdminPanel === "accounts" && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
-          <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search accounts by name or user ID" placeholder="Search name or user ID (MM-xxxx)" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} /></label>
-          {websiteAccounts.length ? filteredWebsiteAccounts.length ? <div className="admin-account-list-scroll" ref={accountListRef}><div className="admin-account-list">{filteredWebsiteAccounts.map((account) => {
+          <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search accounts by name, username, email, or ID" placeholder="Search name, username, email, or ID" value={accountSearch} onChange={(event) => { setAccountSearch(event.target.value); setAccountPage(1); if (accountListRef.current) accountListRef.current.scrollTop = 0; }} /></label>
+          <div className="admin-account-filters" aria-label="Filter accounts">
+            {([
+              ["all", "All"],
+              ["active", "Active"],
+              ["deactivated", "Deactivated"],
+              ["approvedLicence", "Approved licence"],
+              ["subscribed", "Subscribed"],
+              ["notSubscribed", "Not subscribed"],
+              ["noApprovedLicence", "No approved licence"],
+              ["licencePending", "Licence pending"],
+            ] as const).map(([value, label]) => <button className={accountFilter === value ? "is-selected" : ""} type="button" key={value} aria-pressed={accountFilter === value} onClick={() => { setAccountFilter(value); setAccountPage(1); if (accountListRef.current) accountListRef.current.scrollTop = 0; }}>{label}</button>)}
+          </div>
+          {websiteAccounts.length ? filteredWebsiteAccounts.length ? <>
+            <div className="admin-account-list-scroll" ref={accountListRef}><div className="admin-account-list">{visibleWebsiteAccounts.map((account) => {
             const totalPosts = account.listings.total + account.buying_requests.total;
             const accountCertificates = adminCertificates.filter((certificate) => certificate.website_user_id === account.id);
             const pendingAccountCertificates = accountCertificates.filter((certificate) => certificate.status === "pending");
             const approvedAccountCertificates = accountCertificates.filter((certificate) => certificate.status === "approved");
             const busy = busyAccountId === account.id;
-            return <article className="admin-account-row" key={account.id}>
+            return <details className="admin-account-disclosure" key={account.id}>
+              <summary className="admin-account-summary">
+                <span className="admin-account-summary-identity"><strong>{account.display_name}</strong><small>{account.username} · {account.email}</small></span>
+                <span className="admin-account-summary-statuses">
+                  <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Deactivated"}</span>
+                  <span className={`admin-account-status ${account.subscription ? "is-subscribed" : "is-not-subscribed"}`}>{account.subscription ? "Subscribed" : "Not subscribed"}</span>
+                  <span className={`admin-account-status ${approvedAccountCertificates.length ? "is-license-approved" : "is-license-unavailable"}`}>{approvedAccountCertificates.length ? "Approved licence" : "No approved licence"}</span>
+                  {pendingAccountCertificates.length > 0 && <span className="admin-account-status is-license-pending">Licence pending</span>}
+                </span>
+                <ChevronDown className="admin-account-disclosure-chevron" size={16} aria-hidden="true" />
+              </summary>
+              <article className="admin-account-row">
               <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username} · {account.email}</span><small>{account.phone || "No phone number"}</small></div>
               <div className="admin-account-counts">
                 <span><strong>{totalPosts}</strong> total posted</span>
@@ -2933,8 +2987,14 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                   <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyCertificate === certificate.id} onClick={() => void withProgress(`certificate-${certificate.id}-verify`, () => reviewCertificate(certificate, true))}>{busyActions.has(`certificate-${certificate.id}-verify`) ? "Verifying…" : "Verify"}</button><button className="button button-outline" type="button" disabled={busyCertificate === certificate.id || !certificateRejectionMessages[certificate.id]?.trim()} onClick={() => void withProgress(`certificate-${certificate.id}-reject`, () => reviewCertificate(certificate, false))}>{busyActions.has(`certificate-${certificate.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
                 </article>)}</div>
               </details>}
-            </article>;
-          })}</div></div> : <p className="admin-empty">No accounts match “{accountSearch.trim()}”.</p> : <p className="admin-empty">No website accounts have been created.</p>}
+              </article>
+            </details>;
+          })}</div></div>
+            <div className="admin-account-pagination">
+              <span>{`Showing ${(activeAccountPage - 1) * accountPageSize + 1}–${Math.min(activeAccountPage * accountPageSize, filteredWebsiteAccounts.length)} of ${filteredWebsiteAccounts.length} accounts`}</span>
+              <div><button className="button button-outline" type="button" disabled={activeAccountPage <= 1} onClick={() => { setAccountPage((current) => Math.max(1, current - 1)); if (accountListRef.current) accountListRef.current.scrollTop = 0; }}>Previous</button><span>Page {activeAccountPage} of {accountPageCount}</span><button className="button button-outline" type="button" disabled={activeAccountPage >= accountPageCount} onClick={() => { setAccountPage((current) => Math.min(accountPageCount, current + 1)); if (accountListRef.current) accountListRef.current.scrollTop = 0; }}>Next</button></div>
+            </div>
+          </> : <p className="admin-empty">No accounts match the selected filters{accountSearch.trim() ? ` and “${accountSearch.trim()}”` : ""}.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
         {activeAdminPanel === "orders" && <AdminMarketplaceOrders onNotice={setNotice} pendingPaymentCount={pendingMarketplacePayments} />}
         {activeAdminPanel === "order-time-limits" && <AdminOrderTimeLimits onNotice={setNotice} />}
