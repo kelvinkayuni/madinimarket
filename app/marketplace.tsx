@@ -3252,7 +3252,7 @@ export default function Marketplace() {
             {pendingUserSubscription.payment_reference && <span>Payment reference: {pendingUserSubscription.payment_reference}</span>}
             <span>Your subscription period starts after payment is confirmed. If renewing early, your current subscription remains active until its expiry.</span>
           </div>}
-          {!pendingUserSubscription && previousSubscription && (previousSubscription.status === "rejected" || !activeSubscription) && <div className={`user-subscription-status is-${previousSubscription.status}`}>
+          {!activeSubscription && !pendingUserSubscription && previousSubscription && <div className={`user-subscription-status is-${previousSubscription.status}`}>
             <strong>{previousSubscription.status === "expired" ? "Your previous subscription has expired" : "Your previous subscription request was rejected"}</strong>
             {previousSubscription.expires_at && <span>It expired {new Date(previousSubscription.expires_at).toLocaleString()}.</span>}
             {previousSubscription.status === "rejected" && previousSubscription.review_note && <span>Admin’s reason: {previousSubscription.review_note}</span>}
