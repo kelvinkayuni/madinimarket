@@ -567,7 +567,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       </div>}
       {data.privateOffers.threads.length ? <div className="commerce-private-board">
         <details className="commerce-private-role-group" open>
-          <summary className="commerce-private-group-heading"><span><strong>Offers as Buyer</strong><small>{visibleBuyerPrivateThreads.length} offer{visibleBuyerPrivateThreads.length === 1 ? "" : "s"}</small></span><span className="commerce-private-group-count">{visibleBuyerPrivateThreads.length}</span><span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
+          <summary className="commerce-private-group-heading"><span><strong>Your offers as a buyer</strong><small>{visibleBuyerPrivateThreads.length} offer{visibleBuyerPrivateThreads.length === 1 ? "" : "s"}</small></span><span className="commerce-private-group-count">{visibleBuyerPrivateThreads.length}</span><span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
           <div className="commerce-private-card-list">
             {visibleBuyerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
@@ -578,7 +578,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           {!visibleBuyerPrivateThreads.length && <p className="commerce-note">No offers received as a buyer match the current filter.</p>}
         </details>
         <details className="commerce-private-role-group" open>
-          <summary className="commerce-private-group-heading"><span><strong>Offers as Seller</strong><small>{visibleSellerPrivateThreads.length} offer{visibleSellerPrivateThreads.length === 1 ? "" : "s"}</small></span><span className="commerce-private-group-count">{visibleSellerPrivateThreads.length}</span><span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
+          <summary className="commerce-private-group-heading"><span><strong>Your offers as a seller</strong><small>{visibleSellerPrivateThreads.length} offer{visibleSellerPrivateThreads.length === 1 ? "" : "s"}</small></span><span className="commerce-private-group-count">{visibleSellerPrivateThreads.length}</span><span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
           <div className="commerce-private-card-list">
             {visibleSellerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; const remaining = Math.max(0, 3 - thread.attempt_count); return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
