@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
     const admin = createSupabaseAdminClient();
     const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, account_creation_disabled, homepage_announcement").eq("id", true).single(),
+      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement").eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsError) throw settingsError;
@@ -46,6 +46,7 @@ export async function GET(request: Request) {
       swahiliEnabled: settings.swahili_enabled,
       headlineFontSize: settings.homepage_headline_font_size,
       accountCreationDisabled: settings.account_creation_disabled,
+      nonAdminSignInDisabled: settings.non_admin_sign_in_disabled ?? false,
       homepageAnnouncement: settings.homepage_announcement ?? "",
       headlines: headlines ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
@@ -67,6 +68,15 @@ export async function PATCH(request: Request) {
         .single();
       if (error) throw error;
       return NextResponse.json({ accountCreationDisabled: data.account_creation_disabled }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (typeof values?.nonAdminSignInDisabled === "boolean") {
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ non_admin_sign_in_disabled: values.nonAdminSignInDisabled })
+        .eq("id", true)
+        .select("non_admin_sign_in_disabled")
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ nonAdminSignInDisabled: data.non_admin_sign_in_disabled }, { headers: { "Cache-Control": "no-store" } });
     }
     if (typeof values?.homepageAnnouncement === "string") {
       const announcement = values.homepageAnnouncement.trim().slice(0, 500);

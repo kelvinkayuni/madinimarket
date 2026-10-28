@@ -380,14 +380,14 @@ async function loadAdminTranslations(accessToken: string): Promise<TranslationPa
   return result.translations as TranslationPair[];
 }
 
-async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; accountCreationDisabled: boolean; homepageAnnouncement: string; headlines: HomepageHeadline[] }> {
+async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; headlines: HomepageHeadline[] }> {
   const response = await fetch("/api/admin/site-content", {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "Could not load homepage and language settings.");
-  if (typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || !Number.isInteger(result.headlineFontSize) ||
+  if (typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || !Number.isInteger(result.headlineFontSize) ||
     result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Array.isArray(result.headlines) ||
     !result.headlines.every((headline: unknown) =>
       typeof headline === "object" && headline !== null &&
@@ -401,6 +401,7 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
     swahiliEnabled: result.swahiliEnabled,
     headlineFontSize: result.headlineFontSize,
     accountCreationDisabled: result.accountCreationDisabled,
+    nonAdminSignInDisabled: result.nonAdminSignInDisabled,
     homepageAnnouncement: result.homepageAnnouncement,
     headlines: result.headlines,
   };
@@ -456,6 +457,7 @@ export default function Marketplace() {
   const [editingTranslationId, setEditingTranslationId] = useState<string | null>(null);
   const [swahiliEnabled, setSwahiliEnabled] = useState(true);
   const [accountCreationDisabled, setAccountCreationDisabled] = useState(false);
+  const [nonAdminSignInDisabled, setNonAdminSignInDisabled] = useState(false);
   const [homepageAnnouncement, setHomepageAnnouncement] = useState("");
   const [homepageAnnouncementDraft, setHomepageAnnouncementDraft] = useState("");
   const [siteContentLoaded, setSiteContentLoaded] = useState(false);
@@ -1160,6 +1162,10 @@ export default function Marketplace() {
               setTranslationPairs(await loadAdminTranslations(session.access_token));
               const siteContent = await loadAdminSiteContent(session.access_token);
               setSwahiliEnabled(siteContent.swahiliEnabled);
+              setAccountCreationDisabled(siteContent.accountCreationDisabled);
+              setNonAdminSignInDisabled(siteContent.nonAdminSignInDisabled);
+              setHomepageAnnouncement(siteContent.homepageAnnouncement);
+              setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
               setHomepageHeadlineFontSize(siteContent.headlineFontSize);
               setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
               setSiteContentLoaded(true);
@@ -1801,6 +1807,7 @@ export default function Marketplace() {
     const content = await loadAdminSiteContent(session.access_token);
     setSwahiliEnabled(content.swahiliEnabled);
     setAccountCreationDisabled(content.accountCreationDisabled);
+    setNonAdminSignInDisabled(content.nonAdminSignInDisabled);
     setHomepageAnnouncement(content.homepageAnnouncement);
     setHomepageAnnouncementDraft(content.homepageAnnouncement);
     setHomepageHeadlineFontSize(content.headlineFontSize);
@@ -1886,6 +1893,26 @@ export default function Marketplace() {
         setNotice(result.accountCreationDisabled ? "Account creation is now suspended." : "Account creation is enabled again.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not update account creation access.");
+      }
+    });
+  };
+  const updateNonAdminSignInAvailability = async (disabled: boolean) => {
+    await withProgress("non-admin-signin-setting", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "PATCH",
+          headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
+          body: JSON.stringify({ nonAdminSignInDisabled: disabled }),
+        });
+        const result = await response.json();
+        if (!response.ok || typeof result.nonAdminSignInDisabled !== "boolean") throw new Error(result.error ?? "Could not update sign-in access.");
+        setNonAdminSignInDisabled(result.nonAdminSignInDisabled);
+        setNotice(result.nonAdminSignInDisabled ? "Non-administrator sign-in is now suspended." : "Sign-in access is enabled again.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update sign-in access.");
       }
     });
   };
@@ -3101,6 +3128,10 @@ export default function Marketplace() {
             <div className="admin-account-control-row">
               <div><strong>Account creation</strong><span>{!siteContentLoaded ? "Loading account settings…" : accountCreationDisabled ? "New account creation is suspended." : "New account creation is enabled."}</span></div>
               <button className={`admin-currency-switch${accountCreationDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={accountCreationDisabled} aria-label="Suspend new account creation" disabled={!siteContentLoaded || busyActions.has("account-creation-setting")} onClick={() => void updateAccountCreationAvailability(!accountCreationDisabled)}><span /></button>
+            </div>
+            <div className="admin-account-control-row">
+              <div><strong>User sign-in</strong><span>{!siteContentLoaded ? "Loading sign-in settings…" : nonAdminSignInDisabled ? "Non-administrator sign-in is suspended." : "User sign-in is enabled."}</span></div>
+              <button className={`admin-currency-switch${nonAdminSignInDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={nonAdminSignInDisabled} aria-label="Suspend non-administrator sign-in" disabled={!siteContentLoaded || busyActions.has("non-admin-signin-setting")} onClick={() => void updateNonAdminSignInAvailability(!nonAdminSignInDisabled)}><span /></button>
             </div>
             <form className="admin-homepage-announcement-form" onSubmit={(event) => void saveHomepageAnnouncement(event)}>
               <label className="field-label" htmlFor="admin-homepage-announcement">Homepage announcement</label>

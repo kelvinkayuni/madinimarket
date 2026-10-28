@@ -22,6 +22,14 @@ export async function POST(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
+    const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
+      .select("non_admin_sign_in_disabled")
+      .eq("id", true)
+      .maybeSingle();
+    if (!settingsError && settings?.non_admin_sign_in_disabled === true) {
+      return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
+    }
+
     const { data: account, error } = await admin.from("website_accounts")
       .select("id, username, display_name, password_hash, is_active, session_version")
       .eq("username", username)
