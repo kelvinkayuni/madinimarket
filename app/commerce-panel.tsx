@@ -666,34 +666,34 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <option value="all">All statuses</option><option value="awaiting_seller">Awaiting response</option><option value="paid">Ready to dispatch</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
     </div>
-    <section className="commerce-section">
+    <section className="commerce-section commerce-order-section">
       <h3>Buying orders · active <span className="commerce-section-count">{data.buyerOpenOrdersCount}</span></h3>
       {filteredActiveBuyerOrders.length
         ? <div className="commerce-list">{visibleActiveBuyerOrders.map((order) => renderBuyerOrder(order))}</div>
         : <p className="commerce-note">{activeBuyerOrders.length ? "No active buying orders match your search and status filter." : data.buyerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Buying order history and load older orders to find them." : "No active buying orders."}</p>}
-      {renderOrderPagination(filteredActiveBuyerOrders.length, currentBuyerActivePage, buyerActivePageCount, "active buyer orders", setBuyerActivePage)}
+      {renderOrderPagination(filteredActiveBuyerOrders.length, currentBuyerActivePage, buyerActivePageCount, "active buying orders", setBuyerActivePage)}
       <details className="commerce-history">
         <summary>Buying order history <span className="commerce-section-count">{data.buyerHistoryCount}</span></summary>
         {filteredBuyerHistory.length
           ? <div className="commerce-list">{visibleBuyerHistory.map((order) => renderBuyerOrder(order, true))}</div>
           : <p className="commerce-note">{buyerOrderHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
-        {renderOrderPagination(filteredBuyerHistory.length, currentBuyerHistoryPage, buyerHistoryPageCount, "history orders", setBuyerHistoryPage)}
+        {renderOrderPagination(filteredBuyerHistory.length, currentBuyerHistoryPage, buyerHistoryPageCount, "buying history orders", setBuyerHistoryPage)}
         {buyerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("buyer")}>{historyLoading === "buyer" ? "Loading…" : "Load older orders"}</button>}
       </details>
     </section>
 
-    <section className="commerce-section">
+    <section className="commerce-section commerce-order-section">
       <h3>Selling orders · active <span className="commerce-section-count">{data.sellerOpenOrdersCount}</span></h3>
       {filteredActiveSellerItems.length
         ? <div className="commerce-list">{visibleActiveSellerItems.map((item) => renderSellerItem(item))}</div>
         : <p className="commerce-note">{activeSellerItems.length ? "No active selling orders match your search and status filter." : data.sellerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Selling order history and load older orders to find them." : "No active selling orders."}</p>}
-      {renderOrderPagination(filteredActiveSellerItems.length, currentSellerActivePage, sellerActivePageCount, "active seller orders", setSellerActivePage)}
+      {renderOrderPagination(filteredActiveSellerItems.length, currentSellerActivePage, sellerActivePageCount, "active selling orders", setSellerActivePage)}
       <details className="commerce-history">
         <summary>Selling order history · items <span className="commerce-section-count">{data.sellerHistoryItemCount}</span></summary>
         {filteredSellerHistory.length
           ? <div className="commerce-list">{visibleSellerHistory.map((item) => renderSellerItem(item, true))}</div>
           : <p className="commerce-note">{sellerItemHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
-        {renderOrderPagination(filteredSellerHistory.length, currentSellerHistoryPage, sellerHistoryPageCount, "history items", setSellerHistoryPage)}
+        {renderOrderPagination(filteredSellerHistory.length, currentSellerHistoryPage, sellerHistoryPageCount, "selling history items", setSellerHistoryPage)}
         {sellerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("seller")}>{historyLoading === "seller" ? "Loading…" : "Load older orders"}</button>}
       </details>
     </section>
