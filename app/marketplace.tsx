@@ -462,6 +462,7 @@ export default function Marketplace() {
   const [signOutAllUsersAction, setSignOutAllUsersAction] = useState(false);
   const [homepageAnnouncement, setHomepageAnnouncement] = useState("");
   const [homepageAnnouncementDraft, setHomepageAnnouncementDraft] = useState("");
+  const homepageAnnouncementDirty = useRef(false);
   const [siteContentLoaded, setSiteContentLoaded] = useState(false);
   const [homepageHeadlines, setHomepageHeadlines] = useState<HomepageHeadline[]>([]);
   const [homepageHeadlineIndex, setHomepageHeadlineIndex] = useState(0);
@@ -1205,7 +1206,7 @@ export default function Marketplace() {
               setAccountCreationDisabled(siteContent.accountCreationDisabled);
               setNonAdminSignInDisabled(siteContent.nonAdminSignInDisabled);
               setHomepageAnnouncement(siteContent.homepageAnnouncement);
-              setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
+              if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
               setHomepageHeadlineFontSize(siteContent.headlineFontSize);
               setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
               setSiteContentLoaded(true);
@@ -1849,7 +1850,7 @@ export default function Marketplace() {
     setAccountCreationDisabled(content.accountCreationDisabled);
     setNonAdminSignInDisabled(content.nonAdminSignInDisabled);
     setHomepageAnnouncement(content.homepageAnnouncement);
-    setHomepageAnnouncementDraft(content.homepageAnnouncement);
+    if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(content.homepageAnnouncement);
     setHomepageHeadlineFontSize(content.headlineFontSize);
     setHomepageHeadlineFontSizeInput(String(content.headlineFontSize));
     setSiteContentLoaded(true);
@@ -1995,6 +1996,7 @@ export default function Marketplace() {
         if (!response.ok || typeof result.homepageAnnouncement !== "string") throw new Error(result.error ?? "Could not save the homepage message.");
         setHomepageAnnouncement(result.homepageAnnouncement);
         setHomepageAnnouncementDraft(result.homepageAnnouncement);
+        homepageAnnouncementDirty.current = false;
         setNotice(result.homepageAnnouncement ? "Homepage announcement saved." : "Homepage announcement cleared.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not save the homepage message.");
@@ -2016,6 +2018,7 @@ export default function Marketplace() {
         if (!response.ok || typeof result.homepageAnnouncement !== "string") throw new Error(result.error ?? "Could not clear the homepage message.");
         setHomepageAnnouncement("");
         setHomepageAnnouncementDraft("");
+        homepageAnnouncementDirty.current = false;
         setNotice("Homepage announcement cleared.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not clear the homepage message.");
@@ -3209,7 +3212,7 @@ export default function Marketplace() {
               </summary>
               <form className="admin-homepage-announcement-form" onSubmit={(event) => void saveHomepageAnnouncement(event)}>
                 <label className="field-label" htmlFor="admin-homepage-announcement">Message</label>
-                <textarea className="text-input" id="admin-homepage-announcement" rows={3} maxLength={500} value={homepageAnnouncementDraft} placeholder="The website is under development…" onChange={(event) => setHomepageAnnouncementDraft(event.target.value)} />
+                <textarea className="text-input" id="admin-homepage-announcement" rows={3} maxLength={500} value={homepageAnnouncementDraft} placeholder="The website is under development…" onChange={(event) => { homepageAnnouncementDirty.current = true; setHomepageAnnouncementDraft(event.target.value); }} />
                 <div className="admin-homepage-announcement-actions"><span>{homepageAnnouncement ? "Currently displayed on the homepage" : "No homepage announcement is displayed"}</span><button className="button button-outline" type="button" disabled={!homepageAnnouncementDraft && !homepageAnnouncement || busyActions.has("homepage-announcement-save")} onClick={() => void clearHomepageAnnouncement()}>Clear</button><button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("homepage-announcement-save") || homepageAnnouncementDraft.trim() === homepageAnnouncement}>Save message</button></div>
               </form>
             </details>
