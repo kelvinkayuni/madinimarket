@@ -913,6 +913,11 @@ h1, h2, h3, p { margin-top: 0; }
 .support-thread-list { overflow-y: auto; border-right: 1px solid var(--line); background: #fafbf8; }
 .support-list-heading { min-height: 58px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .support-thread-list > .field-label { margin: 10px 12px 0; }
+.support-filter-toolbar { padding: 10px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+.support-filter-toolbar .field-label { display: grid; gap: 4px; }
+.support-filter-toolbar .text-input { width: 100%; min-height: 36px; padding: 7px 8px; font-size: 11px; }
+.support-date-range { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.support-date-range .field-label { min-width: 0; display: grid; gap: 4px; }
 .support-thread { position: relative; width: 100%; min-height: 92px; padding: 12px; display: grid; gap: 5px; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer; }
 .support-thread:hover, .support-thread.is-selected { background: #edf2e9; }
 .support-thread > span { display: flex; justify-content: space-between; gap: 8px; color: var(--forest); font-size: 11px; }

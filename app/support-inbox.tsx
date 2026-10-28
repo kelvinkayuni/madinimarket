@@ -13,7 +13,7 @@ export type SupportThread = {
 };
 export type SupportMessage = { id: string; sender_type: "user" | "admin"; message: string; created_at: string; support_attachments: { id: string; file_name: string; file_type: string; file_size: number; signed_url: string | null }[] };
 
-const statusLabels: Record<string, string> = { open: "Open", admin_replied: "Admin replied", pending_user: "Waiting for you", resolved: "Resolved" };
+const statusLabels: Record<string, string> = { open: "Open", admin_replied: "Admin replied", pending_user: "Waiting for user", resolved: "Resolved" };
 
 export default function SupportInbox({ admin = false, onNotice }: { admin?: boolean; onNotice: (message: string) => void }) {
   const [adminAccessToken, setAdminAccessToken] = useState("");
@@ -23,6 +23,11 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [reply, setReply] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [internalNote, setInternalNote] = useState("");
@@ -116,12 +121,47 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
     onNotice("Internal note saved.");
   };
 
-  const visibleThreads = threads.filter((item) => statusFilter === "all" || item.status === statusFilter);
+  const visibleThreads = threads
+    .filter((item) => statusFilter === "all" || item.status === statusFilter)
+    .filter((item) => {
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) return true;
+      const account = item.website_accounts;
+      const searchable = admin
+        ? [item.ticket_number, item.subject, item.category, account?.display_name, account?.username, account?.email, account?.phone].filter(Boolean).join(" ").toLowerCase()
+        : `${item.ticket_number}`.toLowerCase();
+      return searchable.includes(query);
+    })
+    .filter((item) => {
+      if (dateFilter === "all") return true;
+      const created = new Date(item.created_at);
+      const now = new Date();
+      if (dateFilter === "today") {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return created >= start;
+      }
+      if (dateFilter === "7days") return created >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      if (dateFilter === "30days") return created >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      if (dateFilter === "custom") {
+        if (dateFrom && created < new Date(`${dateFrom}T00:00:00`)) return false;
+        if (dateTo && created > new Date(`${dateTo}T23:59:59.999`)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => sortOrder === "oldest"
+      ? new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      : new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return <div className="support-inbox">
     <aside className="support-thread-list">
       <div className="support-list-heading"><strong>{admin ? "Support inbox" : "Your support"}</strong>{!admin && <button className="button button-dark" type="button" onClick={() => { setCreating(true); setSelectedId(null); }}>New request</button>}</div>
-      {admin && <label className="field-label">Filter<select className="text-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All</option><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label>}
-      {loading ? <p className="admin-empty">Loading…</p> : visibleThreads.length ? visibleThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(admin ? item.unread_by_admin : item.unread_by_user) && <i>Unread</i>}</button>) : <p className="admin-empty">No support conversations found.</p>}
+      <div className="support-filter-toolbar">
+        <label className="field-label">Status<select className="text-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label>
+        <label className="field-label">{admin ? "Search user or request" : "Search request ID"}<input className="text-input" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={admin ? "Name, user, email, or MM-ID" : "Enter ticket number"} /></label>
+        <label className="field-label">Request date<select className="text-input" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}><option value="all">All dates</option><option value="today">Today</option><option value="7days">Last 7 days</option><option value="30days">Last 30 days</option><option value="custom">Custom range</option></select></label>
+        {dateFilter === "custom" && <div className="support-date-range"><label className="field-label">From<input className="text-input" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label className="field-label">To<input className="text-input" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label></div>}
+        <label className="field-label">Sort<select className="text-input" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
+      </div>
+      {loading ? <p className="admin-empty">Loading…</p> : visibleThreads.length ? visibleThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(admin ? item.unread_by_admin : item.unread_by_user) && <i>Unread</i>}</button>) : <p className="admin-empty">No support conversations match these filters.</p>}
     </aside>
     <section className="support-conversation">
       {creating && !admin ? <form className="support-form form-stack" onSubmit={submitTicket}><div className="dialog-kicker">CONTACT ADMIN</div><h2>Create a support request</h2><label className="field-label">Category<select className="text-input" name="category" required><option value="">Choose a category</option>{["Account","Subscription","Payment","Product listing","Order","Other"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="field-label">Subject<input className="text-input" name="subject" minLength={3} maxLength={160} required /></label><label className="field-label">Message<textarea className="text-input" name="message" rows={6} maxLength={5000} required /></label><label className="field-label">Attachments (optional)<input className="text-input" name="attachments" type="file" multiple accept="application/pdf,image/jpeg,image/png" /></label><p className="user-subscription-receipt-help">PDF, JPEG, or PNG. Maximum 4 MB per file.</p><div className="support-actions"><button className="button button-dark" type="submit" disabled={submittingRequest}>{submittingRequest ? "Submitting…" : "Submit request"}</button><button className="button button-outline" type="button" onClick={() => setCreating(false)} disabled={submittingRequest}>Cancel</button></div></form>
