@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 
@@ -45,36 +45,82 @@ type Order = {
   items: Item[];
 };
 
+type OrderFilter =
+  | "needs_action"
+  | "active"
+  | "payment_submitted"
+  | "awaiting_sellers"
+  | "awaiting_payment"
+  | "delivery_due"
+  | "disputes"
+  | "payout_due"
+  | "refund_due"
+  | "history"
+  | "all";
+
 const money = (value: string | number, currency: Currency) =>
   `${currency === "TZS" ? "TSh" : "$"} ${new Intl.NumberFormat("en-US", {
     minimumFractionDigits: currency === "USD" ? 2 : 0,
     maximumFractionDigits: currency === "USD" ? 2 : 0,
   }).format(Number(value))}`;
 
+function orderQueueLabel(order: Order) {
+  if (order.payment_status === "payment_submitted") return "Payment verification";
+  if (order.items.some((item) => item.status === "disputed")) return "Open dispute";
+  if (order.items.some((item) => item.status === "payout_due")) return "Payout due";
+  if (order.items.some((item) => item.status === "refund_due")) return "Refund due";
+  if (order.items.some((item) =>
+    ["paid", "shipped"].includes(item.status) && item.shipping_carrier?.trim() && item.tracking_number?.trim(),
+  )) return "Delivery confirmation";
+  return order.payment_status.replaceAll("_", " ");
+}
+
+function orderNeedsAdminAttention(order: Order) {
+  return order.payment_status === "payment_submitted" || order.items.some((item) =>
+    ["disputed", "payout_due", "refund_due"].includes(item.status) ||
+    (["paid", "shipped"].includes(item.status) && Boolean(item.shipping_carrier?.trim()) && Boolean(item.tracking_number?.trim())),
+  );
+}
+
 export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }: {
   onNotice: (message: string) => void;
   pendingPaymentCount: number;
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
+  const [filter, setFilter] = useState<OrderFilter>("needs_action");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const loadSequence = useRef(0);
   const [payoutReferences, setPayoutReferences] = useState<Record<string, string>>({});
   const [payoutReceipts, setPayoutReceipts] = useState<Record<string, File | undefined>>({});
   const [refundReferences, setRefundReferences] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
+    const requestSequence = ++loadSequence.current;
     if (!isSupabaseConfigured) throw new Error("The admin service is not connected.");
     const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
     if (sessionError) throw sessionError;
     if (!session) throw new Error("Admin session expired.");
-    const response = await fetch("/api/admin/marketplace-orders", {
+    const params = new URLSearchParams({ filter, search, page: String(page) });
+    const response = await fetch(`/api/admin/marketplace-orders?${params}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
       cache: "no-store",
     });
     const result = await response.json();
+    if (requestSequence !== loadSequence.current) return;
     if (!response.ok) throw new Error(result.error ?? "Could not load marketplace orders.");
+    if (page > Math.max(1, Math.ceil(Number(result.totalCount ?? 0) / 25))) {
+      setLoading(true);
+      setPage(Math.max(1, Math.ceil(Number(result.totalCount ?? 0) / 25)));
+      return;
+    }
     setOrders(result.orders as Order[]);
-  }, []);
+    setTotalCount(result.totalCount as number);
+  }, [filter, page, search]);
 
   useEffect(() => {
     let active = true;
@@ -157,19 +203,61 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
     }
   };
 
-  if (loading) return <section className="admin-overview"><p>Loading marketplace orders…</p></section>;
   return <section className="admin-overview admin-commerce-orders">
     <div className="admin-page-heading">
       <div><div className="dialog-kicker">BUYER PAYMENTS & SELLER PAYOUTS</div><h1>Marketplace orders</h1>
-        <p>{pendingPaymentCount} payment{pendingPaymentCount === 1 ? "" : "s"} awaiting verification. Verify buyer payments, confirm carrier delivery, resolve disputes, and record manual seller payouts/refunds.</p></div>
+        <p><strong>{pendingPaymentCount}</strong> payment{pendingPaymentCount === 1 ? "" : "s"} awaiting verification. Orders needing admin attention are shown first.</p></div>
       <button className="button button-outline" type="button" disabled={busy === "refresh"} onClick={() => {
         setBusy("refresh");
         void load().then(() => onNotice("Marketplace orders refreshed.")).catch((error: unknown) => onNotice(error instanceof Error ? error.message : "Could not refresh orders.")).finally(() => setBusy(""));
       }}>{busy === "refresh" ? "Refreshing…" : "Refresh"}</button>
     </div>
+    <div className="admin-order-tools">
+      <form className="admin-order-search" onSubmit={(event) => {
+        event.preventDefault();
+        setPage(1);
+        setLoading(true);
+        setSearch(searchInput.trim());
+      }}>
+        <label className="field-label">Search orders<input className="text-input" value={searchInput} maxLength={80} placeholder="Order number, buyer name, or email" onChange={(event) => setSearchInput(event.target.value)} /></label>
+        <button className="button button-dark" type="submit">Search</button>
+        {search && <button className="button button-outline" type="button" onClick={() => {
+          setSearch("");
+          setSearchInput("");
+          setPage(1);
+          setLoading(true);
+        }}>Clear search</button>}
+      </form>
+      <label className="field-label admin-order-filter">Show
+        <select className="text-input" value={filter} onChange={(event) => {
+          setFilter(event.target.value as OrderFilter);
+          setPage(1);
+          setLoading(true);
+        }}>
+          <option value="needs_action">Needs admin action</option>
+          <option value="active">Active orders</option>
+          <option value="payment_submitted">Payments awaiting verification</option>
+          <option value="awaiting_sellers">Awaiting seller responses</option>
+          <option value="awaiting_payment">Awaiting buyer payment</option>
+          <option value="delivery_due">Delivery confirmation</option>
+          <option value="disputes">Open disputes</option>
+          <option value="payout_due">Seller payouts due</option>
+          <option value="refund_due">Buyer refunds due</option>
+          <option value="history">Order history</option>
+          <option value="all">All orders</option>
+        </select>
+      </label>
+    </div>
     {orders.length ? <div className="commerce-list">
-      {orders.map((order) => <article className="commerce-order admin-commerce-order" key={order.id}>
-        <div className="commerce-order-heading"><strong>{order.control_number}</strong><span>{order.payment_status.replaceAll("_", " ")}</span></div>
+      {orders.map((order) => <details className="commerce-order admin-commerce-order" key={order.id}>
+        <summary className="admin-commerce-summary">
+          <strong>{order.control_number}</strong>
+          <span>{order.buyer_name} · {order.buyer_email}</span>
+          <span>{money(order.total_amount, order.currency)}</span>
+          <span>{new Date(order.created_at).toLocaleDateString()}</span>
+          <span className={orderNeedsAdminAttention(order) ? "admin-order-status needs-action" : "admin-order-status"}>{orderQueueLabel(order)}</span>
+        </summary>
+        <div className="admin-commerce-order-details">
         <p>{money(order.total_amount, order.currency)} · Created {new Date(order.created_at).toLocaleString()}</p>
         <p>Buyer: {order.buyer_name} · {order.buyer_email} · {order.buyer_phone}</p>
         <p>Delivery: {order.delivery_address}, {order.delivery_district}, {order.delivery_region}, {order.delivery_country}</p>
@@ -228,8 +316,23 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
             <button className="button button-outline" type="submit" disabled={busy === `refund-${item.id}` || (refundReferences[item.id]?.trim().length ?? 0) < 3}>{busy === `refund-${item.id}` ? "Recording…" : "Record buyer refund"}</button>
           </form>}
         </div>)}
-      </article>)}
-    </div> : <p className="admin-empty">No mineral purchase orders yet.</p>}
+        </div>
+      </details>)}
+    </div> : <p className="admin-empty">{loading ? "Loading marketplace orders…" : "No orders match this filter and search."}</p>}
+    <div className="admin-order-pagination">
+      <span>{totalCount ? `Showing ${(page - 1) * 25 + 1}–${Math.min(page * 25, totalCount)} of ${totalCount} orders` : "No matching orders"}</span>
+      <div>
+        <button className="button button-outline" type="button" disabled={loading || page <= 1} onClick={() => {
+          setPage((current) => Math.max(1, current - 1));
+          setLoading(true);
+        }}>Previous</button>
+        <span>Page {page} of {Math.max(1, Math.ceil(totalCount / 25))}</span>
+        <button className="button button-outline" type="button" disabled={loading || page >= Math.ceil(totalCount / 25)} onClick={() => {
+          setPage((current) => current + 1);
+          setLoading(true);
+        }}>Next</button>
+      </div>
+    </div>
     <p className="commerce-note">Payment collection, holding buyer funds, seller bank/mobile-money transfers, and refunds are recorded manually. The app does not custody or automatically transfer money.</p>
   </section>;
 }

@@ -33,7 +33,8 @@ async function readBody(request: Request): Promise<Body | null> {
 export async function GET(request: Request) {
   const admin = await getAdminClient(request);
   if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
-  if (new URL(request.url).searchParams.get("summary") === "1") {
+  const searchParams = new URL(request.url).searchParams;
+  if (searchParams.get("summary") === "1") {
     const { count, error } = await admin.from("marketplace_orders")
       .select("id", { count: "exact", head: true })
       .eq("payment_status", "payment_submitted");
@@ -43,14 +44,48 @@ export async function GET(request: Request) {
     }
     return NextResponse.json({ pendingPaymentCount: count ?? 0 }, { headers: { "Cache-Control": "no-store" } });
   }
+  const filters = new Set([
+    "needs_action", "active", "payment_submitted", "awaiting_sellers", "awaiting_payment",
+    "delivery_due", "disputes", "payout_due", "refund_due", "history", "all",
+  ]);
+  const requestedFilter = searchParams.get("filter") ?? "needs_action";
+  if (!filters.has(requestedFilter)) {
+    return NextResponse.json({ error: "Choose a valid marketplace order filter." }, { status: 400 });
+  }
+  const page = Number(searchParams.get("page") ?? 1);
+  if (!Number.isSafeInteger(page) || page < 1 || page > 40_000) {
+    return NextResponse.json({ error: "Choose a valid marketplace order page." }, { status: 400 });
+  }
+  const search = (searchParams.get("search") ?? "").trim().replace(/[%_,()\\]/g, "").slice(0, 80);
+  const pageSize = 25;
+  const offset = (page - 1) * pageSize;
+  const { data: queue, error: queueError } = await admin.rpc("admin_marketplace_order_queue", {
+    p_filter: requestedFilter,
+    p_search: search,
+    p_offset: offset,
+    p_limit: pageSize,
+  });
+  if (queueError) {
+    console.error("Admin could not query marketplace order queue", queueError);
+    return NextResponse.json({ error: "Could not load marketplace order queue. Run supabase/marketplace-admin-order-queue.sql in Supabase and retry." }, { status: 503 });
+  }
+  const queueRows = queue as { order_id: string | null; total_count: number | string; action_priority: number }[] | null;
+  const totalCount = Number(queueRows?.[0]?.total_count ?? 0);
+  const orderIds = (queueRows ?? []).map((row) => row.order_id).filter((id): id is string => typeof id === "string");
+  if (!orderIds.length) {
+    return NextResponse.json({ orders: [], totalCount, page, pageSize }, { headers: { "Cache-Control": "no-store" } });
+  }
   const { data, error } = await admin.from("marketplace_orders")
-    .select("*, items:marketplace_order_items(*)").order("created_at", { ascending: false }).limit(200);
+    .select("*, items:marketplace_order_items(*)").in("id", orderIds);
   if (error) {
     console.error("Admin could not load marketplace orders", error);
     return NextResponse.json({ error: "Could not load marketplace orders." }, { status: 503 });
   }
   try {
-    const orders = await Promise.all((data ?? []).map(async (order) => {
+    const ordersById = new Map((data ?? []).map((order) => [order.id, order]));
+    const signedOrders = await Promise.all(orderIds.map(async (id) => {
+      const order = ordersById.get(id);
+      if (!order) return null;
       const paymentProof = order.payment_proof_path
         ? await admin.storage.from("marketplace-payment-proofs").createSignedUrl(order.payment_proof_path, 10 * 60)
         : null;
@@ -69,7 +104,8 @@ export async function GET(request: Request) {
         items,
       };
     }));
-    return NextResponse.json({ orders });
+    const orders = signedOrders.filter((order) => order !== null);
+    return NextResponse.json({ orders, totalCount, page, pageSize }, { headers: { "Cache-Control": "no-store" } });
   } catch (proofError) {
     console.error("Admin could not create signed marketplace order document links", proofError);
     return NextResponse.json({ error: "Could not load private order documents." }, { status: 503 });
