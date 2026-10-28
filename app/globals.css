@@ -169,6 +169,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .user-subscription-status.is-scheduled strong { color: #435b79; }
 .user-subscription-status.is-rejected { border-color: #ecd4ce; background: #fbf2ef; }
 .user-subscription-status.is-rejected strong { color: #8b4b3d; }
+.subscription-payment-instructions { display: grid; gap: 9px; margin: 14px 0; padding: 13px; border: 1px solid #dfe5dc; background: #f8faf6; }
+.subscription-payment-instructions h3 { margin: 0; color: #35553e; font-size: 12px; }
+.subscription-payment-instructions > p { margin: 0; color: #697369; font-size: 10px; line-height: 1.5; }
+.user-subscription-status a, .admin-subscription-request a { color: #35553e; font-size: 10px; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .user-subscription-plan-list { display: grid; gap: 10px; max-height: min(46vh, 430px); overflow-y: auto; padding: 2px 3px 2px 0; }
 .user-subscription-plan { padding: 13px; border: 1px solid #e1e5dd; background: #fff; }
 .user-subscription-plan.is-current { border-color: #93a68d; box-shadow: 0 0 0 1px #93a68d; }
@@ -179,6 +183,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .user-subscription-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .user-subscription-actions .button { min-height: 37px; padding: 0 8px; font-size: 10px; }
 .user-subscription-actions .button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.user-subscription-request-form { display: grid; gap: 10px; margin-top: 12px; padding: 12px; border: 1px solid #e1e5dd; background: #fbfcf9; }
+.user-subscription-request-form > p, .user-subscription-receipt-help, .user-subscription-receipt-name { margin: 0; color: #697369; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.user-subscription-request-form > p strong { color: #35553e; }
+.user-subscription-request-form .text-input[type="file"] { padding: 8px; font-size: 10px; }
+.user-subscription-request-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.user-subscription-request-actions .button { min-height: 36px; font-size: 10px; }
+.admin-subscription-review-note { display: grid; gap: 6px; margin-top: 10px; }
+.admin-subscription-review-note textarea { resize: vertical; }
 .admin-ledger { padding: 26px 0 24px; border-bottom: 1px solid var(--line); }
 .admin-ledger-heading h2 { margin: 4px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 22px; font-weight: 500; }
 .admin-ledger-live { display: flex; align-items: center; gap: 7px; color: #667565; font-size: 9px; white-space: nowrap; }

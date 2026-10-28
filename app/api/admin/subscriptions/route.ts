@@ -26,7 +26,7 @@ export async function GET(request: Request) {
         .select("id, months, price_tzs, price_usd, is_active, updated_at")
         .order("months", { ascending: true }),
       service.from("account_subscriptions")
-        .select("id, website_user_id, plan_id, months, currency, amount, status, requested_at")
+        .select("id, website_user_id, plan_id, months, currency, amount, status, requested_at, payment_reference, payment_receipt_path")
         .eq("status", "pending")
         .order("requested_at", { ascending: true }),
     ]);
@@ -37,9 +37,17 @@ export async function GET(request: Request) {
       : { data: [], error: null };
     if (accountsError) throw accountsError;
     const accountsById = new Map((accounts ?? []).map((account) => [account.id, account]));
-    const pendingSubscriptions = (pendingResult.data ?? []).map((subscription) => ({
-      ...subscription,
-      account: accountsById.get(subscription.website_user_id) ?? null,
+    const pendingSubscriptions = await Promise.all((pendingResult.data ?? []).map(async (subscription) => {
+      const { payment_receipt_path: receiptPath, ...safeSubscription } = subscription;
+      const receipt = receiptPath
+        ? await service.storage.from("account-subscription-payment-proofs").createSignedUrl(receiptPath, 10 * 60)
+        : null;
+      if (receipt?.error) throw receipt.error;
+      return {
+        ...safeSubscription,
+        payment_receipt_url: receipt?.data.signedUrl ?? null,
+        account: accountsById.get(subscription.website_user_id) ?? null,
+      };
     }));
     return NextResponse.json({
       plans: plansResult.data ?? [],
@@ -95,11 +103,19 @@ export async function PATCH(request: Request) {
     if (!subscriptionId || typeof body?.paid !== "boolean") {
       return NextResponse.json({ error: "Choose whether to confirm or reject this payment." }, { status: 400 });
     }
+    const reviewNote = typeof body.reviewNote === "string" ? body.reviewNote.trim() : "";
+    if (!body.paid && !reviewNote) {
+      return NextResponse.json({ error: "Enter a reason before rejecting this request." }, { status: 400 });
+    }
+    if (reviewNote.length > 500) {
+      return NextResponse.json({ error: "The rejection reason must be 500 characters or fewer." }, { status: 400 });
+    }
     const service = createSupabaseAdminClient();
     const { data, error } = await service.rpc("review_website_subscription", {
       p_subscription_id: subscriptionId,
       p_admin_id: user.id,
       p_approved: body.paid,
+      p_review_note: reviewNote || null,
     });
     if (error?.code === "P0002") return NextResponse.json({ error: "That payment request is no longer pending." }, { status: 404 });
     if (error?.code === "42501") return NextResponse.json({ error: "Admin access required." }, { status: 403 });
