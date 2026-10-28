@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     const requestIds = [...new Set((threads ?? []).map((thread) => thread.request_id))];
     const accountIds = [...new Set((threads ?? []).flatMap((thread) => [thread.seller_id, thread.buyer_id]))];
     const [{ data: offers, error: offerError }, { data: requests, error: requestError }, { data: accounts, error: accountError }] = await Promise.all([
-      admin.from("marketplace_private_offers").select("id, thread_id, attempt_number, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, color, shape, quality, image_path, country, region, district, seller_amount, platform_fee_rate, platform_fee_amount, total_price, currency, status, created_at").in("thread_id", threadIds).order("attempt_number"),
+      admin.from("marketplace_private_offers").select("id, thread_id, attempt_number, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, color, shape, quality, image_path, certificate_path, certificate_file_name, certificate_content_type, decline_reason, decline_explanation, declined_at, country, region, district, seller_amount, platform_fee_rate, platform_fee_amount, total_price, currency, status, created_at").in("thread_id", threadIds).order("attempt_number"),
       admin.from("buy_requests").select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location")
         .in("id", requestIds),
       admin.from("website_accounts").select("id, username").in("id", accountIds),
@@ -75,6 +75,9 @@ export async function GET(request: Request) {
     const safeOffers = await Promise.all((offers ?? []).map(async (offer) => {
       const {
         image_path: imagePath,
+        certificate_path: certificatePath,
+        certificate_file_name: certificateFileName,
+        certificate_content_type: certificateContentType,
         seller_amount: sellerAmount,
         platform_fee_rate: platformFeeRate,
         platform_fee_amount: platformFeeAmount,
@@ -86,6 +89,12 @@ export async function GET(request: Request) {
         if (error || !signed?.signedUrl) throw error ?? new Error("Could not sign a private offer image.");
         signedImageUrl = signed.signedUrl;
       }
+      let signedCertificateUrl: string | null = null;
+      if (certificatePath) {
+        const { data: signed, error } = await admin.storage.from("private-offer-certificates").createSignedUrl(certificatePath, 3600);
+        if (error || !signed?.signedUrl) throw error ?? new Error("Could not sign the private mineral certificate.");
+        signedCertificateUrl = signed.signedUrl;
+      }
       return {
         thread_id: offer.thread_id,
         offer: {
@@ -94,6 +103,9 @@ export async function GET(request: Request) {
             ? { seller_amount: sellerAmount, platform_fee_rate: platformFeeRate, platform_fee_amount: platformFeeAmount }
             : {}),
           signed_image_url: signedImageUrl,
+          signed_certificate_url: signedCertificateUrl,
+          certificate_file_name: certificateFileName,
+          certificate_content_type: certificateContentType,
         },
       };
     }));
@@ -162,11 +174,48 @@ export async function POST(request: Request) {
         imageBytes[0] !== 0xff || imageBytes[1] !== 0xd8 || imageBytes[2] !== 0xff) {
         return NextResponse.json({ error: "Choose a mineral photo smaller than 5 MB." }, { status: 400 });
       }
+      const certificateData = typeof body.certificateData === "object" && body.certificateData !== null
+        ? body.certificateData as Record<string, unknown> : null;
+      let certificatePath: string | null = null;
+      let certificateFileName: string | null = null;
+      let certificateContentType: string | null = null;
+      if (certificateData) {
+        const certificateType = text(certificateData.type, 50);
+        const certificateRaw = typeof certificateData.data === "string" ? certificateData.data : "";
+        const certificateMatch = /^data:(application\/pdf|image\/jpeg|image\/png);base64,([A-Za-z\d+/=]+)$/.exec(certificateRaw);
+        if (!certificateMatch || !["application/pdf", "image/jpeg", "image/png"].includes(certificateType) || certificateType !== certificateMatch[1]) {
+          return NextResponse.json({ error: "Choose a valid PDF, JPG, or PNG mineral certificate." }, { status: 400 });
+        }
+        const certificateBytes = Buffer.from(certificateMatch[2], "base64");
+        if (certificateBytes.length < 1 || certificateBytes.length > 10 * 1024 * 1024) {
+          return NextResponse.json({ error: "Choose a mineral certificate smaller than 10 MB." }, { status: 400 });
+        }
+        certificateFileName = text(certificateData.name, 180);
+        certificateContentType = certificateType;
+        const extension = certificateType === "application/pdf" ? "pdf" : certificateType === "image/png" ? "png" : "jpg";
+        certificatePath = `${accountId}/${randomUUID()}.${extension}`;
+      }
       const imagePath = `${accountId}/${randomUUID()}.jpg`;
       const { error: uploadError } = await admin.storage.from("mineral-images").upload(imagePath, imageBytes, {
         contentType: "image/jpeg",
       });
       if (uploadError) throw uploadError;
+      let uploadedCertificatePath: string | null = null;
+      if (certificatePath && certificateContentType && certificateData?.data) {
+        const certificateMatch = /^data:[^;]+;base64,([A-Za-z\d+/=]+)$/.exec(String(certificateData.data));
+        if (certificateMatch) {
+          const { error: certificateUploadError } = await admin.storage.from("private-offer-certificates").upload(
+            certificatePath,
+            Buffer.from(certificateMatch[1], "base64"),
+            { contentType: certificateContentType },
+          );
+          if (certificateUploadError) {
+            await admin.storage.from("mineral-images").remove([imagePath]);
+            throw certificateUploadError;
+          }
+          uploadedCertificatePath = certificatePath;
+        }
+      }
       const { data: offerId, error } = await admin.rpc("send_marketplace_private_offer", {
         p_seller_id: accountId,
         p_request_id: requestId,
@@ -189,9 +238,23 @@ export async function POST(request: Request) {
         p_currency: text(body.currency, 3),
       });
       if (error) {
-        const { error: cleanupError } = await admin.storage.from("mineral-images").remove([imagePath]);
-        if (cleanupError) console.error("Could not remove an unlinked private offer photo", cleanupError);
+        await admin.storage.from("mineral-images").remove([imagePath]);
+        if (uploadedCertificatePath) await admin.storage.from("private-offer-certificates").remove([uploadedCertificatePath]);
         return fail(error);
+      }
+      if (uploadedCertificatePath && typeof offerId === "string") {
+        const { error: metadataError } = await admin.from("marketplace_private_offers")
+          .update({
+            certificate_path: uploadedCertificatePath,
+            certificate_file_name: certificateFileName,
+            certificate_content_type: certificateContentType,
+          })
+          .eq("id", offerId);
+        if (metadataError) {
+          await admin.storage.from("mineral-images").remove([imagePath]);
+          await admin.storage.from("private-offer-certificates").remove([uploadedCertificatePath]);
+          throw metadataError;
+        }
       }
       return NextResponse.json({ ok: true, offerId });
     }
@@ -201,12 +264,37 @@ export async function POST(request: Request) {
       if (!uuidPattern.test(offerId) || typeof body.agree !== "boolean") {
         return NextResponse.json({ error: "Choose whether to accept or decline this offer." }, { status: 400 });
       }
+      const declineReason = text(body.declineReason, 100);
+      const declineExplanation = text(body.declineExplanation, 500);
+      if (!body.agree && !declineReason) {
+        return NextResponse.json({ error: "Choose a reason for declining the offer." }, { status: 400 });
+      }
+      const { data: offerOwnership, error: ownershipError } = await admin.from("marketplace_private_offers")
+        .select("thread_id")
+        .eq("id", offerId)
+        .maybeSingle();
+      if (ownershipError) throw ownershipError;
+      if (!offerOwnership) return NextResponse.json({ error: "Private offer not found." }, { status: 404 });
+      const { data: threadOwnership, error: threadOwnershipError } = await admin.from("marketplace_private_offer_threads")
+        .select("buyer_id")
+        .eq("id", offerOwnership.thread_id)
+        .maybeSingle();
+      if (threadOwnershipError) throw threadOwnershipError;
+      if (!threadOwnership || threadOwnership.buyer_id !== accountId) {
+        return NextResponse.json({ error: "Private offer not found." }, { status: 404 });
+      }
       const { data, error } = await admin.rpc("decide_marketplace_private_offer", {
         p_buyer_id: accountId,
         p_offer_id: offerId,
         p_agree: body.agree,
       });
       if (error) return fail(error);
+      if (!body.agree) {
+        const { error: declineError } = await admin.from("marketplace_private_offers")
+          .update({ decline_reason: declineReason, decline_explanation: declineExplanation || null, declined_at: new Date().toISOString() })
+          .eq("id", offerId);
+        if (declineError) throw declineError;
+      }
       return NextResponse.json({ ok: true, ...data });
     }
 

@@ -14,7 +14,7 @@ export type PrivateOfferDetails = {
   usdEnabled: boolean;
   defaultCurrency: Currency;
   submitting: boolean;
-  onSubmit: (details: Record<string, string | number | null>) => void;
+  onSubmit: (details: Record<string, unknown>) => void;
 };
 
 export type FinalizedOfferDetails = {
@@ -32,6 +32,19 @@ export type FinalizedOfferDetails = {
   region: string;
   district: string;
 };
+
+async function encodeCertificate(file: File) {
+  if (file.size > 10 * 1024 * 1024 || !["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+    throw new Error("Choose a PDF, JPG, or PNG mineral certificate smaller than 10 MB.");
+  }
+  const bytes = await file.arrayBuffer();
+  let binary = "";
+  const chunk = new Uint8Array(bytes);
+  for (let index = 0; index < chunk.length; index += 0x8000) {
+    binary += String.fromCharCode(...chunk.subarray(index, index + 0x8000));
+  }
+  return { data: `data:${file.type};base64,${btoa(binary)}`, name: file.name.slice(0, 180), type: file.type };
+}
 
 async function encodeMineralPhoto(file: File) {
   if (file.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png"].includes(file.type)) {
@@ -149,6 +162,10 @@ export default function PrivateOfferForm({
     setPhotoError("");
     try {
       const imageData = await encodeMineralPhoto(photo);
+      const certificate = values.get("certificate");
+      const certificateData = certificate instanceof File && certificate.size > 0
+        ? await encodeCertificate(certificate)
+        : null;
       onSubmit({
         action: "send_offer",
         requestId,
@@ -169,6 +186,7 @@ export default function PrivateOfferForm({
         sellerAmount: Number(sellerAmount),
         currency,
         imageData,
+        certificateData,
       });
     } catch (error) {
       setPhotoError(error instanceof Error ? error.message : "Could not prepare the mineral photo.");
@@ -210,6 +228,7 @@ export default function PrivateOfferForm({
         <label>District<input name="district" required maxLength={100} /></label>
       </div>
       <label>Mineral photo<input name="image" type="file" accept="image/jpeg,image/png" required /><small>JPG or PNG · square crop · max 5 MB</small></label>
+      <label>Mineral certificate <small>(optional)</small><input name="certificate" type="file" accept="application/pdf,image/jpeg,image/png" /><small>PDF, JPG, or PNG · max 10 MB</small></label>
       {photoError && <p className="commerce-warning" role="alert">{photoError}</p>}
       <div className="form-row">
         <label>Your price<input type="number" min="0.01" step="any" required value={sellerAmount} onChange={(event) => setSellerAmount(event.target.value)} /></label>

@@ -90,6 +90,11 @@ type PrivateOffer = {
   currency: Currency;
   status: string;
   signed_image_url: string | null;
+  signed_certificate_url: string | null;
+  certificate_file_name: string | null;
+  certificate_content_type: string | null;
+  decline_reason: string | null;
+  decline_explanation: string | null;
 };
 type PrivateOfferThread = {
   id: string;
@@ -192,6 +197,10 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [paymentProofFiles, setPaymentProofFiles] = useState<Record<string, string>>({});
   const [shipping, setShipping] = useState<Record<string, { carrier: string; tracking: string }>>({});
   const [disputeReasons, setDisputeReasons] = useState<Record<string, string>>({});
+  const [acceptOffer, setAcceptOffer] = useState<PrivateOffer | null>(null);
+  const [declineOffer, setDeclineOffer] = useState<PrivateOffer | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [declineExplanation, setDeclineExplanation] = useState("");
 
   const refresh = useCallback(async () => {
     const [response, offersResponse] = await Promise.all([
@@ -555,10 +564,17 @@ export default function CommercePanel({ onNotice, onCounters }: {
               {thread.side === "seller" && offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined
                 ? <p>Your price {amount(offer.seller_amount, offer.currency)} + Madinimarket fee {amount(offer.platform_fee_amount, offer.currency)} = <strong>Buyer total {amount(offer.total_price, offer.currency)}</strong></p>
                 : <p>Total price: <strong>{amount(offer.total_price, offer.currency)}</strong></p>}
-              {thread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions">
-                <button className="button button-dark" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: true })}>Agree</button>
-                <button className="button button-outline" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: false })}>Decline</button>
+              {offer.signed_certificate_url
+                ? <p><a className="certificate-file-link" href={offer.signed_certificate_url} target="_blank" rel="noreferrer">View mineral certificate{offer.certificate_file_name ? `: ${offer.certificate_file_name}` : ""}</a></p>
+                : <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>}
+              {thread.side === "buyer" && offer.status === "pending" && <div>
+                <p className="commerce-note"><strong>No money is paid yet. Accepting starts the next checkout stage.</strong></p>
+                <div className="commerce-private-actions">
+                  <button className="button button-dark" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => setAcceptOffer(offer)}>Accept to buy</button>
+                  <button className="button button-outline" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => { setDeclineOffer(offer); setDeclineReason(""); setDeclineExplanation(""); }}>Decline offer</button>
+                </div>
               </div>}
+              {thread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}<br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</p>}
               {thread.side === "seller" && offer.status === "accepted" && <div className="commerce-revised-offer">
                 <h4>Finalize the mineral card</h4>
                 <p className="commerce-note">Review or complete the mineral details. The buyer-approved amount and currency cannot be changed.</p>
@@ -697,5 +713,25 @@ export default function CommercePanel({ onNotice, onCounters }: {
         {sellerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("seller")}>{historyLoading === "seller" ? "Loading…" : "Load older orders"}</button>}
       </details>
     </section>
+    {(acceptOffer || declineOffer) && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) { setAcceptOffer(null); setDeclineOffer(null); } }}>
+      {acceptOffer && <div className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="accept-offer-title">
+        <div className="dialog-kicker">CONFIRM PURCHASE</div>
+        <h2 id="accept-offer-title">Accept this offer to buy?</h2>
+        <p><strong>Mineral price:</strong> {amount(acceptOffer.total_price, acceptOffer.currency)}</p>
+        {acceptOffer.platform_fee_amount !== undefined && <p><strong>Listing fee:</strong> {amount(acceptOffer.platform_fee_amount, acceptOffer.currency)}</p>}
+        <p><strong>Total buyer amount:</strong> {amount(acceptOffer.total_price, acceptOffer.currency)}</p>
+        {!acceptOffer.signed_certificate_url && <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>}
+        <p className="commerce-note"><strong>You will not pay until checkout.</strong> Accepting starts the next checkout stage.</p>
+        <div className="dialog-actions"><button type="button" className="button button-outline" onClick={() => setAcceptOffer(null)}>Cancel</button><button type="button" className="button button-dark" disabled={busy !== ""} onClick={() => { const offer = acceptOffer; setAcceptOffer(null); void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: true }); }}>Accept to buy</button></div>
+      </div>}
+      {declineOffer && <form className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="decline-offer-title" onSubmit={(event) => { event.preventDefault(); const offer = declineOffer; if (!declineReason) return; setDeclineOffer(null); void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: false, declineReason, declineExplanation }); }}>
+        <div className="dialog-kicker">DECLINE OFFER</div>
+        <h2 id="decline-offer-title">Decline this offer?</h2>
+        <p className="commerce-note">The seller will see your reason. <strong>This action cannot be undone.</strong></p>
+        <label className="field-label">Reason<select className="text-input" required value={declineReason} onChange={(event) => setDeclineReason(event.target.value)}><option value="">Choose a reason</option><option>Price is too high</option><option>Mineral details do not match</option><option>Certificate is missing or unsuitable</option><option>Photo is unclear</option><option>Changed my mind</option><option>Other reason</option></select></label>
+        <label className="field-label">Additional explanation<textarea className="text-input" maxLength={500} value={declineExplanation} onChange={(event) => setDeclineExplanation(event.target.value)} /></label>
+        <div className="dialog-actions"><button type="button" className="button button-outline" onClick={() => setDeclineOffer(null)}>Cancel</button><button type="submit" className="button button-dark" disabled={busy !== "" || !declineReason}>Yes, decline offer</button></div>
+      </form>}
+    </div>}
   </div>;
 }

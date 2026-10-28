@@ -817,7 +817,7 @@ export default function Marketplace() {
     setDialog("private-offer");
   };
 
-  const sendPrivateOffer = async (details: Record<string, string | number | null>) => {
+  const sendPrivateOffer = async (details: Record<string, unknown>) => {
     await withProgress("private-offer-submit", async () => {
       try {
         const response = await fetchWithWebsiteSession("/api/marketplace-offers", {
