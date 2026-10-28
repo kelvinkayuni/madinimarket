@@ -32,6 +32,7 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
   const [loading, setLoading] = useState(true);
   const [internalNote, setInternalNote] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const getFreshAdminHeaders = async (includeJson = false) => {
     const { data } = await getSupabaseBrowserClient().auth.getSession();
@@ -132,6 +133,8 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
     onNotice("Internal note saved.");
   };
 
+  useEffect(() => { setCurrentPage(1); }, [statusFilter, searchQuery, dateFilter, dateFrom, dateTo, sortOrder]);
+
   const visibleThreads = threads
     .filter((item) => statusFilter === "all" || item.status === statusFilter)
     .filter((item) => {
@@ -162,6 +165,10 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
     .sort((a, b) => sortOrder === "oldest"
       ? new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       : new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const threadsPerPage = 20;
+  const totalPages = Math.max(1, Math.ceil(visibleThreads.length / threadsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedThreads = visibleThreads.slice((safePage - 1) * threadsPerPage, safePage * threadsPerPage);
   return <div className="support-inbox">
     <aside className="support-thread-list">
       <div className="support-list-heading"><strong>{admin ? "Support inbox" : "Your support"}</strong>{!admin && <button className="button button-dark" type="button" onClick={() => { setCreating(true); setSelectedId(null); }}>New request</button>}</div>
@@ -172,7 +179,10 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
         {dateFilter === "custom" && <div className="support-date-range"><label className="field-label">From<input className="text-input" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label className="field-label">To<input className="text-input" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label></div>}
         <label className="field-label">Sort<select className="text-input" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
       </div>
-      {loading ? <p className="admin-empty">Loading…</p> : visibleThreads.length ? visibleThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(admin ? item.unread_by_admin : item.unread_by_user) && <i>Unread</i>}</button>) : <p className="admin-empty">No support conversations match these filters.</p>}
+      <div className="support-thread-scroll">
+        {loading ? <p className="admin-empty">Loading…</p> : paginatedThreads.length ? paginatedThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(admin ? item.unread_by_admin : item.unread_by_user) && <i>Unread</i>}</button>) : <p className="admin-empty">No support conversations match these filters.</p>}
+      </div>
+      {visibleThreads.length > 0 && <div className="support-pagination"><button type="button" className="button button-outline" onClick={() => setCurrentPage(Math.max(1, safePage - 1))} disabled={safePage <= 1}>Previous</button><span>Page {safePage} of {totalPages}</span><button type="button" className="button button-outline" onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))} disabled={safePage >= totalPages}>Next</button></div>}
     </aside>
     <section className="support-conversation">
       {creating && !admin ? <form className="support-form form-stack" onSubmit={submitTicket}><div className="dialog-kicker">CONTACT ADMIN</div><h2>Create a support request</h2><label className="field-label">Category<select className="text-input" name="category" required><option value="">Choose a category</option>{["Account","Subscription","Payment","Product listing","Order","Other"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="field-label">Subject<input className="text-input" name="subject" minLength={3} maxLength={160} required /></label><label className="field-label">Message<textarea className="text-input" name="message" rows={6} maxLength={5000} required /></label><label className="field-label">Attachments (optional)<input className="text-input" name="attachments" type="file" multiple accept="application/pdf,image/jpeg,image/png" /></label><p className="user-subscription-receipt-help">PDF, JPEG, or PNG. Maximum 4 MB per file.</p><div className="support-actions"><button className="button button-dark" type="submit" disabled={submittingRequest}>{submittingRequest ? "Submitting…" : "Submit request"}</button><button className="button button-outline" type="button" onClick={() => setCreating(false)} disabled={submittingRequest}>Cancel</button></div></form>

@@ -909,8 +909,13 @@ h1, h2, h3, p { margin-top: 0; }
 }
 
 .admin-support-panel { min-height: calc(100vh - 68px); }
-.support-inbox { min-height: 520px; max-height: calc(100vh - 160px); display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); overflow: hidden; border: 1px solid var(--line); background: #fff; }
-.support-thread-list { overflow-y: auto; border-right: 1px solid var(--line); background: #fafbf8; }
+.support-inbox { height: min(680px, calc(100vh - 160px)); min-height: 520px; max-height: calc(100vh - 160px); display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); overflow: hidden; border: 1px solid var(--line); background: #fff; }
+.support-thread-list { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: #fafbf8; }
+.support-thread-scroll { min-height: 0; flex: 1; overflow-y: auto; }
+.support-pagination { min-height: 52px; padding: 8px 10px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; border-top: 1px solid var(--line); background: #fff; }
+.support-pagination .button { min-height: 34px; padding: 7px 8px; font-size: 10px; }
+.support-pagination span { color: var(--muted); font-size: 10px; white-space: nowrap; }
+.support-pagination .button:last-child { justify-self: end; }
 .support-list-heading { min-height: 58px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .support-thread-list > .field-label { margin: 10px 12px 0; }
 .support-filter-toolbar { padding: 10px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
@@ -948,9 +953,9 @@ h1, h2, h3, p { margin-top: 0; }
 .support-actions { display: flex; gap: 8px; }
 .dialog-panel:has(.support-inbox) { width: min(980px, calc(100vw - 28px)); max-height: calc(100vh - 28px); }
 @media (max-width: 720px) {
-  .support-inbox { grid-template-columns: 1fr; min-height: 560px; }
-  .support-thread-list { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .support-conversation { min-height: 380px; }
+  .support-inbox { height: min(760px, calc(100vh - 28px)); min-height: 560px; grid-template-columns: 1fr; grid-template-rows: 300px minmax(260px, 1fr); }
+  .support-thread-list { max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
+  .support-conversation { min-height: 0; }
   .support-message { width: 92%; }
   .support-admin-tools { grid-template-columns: 1fr; align-items: stretch; }
 }
