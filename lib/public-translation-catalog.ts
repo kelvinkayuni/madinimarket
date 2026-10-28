@@ -88,7 +88,7 @@ export const publicTranslationPhrases = [
   "One account. Buy or sell.",
   "Open certificate",
   "Opening…",
-  "Orders",
+  "Orders and Cart",
   "POST A BUYING REQUEST",
   "PREVIEW MARKET · 2025—26",
   "PRIVATE OFFER · REQUEST #",
