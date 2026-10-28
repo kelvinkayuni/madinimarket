@@ -528,7 +528,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   return <div className="commerce-panel">
     <div className="dialog-kicker">BUYER & SELLER ORDERS</div>
     <h2 id="dialog-title">Orders and Cart</h2>
-    <section className="commerce-section">
+    <section className="commerce-section commerce-order-section">
       <h3>Private mineral offers <span className="commerce-section-count">{data.privateOffersCount}</span></h3>
       {data.privateOffers.threads.length > 0 && <div className="commerce-collection-tools">
         <label className="commerce-order-search">Search private offers<input className="text-input" type="search" value={privateOfferSearch} placeholder="Mineral, seller, or request number" onChange={(event) => { setPrivateOfferSearch(event.target.value); setPrivateOfferPage(1); }} /></label>
@@ -614,7 +614,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       </div> : <p className="commerce-note">No private mineral offers yet. You can send offers to buyer requests directly from the market.</p>}
       {renderOrderPagination(filteredPrivateThreads.length, currentPrivateOfferPage, privateOfferPageCount, "private offers", setPrivateOfferPage)}
     </section>
-    <section className="commerce-section">
+    <section className="commerce-section commerce-order-section">
       <h3>My cart ({data.cartItems.length})</h3>
       {data.cartItems.length ? <>
         <div className="commerce-collection-tools">
