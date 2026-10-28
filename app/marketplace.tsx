@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, FileSpreadsheet, FileText, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -34,12 +34,10 @@ type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
-type AdminListingLedgerEntry = { id: number; seller_name: string; mineral_name: string; seller_price: string; platform_fee_rate: number; platform_fee_amount: string; price: string; currency: Currency; status: SubmissionStatus; listing_type: ListingType; created_at: string };
 type SalesLedgerTotals = Record<Currency, { transactions: number; grossSales: number; sellerAmount: number; marketplaceFee: number }>;
 type SalesLedgerPeriod = { today: SalesLedgerTotals; thisWeek: SalesLedgerTotals; thisMonth: SalesLedgerTotals; thisYear: SalesLedgerTotals };
 type SalesLedgerTransaction = { itemId: string; orderId: string; controlNumber: string; verifiedAt: string; mineralName: string; status: string; currency: Currency; grossSales: number; sellerAmount: number; marketplaceFee: number; feeRate: number };
-type SalesLedgerHistory = Record<"daily" | "weekly" | "monthly" | "yearly", { period: string; totals: SalesLedgerTotals }[]>;
-type SalesLedgerData = { periods: SalesLedgerPeriod; history: SalesLedgerHistory; transactions: SalesLedgerTransaction[]; timeZone: string };
+type SalesLedgerData = { periods: SalesLedgerPeriod; transactions: SalesLedgerTransaction[]; timeZone: string };
 type SubscriptionPlan = { id: string; months: number; price_tzs: string; price_usd: string; is_active: boolean; updated_at?: string };
 type AccountSubscription = { id: string; website_user_id?: string; plan_id: string | null; months: number; currency: Currency; amount: string; status: "pending" | "active" | "expired" | "rejected"; requested_at: string; starts_at: string | null; expires_at: string | null; paid_at: string | null; account?: { display_name: string; username: string; email: string } | null };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
@@ -324,16 +322,6 @@ async function loadAdminAccounts(accessToken: string): Promise<WebsiteAccount[]>
   return result.accounts as WebsiteAccount[];
 }
 
-async function loadAdminListingLedger(accessToken: string): Promise<AdminListingLedgerEntry[]> {
-  const response = await fetch("/api/admin/listing-ledger", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error ?? "Could not load the listing ledger.");
-  return result.listings as AdminListingLedgerEntry[];
-}
-
 async function loadAdminSalesLedger(accessToken: string): Promise<SalesLedgerData> {
   const response = await fetch("/api/admin/sales-ledger", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -342,9 +330,7 @@ async function loadAdminSalesLedger(accessToken: string): Promise<SalesLedgerDat
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "Could not load the marketplace sales ledger.");
   if (typeof result !== "object" || result === null || !Array.isArray(result.transactions) ||
-    typeof result.timeZone !== "string" || typeof result.periods !== "object" || result.periods === null ||
-    typeof result.history !== "object" || result.history === null ||
-    !["daily", "weekly", "monthly", "yearly"].every((period) => Array.isArray(result.history[period]))) {
+    typeof result.timeZone !== "string" || typeof result.periods !== "object" || result.periods === null) {
     throw new Error("Marketplace sales ledger data is invalid.");
   }
   return result as SalesLedgerData;
@@ -429,11 +415,7 @@ export default function Marketplace() {
   const [accountSearch, setAccountSearch] = useState("");
   const accountListRef = useRef<HTMLDivElement>(null);
   const accountListScrollTop = useRef<number | null>(null);
-  const [adminListingLedger, setAdminListingLedger] = useState<AdminListingLedgerEntry[]>([]);
-  const [adminLedgerUpdatedAt, setAdminLedgerUpdatedAt] = useState<Date | null>(null);
-  const [adminLedgerError, setAdminLedgerError] = useState("");
   const [adminSalesLedger, setAdminSalesLedger] = useState<SalesLedgerData | null>(null);
-  const [adminSalesLedgerUpdatedAt, setAdminSalesLedgerUpdatedAt] = useState<Date | null>(null);
   const [adminSalesLedgerError, setAdminSalesLedgerError] = useState("");
   const [translationPairs, setTranslationPairs] = useState<TranslationPair[]>([]);
   const [translationForm, setTranslationForm] = useState({ english_phrase: "", swahili_phrase: "" });
@@ -1139,40 +1121,6 @@ export default function Marketplace() {
     if (!isSupabaseConfigured || role !== "admin") return;
     let active = true;
     let isLoading = false;
-    const refreshLedger = async () => {
-      if (isLoading) return;
-      isLoading = true;
-      try {
-        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
-        if (error) throw error;
-        if (!session) throw new Error("Your admin session has expired. Sign in again to view the listing ledger.");
-        const listings = await loadAdminListingLedger(session.access_token);
-        if (active) {
-          setAdminListingLedger(listings);
-          setAdminLedgerUpdatedAt(new Date());
-          setAdminLedgerError("");
-        }
-      } catch (error) {
-        if (active) setAdminLedgerError(error instanceof Error ? error.message : "Could not refresh the listing ledger.");
-      } finally {
-        isLoading = false;
-      }
-    };
-    void refreshLedger();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshLedger();
-    }, 10_000);
-    const removeResumeListener = onBrowserResume(refreshLedger);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-      removeResumeListener();
-    };
-  }, [role]);
-  useEffect(() => {
-    if (!isSupabaseConfigured || role !== "admin") return;
-    let active = true;
-    let isLoading = false;
     const refreshSalesLedger = async () => {
       if (isLoading || document.visibilityState !== "visible") return;
       isLoading = true;
@@ -1183,7 +1131,6 @@ export default function Marketplace() {
         const salesLedger = await loadAdminSalesLedger(session.access_token);
         if (active) {
           setAdminSalesLedger(salesLedger);
-          setAdminSalesLedgerUpdatedAt(new Date());
           setAdminSalesLedgerError("");
         }
       } catch (error) {
@@ -2502,16 +2449,6 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
 
   if (isAdminRole(role)) {
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
-    const ledgerTotals = (["TZS", "USD"] as const).map((currency) => {
-      const currencyListings = adminListingLedger.filter((listing) => listing.currency === currency);
-      const totals = currencyListings.reduce((current, listing) => ({
-        count: current.count + 1,
-        sellerPrice: current.sellerPrice + Number(listing.seller_price),
-        platformFee: current.platformFee + Number(listing.platform_fee_amount),
-        marketPrice: current.marketPrice + Number(listing.price),
-      }), { count: 0, sellerPrice: 0, platformFee: 0, marketPrice: 0 });
-      return { currency, ...totals };
-    });
     const formatLedgerMoney = (amount: number, currency: Currency) => money(
       new Intl.NumberFormat("en-US", {
         minimumFractionDigits: currency === "USD" ? 2 : 0,
@@ -2520,26 +2457,11 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       currency,
     );
     const salesPeriods = [
-      { key: "today", label: "Today" },
-      { key: "thisWeek", label: "This week" },
-      { key: "thisMonth", label: "This month" },
-      { key: "thisYear", label: "This year" },
+      { key: "today", label: "Daily total" },
+      { key: "thisWeek", label: "Weekly total" },
+      { key: "thisMonth", label: "Monthly total" },
+      { key: "thisYear", label: "Yearly total" },
     ] as const;
-    const salesHistoryPeriods = [
-      { key: "daily", label: "Daily totals" },
-      { key: "weekly", label: "Weekly totals" },
-      { key: "monthly", label: "Monthly totals" },
-      { key: "yearly", label: "Yearly totals" },
-    ] as const;
-    const exportLedger = async (format: "pdf" | "excel") => {
-      try {
-        const { downloadLedgerExcel, downloadLedgerPdf } = await import("@/lib/ledger-report");
-        if (format === "pdf") downloadLedgerPdf(adminListingLedger, ledgerTotals);
-        else downloadLedgerExcel(adminListingLedger, ledgerTotals);
-      } catch (error) {
-        setNotice(error instanceof Error ? `Could not export the seller ledger: ${error.message}` : `Could not export the seller ledger as ${format.toUpperCase()}.`);
-      }
-    };
     return <main className="admin-shell">
       {appUpdateAvailable && <div className="app-update-banner" role="status">
         <span>A new version of Madinimarket is available.</span>
@@ -2748,51 +2670,14 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
         </>}
         {activeAdminPanel === "ledger" && <section className="admin-ledger" aria-labelledby="admin-ledger-heading">
           <div className="admin-queue-heading admin-ledger-heading">
-            <div><span>LISTING ACCOUNTING</span><h2 id="admin-ledger-heading">Seller price ledger</h2></div>
-            <div className="admin-ledger-tools">
-              <div className="admin-ledger-live"><span className="admin-ledger-live-dot" /> Live · refreshes every 10 seconds</div>
-              <div className="admin-ledger-export">
-                <button className="button button-outline" type="button" disabled={!adminListingLedger.length} onClick={() => void exportLedger("pdf")}><FileText size={14} /> PDF</button>
-                <button className="button button-outline" type="button" disabled={!adminListingLedger.length} onClick={() => void exportLedger("excel")}><FileSpreadsheet size={14} /> Excel</button>
-              </div>
-            </div>
+            <div><span>MARKETPLACE SALES</span><h2 id="admin-ledger-heading">Seller price ledger</h2></div>
+            <div className="admin-ledger-live"><span className="admin-ledger-live-dot" /> Live · refreshes every 60 seconds</div>
           </div>
-          <p className="admin-ledger-note">Tracks every submitted seller listing, including listings awaiting review. Fee totals are pricing amounts only—not confirmed sales, collected revenue, or seller payouts.</p>
-          {adminLedgerError && <p className="admin-ledger-error" role="alert">{adminLedgerError}</p>}
-          <div className="admin-ledger-totals">
-            {ledgerTotals.map((totals) => <article className="admin-ledger-currency" key={totals.currency}>
-              <div className="admin-ledger-currency-heading"><strong>{totals.currency}</strong><span>{totals.count} {totals.count === 1 ? "listing" : "listings"}</span></div>
-              <div className="admin-ledger-total-grid">
-                <div><span>Seller asking total</span><strong>{formatLedgerMoney(totals.sellerPrice, totals.currency)}</strong></div>
-                <div><span>Fee total</span><strong>{formatLedgerMoney(totals.platformFee, totals.currency)}</strong></div>
-                <div><span>Market price total</span><strong>{formatLedgerMoney(totals.marketPrice, totals.currency)}</strong></div>
-              </div>
-            </article>)}
-          </div>
-          <div className="admin-ledger-table-wrap">
-            <table className="admin-ledger-table">
-              <thead><tr><th>Submitted</th><th>Seller</th><th>Mineral</th><th>Status</th><th>Seller price</th><th>Fee added</th><th>Total market price</th></tr></thead>
-              <tbody>
-                {adminListingLedger.map((listing) => <tr key={listing.id}>
-                  <td>{new Date(listing.created_at).toLocaleString()}</td>
-                  <td>{listing.seller_name}</td>
-                  <td>{listing.mineral_name}<small>{listing.listing_type === "batch" ? "Batch" : "Single piece"}</small></td>
-                  <td><span className={`admin-ledger-status is-${listing.status}`}>{listing.status}</span></td>
-                  <td>{money(listing.seller_price, listing.currency)}</td>
-                  <td>{money(listing.platform_fee_amount, listing.currency)}<small>{(listing.platform_fee_rate * 100).toFixed(0)}%</small></td>
-                  <td><strong>{money(listing.price, listing.currency)}</strong></td>
-                </tr>)}
-                {!adminListingLedger.length && <tr><td className="admin-ledger-empty" colSpan={7}>{adminLedgerError ? "The listing ledger could not be loaded." : "No seller listings have been submitted yet."}</td></tr>}
-              </tbody>
-            </table>
-          </div>
-          <p className="admin-ledger-updated">{adminLedgerUpdatedAt ? `Last updated ${adminLedgerUpdatedAt.toLocaleTimeString()}` : "Loading listing prices…"}</p>
           <section className="admin-sales-ledger" aria-labelledby="admin-sales-ledger-heading">
             <div className="admin-queue-heading">
-              <div><span>VERIFIED MARKETPLACE ORDERS</span><h2 id="admin-sales-ledger-heading">Sales and Madinimarket fees</h2></div>
+              <div><span>VERIFIED MARKETPLACE ORDERS</span><h2 id="admin-sales-ledger-heading">Verified payments</h2></div>
               <strong>{adminSalesLedger?.transactions.length ?? 0}</strong>
             </div>
-            <p className="admin-ledger-note">Sales are recorded when admin verifies the buyer’s payment. Refunded items are excluded, so historical totals adjust if an item is refunded. Madinimarket fee totals are calculated from verified order records; reconcile them against your bank/mobile-money statements to confirm actual deposits.</p>
             {adminSalesLedgerError && <p className="admin-ledger-error" role="alert">{adminSalesLedgerError}</p>}
             {adminSalesLedger
               ? <>
@@ -2812,30 +2697,6 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                     })}
                   </article>)}
                 </div>
-                <div className="admin-sales-history">
-                  {salesHistoryPeriods.map(({ key, label }) => <details key={key}>
-                    <summary>{label}<span>{adminSalesLedger.history[key].length} periods</span></summary>
-                    <div className="admin-ledger-table-wrap">
-                      <table className="admin-ledger-table admin-sales-history-table">
-                        <thead><tr><th>Period ({adminSalesLedger.timeZone})</th><th>Currency</th><th>Items</th><th>Gross sales</th><th>Seller amount</th><th>Madinimarket fee</th></tr></thead>
-                        <tbody>
-                          {adminSalesLedger.history[key].flatMap(({ period, totals }) =>
-                            (["TZS", "USD"] as const)
-                              .filter((currency) => totals[currency].transactions > 0)
-                              .map((currency) => <tr key={`${period}-${currency}`}>
-                                <td>{period}</td>
-                                <td>{currency}</td>
-                                <td>{totals[currency].transactions}</td>
-                                <td>{formatLedgerMoney(totals[currency].grossSales, currency)}</td>
-                                <td>{formatLedgerMoney(totals[currency].sellerAmount, currency)}</td>
-                                <td><strong>{formatLedgerMoney(totals[currency].marketplaceFee, currency)}</strong></td>
-                              </tr>))}
-                          {!adminSalesLedger.history[key].length && <tr><td className="admin-ledger-empty" colSpan={6}>No verified sales in this period yet.</td></tr>}
-                        </tbody>
-                      </table>
-                    </div>
-                  </details>)}
-                </div>
                 <div className="admin-ledger-table-wrap">
                   <table className="admin-ledger-table admin-sales-table">
                     <thead><tr><th>Payment verified (Tanzania time)</th><th>Order</th><th>Product</th><th>Status</th><th>Gross sale</th><th>Seller amount</th><th>Madinimarket fee</th></tr></thead>
@@ -2853,7 +2714,6 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                     </tbody>
                   </table>
                 </div>
-                <p className="admin-ledger-updated">Sales report timezone: {adminSalesLedger.timeZone}. {adminSalesLedgerUpdatedAt ? `Last updated ${adminSalesLedgerUpdatedAt.toLocaleTimeString()}` : ""}</p>
               </>
               : !adminSalesLedgerError && <p className="admin-ledger-updated">Loading verified sales…</p>}
           </section>

@@ -9,7 +9,6 @@ type PeriodTotals = Record<Currency, {
   sellerAmount: number;
   marketplaceFee: number;
 }>;
-type HistoryKey = "daily" | "weekly" | "monthly" | "yearly";
 
 const TIME_ZONE = "Africa/Dar_es_Salaam";
 const PAGE_SIZE = 500;
@@ -79,12 +78,6 @@ export async function GET(request: Request) {
       thisMonth: emptyTotals(),
       thisYear: emptyTotals(),
     };
-    const historyGroups: Record<HistoryKey, Map<string, PeriodTotals>> = {
-      daily: new Map(),
-      weekly: new Map(),
-      monthly: new Map(),
-      yearly: new Map(),
-    };
     const transactions = [];
     const current = periodKeys(new Date());
     for (const order of orders) {
@@ -125,34 +118,11 @@ export async function GET(request: Request) {
           bucket[currency].sellerAmount += sellerAmount;
           bucket[currency].marketplaceFee += marketplaceFee;
         }
-        const historyKeys: [HistoryKey, string][] = [
-          ["daily", keys.day],
-          ["weekly", keys.week],
-          ["monthly", keys.month],
-          ["yearly", keys.year],
-        ];
-        for (const [period, key] of historyKeys) {
-          let totals = historyGroups[period].get(key);
-          if (!totals) {
-            totals = emptyTotals();
-            historyGroups[period].set(key, totals);
-          }
-          totals[currency].transactions += 1;
-          totals[currency].grossSales += grossSales;
-          totals[currency].sellerAmount += sellerAmount;
-          totals[currency].marketplaceFee += marketplaceFee;
-        }
       }
     }
 
     return NextResponse.json({
       periods,
-      history: Object.fromEntries(Object.entries(historyGroups).map(([period, values]) => [
-        period,
-        [...values.entries()]
-          .sort(([first], [second]) => second.localeCompare(first))
-          .map(([key, totals]) => ({ period: key, totals })),
-      ])),
       transactions: transactions.sort((a, b) => Date.parse(b.verifiedAt) - Date.parse(a.verifiedAt)),
       timeZone: TIME_ZONE,
     }, { headers: { "Cache-Control": "no-store" } });

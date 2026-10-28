@@ -180,25 +180,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .user-subscription-actions .button { min-height: 37px; padding: 0 8px; font-size: 10px; }
 .user-subscription-actions .button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .admin-ledger { padding: 26px 0 24px; border-bottom: 1px solid var(--line); }
-.admin-ledger-heading { align-items: flex-end; }
 .admin-ledger-heading h2 { margin: 4px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 22px; font-weight: 500; }
-.admin-ledger-tools { display: grid; justify-items: end; gap: 10px; }
 .admin-ledger-live { display: flex; align-items: center; gap: 7px; color: #667565; font-size: 9px; white-space: nowrap; }
 .admin-ledger-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #52875e; box-shadow: 0 0 0 3px #e4eee3; }
-.admin-ledger-export { display: flex; flex-wrap: wrap; gap: 7px; }
-.admin-ledger-export .button { min-height: 31px; padding: 0 10px; font-size: 9px; }
-.admin-ledger-export .button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-.admin-ledger-note, .admin-ledger-updated { color: #778075; font-size: 10px; line-height: 1.5; }
-.admin-ledger-note { margin: 0 0 14px; }
+.admin-ledger-updated { color: #778075; font-size: 10px; line-height: 1.5; margin: 8px 0 0; text-align: right; }
 .admin-ledger-error { margin: 0 0 12px; color: #9a4639; font-size: 11px; }
-.admin-ledger-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
-.admin-ledger-currency { padding: 13px; border: 1px solid #e1e5dd; background: #fff; }
-.admin-ledger-currency-heading { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 11px; color: #71806f; font-size: 10px; }
-.admin-ledger-currency-heading strong { color: var(--forest); }
-.admin-ledger-total-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.admin-ledger-total-grid > div { display: grid; gap: 6px; min-width: 0; }
-.admin-ledger-total-grid span { color: #7b847a; font-size: 9px; }
-.admin-ledger-total-grid strong { color: #314d3a; font-size: 12px; overflow-wrap: anywhere; }
 .admin-ledger-table-wrap { max-height: 500px; overflow: auto; overscroll-behavior: contain; border: 1px solid #e1e5dd; background: #fff; }
 .admin-ledger-table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: left; white-space: nowrap; }
 .admin-ledger-table th, .admin-ledger-table td { padding: 10px 12px; border-bottom: 1px solid #e8ebe5; }
@@ -211,7 +197,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-ledger-status.is-approved { background: #e7efe6; color: #3b6146; }
 .admin-ledger-status.is-rejected { background: #f5e9e5; color: #8b4b3d; }
 .admin-ledger-empty { padding: 24px !important; color: #798278 !important; text-align: center; }
-.admin-ledger-updated { margin: 8px 0 0; text-align: right; }
 .admin-sales-ledger { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
 .admin-sales-ledger > .admin-queue-heading { align-items: flex-end; }
 .admin-sales-ledger > .admin-queue-heading h2 { margin: 4px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 22px; font-weight: 500; }
@@ -228,15 +213,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-sales-currency dd { margin: 0; color: #314d3a; font-weight: 650; text-align: right; }
 .admin-sales-table { min-width: 920px; }
 .admin-sales-table td:nth-last-child(-n+3) { text-align: right; }
-.admin-sales-history { display: grid; gap: 8px; margin: 0 0 16px; }
-.admin-sales-history > details { border: 1px solid #e1e5dd; background: #fff; }
-.admin-sales-history > details > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 42px; padding: 0 12px; color: #354b39; font-size: 11px; font-weight: 650; cursor: pointer; list-style: none; }
-.admin-sales-history > details > summary::-webkit-details-marker { display: none; }
-.admin-sales-history > details > summary::after { content: "+"; color: #667064; font-size: 16px; }
-.admin-sales-history > details[open] > summary::after { content: "−"; }
-.admin-sales-history > details > summary > span { margin-left: auto; color: #778075; font-size: 9px; font-weight: 400; }
-.admin-sales-history-table { min-width: 760px; }
-.admin-sales-history-table td:nth-last-child(-n+3) { text-align: right; }
+
 .admin-queues { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 34px; padding-top: 26px; }
 .admin-queue-list { max-height: 292px; overflow-y: auto; overscroll-behavior: contain; padding-right: 8px; }
 .admin-queue-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -649,10 +626,6 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-homepage-font-size label { width: 100%; }
   .admin-subscription-plan-form { grid-template-columns: 1fr; }
   .admin-subscription-plan-actions { grid-column: auto; }
-  .admin-ledger-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
-  .admin-ledger-tools { justify-items: start; }
-  .admin-ledger-totals { grid-template-columns: 1fr; }
-  .admin-ledger-total-grid strong { font-size: 10px; }
   .admin-translation-form-actions { justify-content: flex-start; }
   .market-shell, .market-content { display: block; }
   .market-content { min-height: 0; }
