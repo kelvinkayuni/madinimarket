@@ -394,7 +394,15 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <button className="button button-dark" type="submit" disabled={busy === `payment-${order.id}` || !data.paymentMethods.length}>{busy === `payment-${order.id}` ? "Submitting…" : !data.paymentMethods.length ? "Payment details unavailable" : "Submit proof for verification"}</button>
     </form>}
     {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
-      <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>{statusLabel(item.status)} · Total {amount(item.total_price, item.currency)}</small></div>
+      <div>
+        <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
+        <small>{statusLabel(item.status)} · Total {amount(item.total_price, item.currency)}</small>
+        {(item.shipping_carrier || item.tracking_number) && <div className="commerce-delivery-details">
+          <strong>Tracking details</strong>
+          {item.shipping_carrier && <span>Carrier: {item.shipping_carrier}</span>}
+          {item.tracking_number && <span>Tracking number: {item.tracking_number}</span>}
+        </div>}
+      </div>
       {item.status === "delivered" && <div className="commerce-item-actions">
         <button className="button button-dark" type="button" disabled={busy === `receipt-${item.id}`} onClick={() => void perform(`receipt-${item.id}`, "confirm_receipt", { itemId: item.id })}>Confirm receipt</button>
         <label className="field-label">Report a delivery issue<textarea className="review-message" minLength={10} maxLength={500} value={disputeReasons[item.id] ?? ""} onChange={(event) => setDisputeReasons((current) => ({ ...current, [item.id]: event.target.value }))} /></label>
