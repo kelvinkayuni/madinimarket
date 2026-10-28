@@ -194,6 +194,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [privateOfferSearch, setPrivateOfferSearch] = useState("");
   const [privateOfferStatusFilter, setPrivateOfferStatusFilter] = useState("all");
   const [privateOfferPage, setPrivateOfferPage] = useState(1);
+  const [selectedPrivateThreadId, setSelectedPrivateThreadId] = useState<string | null>(null);
   const [buyerActivePage, setBuyerActivePage] = useState(1);
   const [buyerHistoryPage, setBuyerHistoryPage] = useState(1);
   const [sellerActivePage, setSellerActivePage] = useState(1);
@@ -438,6 +439,9 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const privateOfferPageCount = Math.max(1, Math.ceil(filteredPrivateThreads.length / orderPageSize));
   const currentPrivateOfferPage = Math.min(privateOfferPage, privateOfferPageCount);
   const visiblePrivateThreads = filteredPrivateThreads.slice((currentPrivateOfferPage - 1) * orderPageSize, currentPrivateOfferPage * orderPageSize);
+  const visibleBuyerPrivateThreads = visiblePrivateThreads.filter((thread) => thread.side === "buyer");
+  const visibleSellerPrivateThreads = visiblePrivateThreads.filter((thread) => thread.side === "seller");
+  const selectedPrivateThread = data.privateOffers.threads.find((thread) => thread.id === selectedPrivateThreadId) ?? null;
   const buyerActivePageCount = Math.max(1, Math.ceil(filteredActiveBuyerOrders.length / orderPageSize));
   const buyerHistoryPageCount = Math.max(1, Math.ceil(filteredBuyerHistory.length / orderPageSize));
   const sellerActivePageCount = Math.max(1, Math.ceil(filteredActiveSellerItems.length / orderPageSize));
@@ -565,104 +569,36 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <label className="commerce-order-filter">Offer status<select className="text-input" value={privateOfferStatusFilter} onChange={(event) => { setPrivateOfferStatusFilter(event.target.value); setPrivateOfferPage(1); }}><option value="all">All offers</option><option value="open">Open</option><option value="closed">Closed</option></select></label>
         {data.privateOffers.threads.some((thread) => thread.state === "closed") && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Clear all closed private offers from your view?")) void performPrivateOffer("clear-closed-offers", { action: "clear_closed_offer_threads" }); }}>Clear closed offers</button>}
       </div>}
-      {data.privateOffers.threads.length ? <div className="commerce-list commerce-private-list">
-        {visiblePrivateThreads.map((thread) => {
-          const latestOffer = thread.offers[thread.offers.length - 1];
-          const buyerRequest = thread.request;
-          return <details className="commerce-private-thread" key={thread.id}>
-            <summary className="commerce-order-summary">
-              <span><strong>{thread.side === "buyer" ? `Offer from seller @${thread.seller_username} · Request #${thread.request_id}` : `Your offer to buyer · Request #${thread.request_id}`}</strong><small>{latestOffer ? `${latestOffer.mineral_name} · ${amount(latestOffer.total_price, latestOffer.currency)}` : buyerRequest?.mineral_name ?? "Private offer"}</small></span>
-              <span className="commerce-order-summary-status">{statusLabel(thread.state)}</span>
-              <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
-            </summary>
-            <div className="commerce-private-thread-content">
-            {buyerRequest && <p className="commerce-note">Request: {buyerRequest.mineral_name} · {buyerRequest.weight} {buyerRequest.unit} · {buyerRequest.color} · {buyerRequest.shape} · {buyerRequest.quality} · {buyerRequest.location}</p>}
-            {thread.offers.map((offer) => <div className="commerce-private-offer" key={offer.id}>
-              <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{statusLabel(offer.status)}</span></div>
-              {offer.signed_image_url && <div className="commerce-private-image"><Image src={offer.signed_image_url} alt={`${offer.mineral_name} private offer`} width={800} height={800} unoptimized /></div>}
-              {thread.side === "seller" && <>
-                <p>{offer.listing_type === "batch" ? "Batch · " : ""}{offer.weight} {offer.unit}{offer.listing_type === "batch" && ` · Stone sizes ${offer.smallest_stone_weight}–${offer.largest_stone_weight} ${offer.stone_weight_unit}`}</p>
-                <p>{offer.color} · {offer.shape} · {offer.quality}</p>
-                <p>Location: {offer.district}, {offer.region}, {offer.country}</p>
-              </>}
-              {thread.side === "buyer" && buyerRequest
-                ? <div className="private-offer-comparison">
-                    <div className="private-offer-compare-column"><span className="private-offer-compare-title">Your original request</span><strong>{buyerRequest.mineral_name}</strong><span>{buyerRequest.weight} {buyerRequest.unit}</span><span>{buyerRequest.color} · {buyerRequest.shape} · {buyerRequest.quality}</span><span>Location: {buyerRequest.location}</span><strong className="private-offer-request-price">Your requested offer: {amount(buyerRequest.offer, buyerRequest.currency)}</strong></div>
-                    <div className="private-offer-compare-column"><span className="private-offer-compare-title">Seller’s offer</span><strong>{offer.mineral_name}</strong><span>{offer.listing_type === "batch" ? "Batch · " : "Single · "}{offer.weight} {offer.unit}{offer.listing_type === "batch" && ` · ${offer.smallest_stone_weight}–${offer.largest_stone_weight} ${offer.stone_weight_unit}`}</span><span>{offer.color} · {offer.shape} · {offer.quality}</span><span>Location: {offer.district}, {offer.region}, {offer.country}</span><strong className="private-offer-total-price">Seller’s offer / Total to pay: {amount(offer.total_price, offer.currency)}</strong></div>
-                    {buyerRequest.currency === offer.currency && <p className="private-offer-difference">{offerDifference(buyerRequest.offer, offer.total_price, offer.currency)}</p>}
-                  </div>
-                : thread.side === "seller" && offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined
-                  ? <p>Seller price {amount(offer.seller_amount, offer.currency)} + Madinimarket fee {amount(offer.platform_fee_amount, offer.currency)} = <strong>Total sent to buyer {amount(offer.total_price, offer.currency)}</strong></p>
-                  : <p>Seller’s offer / Total to pay: <strong>{amount(offer.total_price, offer.currency)}</strong></p>}
-              {thread.side === "seller" ? (offer.signed_certificate_url
-                ? <p><strong>Your uploaded certificate:</strong> <a className="certificate-file-link" href={offer.signed_certificate_url} target="_blank" rel="noreferrer">View mineral certificate{offer.certificate_file_name ? `: ${offer.certificate_file_name}` : ""}</a></p>
-                : <p className="commerce-note"><strong>No mineral certificate was uploaded with this offer.</strong></p>)
-                : (offer.signed_certificate_url
-                  ? <p><strong>Seller mineral certificate:</strong> <a className="certificate-file-link" href={offer.signed_certificate_url} target="_blank" rel="noreferrer">View mineral certificate{offer.certificate_file_name ? `: ${offer.certificate_file_name}` : ""}</a></p>
-                  : <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>)}
-              {thread.side === "buyer" && offer.status === "pending" && <div>
-                <p className="commerce-note"><strong>No money is paid yet. Accepting starts the next checkout stage.</strong></p>
-                <div className="commerce-private-actions">
-                  <button className="button button-dark" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => { setAcceptOffer(offer); setAcceptRequestOffer(buyerRequest?.offer ?? null); setAcceptRequestCurrency(buyerRequest?.currency ?? offer.currency); setAcceptRequestDetails(buyerRequest); }}>Accept to buy</button>
-                  <button className="button button-outline" type="button" disabled={busy === `offer-${offer.id}`} onClick={() => { setDeclineOffer(offer); setDeclineReason(""); setDeclineExplanation(""); }}>Decline offer</button>
-                </div>
-              </div>}
-              {thread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}<br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</p>}
-              {thread.side === "seller" && offer.status === "accepted" && <div className="commerce-revised-offer">
-                <h4>Finalize the mineral card</h4>
-                <p className="commerce-note">Review or complete the mineral details. The buyer-approved amount and currency cannot be changed.</p>
-                <FinalizePrivateOfferForm offer={{
-                  mineralName: offer.mineral_name,
-                  listingType: offer.listing_type as "single" | "batch",
-                  weight: Number(offer.weight),
-                  unit: offer.unit as "carats" | "g" | "kg" | "tons",
-                  smallestStoneWeight: offer.smallest_stone_weight,
-                  largestStoneWeight: offer.largest_stone_weight,
-                  stoneWeightUnit: offer.stone_weight_unit,
-                  color: offer.color,
-                  shape: offer.shape,
-                  quality: offer.quality,
-                  country: offer.country,
-                  region: offer.region,
-                  district: offer.district,
-                }} submitting={busy === `confirm-offer-${offer.id}`} onSubmit={(details) => void performPrivateOffer(`confirm-offer-${offer.id}`, { ...details, offerId: offer.id })} />
-              </div>}
-              {thread.side === "buyer" && offer.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => {
-                event.preventDefault();
-                void performPrivateOffer(`checkout-offer-${offer.id}`, {
-                  action: "checkout_offer", offerId: offer.id, buyerName, buyerPhone,
-                  country, region, district, address,
-                });
-              }}>
-                <h4>Confirm mineral and delivery details</h4>
-                <p className="commerce-note">The total price is locked. Confirm this private mineral to create a standard order. The seller response deadline is set by the marketplace administrator.</p>
-                <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
-                <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
-                <div className="field-row">
-                  <label className="field-label">Country<input className="text-input" required maxLength={100} value={country} onChange={(event) => setCountry(event.target.value)} /></label>
-                  <label className="field-label">Region<input className="text-input" required maxLength={100} value={region} onChange={(event) => setRegion(event.target.value)} /></label>
-                </div>
-                <div className="field-row">
-                  <label className="field-label">District<input className="text-input" required maxLength={100} value={district} onChange={(event) => setDistrict(event.target.value)} /></label>
-                  <label className="field-label">Street / delivery address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
-                </div>
-                <button className="button button-dark" type="submit" disabled={busy === `checkout-offer-${offer.id}`}>{busy === `checkout-offer-${offer.id}` ? "Confirming…" : `Confirm and continue · ${amount(offer.total_price, offer.currency)}`}</button>
-              </form>}
-            </div>)}
-            {thread.side === "buyer" && thread.state === "accepted" && <p className="commerce-note">You accepted this offer. The seller will confirm the mineral details before checkout.</p>}
-            {thread.side === "seller" && thread.state === "open" && latestOffer?.status === "pending" && <p className="commerce-note">Waiting for the buyer to accept or decline. Offer attempts: {thread.attempt_count}/3.</p>}
-            {thread.side === "seller" && thread.state === "open" && latestOffer?.status === "declined" && thread.attempt_count < 3 && buyerRequest && data.privateOffers.feeRate !== null && <div className="commerce-revised-offer">
-              <h4>Send a revised offer ({thread.attempt_count}/3 used)</h4>
-              <PrivateOfferForm requestId={thread.request_id} threadId={thread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? buyerRequest.currency : "TZS"} submitting={busy === `revise-offer-${thread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${thread.id}`, details)} />
-            </div>}
-            {thread.state === "open" && <div className="commerce-private-actions"><button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Close this private offer? No more offers or revised attempts can be sent.")) void performPrivateOffer(`close-offer-${thread.id}`, { action: "close_offer_thread", threadId: thread.id }); }}>Close offer</button></div>}
-            {thread.state === "closed" && <div className="commerce-private-actions"><p className="commerce-note">This offer thread is closed. No more offers can be sent for this request.</p><button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Delete this closed private offer from your view?")) void performPrivateOffer(`delete-offer-${thread.id}`, { action: "delete_closed_offer_thread", threadId: thread.id }); }}>Delete closed offer</button></div>}
-            </div>
-          </details>;
-        })}
-        {!visiblePrivateThreads.length && <p className="commerce-note">No private offers match your search and status filter.</p>}
-      </div> : <p className="commerce-note">No private mineral offers yet. You can send offers to buyer requests directly from the market.</p>}
-      {renderOrderPagination(filteredPrivateThreads.length, currentPrivateOfferPage, privateOfferPageCount, "private offers", setPrivateOfferPage)}
+      {data.privateOffers.threads.length ? <div className="commerce-private-board">
+        <section className="commerce-private-role-group">
+          <div className="commerce-private-group-heading"><h4>Offers as Buyer</h4><span>{visibleBuyerPrivateThreads.length}</span></div>
+          <div className="commerce-private-card-grid">
+            {visibleBuyerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
+              {latest?.signed_image_url && <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={280} height={180} unoptimized />}
+              <span className="commerce-private-card-role">Buyer · Request #{thread.request_id}</span>
+              <strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong>
+              <span>Seller @{thread.seller_username}</span>
+              {latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}
+              <span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {latest?.status === "declined" ? "Declined" : statusLabel(thread.state)}</span>
+            </button>; })}
+          </div>
+          {!visibleBuyerPrivateThreads.length && <p className="commerce-note">No offers received as a buyer match the current filter.</p>}
+        </section>
+        <section className="commerce-private-role-group">
+          <div className="commerce-private-group-heading"><h4>Offers as Seller</h4><span>{visibleSellerPrivateThreads.length}</span></div>
+          <div className="commerce-private-card-grid">
+            {visibleSellerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; const remaining = Math.max(0, 3 - thread.attempt_count); return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
+              {latest?.signed_image_url && <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={280} height={180} unoptimized />}
+              <span className="commerce-private-card-role">Seller · Request #{thread.request_id}</span>
+              <strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong>
+              {latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}
+              <span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span>
+              <span className="commerce-private-card-status">{statusLabel(thread.state)}</span>
+            </button>; })}
+          </div>
+          {!visibleSellerPrivateThreads.length && <p className="commerce-note">No offers sent as a seller match the current filter.</p>}
+        </section>
+      </div> : <p className="commerce-note">No private mineral offers yet. You can send offers to buyer requests directly from the market.</p>}      {renderOrderPagination(filteredPrivateThreads.length, currentPrivateOfferPage, privateOfferPageCount, "private offers", setPrivateOfferPage)}
     </section>
     <section className="commerce-section commerce-order-section">
       <h3>My cart ({data.cartItems.length})</h3>
@@ -747,6 +683,44 @@ export default function CommercePanel({ onNotice, onCounters }: {
         {sellerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("seller")}>{historyLoading === "seller" ? "Loading…" : "Load older orders"}</button>}
       </details>
     </section>
+    {selectedPrivateThread && !acceptOffer && !declineOffer && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setSelectedPrivateThreadId(null); }}>
+      <div className="dialog-card commerce-private-dialog" role="dialog" aria-modal="true" aria-labelledby="private-thread-title">
+        <div className="dialog-kicker">{selectedPrivateThread.side === "buyer" ? "OFFERS AS BUYER" : "OFFERS AS SELLER"}</div>
+        <h2 id="private-thread-title">{selectedPrivateThread.request?.mineral_name ?? "Private mineral offer"} · Request #{selectedPrivateThread.request_id}</h2>
+        {selectedPrivateThread.offers.map((offer) => <div className="commerce-private-offer" key={offer.id}>
+          <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{statusLabel(offer.status)}</span></div>
+          {offer.signed_image_url && <div className="commerce-private-image"><Image src={offer.signed_image_url} alt={`${offer.mineral_name} private offer`} width={800} height={800} unoptimized /></div>}
+          {selectedPrivateThread.side === "buyer" && selectedPrivateThread.request
+            ? <div className="private-offer-comparison">
+                <div className="private-offer-compare-column"><span className="private-offer-compare-title">Your original request</span><strong>{selectedPrivateThread.request.mineral_name}</strong><span>{selectedPrivateThread.request.weight} {selectedPrivateThread.request.unit}</span><span>{selectedPrivateThread.request.color} · {selectedPrivateThread.request.shape} · {selectedPrivateThread.request.quality}</span><span>Location: {selectedPrivateThread.request.location}</span><strong className="private-offer-request-price">Your requested offer: {amount(selectedPrivateThread.request.offer, selectedPrivateThread.request.currency)}</strong></div>
+                <div className="private-offer-compare-column"><span className="private-offer-compare-title">Seller’s offer</span><strong>{offer.mineral_name}</strong><span>{offer.weight} {offer.unit}</span><span>{offer.color} · {offer.shape} · {offer.quality}</span><span>Location: {offer.district}, {offer.region}, {offer.country}</span><strong className="private-offer-total-price">Seller’s offer / Total to pay: {amount(offer.total_price, offer.currency)}</strong></div>
+                {selectedPrivateThread.request.currency === offer.currency && <p className="private-offer-difference">{offerDifference(selectedPrivateThread.request.offer, offer.total_price, offer.currency)}</p>}
+              </div>
+            : <p>Seller’s offer / Total to pay: <strong>{amount(offer.total_price, offer.currency)}</strong>{offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined ? ` · Seller price ${amount(offer.seller_amount, offer.currency)} + Madinimarket fee ${amount(offer.platform_fee_amount, offer.currency)}` : ""}</p>}
+          {offer.signed_certificate_url
+            ? <a className="certificate-file-link" href={offer.signed_certificate_url} target="_blank" rel="noreferrer">View mineral certificate{offer.certificate_file_name ? `: ${offer.certificate_file_name}` : ""}</a>
+            : selectedPrivateThread.side === "buyer"
+              ? <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>
+              : <p className="commerce-note"><strong>No mineral certificate was uploaded with this offer.</strong></p>}
+          {selectedPrivateThread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions"><button className="button button-dark" type="button" onClick={() => { setAcceptOffer(offer); setAcceptRequestOffer(selectedPrivateThread.request?.offer ?? null); setAcceptRequestCurrency(selectedPrivateThread.request?.currency ?? offer.currency); setAcceptRequestDetails(selectedPrivateThread.request); }}>Accept to buy</button><button className="button button-outline" type="button" onClick={() => { setDeclineOffer(offer); setDeclineReason(""); setDeclineExplanation(""); }}>Decline offer</button></div>}
+          {selectedPrivateThread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}<br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</p>}
+          {selectedPrivateThread.side === "seller" && offer.status === "accepted" && <div className="commerce-revised-offer"><h4>Finalize the mineral card</h4><FinalizePrivateOfferForm offer={{ mineralName: offer.mineral_name, listingType: offer.listing_type as "single" | "batch", weight: Number(offer.weight), unit: offer.unit as "carats" | "g" | "kg" | "tons", smallestStoneWeight: offer.smallest_stone_weight, largestStoneWeight: offer.largest_stone_weight, stoneWeightUnit: offer.stone_weight_unit, color: offer.color, shape: offer.shape, quality: offer.quality, country: offer.country, region: offer.region, district: offer.district }} submitting={busy === `confirm-offer-${offer.id}`} onSubmit={(details) => void performPrivateOffer(`confirm-offer-${offer.id}`, { ...details, offerId: offer.id })} /></div>}
+        </div>)}
+        {selectedPrivateThread.side === "buyer" && selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => { event.preventDefault(); const offer = selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]; void performPrivateOffer(`checkout-offer-${offer.id}`, { action: "checkout_offer", offerId: offer.id, buyerName, buyerPhone, country, region, district, address }); }}>
+          <h4>Confirm mineral and delivery details</h4>
+          <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
+          <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
+          <div className="field-row"><label className="field-label">Country<input className="text-input" required value={country} onChange={(event) => setCountry(event.target.value)} /></label><label className="field-label">Region<input className="text-input" required value={region} onChange={(event) => setRegion(event.target.value)} /></label><label className="field-label">District<input className="text-input" required value={district} onChange={(event) => setDistrict(event.target.value)} /></label><label className="field-label">Street / address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label></div>
+          <button className="button button-dark" type="submit">Confirm and continue</button>
+        </form>}
+        {selectedPrivateThread.side === "seller" && selectedPrivateThread.state === "open" && selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "declined" && selectedPrivateThread.attempt_count < 3 && selectedPrivateThread.request && data.privateOffers.feeRate !== null && <div className="commerce-revised-offer"><h4>Send a revised offer ({selectedPrivateThread.attempt_count}/3 used)</h4><PrivateOfferForm requestId={selectedPrivateThread.request_id} threadId={selectedPrivateThread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? selectedPrivateThread.request.currency : "TZS"} submitting={busy === `revise-offer-${selectedPrivateThread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${selectedPrivateThread.id}`, details)} /></div>}
+        <div className="dialog-actions">
+          {selectedPrivateThread.state === "open" && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Close this private offer? No more offers or revised attempts can be sent.")) void performPrivateOffer(`close-offer-${selectedPrivateThread.id}`, { action: "close_offer_thread", threadId: selectedPrivateThread.id }); }}>Close offer</button>}
+          {selectedPrivateThread.state === "closed" && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Delete this closed private offer from your view?")) void performPrivateOffer(`delete-offer-${selectedPrivateThread.id}`, { action: "delete_closed_offer_thread", threadId: selectedPrivateThread.id }); }}>Delete closed offer</button>}
+          <button className="button button-dark" type="button" onClick={() => setSelectedPrivateThreadId(null)}>Close panel</button>
+        </div>
+      </div>
+    </div>}
     {(acceptOffer || declineOffer) && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) { setAcceptOffer(null); setDeclineOffer(null); } }}>
       {acceptOffer && <div className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="accept-offer-title">
         <div className="dialog-kicker">CONFIRM PURCHASE</div>
