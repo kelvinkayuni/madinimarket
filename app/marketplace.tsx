@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
-import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Session } from "@supabase/supabase-js";
 
 import AdminMarketplaceOrders from "./admin-marketplace-orders";
@@ -38,6 +38,7 @@ type SalesLedgerTotals = Record<Currency, { transactions: number; grossSales: nu
 type SalesLedgerPeriod = { today: SalesLedgerTotals; thisWeek: SalesLedgerTotals; thisMonth: SalesLedgerTotals; thisYear: SalesLedgerTotals };
 type SalesLedgerTransaction = { itemId: string; orderId: string; controlNumber: string; verifiedAt: string; mineralName: string; status: string; currency: Currency; grossSales: number; sellerAmount: number; marketplaceFee: number; feeRate: number };
 type SalesLedgerData = { periods: SalesLedgerPeriod; transactions: SalesLedgerTransaction[]; timeZone: string };
+type SalesLedgerPeriodFilter = "all" | "today" | "thisWeek" | "thisMonth" | "thisYear";
 type SubscriptionPlan = { id: string; months: number; price_tzs: string; price_usd: string; is_active: boolean; updated_at?: string };
 type AccountSubscription = { id: string; website_user_id?: string; plan_id: string | null; months: number; currency: Currency; amount: string; status: "pending" | "active" | "expired" | "rejected"; requested_at: string; starts_at: string | null; expires_at: string | null; paid_at: string | null; account?: { display_name: string; username: string; email: string } | null };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
@@ -46,7 +47,29 @@ type Dialog = "create" | "signin" | "forgot-password" | "sell" | "buy" | "review
 const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
 const USER_STORAGE_KEY = "madinimarket:user:v1";
+const SALES_LEDGER_PAGE_SIZE = 25;
 const signedMineralImageUrls = new Map<string, { url: string; expiresAt: number }>();
+
+function salesLedgerPeriodKeys(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  const year = Number(values.year);
+  const month = Number(values.month);
+  const day = Number(values.day);
+  const localDate = new Date(Date.UTC(year, month - 1, day));
+  localDate.setUTCDate(localDate.getUTCDate() - ((localDate.getUTCDay() + 6) % 7));
+  return {
+    day: `${values.year}-${values.month}-${values.day}`,
+    week: localDate.toISOString().slice(0, 10),
+    month: `${values.year}-${values.month}`,
+    year: values.year,
+  };
+}
 const defaultMarketHours: MarketHoursSchedule = {
   openDays: [0, 1, 2, 3, 4, 5, 6],
   openTime: "00:00",
@@ -417,6 +440,12 @@ export default function Marketplace() {
   const accountListScrollTop = useRef<number | null>(null);
   const [adminSalesLedger, setAdminSalesLedger] = useState<SalesLedgerData | null>(null);
   const [adminSalesLedgerError, setAdminSalesLedgerError] = useState("");
+  const [salesLedgerSearchInput, setSalesLedgerSearchInput] = useState("");
+  const [salesLedgerSearch, setSalesLedgerSearch] = useState("");
+  const [salesLedgerCurrency, setSalesLedgerCurrency] = useState<"all" | Currency>("all");
+  const [salesLedgerStatus, setSalesLedgerStatus] = useState("all");
+  const [salesLedgerPeriod, setSalesLedgerPeriod] = useState<SalesLedgerPeriodFilter>("all");
+  const [salesLedgerPage, setSalesLedgerPage] = useState(1);
   const [translationPairs, setTranslationPairs] = useState<TranslationPair[]>([]);
   const [translationForm, setTranslationForm] = useState({ english_phrase: "", swahili_phrase: "" });
   const [editingTranslationId, setEditingTranslationId] = useState<string | null>(null);
@@ -426,6 +455,32 @@ export default function Marketplace() {
   const [homepageHeadlineIndex, setHomepageHeadlineIndex] = useState(0);
   const [homepageHeadlineFontSize, setHomepageHeadlineFontSize] = useState(49);
   const [homepageHeadlineFontSizeInput, setHomepageHeadlineFontSizeInput] = useState("49");
+  const filteredSalesLedgerTransactions = useMemo(() => {
+    const transactions = adminSalesLedger?.transactions ?? [];
+    const query = salesLedgerSearch.trim().toLocaleLowerCase();
+    const currentPeriods = adminSalesLedger
+      ? salesLedgerPeriodKeys(new Date(), adminSalesLedger.timeZone)
+      : null;
+    return transactions.filter((transaction) => {
+      if (salesLedgerCurrency !== "all" && transaction.currency !== salesLedgerCurrency) return false;
+      if (salesLedgerStatus !== "all" && transaction.status !== salesLedgerStatus) return false;
+      if (query && !`${transaction.controlNumber} ${transaction.mineralName}`.toLocaleLowerCase().includes(query)) return false;
+      if (salesLedgerPeriod !== "all" && currentPeriods && adminSalesLedger) {
+        const transactionPeriods = salesLedgerPeriodKeys(new Date(transaction.verifiedAt), adminSalesLedger.timeZone);
+        const periodKey = salesLedgerPeriod === "today" ? "day"
+          : salesLedgerPeriod === "thisWeek" ? "week"
+            : salesLedgerPeriod === "thisMonth" ? "month" : "year";
+        if (transactionPeriods[periodKey] !== currentPeriods[periodKey]) return false;
+      }
+      return true;
+    });
+  }, [adminSalesLedger, salesLedgerCurrency, salesLedgerPeriod, salesLedgerSearch, salesLedgerStatus]);
+  const salesLedgerPageCount = Math.max(1, Math.ceil(filteredSalesLedgerTransactions.length / SALES_LEDGER_PAGE_SIZE));
+  const activeSalesLedgerPage = Math.min(salesLedgerPage, salesLedgerPageCount);
+  const visibleSalesLedgerTransactions = filteredSalesLedgerTransactions.slice(
+    (activeSalesLedgerPage - 1) * SALES_LEDGER_PAGE_SIZE,
+    activeSalesLedgerPage * SALES_LEDGER_PAGE_SIZE,
+  );
   const activeHomepageHeadline = homepageHeadlines.length
     ? homepageHeadlines[homepageHeadlineIndex % homepageHeadlines.length]
     : null;
@@ -2700,7 +2755,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           <section className="admin-sales-ledger" aria-labelledby="admin-sales-ledger-heading">
             <div className="admin-queue-heading">
               <div><span>VERIFIED MARKETPLACE ORDERS</span><h2 id="admin-sales-ledger-heading">Verified payments</h2></div>
-              <strong>{adminSalesLedger?.transactions.length ?? 0}</strong>
+              <strong>{filteredSalesLedgerTransactions.length}</strong>
             </div>
             {adminSalesLedgerError && <p className="admin-ledger-error" role="alert">{adminSalesLedgerError}</p>}
             {adminSalesLedger
@@ -2721,22 +2776,82 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
                     })}
                   </article>)}
                 </div>
-                <div className="admin-ledger-table-wrap">
-                  <table className="admin-ledger-table admin-sales-table">
-                    <thead><tr><th>Payment verified (Tanzania time)</th><th>Order</th><th>Product</th><th>Status</th><th>Gross sale</th><th>Seller amount</th><th>Madinimarket fee</th></tr></thead>
-                    <tbody>
-                      {adminSalesLedger.transactions.map((transaction) => <tr key={transaction.itemId}>
-                        <td>{new Date(transaction.verifiedAt).toLocaleString("en-GB", { timeZone: adminSalesLedger.timeZone })}</td>
-                        <td>{transaction.controlNumber}</td>
-                        <td>{transaction.mineralName}</td>
-                        <td><span className="admin-ledger-status is-approved">{transaction.status.replaceAll("_", " ")}</span></td>
-                        <td><strong>{formatLedgerMoney(transaction.grossSales, transaction.currency)}</strong></td>
-                        <td>{formatLedgerMoney(transaction.sellerAmount, transaction.currency)}</td>
-                        <td>{formatLedgerMoney(transaction.marketplaceFee, transaction.currency)}<small>{(transaction.feeRate * 100).toFixed(0)}%</small></td>
-                      </tr>)}
-                      {!adminSalesLedger.transactions.length && <tr><td className="admin-ledger-empty" colSpan={7}>No verified marketplace sales yet.</td></tr>}
-                    </tbody>
-                  </table>
+                <div className="admin-sales-tools">
+                  <form className="admin-sales-search" onSubmit={(event) => {
+                    event.preventDefault();
+                    setSalesLedgerPage(1);
+                    setSalesLedgerSearch(salesLedgerSearchInput.trim());
+                  }}>
+                    <label className="field-label">Search sales
+                      <input className="text-input" value={salesLedgerSearchInput} maxLength={80} placeholder="Order number or mineral" onChange={(event) => setSalesLedgerSearchInput(event.target.value)} />
+                    </label>
+                    <button className="button button-dark" type="submit">Search</button>
+                    {salesLedgerSearch && <button className="button button-outline" type="button" onClick={() => {
+                      setSalesLedgerSearch("");
+                      setSalesLedgerSearchInput("");
+                      setSalesLedgerPage(1);
+                    }}>Clear</button>}
+                  </form>
+                  <div className="admin-sales-filters">
+                    <label className="field-label">Period
+                      <select className="text-input" value={salesLedgerPeriod} onChange={(event) => {
+                        setSalesLedgerPeriod(event.target.value as SalesLedgerPeriodFilter);
+                        setSalesLedgerPage(1);
+                      }}>
+                        <option value="all">All time</option>
+                        <option value="today">Today</option>
+                        <option value="thisWeek">This week</option>
+                        <option value="thisMonth">This month</option>
+                        <option value="thisYear">This year</option>
+                      </select>
+                    </label>
+                    <label className="field-label">Currency
+                      <select className="text-input" value={salesLedgerCurrency} onChange={(event) => {
+                        setSalesLedgerCurrency(event.target.value as "all" | Currency);
+                        setSalesLedgerPage(1);
+                      }}>
+                        <option value="all">All currencies</option>
+                        <option value="TZS">TZS</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </label>
+                    <label className="field-label">Status
+                      <select className="text-input" value={salesLedgerStatus} onChange={(event) => {
+                        setSalesLedgerStatus(event.target.value);
+                        setSalesLedgerPage(1);
+                      }}>
+                        <option value="all">All statuses</option>
+                        {Array.from(new Set(adminSalesLedger.transactions.map((transaction) => transaction.status))).sort().map((status) =>
+                          <option value={status} key={status}>{status.replaceAll("_", " ")}</option>,
+                        )}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                {visibleSalesLedgerTransactions.length ? <div className="admin-sales-transaction-list">
+                  {visibleSalesLedgerTransactions.map((transaction) => <details className="admin-sales-transaction" key={transaction.itemId}>
+                    <summary className="admin-sales-transaction-summary">
+                      <strong>{transaction.controlNumber}</strong>
+                      <span>{transaction.mineralName}</span>
+                      <span>{new Date(transaction.verifiedAt).toLocaleString("en-GB", { timeZone: adminSalesLedger.timeZone })}</span>
+                      <span className="admin-ledger-status is-approved">{transaction.status.replaceAll("_", " ")}</span>
+                      <strong>{formatLedgerMoney(transaction.grossSales, transaction.currency)}</strong>
+                    </summary>
+                    <div className="admin-sales-transaction-details">
+                      <span>Order item · {transaction.mineralName}</span>
+                      <span>Seller amount <strong>{formatLedgerMoney(transaction.sellerAmount, transaction.currency)}</strong></span>
+                      <span>Madinimarket fee <strong>{formatLedgerMoney(transaction.marketplaceFee, transaction.currency)} ({(transaction.feeRate * 100).toFixed(0)}%)</strong></span>
+                      <span>Gross sale <strong>{formatLedgerMoney(transaction.grossSales, transaction.currency)}</strong></span>
+                    </div>
+                  </details>)}
+                </div> : <p className="admin-ledger-empty">{adminSalesLedger.transactions.length ? "No sales match these filters." : "No verified marketplace sales yet."}</p>}
+                <div className="admin-sales-pagination">
+                  <span>{filteredSalesLedgerTransactions.length ? `Showing ${(activeSalesLedgerPage - 1) * SALES_LEDGER_PAGE_SIZE + 1}–${Math.min(activeSalesLedgerPage * SALES_LEDGER_PAGE_SIZE, filteredSalesLedgerTransactions.length)} of ${filteredSalesLedgerTransactions.length} sales` : "No matching sales"}</span>
+                  <div>
+                    <button className="button button-outline" type="button" disabled={activeSalesLedgerPage <= 1} onClick={() => setSalesLedgerPage((current) => Math.max(1, current - 1))}>Previous</button>
+                    <span>Page {activeSalesLedgerPage} of {salesLedgerPageCount}</span>
+                    <button className="button button-outline" type="button" disabled={activeSalesLedgerPage >= salesLedgerPageCount} onClick={() => setSalesLedgerPage((current) => Math.min(salesLedgerPageCount, current + 1))}>Next</button>
+                  </div>
                 </div>
               </>
               : !adminSalesLedgerError && <p className="admin-ledger-updated">Loading verified sales…</p>}
