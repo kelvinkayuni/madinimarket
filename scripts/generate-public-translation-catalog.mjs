@@ -4,10 +4,14 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourcePath = path.join(root, "app", "marketplace.tsx");
+const sourcePaths = [
+  path.join(root, "app", "marketplace.tsx"),
+  path.join(root, "app", "commerce-panel.tsx"),
+];
 const outputPath = path.join(root, "lib", "public-translation-catalog.ts");
-const source = fs.readFileSync(sourcePath, "utf8");
-const sourceFile = ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+let sourcePath = "";
+let source = "";
+let sourceFile;
 const phrases = new Set();
 
 function addPhrase(value) {
@@ -25,6 +29,20 @@ function findPublicRoot(node) {
   let result;
   ts.forEachChild(node, (child) => {
     result ??= findPublicRoot(child);
+  });
+  return result;
+}
+
+function findRootByClass(node, tagName, className) {
+  if (ts.isJsxElement(node) && node.openingElement.tagName.getText(sourceFile) === tagName) {
+    const classAttribute = node.openingElement.attributes.properties.find((attribute) =>
+      ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === "className");
+    if (classAttribute?.initializer?.getText(sourceFile).includes(className)) return node;
+  }
+
+  let result;
+  ts.forEachChild(node, (child) => {
+    result ??= findRootByClass(child, tagName, className);
   });
   return result;
 }
@@ -116,9 +134,16 @@ function visitJsx(node) {
   if (ts.isJsxExpression(node)) visitExpression(node.expression);
 }
 
-const publicRoot = findPublicRoot(sourceFile);
-if (!publicRoot) throw new Error("Could not locate the public marketplace interface.");
-visitJsx(publicRoot);
+for (const [index, currentPath] of sourcePaths.entries()) {
+  sourcePath = currentPath;
+  source = fs.readFileSync(sourcePath, "utf8");
+  sourceFile = ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const interfaceRoot = index === 0
+    ? findPublicRoot(sourceFile)
+    : findRootByClass(sourceFile, "div", "commerce-panel");
+  if (!interfaceRoot) throw new Error(`Could not locate the public interface in ${path.relative(root, sourcePath)}.`);
+  visitJsx(interfaceRoot);
+}
 
 const output = `export const publicTranslationPhrases = ${JSON.stringify([...phrases].sort(), null, 2)} as const;\n`;
 fs.writeFileSync(outputPath, output);

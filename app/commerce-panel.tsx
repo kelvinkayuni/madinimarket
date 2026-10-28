@@ -168,6 +168,19 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [buyerHistoryHasMore, setBuyerHistoryHasMore] = useState(false);
   const [sellerHistoryHasMore, setSellerHistoryHasMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState<"buyer" | "seller" | "">("");
+  const [commerceSearch, setCommerceSearch] = useState("");
+  const [buyerStatusFilter, setBuyerStatusFilter] = useState("all");
+  const [sellerStatusFilter, setSellerStatusFilter] = useState("all");
+  const [cartSearch, setCartSearch] = useState("");
+  const [cartStatusFilter, setCartStatusFilter] = useState("all");
+  const [cartPage, setCartPage] = useState(1);
+  const [privateOfferSearch, setPrivateOfferSearch] = useState("");
+  const [privateOfferStatusFilter, setPrivateOfferStatusFilter] = useState("all");
+  const [privateOfferPage, setPrivateOfferPage] = useState(1);
+  const [buyerActivePage, setBuyerActivePage] = useState(1);
+  const [buyerHistoryPage, setBuyerHistoryPage] = useState(1);
+  const [sellerActivePage, setSellerActivePage] = useState(1);
+  const [sellerHistoryPage, setSellerHistoryPage] = useState(1);
   const [buyerName, setBuyerName] = useState("");
   const [buyerPhone, setBuyerPhone] = useState("");
   const [country, setCountry] = useState("");
@@ -362,8 +375,68 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const buyerOrderHistory = allBuyerOrders.filter(isBuyerOrderHistory);
   const activeSellerItems = allSellerItems.filter((item) => !completedOrderItemStatuses.has(item.status));
   const sellerItemHistory = allSellerItems.filter((item) => completedOrderItemStatuses.has(item.status));
-  const renderBuyerOrder = (order: BuyerOrder, history = false) => <article className="commerce-order" key={order.id}>
-    <div className="commerce-order-heading"><strong>Order {order.control_number}</strong><span>{history ? buyerOrderHistoryLabel(order) : statusLabel(order.payment_status)}</span></div>
+  const searchTerm = commerceSearch.trim().toLocaleLowerCase();
+  const matchesBuyerSearch = (order: BuyerOrder) => !searchTerm ||
+    `${order.control_number} ${order.payment_status} ${order.items.map((item) => `${item.mineral_name} ${item.status}`).join(" ")}`.toLocaleLowerCase().includes(searchTerm);
+  const matchesBuyerStatus = (order: BuyerOrder) => buyerStatusFilter === "all" ||
+    order.payment_status === buyerStatusFilter || order.items.some((item) => item.status === buyerStatusFilter);
+  const matchesSellerSearch = (item: OrderItem) => !searchTerm ||
+    `${item.order?.control_number ?? ""} ${item.mineral_name} ${item.status}`.toLocaleLowerCase().includes(searchTerm);
+  const matchesSellerStatus = (item: OrderItem) => sellerStatusFilter === "all" || item.status === sellerStatusFilter;
+  const filteredActiveBuyerOrders = activeBuyerOrders.filter((order) => matchesBuyerSearch(order) && matchesBuyerStatus(order));
+  const filteredBuyerHistory = buyerOrderHistory.filter((order) => matchesBuyerSearch(order) && matchesBuyerStatus(order));
+  const filteredActiveSellerItems = activeSellerItems.filter((item) => matchesSellerSearch(item) && matchesSellerStatus(item));
+  const filteredSellerHistory = sellerItemHistory.filter((item) => matchesSellerSearch(item) && matchesSellerStatus(item));
+  const orderPageSize = 10;
+  const isCartListingAvailable = (item: CartItem) => Boolean(item.listing && item.listing.is_active && item.listing.status === "approved" && item.listing.marketplace_state === "available");
+  const filteredCartItems = data.cartItems.filter((item) => {
+    const matchesSearch = !cartSearch.trim() || `${item.listing?.mineral_name ?? ""} ${item.listing?.seller_name ?? ""}`.toLocaleLowerCase().includes(cartSearch.trim().toLocaleLowerCase());
+    const matchesStatus = cartStatusFilter === "all" || (cartStatusFilter === "available" ? isCartListingAvailable(item) : !isCartListingAvailable(item));
+    return matchesSearch && matchesStatus;
+  });
+  const cartPageCount = Math.max(1, Math.ceil(filteredCartItems.length / orderPageSize));
+  const currentCartPage = Math.min(cartPage, cartPageCount);
+  const visibleCartItems = filteredCartItems.slice((currentCartPage - 1) * orderPageSize, currentCartPage * orderPageSize);
+  const filteredPrivateThreads = data.privateOffers.threads.filter((thread) => {
+    const latestOffer = thread.offers[thread.offers.length - 1];
+    const matchesSearch = !privateOfferSearch.trim() ||
+      `${thread.seller_username} ${thread.request_id} ${thread.state} ${thread.request?.mineral_name ?? ""} ${latestOffer?.mineral_name ?? ""}`.toLocaleLowerCase().includes(privateOfferSearch.trim().toLocaleLowerCase());
+    const matchesStatus = privateOfferStatusFilter === "all" ||
+      (privateOfferStatusFilter === "closed" ? thread.state === "closed" : thread.state !== "closed");
+    return matchesSearch && matchesStatus;
+  });
+  const privateOfferPageCount = Math.max(1, Math.ceil(filteredPrivateThreads.length / orderPageSize));
+  const currentPrivateOfferPage = Math.min(privateOfferPage, privateOfferPageCount);
+  const visiblePrivateThreads = filteredPrivateThreads.slice((currentPrivateOfferPage - 1) * orderPageSize, currentPrivateOfferPage * orderPageSize);
+  const buyerActivePageCount = Math.max(1, Math.ceil(filteredActiveBuyerOrders.length / orderPageSize));
+  const buyerHistoryPageCount = Math.max(1, Math.ceil(filteredBuyerHistory.length / orderPageSize));
+  const sellerActivePageCount = Math.max(1, Math.ceil(filteredActiveSellerItems.length / orderPageSize));
+  const sellerHistoryPageCount = Math.max(1, Math.ceil(filteredSellerHistory.length / orderPageSize));
+  const currentBuyerActivePage = Math.min(buyerActivePage, buyerActivePageCount);
+  const currentBuyerHistoryPage = Math.min(buyerHistoryPage, buyerHistoryPageCount);
+  const currentSellerActivePage = Math.min(sellerActivePage, sellerActivePageCount);
+  const currentSellerHistoryPage = Math.min(sellerHistoryPage, sellerHistoryPageCount);
+  const visibleActiveBuyerOrders = filteredActiveBuyerOrders.slice((currentBuyerActivePage - 1) * orderPageSize, currentBuyerActivePage * orderPageSize);
+  const visibleBuyerHistory = filteredBuyerHistory.slice((currentBuyerHistoryPage - 1) * orderPageSize, currentBuyerHistoryPage * orderPageSize);
+  const visibleActiveSellerItems = filteredActiveSellerItems.slice((currentSellerActivePage - 1) * orderPageSize, currentSellerActivePage * orderPageSize);
+  const visibleSellerHistory = filteredSellerHistory.slice((currentSellerHistoryPage - 1) * orderPageSize, currentSellerHistoryPage * orderPageSize);
+  const resetOrderPages = () => {
+    setBuyerActivePage(1);
+    setBuyerHistoryPage(1);
+    setSellerActivePage(1);
+    setSellerHistoryPage(1);
+  };
+  const renderOrderPagination = (totalItems: number, page: number, pageCount: number, label: string, onPageChange: (page: number) => void) => totalItems > orderPageSize
+    ? <div className="commerce-pagination"><span>Showing {(page - 1) * orderPageSize + 1}–{Math.min(page * orderPageSize, totalItems)} of {totalItems} {label}</span><div><button className="button button-outline" type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>Previous</button><span>Page {page} of {pageCount}</span><button className="button button-outline" type="button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)}>Next</button></div></div>
+    : totalItems > 0 ? <p className="commerce-results-count">Showing {totalItems} {label}</p> : null;
+  const renderBuyerOrder = (order: BuyerOrder, history = false) => <details className="commerce-order" key={order.id}>
+    <summary className="commerce-order-summary">
+      <span><strong>Order {order.control_number}</strong><small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small></span>
+      <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : statusLabel(order.payment_status)}</span>
+      <strong className="commerce-order-summary-total">{amount(order.total_amount, order.currency)}</strong>
+      <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
+    </summary>
+    <div className="commerce-order-details">
     <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
     {order.payment_status === "expired" && <button className="button button-outline" type="button" disabled={busy === `delete-order-${order.id}`} onClick={() => {
       if (window.confirm(`Permanently delete expired order ${order.control_number}?`)) {
@@ -410,8 +483,17 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <button className="button button-outline" type="button" disabled={busy === `dispute-${item.id}`} onClick={() => void perform(`dispute-${item.id}`, "dispute_delivery", { itemId: item.id, reason: disputeReasons[item.id] })}>Open dispute</button>
       </div>}
     </div>)}
-  </article>;
-  const renderSellerItem = (item: OrderItem, history = false) => <article className="commerce-order-item" key={item.id}>
+    </div>
+  </details>;
+  const renderSellerItem = (item: OrderItem, history = false) => <details className="commerce-seller-order-item" key={item.id}>
+    <summary className="commerce-order-summary">
+      <span><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>Order {item.order?.control_number}</small></span>
+      <span className="commerce-order-summary-status">{history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : statusLabel(item.status)}</span>
+      <strong className="commerce-order-summary-total">{amount(item.seller_amount, item.currency)}</strong>
+      <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
+    </summary>
+    <div className="commerce-order-details">
+    <div className="commerce-order-item">
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
       <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : statusLabel(item.status)}</small>
       <small>Seller receives {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
@@ -439,22 +521,30 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <button className="button button-dark" type="button" disabled={busy === `dispatch-${item.id}`} onClick={() => void perform(`dispatch-${item.id}`, "seller_dispatch", { itemId: item.id, carrier: shipping[item.id]?.carrier, trackingNumber: shipping[item.id]?.tracking })}>Mark sent</button>
     </div>}
     {item.status === "disputed" && <p className="commerce-warning">Buyer dispute: {item.dispute_reason ?? "Awaiting admin review."}</p>}
-  </article>;
+    </div>
+    </div>
+  </details>;
 
   return <div className="commerce-panel">
     <div className="dialog-kicker">BUYER & SELLER ORDERS</div>
     <h2 id="dialog-title">Orders and Cart</h2>
     <section className="commerce-section">
       <h3>Private mineral offers <span className="commerce-section-count">{data.privateOffersCount}</span></h3>
+      {data.privateOffers.threads.length > 0 && <div className="commerce-collection-tools">
+        <label className="commerce-order-search">Search private offers<input className="text-input" type="search" value={privateOfferSearch} placeholder="Mineral, seller, or request number" onChange={(event) => { setPrivateOfferSearch(event.target.value); setPrivateOfferPage(1); }} /></label>
+        <label className="commerce-order-filter">Offer status<select className="text-input" value={privateOfferStatusFilter} onChange={(event) => { setPrivateOfferStatusFilter(event.target.value); setPrivateOfferPage(1); }}><option value="all">All offers</option><option value="open">Open</option><option value="closed">Closed</option></select></label>
+      </div>}
       {data.privateOffers.threads.length ? <div className="commerce-list">
-        {data.privateOffers.threads.map((thread) => {
+        {visiblePrivateThreads.map((thread) => {
           const latestOffer = thread.offers[thread.offers.length - 1];
           const buyerRequest = thread.request;
-          return <article className="commerce-private-thread" key={thread.id}>
-            <div className="commerce-order-heading">
-              <strong>{thread.side === "buyer" ? `Seller @${thread.seller_username}` : "Your offer"} · Request #{thread.request_id}</strong>
-              <span>{statusLabel(thread.state)}</span>
-            </div>
+          return <details className="commerce-private-thread" key={thread.id}>
+            <summary className="commerce-order-summary">
+              <span><strong>{thread.side === "buyer" ? `Seller @${thread.seller_username}` : "Your offer"} · Request #${thread.request_id}</strong><small>{latestOffer ? `${latestOffer.mineral_name} · ${amount(latestOffer.total_price, latestOffer.currency)}` : buyerRequest?.mineral_name ?? "Private offer"}</small></span>
+              <span className="commerce-order-summary-status">{statusLabel(thread.state)}</span>
+              <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
+            </summary>
+            <div className="commerce-private-thread-content">
             {buyerRequest && <p className="commerce-note">Request: {buyerRequest.mineral_name} · {buyerRequest.weight} {buyerRequest.unit} · {buyerRequest.color} · {buyerRequest.shape} · {buyerRequest.quality} · {buyerRequest.location}</p>}
             {thread.offers.map((offer) => <div className="commerce-private-offer" key={offer.id}>
               <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{statusLabel(offer.status)}</span></div>
@@ -517,27 +607,39 @@ export default function CommercePanel({ onNotice, onCounters }: {
               <PrivateOfferForm requestId={thread.request_id} threadId={thread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? buyerRequest.currency : "TZS"} submitting={busy === `revise-offer-${thread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${thread.id}`, details)} />
             </div>}
             {thread.state === "closed" && <p className="commerce-note">This offer thread is closed. No more offers can be sent for this request.</p>}
-          </article>;
+            </div>
+          </details>;
         })}
+        {!visiblePrivateThreads.length && <p className="commerce-note">No private offers match your search and status filter.</p>}
       </div> : <p className="commerce-note">No private mineral offers yet. You can send offers to buyer requests directly from the market.</p>}
+      {renderOrderPagination(filteredPrivateThreads.length, currentPrivateOfferPage, privateOfferPageCount, "private offers", setPrivateOfferPage)}
     </section>
     <section className="commerce-section">
       <h3>My cart ({data.cartItems.length})</h3>
       {data.cartItems.length ? <>
+        <div className="commerce-collection-tools">
+          <label className="commerce-order-search">Search cart<input className="text-input" type="search" value={cartSearch} placeholder="Mineral or seller" onChange={(event) => { setCartSearch(event.target.value); setCartPage(1); }} /></label>
+          <label className="commerce-order-filter">Listing status<select className="text-input" value={cartStatusFilter} onChange={(event) => { setCartStatusFilter(event.target.value); setCartPage(1); }}><option value="all">All items</option><option value="available">Available</option><option value="unavailable">Unavailable</option></select></label>
+        </div>
         <div className="commerce-list">
-          {data.cartItems.map((item) => <article className="commerce-item" key={item.id}>
-            <div><strong>{item.listing?.mineral_name ?? "Listing no longer available"}</strong>
+          {visibleCartItems.map((item) => <details className="commerce-item" key={item.id}>
+            <summary className="commerce-item-summary"><span><strong>{item.listing?.mineral_name ?? "Listing no longer available"}</strong>
               {item.listing && <small>{item.listing.listing_type === "batch" ? "Batch · " : ""}{item.listing.weight} {item.listing.unit} · {amount(item.listing.price, item.listing.currency)}</small>}
+            </span>{(!item.listing || !item.listing.is_active || item.listing.status !== "approved" || item.listing.marketplace_state !== "available") && <span className="commerce-order-summary-status commerce-warning">{item.listing?.marketplace_state === "reserved" ? "Reserved" : "Unavailable"}</span>}<span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
+            <div className="commerce-item-details">
               {item.listing && item.listing.marketplace_state === "reserved" && <small className="commerce-warning">This mineral is temporarily reserved by another confirmed order. Cart items are not reserved until you confirm an order.</small>}
               {item.listing && item.listing.marketplace_state === "seller_unavailable" && <small className="commerce-warning">The seller confirmed this mineral is unavailable. It has been removed from the market.</small>}
               {item.listing && (!item.listing.is_active || item.listing.status !== "approved" || item.listing.marketplace_state === "sold") && <small className="commerce-warning">This listing is no longer available.</small>}
+              <button className="button button-outline" type="button" disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
             </div>
-            <button className="button button-outline" type="button" disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
-          </article>)}
+          </details>)}
+          {!visibleCartItems.length && <p className="commerce-note">No cart items match your search and status filter.</p>}
         </div>
+        {renderOrderPagination(filteredCartItems.length, currentCartPage, cartPageCount, "cart items", setCartPage)}
         <p className="commerce-total">Cart total <strong>{amount(total, cartCurrency)}</strong></p>
-        <form className="commerce-checkout" onSubmit={checkout}>
-          <h4>Confirm your order and delivery address</h4>
+        <details className="commerce-checkout-disclosure">
+          <summary>Confirm your order and delivery address <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
+          <form className="commerce-checkout" onSubmit={checkout}>
           <p className="commerce-note">Items stay available to other buyers while in your cart. Confirming locks the cart and reserves the minerals; sellers will be asked to confirm availability. Unavailable items will be removed before payment.</p>
           <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
           <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
@@ -550,34 +652,48 @@ export default function CommercePanel({ onNotice, onCounters }: {
             <label className="field-label">Street / delivery address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
           </div>
           <button className="button button-dark" type="submit" disabled={busy === "checkout" || data.cartItems.some((item) => !item.listing || !item.listing.is_active || item.listing.status !== "approved" || item.listing.marketplace_state !== "available")}>{busy === "checkout" ? "Confirming…" : "Confirm order"}</button>
-        </form>
+          </form>
+        </details>
       </> : <p className="commerce-note">Your cart is empty. Add a mineral from the market to begin.</p>}
     </section>
 
+    <div className="commerce-order-tools">
+      <label className="commerce-order-search">Search orders by order number or mineral<input className="text-input" type="search" value={commerceSearch} placeholder="Order number or mineral" onChange={(event) => { setCommerceSearch(event.target.value); resetOrderPages(); }} /></label>
+      <label className="commerce-order-filter">Buyer order status<select className="text-input" value={buyerStatusFilter} onChange={(event) => { setBuyerStatusFilter(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }}>
+        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="awaiting_seller">Awaiting seller</option><option value="paid">Paid</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+      </select></label>
+      <label className="commerce-order-filter">Seller order status<select className="text-input" value={sellerStatusFilter} onChange={(event) => { setSellerStatusFilter(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }}>
+        <option value="all">All statuses</option><option value="awaiting_seller">Awaiting response</option><option value="paid">Ready to dispatch</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+      </select></label>
+    </div>
     <section className="commerce-section">
       <h3>Buyer orders · active <span className="commerce-section-count">{data.buyerOpenOrdersCount}</span></h3>
-      {activeBuyerOrders.length
-        ? <div className="commerce-list">{activeBuyerOrders.map((order) => renderBuyerOrder(order))}</div>
-        : <p className="commerce-note">{data.buyerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Order history and load older orders to find them." : "No active buyer orders."}</p>}
+      {filteredActiveBuyerOrders.length
+        ? <div className="commerce-list">{visibleActiveBuyerOrders.map((order) => renderBuyerOrder(order))}</div>
+        : <p className="commerce-note">{activeBuyerOrders.length ? "No active buyer orders match your search and status filter." : data.buyerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Order history and load older orders to find them." : "No active buyer orders."}</p>}
+      {renderOrderPagination(filteredActiveBuyerOrders.length, currentBuyerActivePage, buyerActivePageCount, "active buyer orders", setBuyerActivePage)}
       <details className="commerce-history">
         <summary>Order history <span className="commerce-section-count">{data.buyerHistoryCount}</span></summary>
-        {buyerOrderHistory.length
-          ? <div className="commerce-list">{buyerOrderHistory.map((order) => renderBuyerOrder(order, true))}</div>
-          : <p className="commerce-note">No completed or closed orders yet.</p>}
+        {filteredBuyerHistory.length
+          ? <div className="commerce-list">{visibleBuyerHistory.map((order) => renderBuyerOrder(order, true))}</div>
+          : <p className="commerce-note">{buyerOrderHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
+        {renderOrderPagination(filteredBuyerHistory.length, currentBuyerHistoryPage, buyerHistoryPageCount, "history orders", setBuyerHistoryPage)}
         {buyerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("buyer")}>{historyLoading === "buyer" ? "Loading…" : "Load older orders"}</button>}
       </details>
     </section>
 
     <section className="commerce-section">
       <h3>Seller orders · active <span className="commerce-section-count">{data.sellerOpenOrdersCount}</span></h3>
-      {activeSellerItems.length
-        ? <div className="commerce-list">{activeSellerItems.map((item) => renderSellerItem(item))}</div>
-        : <p className="commerce-note">{data.sellerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Order history and load older orders to find them." : "No active seller orders."}</p>}
+      {filteredActiveSellerItems.length
+        ? <div className="commerce-list">{visibleActiveSellerItems.map((item) => renderSellerItem(item))}</div>
+        : <p className="commerce-note">{activeSellerItems.length ? "No active seller orders match your search and status filter." : data.sellerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Order history and load older orders to find them." : "No active seller orders."}</p>}
+      {renderOrderPagination(filteredActiveSellerItems.length, currentSellerActivePage, sellerActivePageCount, "active seller orders", setSellerActivePage)}
       <details className="commerce-history">
         <summary>Order history · items <span className="commerce-section-count">{data.sellerHistoryItemCount}</span></summary>
-        {sellerItemHistory.length
-          ? <div className="commerce-list">{sellerItemHistory.map((item) => renderSellerItem(item, true))}</div>
-          : <p className="commerce-note">No completed or closed orders yet.</p>}
+        {filteredSellerHistory.length
+          ? <div className="commerce-list">{visibleSellerHistory.map((item) => renderSellerItem(item, true))}</div>
+          : <p className="commerce-note">{sellerItemHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
+        {renderOrderPagination(filteredSellerHistory.length, currentSellerHistoryPage, sellerHistoryPageCount, "history items", setSellerHistoryPage)}
         {sellerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("seller")}>{historyLoading === "seller" ? "Loading…" : "Load older orders"}</button>}
       </details>
     </section>

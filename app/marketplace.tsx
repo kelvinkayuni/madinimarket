@@ -504,6 +504,9 @@ export default function Marketplace() {
   const [adminCertificates, setAdminCertificates] = useState<AdminCertificate[]>([]);
   const [myMarketMinerals, setMyMarketMinerals] = useState<AccountMarketListing[]>([]);
   const [myWantedMinerals, setMyWantedMinerals] = useState<AccountWantedMineral[]>([]);
+  const [userAccountListSearch, setUserAccountListSearch] = useState("");
+  const [userAccountListFilter, setUserAccountListFilter] = useState<"all" | "pending" | "rejected">("all");
+  const [userAccountListPage, setUserAccountListPage] = useState(1);
   const accountListScroll = useRef({ submissions: 0, market: 0, wanted: 0 });
   const submissionsListRef = useRef<HTMLDivElement>(null);
   const marketListRef = useRef<HTMLDivElement>(null);
@@ -1274,9 +1277,20 @@ export default function Marketplace() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const openDialog = (next: Exclude<Dialog, null>) => { setMenuOpen(false); setDialog(next); };
+  const resetUserAccountList = () => {
+    setUserAccountListSearch("");
+    setUserAccountListFilter("all");
+    setUserAccountListPage(1);
+    accountListScroll.current = { submissions: 0, market: 0, wanted: 0 };
+  };
+  const openDialog = (next: Exclude<Dialog, null>) => {
+    setMenuOpen(false);
+    if (next === "submissions") resetUserAccountList();
+    setDialog(next);
+  };
   const openAccountMarket = async (next: "my-market-minerals" | "my-wanted-minerals") => {
     setMenuOpen(false);
+    resetUserAccountList();
     await withProgress(`load-${next}`, async () => {
       try {
         if (isSupabaseConfigured && role === "user") {
@@ -2177,22 +2191,46 @@ export default function Marketplace() {
     });
   };
   const mySellers = sellers.filter((item) => item.user_id === userId && item.status !== "approved");
-const myBuyers = buyers.filter((item) => item.user_id === userId && item.status !== "approved");
+  const myBuyers = buyers.filter((item) => item.user_id === userId && item.status !== "approved");
+  const userAccountPageSize = 10;
+  const accountSubmissionEntries = [
+    ...mySellers.map((item) => ({ kind: "seller" as const, item })),
+    ...myBuyers.map((item) => ({ kind: "buyer" as const, item })),
+  ];
+  const filteredAccountSubmissions = accountSubmissionEntries.filter(({ kind, item }) => {
+    const matchesStatus = userAccountListFilter === "all" || item.status === userAccountListFilter;
+    const matchesSearch = !userAccountListSearch.trim() ||
+      `${item.mineral} ${kind} ${item.status}`.toLocaleLowerCase().includes(userAccountListSearch.trim().toLocaleLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+  const filteredMarketMinerals = myMarketMinerals.filter((item) =>
+    !userAccountListSearch.trim() || `${item.mineral} ${item.location}`.toLocaleLowerCase().includes(userAccountListSearch.trim().toLocaleLowerCase()));
+  const filteredWantedMinerals = myWantedMinerals.filter((item) =>
+    !userAccountListSearch.trim() || `${item.mineral} ${item.location} ${item.color} ${item.shape} ${item.quality}`.toLocaleLowerCase().includes(userAccountListSearch.trim().toLocaleLowerCase()));
+  const activeUserAccountList = dialog === "submissions" ? filteredAccountSubmissions
+    : dialog === "my-market-minerals" ? filteredMarketMinerals
+      : dialog === "my-wanted-minerals" ? filteredWantedMinerals : [];
+  const userAccountPageCount = Math.max(1, Math.ceil(activeUserAccountList.length / userAccountPageSize));
+  const activeUserAccountPage = Math.min(userAccountListPage, userAccountPageCount);
+  const userAccountListStart = (activeUserAccountPage - 1) * userAccountPageSize;
+  const visibleAccountSubmissions = filteredAccountSubmissions.slice(userAccountListStart, userAccountListStart + userAccountPageSize);
+  const visibleMarketMinerals = filteredMarketMinerals.slice(userAccountListStart, userAccountListStart + userAccountPageSize);
+  const visibleWantedMinerals = filteredWantedMinerals.slice(userAccountListStart, userAccountListStart + userAccountPageSize);
   useLayoutEffect(() => {
     if (dialog === "submissions" && submissionsListRef.current) {
       submissionsListRef.current.scrollTop = accountListScroll.current.submissions;
     }
-  }, [dialog, mySellers, myBuyers]);
+  }, [dialog, mySellers, myBuyers, userAccountListPage]);
   useLayoutEffect(() => {
     if (dialog === "my-market-minerals" && marketListRef.current) {
       marketListRef.current.scrollTop = accountListScroll.current.market;
     }
-  }, [dialog, myMarketMinerals]);
+  }, [dialog, myMarketMinerals, userAccountListPage]);
   useLayoutEffect(() => {
     if (dialog === "my-wanted-minerals" && wantedListRef.current) {
       wantedListRef.current.scrollTop = accountListScroll.current.wanted;
     }
-  }, [dialog, myWantedMinerals]);
+  }, [dialog, myWantedMinerals, userAccountListPage]);
   const pendingSellers = role === "admin" ? sellers.filter((item) => item.status === "pending") : [];
   const pendingBuyers = role === "admin" ? buyers.filter((item) => item.status === "pending") : [];
 
@@ -3208,49 +3246,68 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
       </>}
       {dialog === "commerce" && <CommercePanel onNotice={setNotice} onCounters={updateAccountMenuCounts} />}
       {dialog === "private-offer" && privateOfferRequest && <><div className="dialog-kicker">PRIVATE OFFER · REQUEST #{privateOfferRequest.id}</div><h2 id="dialog-title">Offer a mineral privately.</h2><p className="dialog-copy">Send a mineral card and price to this buyer. Your contact details stay private. The current marketplace fee is saved with this offer and included in the buyer total.</p><div className="private-offer-request-summary"><strong>{privateOfferRequest.mineral}</strong><span>{privateOfferRequest.weight} {privateOfferRequest.unit} · {privateOfferRequest.color} · {privateOfferRequest.shape} · {privateOfferRequest.quality}</span><span>Buyer’s request offer: {money(privateOfferRequest.offer, privateOfferRequest.currency)}</span></div>{listingFeeSettingsLoaded ? <PrivateOfferForm requestId={privateOfferRequest.id} threadId={null} feeRate={listingFeePercent / 100} usdEnabled={usdEnabled && currencySettingsLoaded} defaultCurrency={usdEnabled && currencySettingsLoaded ? privateOfferRequest.currency : "TZS"} submitting={busyActions.has("private-offer-submit")} onSubmit={(details) => void sendPrivateOffer(details)} /> : <p className="admin-empty">Loading current marketplace pricing…</p>}</>}
-      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p><div className="submission-list account-scroll-list" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>{mySellers.map((item) => <article className="submission-item" key={`seller-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>{item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}  <div className="submission-actions">
-  <button
-    type="button"
-    className="button button-outline"
-    onClick={() => void editSubmission("seller", item)}
-    disabled={item.status === "pending" || busyActions.has(`submission-delete-seller-${item.id}`) || busyActions.has(`submission-edit-seller-${item.id}`)}
-  >
-    {busyActions.has(`submission-edit-seller-${item.id}`) ? "Loading submission…" : "Edit"}
-  </button>
-  <button
-    type="button"
-    className="button button-danger"
-    onClick={() => void withProgress(`submission-delete-seller-${item.id}`, () => deleteSubmission("seller", item))}
-    disabled={item.status === "pending" || busyActions.has(`submission-delete-seller-${item.id}`)}
-  >
-    {busyActions.has(`submission-delete-seller-${item.id}`) ? "Deleting…" : "Delete"}
-  </button>
-</div> </article>)}{myBuyers.map((item) => <article className="submission-item" key={`buyer-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className={`submission-status status-${item.status}`}>{item.status}</span></div><p data-no-translate>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>{item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}<div className="submission-actions">
-  <button
-    type="button"
-    className="button button-outline"
-    onClick={() => void editSubmission("buyer", item)}
-    disabled={item.status === "pending" || busyActions.has(`submission-delete-buyer-${item.id}`) || busyActions.has(`submission-edit-buyer-${item.id}`)}
-  >
-    {busyActions.has(`submission-edit-buyer-${item.id}`) ? "Loading submission…" : "Edit"}
-  </button>
-  <button
-    type="button"
-    className="button button-danger"
-    onClick={() => void withProgress(`submission-delete-buyer-${item.id}`, () => deleteSubmission("buyer", item))}
-    disabled={item.status === "pending" || busyActions.has(`submission-delete-buyer-${item.id}`)}
-  >
-    {busyActions.has(`submission-delete-buyer-${item.id}`) ? "Deleting…" : "Delete"}
-  </button>
-</div> </article>)}{!mySellers.length && !myBuyers.length && <div className="empty-search">You have no pending or rejected submissions.</div>}</div></>}
-      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p><div className="submission-list account-scroll-list" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>{myMarketMinerals.map((item) => <article className="submission-item account-market-item" key={`market-mineral-${item.id}`}>{item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}<div className="account-market-details"><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">On market</span></div><p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>{item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}{item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p data-no-translate>{item.location}</p></div></article>)}{!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}</div></>}
-      {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p><div className="submission-list account-scroll-list" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>{myWantedMinerals.map((item) => <article className="submission-item" key={`wanted-mineral-${item.id}`}><div className="submission-title"><h3 data-no-translate>{item.mineral}</h3><span className="submission-status status-approved">Buyers looking</span></div><p data-no-translate>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p><span>Offer: </span><span data-no-translate>{money(item.offer, item.currency)} · {item.location}</span></p></article>)}{!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}</div></>}
+      {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p>
+        <div className="user-account-list-tools"><label className="user-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search submissions by mineral" placeholder="Search submissions" value={userAccountListSearch} onChange={(event) => { setUserAccountListSearch(event.target.value); setUserAccountListPage(1); accountListScroll.current.submissions = 0; if (submissionsListRef.current) submissionsListRef.current.scrollTop = 0; }} /></label>
+          <div className="user-account-filter-buttons" aria-label="Filter submissions">{(["all", "pending", "rejected"] as const).map((filter) => <button type="button" className={userAccountListFilter === filter ? "is-selected" : ""} aria-pressed={userAccountListFilter === filter} key={filter} onClick={() => { setUserAccountListFilter(filter); setUserAccountListPage(1); accountListScroll.current.submissions = 0; if (submissionsListRef.current) submissionsListRef.current.scrollTop = 0; }}>{filter === "all" ? "All" : filter === "pending" ? "Pending" : "Rejected"}</button>)}</div>
+        </div>
+        <div className="submission-list account-scroll-list user-account-records" ref={submissionsListRef} onScroll={(event) => { accountListScroll.current.submissions = event.currentTarget.scrollTop; }}>
+          {visibleAccountSubmissions.map(({ kind, item }) => <details className="user-account-record" key={`${kind}-${item.id}`}>
+            <summary><span><strong data-no-translate>{item.mineral}</strong><small>{kind === "seller" ? "Seller listing" : "Buyer request"}</small></span><span className={`submission-status status-${item.status}`}>{item.status}</span><ChevronDown size={16} aria-hidden="true" /></summary>
+            <div className="user-account-record-details">
+              {kind === "seller" ? <>
+                <p data-no-translate>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · Market price: {money(item.price, item.currency)}</p>
+                {item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}
+                {item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}
+              </> : <p data-no-translate>{item.weight} {item.unit} · {money(item.offer, item.currency)}</p>}
+              {item.review_message && <p className="submission-message"><span>Admin message: </span><span data-no-translate>{item.review_message}</span></p>}
+              <div className="submission-actions">
+                <button type="button" className="button button-outline" onClick={() => void editSubmission(kind, item)} disabled={item.status === "pending" || busyActions.has(`submission-delete-${kind}-${item.id}`) || busyActions.has(`submission-edit-${kind}-${item.id}`)}>{busyActions.has(`submission-edit-${kind}-${item.id}`) ? "Loading submission…" : "Edit"}</button>
+                <button type="button" className="button button-danger" onClick={() => void withProgress(`submission-delete-${kind}-${item.id}`, () => deleteSubmission(kind, item))} disabled={item.status === "pending" || busyActions.has(`submission-delete-${kind}-${item.id}`)}>{busyActions.has(`submission-delete-${kind}-${item.id}`) ? "Deleting…" : "Delete"}</button>
+              </div>
+            </div>
+          </details>)}
+          {!accountSubmissionEntries.length && <div className="empty-search">You have no pending or rejected submissions.</div>}
+          {accountSubmissionEntries.length > 0 && !visibleAccountSubmissions.length && <div className="empty-search">No submissions match your search and status filter.</div>}
+        </div>
+        {filteredAccountSubmissions.length > 0 && <div className="user-account-pagination"><span>Showing {userAccountListStart + 1}–{Math.min(userAccountListStart + userAccountPageSize, filteredAccountSubmissions.length)} of {filteredAccountSubmissions.length} submissions</span><div><button className="button button-outline" type="button" disabled={activeUserAccountPage <= 1} onClick={() => { accountListScroll.current.submissions = 0; setUserAccountListPage((page) => Math.max(1, page - 1)); }}>Previous</button><span>Page {activeUserAccountPage} of {userAccountPageCount}</span><button className="button button-outline" type="button" disabled={activeUserAccountPage >= userAccountPageCount} onClick={() => { accountListScroll.current.submissions = 0; setUserAccountListPage((page) => Math.min(userAccountPageCount, page + 1)); }}>Next</button></div></div>}
+      </>}
+      {dialog === "my-market-minerals" && <><div className="dialog-kicker">YOUR SELLING MARKET</div><h2 id="dialog-title">My minerals on market</h2><p className="dialog-copy">These are your approved mineral listings currently visible on the selling market.</p>
+        <label className="user-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search your market listings" placeholder="Search minerals or location" value={userAccountListSearch} onChange={(event) => { setUserAccountListSearch(event.target.value); setUserAccountListPage(1); accountListScroll.current.market = 0; if (marketListRef.current) marketListRef.current.scrollTop = 0; }} /></label>
+        <div className="submission-list account-scroll-list user-account-records" ref={marketListRef} onScroll={(event) => { accountListScroll.current.market = event.currentTarget.scrollTop; }}>
+          {visibleMarketMinerals.map((item) => <details className="user-account-record" key={`market-mineral-${item.id}`}>
+            <summary><span><strong data-no-translate>{item.mineral}</strong><small>{item.listing_type === "batch" ? "Batch · " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)}</small></span><span className="submission-status status-approved">On market</span><ChevronDown size={16} aria-hidden="true" /></summary>
+            <div className="user-account-record-details account-market-item">
+              {item.image && <div className="account-market-image"><Image src={item.image} alt={`${item.mineral} listing`} fill sizes="88px" unoptimized /></div>}
+              <div className="account-market-details">
+                {item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}
+                {item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}
+                <p data-no-translate>{item.location}</p>
+              </div>
+            </div>
+          </details>)}
+          {!myMarketMinerals.length && <div className="empty-search">You have no approved minerals currently on the selling market.</div>}
+          {myMarketMinerals.length > 0 && !visibleMarketMinerals.length && <div className="empty-search">No listings match your search.</div>}
+        </div>
+        {filteredMarketMinerals.length > 0 && <div className="user-account-pagination"><span>Showing {userAccountListStart + 1}–{Math.min(userAccountListStart + userAccountPageSize, filteredMarketMinerals.length)} of {filteredMarketMinerals.length} listings</span><div><button className="button button-outline" type="button" disabled={activeUserAccountPage <= 1} onClick={() => { accountListScroll.current.market = 0; setUserAccountListPage((page) => Math.max(1, page - 1)); }}>Previous</button><span>Page {activeUserAccountPage} of {userAccountPageCount}</span><button className="button button-outline" type="button" disabled={activeUserAccountPage >= userAccountPageCount} onClick={() => { accountListScroll.current.market = 0; setUserAccountListPage((page) => Math.min(userAccountPageCount, page + 1)); }}>Next</button></div></div>}
+      </>}
+      {dialog === "my-wanted-minerals" && <><div className="dialog-kicker">YOUR BUYER REQUESTS</div><h2 id="dialog-title">My wanted minerals</h2><p className="dialog-copy">These are your approved requests currently visible in the buyers looking panel.</p>
+        <label className="user-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search your approved buyer requests" placeholder="Search minerals or location" value={userAccountListSearch} onChange={(event) => { setUserAccountListSearch(event.target.value); setUserAccountListPage(1); accountListScroll.current.wanted = 0; if (wantedListRef.current) wantedListRef.current.scrollTop = 0; }} /></label>
+        <div className="submission-list account-scroll-list user-account-records" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>
+          {visibleWantedMinerals.map((item) => <details className="user-account-record" key={`wanted-mineral-${item.id}`}>
+            <summary><span><strong data-no-translate>{item.mineral}</strong><small>{item.weight} {item.unit} · {money(item.offer, item.currency)}</small></span><span className="submission-status status-approved">Buyers looking</span><ChevronDown size={16} aria-hidden="true" /></summary>
+            <div className="user-account-record-details"><p data-no-translate>{item.color} · {item.shape} · {item.quality}</p><p data-no-translate>{item.location}</p></div>
+          </details>)}
+          {!myWantedMinerals.length && <div className="empty-search">You have no approved requests currently in the buyers looking panel.</div>}
+          {myWantedMinerals.length > 0 && !visibleWantedMinerals.length && <div className="empty-search">No requests match your search.</div>}
+        </div>
+        {filteredWantedMinerals.length > 0 && <div className="user-account-pagination"><span>Showing {userAccountListStart + 1}–{Math.min(userAccountListStart + userAccountPageSize, filteredWantedMinerals.length)} of {filteredWantedMinerals.length} requests</span><div><button className="button button-outline" type="button" disabled={activeUserAccountPage <= 1} onClick={() => { accountListScroll.current.wanted = 0; setUserAccountListPage((page) => Math.max(1, page - 1)); }}>Previous</button><span>Page {activeUserAccountPage} of {userAccountPageCount}</span><button className="button button-outline" type="button" disabled={activeUserAccountPage >= userAccountPageCount} onClick={() => { accountListScroll.current.wanted = 0; setUserAccountListPage((page) => Math.min(userAccountPageCount, page + 1)); }}>Next</button></div></div>}
+      </>}
       {dialog === "my-licenses" && role === "user" && <><div className="dialog-kicker">SELLER VERIFICATION</div><h2 id="dialog-title">Your licences</h2><p className="dialog-copy">At least one approved licence is required to list a mineral.</p><div className="certificate-options certificate-options-account">{(["dealer", "broker"] as const).map((kind) => {
         const certificate = certificates[kind];
         const canUpload = !certificate || certificate.status === "rejected";
         const title = kind === "dealer" ? "Dealer licence" : "Broker licence";
-        return <article className="certificate-option" key={kind}>
-          <div className="certificate-option-heading"><h3>{title}</h3><span className={`submission-status status-${certificate?.status ?? "empty"}`}>{certificate?.status ?? "Not submitted"}</span></div>
+        return <details className="certificate-option user-license-disclosure" key={kind}>
+          <summary className="certificate-option-heading"><h3>{title}</h3><span className={`submission-status status-${certificate?.status ?? "empty"}`}>{certificate?.status ?? "Not submitted"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
           {certificate?.review_message && <p className="submission-message">Admin rejection reason: {certificate.review_message}</p>}
           {certificate && <a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">View {certificate.file_name}</a>}
           {canUpload && <><label className="field-label certificate-file-label">Upload PDF, JPEG, or PNG<input className="certificate-file-input" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => {
@@ -3266,7 +3323,7 @@ const myBuyers = buyers.filter((item) => item.user_id === userId && item.status 
           <button className="button button-dark" type="button" disabled={!certificateFiles[kind] || busyCertificate === kind} onClick={() => void submitCertificate(kind)}>{busyCertificate === kind ? "Submitting for verification…" : "Submit for verification"}</button></>}
           {certificate?.status === "pending" && <p className="certificate-status-note">Received by the admin. Submission is locked while verification is pending.</p>}
           {certificate?.status === "approved" && <p className="certificate-status-note">Verified. Your account is enabled to list minerals.</p>}
-        </article>;
+        </details>;
       })}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p>{item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
