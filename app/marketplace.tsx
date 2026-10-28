@@ -2036,7 +2036,7 @@ export default function Marketplace() {
         });
         setNotice(paid
           ? `Payment confirmed for ${subscription.account?.username ?? "user"} (${subscription.months} month${subscription.months === 1 ? "" : "s"}); the subscription is active now or scheduled after their current term.`
-          : `Subscription request from ${subscription.account?.username ?? "user"} was rejected.`);
+          : `Subscription request from ${subscription.account?.username ?? "user"} was rejected. Reason: ${reviewNote}`);
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not update subscription payment.");
       }
@@ -3285,10 +3285,10 @@ export default function Marketplace() {
             <span>Your subscription period starts after the admin confirms the payment.</span>
           </div>}
           {!activeSubscription && !pendingUserSubscription && previousSubscription && <div className={`user-subscription-status is-${previousSubscription.status}`}>
-            <strong>{previousSubscription.status === "expired" ? "Your previous subscription has expired" : "A previous subscription request was rejected"}</strong>
-            {previousSubscription.expires_at && <span>It expired {new Date(previousSubscription.expires_at).toLocaleString()}.</span>}
+            <strong>{previousSubscription.status === "expired" ? "Your subscription has expired" : "Subscription request rejected — you are not subscribed"}</strong>
+            {previousSubscription.status === "expired" && previousSubscription.expires_at && <span>It expired {new Date(previousSubscription.expires_at).toLocaleString()}.</span>}
             {previousSubscription.status === "rejected" && previousSubscription.review_note && <span>Admin’s reason: {previousSubscription.review_note}</span>}
-            {previousSubscription.status === "rejected" && !activeSubscription && <span>You can submit a corrected request with a new payment reference and receipt.</span>}
+            {previousSubscription.status === "rejected" && <span>The rejection ends that payment request. Submit a corrected request with a new payment reference and receipt.</span>}
           </div>}
           <div className="user-subscription-plan-list">
             {userSubscriptionPlans.map((plan) => {

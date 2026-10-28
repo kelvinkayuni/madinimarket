@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       .lte("expires_at", now);
     if (expiryError) throw expiryError;
 
-    const [plansResult, activeResult, scheduledResult, pendingResult, previousResult, settingsResult] = await Promise.all([
+    const [plansResult, activeResult, scheduledResult, pendingResult, rejectedResult, expiredResult, settingsResult] = await Promise.all([
       admin.from("subscription_plans").select("id, months, price_tzs, price_usd")
         .eq("is_active", true).order("months", { ascending: true }),
       admin.from("account_subscriptions")
@@ -48,20 +48,25 @@ export async function GET(request: Request) {
         .order("requested_at", { ascending: false }).limit(1).maybeSingle(),
       admin.from("account_subscriptions")
         .select("id, plan_id, months, currency, amount, status, requested_at, starts_at, expires_at, paid_at, review_note, payment_reference")
-        .eq("website_user_id", accountId).in("status", ["expired", "rejected"])
+        .eq("website_user_id", accountId).eq("status", "rejected")
+        .order("requested_at", { ascending: false }).limit(1).maybeSingle(),
+      admin.from("account_subscriptions")
+        .select("id, plan_id, months, currency, amount, status, requested_at, starts_at, expires_at, paid_at, review_note, payment_reference")
+        .eq("website_user_id", accountId).eq("status", "expired")
         .order("requested_at", { ascending: false }).limit(1).maybeSingle(),
       admin.from("marketplace_settings").select("payment_methods, payment_instructions")
         .eq("id", true).single(),
     ]);
-    if (plansResult.error || activeResult.error || scheduledResult.error || pendingResult.error || previousResult.error || settingsResult.error) {
+    if (plansResult.error || activeResult.error || scheduledResult.error || pendingResult.error || rejectedResult.error || expiredResult.error || settingsResult.error) {
       throw new Error("Could not load subscription details.");
     }
+    const previousSubscription = rejectedResult.data ?? expiredResult.data;
     return NextResponse.json({
       plans: plansResult.data ?? [],
       activeSubscription: activeResult.data,
       scheduledSubscription: scheduledResult.data,
       pendingSubscription: pendingResult.data,
-      previousSubscription: previousResult.data,
+      previousSubscription,
       paymentMethods: settingsResult.data.payment_methods ?? [],
       paymentInstructions: settingsResult.data.payment_instructions ?? "",
     }, { headers: { "Cache-Control": "no-store" } });
