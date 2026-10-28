@@ -33,7 +33,14 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
   const [internalNote, setInternalNote] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
 
-  const headers = admin && adminAccessToken ? { Authorization: `Bearer ${adminAccessToken}` } : undefined;
+  const getFreshAdminHeaders = async (includeJson = false) => {
+    const { data } = await getSupabaseBrowserClient().auth.getSession();
+    return {
+      ...(includeJson ? { "Content-Type": "application/json" } : {}),
+      ...(data.session?.access_token ? { Authorization: "Bearer " + data.session.access_token } : {}),
+    };
+  };
+  const headers = admin && adminAccessToken ? { Authorization: "Bearer " + adminAccessToken } : undefined;
   const userFetch = (url: string, init?: RequestInit) => admin ? fetch(url, { ...init, headers: { ...(headers ?? {}), ...(init?.headers ?? {}) }, cache: "no-store" }) : fetchWithWebsiteSession(url, init);
   const loadThreads = async () => {
     try {
@@ -88,7 +95,8 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
     event.preventDefault(); if (!selectedId || !reply.trim()) return;
     try {
       if (admin) {
-        const response = await fetch("/api/admin/support", { method: "PATCH", headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId, reply, status: "admin_replied" }) });
+        const adminHeaders = await getFreshAdminHeaders(true);
+        const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, reply, status: "admin_replied" }) });
         const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
       } else {
         const form = new FormData(); form.set("message", reply);
@@ -102,7 +110,8 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
     if (!admin || !selectedId || thread?.status !== "resolved") return;
     if (!window.confirm("Permanently delete this resolved support conversation and its attachments? This cannot be undone.")) return;
     try {
-      const response = await fetch("/api/admin/support", { method: "DELETE", headers: { Authorization: `****** `, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId }) });
+      const adminHeaders = await getFreshAdminHeaders(true);
+      const response = await fetch("/api/admin/support", { method: "DELETE", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not delete the support conversation.");
       setSelectedId(null); setThread(null); setMessages([]); await loadThreads(); onNotice("Resolved support conversation deleted.");
@@ -110,13 +119,15 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
   };
   const updateStatus = async (status: string) => {
     if (!admin || !selectedId) return;
-    const response = await fetch("/api/admin/support", { method: "PATCH", headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId, status }) });
+    const adminHeaders = await getFreshAdminHeaders(true);
+    const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, status }) });
     const result = await response.json(); if (!response.ok) { onNotice(result.error ?? "Could not update status."); return; }
     await loadDetail(selectedId); await loadThreads(); onNotice("Support status updated.");
   };
   const saveNote = async () => {
     if (!admin || !selectedId) return;
-    const response = await fetch("/api/admin/support", { method: "PATCH", headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ threadId: selectedId, internalNote }) });
+    const adminHeaders = await getFreshAdminHeaders(true);
+    const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, internalNote }) });
     const result = await response.json(); if (!response.ok) { onNotice(result.error ?? "Could not save the internal note."); return; }
     onNotice("Internal note saved.");
   };
@@ -174,3 +185,4 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
     </section>
   </div>;
 }
+
