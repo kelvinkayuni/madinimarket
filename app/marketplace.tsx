@@ -3252,11 +3252,12 @@ export default function Marketplace() {
             {pendingUserSubscription.payment_reference && <span>Payment reference: {pendingUserSubscription.payment_reference}</span>}
             <span>Your subscription period starts after payment is confirmed. If renewing early, your current subscription remains active until its expiry.</span>
           </div>}
-          {!activeSubscription && !pendingUserSubscription && previousSubscription && <div className={`user-subscription-status is-${previousSubscription.status}`}>
-            <strong>{previousSubscription.status === "expired" ? "Your previous subscription has expired" : "Your previous subscription request was rejected"}</strong>
+          {!pendingUserSubscription && previousSubscription && (previousSubscription.status === "rejected" || !activeSubscription) && <div className={`user-subscription-status is-${previousSubscription.status}`}>
+            <strong>{previousSubscription.status === "expired" ? "Your previous subscription has expired" : "A previous subscription request was rejected"}</strong>
             {previousSubscription.expires_at && <span>It expired {new Date(previousSubscription.expires_at).toLocaleString()}.</span>}
             {previousSubscription.status === "rejected" && previousSubscription.review_note && <span>Admin’s reason: {previousSubscription.review_note}</span>}
-            {previousSubscription.status === "rejected" && <span>You can submit a corrected request with a new payment reference and receipt.</span>}
+            {previousSubscription.status === "rejected" && activeSubscription && <span>Your current subscription remains active until {activeSubscription.expires_at ? new Date(activeSubscription.expires_at).toLocaleString() : "its expiry"}. The rejection applies only to the earlier request; you can submit a corrected same-plan renewal request.</span>}
+            {previousSubscription.status === "rejected" && !activeSubscription && <span>You can submit a corrected request with a new payment reference and receipt.</span>}
           </div>}
           <div className="user-subscription-plan-list">
             {userSubscriptionPlans.map((plan) => {
