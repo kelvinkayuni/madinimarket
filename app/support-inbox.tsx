@@ -26,6 +26,7 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [internalNote, setInternalNote] = useState("");
+  const [submittingRequest, setSubmittingRequest] = useState(false);
 
   const headers = admin && adminAccessToken ? { Authorization: `Bearer ${adminAccessToken}` } : undefined;
   const userFetch = (url: string, init?: RequestInit) => admin ? fetch(url, { ...init, headers: { ...(headers ?? {}), ...(init?.headers ?? {}) }, cache: "no-store" }) : fetchWithWebsiteSession(url, init);
@@ -58,13 +59,25 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
 
   const submitTicket = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    if (submittingRequest) return;
+    if (!window.confirm("Are you sure you want to submit this support request?")) return;
+
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setSubmittingRequest(true);
     try {
       const response = await fetchWithWebsiteSession("/api/support", { method: "POST", body: form });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not submit support request.");
-      event.currentTarget.reset(); setCreating(false); await loadThreads(); if (result.thread?.id) setSelectedId(result.thread.id); onNotice(`Support request ${result.thread.ticket_number} submitted.`);
+      formElement.reset();
+      setCreating(false);
+      await loadThreads();
+      if (result.thread?.id) setSelectedId(result.thread.id);
+      onNotice(result.thread?.ticket_number
+        ? `Support request ${result.thread.ticket_number} submitted.`
+        : "Support request submitted.");
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not submit support request."); }
+    finally { setSubmittingRequest(false); }
   };
   const submitReply = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!selectedId || !reply.trim()) return;
@@ -101,7 +114,7 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
       {loading ? <p className="admin-empty">Loading…</p> : visibleThreads.length ? visibleThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(admin ? item.unread_by_admin : item.unread_by_user) && <i>Unread</i>}</button>) : <p className="admin-empty">No support conversations found.</p>}
     </aside>
     <section className="support-conversation">
-      {creating && !admin ? <form className="support-form form-stack" onSubmit={submitTicket}><div className="dialog-kicker">CONTACT ADMIN</div><h2>Create a support request</h2><label className="field-label">Category<select className="text-input" name="category" required><option value="">Choose a category</option>{["Account","Subscription","Payment","Product listing","Order","Other"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="field-label">Subject<input className="text-input" name="subject" minLength={3} maxLength={160} required /></label><label className="field-label">Message<textarea className="text-input" name="message" rows={6} maxLength={5000} required /></label><label className="field-label">Attachments (optional)<input className="text-input" name="attachments" type="file" multiple accept="application/pdf,image/jpeg,image/png" /></label><p className="user-subscription-receipt-help">PDF, JPEG, or PNG. Maximum 4 MB per file.</p><div className="support-actions"><button className="button button-dark" type="submit">Submit request</button><button className="button button-outline" type="button" onClick={() => setCreating(false)}>Cancel</button></div></form>
+      {creating && !admin ? <form className="support-form form-stack" onSubmit={submitTicket}><div className="dialog-kicker">CONTACT ADMIN</div><h2>Create a support request</h2><label className="field-label">Category<select className="text-input" name="category" required><option value="">Choose a category</option>{["Account","Subscription","Payment","Product listing","Order","Other"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="field-label">Subject<input className="text-input" name="subject" minLength={3} maxLength={160} required /></label><label className="field-label">Message<textarea className="text-input" name="message" rows={6} maxLength={5000} required /></label><label className="field-label">Attachments (optional)<input className="text-input" name="attachments" type="file" multiple accept="application/pdf,image/jpeg,image/png" /></label><p className="user-subscription-receipt-help">PDF, JPEG, or PNG. Maximum 4 MB per file.</p><div className="support-actions"><button className="button button-dark" type="submit" disabled={submittingRequest}>{submittingRequest ? "Submitting…" : "Submit request"}</button><button className="button button-outline" type="button" onClick={() => setCreating(false)} disabled={submittingRequest}>Cancel</button></div></form>
       : selectedId && thread ? <>
         <div className="support-detail-heading"><div><span>{thread.ticket_number} · {thread.category}</span><h2>{thread.subject}</h2>{admin && thread.website_accounts && <small>{thread.website_accounts.display_name} · {thread.website_accounts.username} · {thread.website_accounts.email}</small>}</div><span className={`support-status status-${thread.status}`}>{statusLabels[thread.status] ?? thread.status}</span></div>
         <div className="support-message-list">{messages.map((message) => <article className={`support-message ${message.sender_type}`} key={message.id}><span>{message.sender_type === "admin" ? "Administrator" : "You"}</span><p>{message.message}</p>{message.support_attachments?.map((attachment) => attachment.signed_url && <a key={attachment.id} href={attachment.signed_url} target="_blank" rel="noreferrer">{attachment.file_name}</a>)}<small>{new Date(message.created_at).toLocaleString()}</small></article>)}</div>
