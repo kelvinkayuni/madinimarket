@@ -43,6 +43,12 @@ export async function GET(request: Request) {
     const accountIds = accounts.map((account) => account.id);
     const now = new Date().toISOString();
     const service = createSupabaseAdminClient();
+    const { error: expiryError } = await service.from("account_subscriptions")
+      .update({ status: "expired" })
+      .eq("status", "active")
+      .lte("expires_at", now);
+    if (expiryError) throw expiryError;
+
     const { data: activeSubscriptions, error: subscriptionsError } = accountIds.length
       ? await service.from("account_subscriptions")
         .select("website_user_id, months, starts_at, expires_at")

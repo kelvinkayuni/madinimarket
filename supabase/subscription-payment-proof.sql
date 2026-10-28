@@ -32,7 +32,6 @@ set search_path = ''
 as $request_subscription$
 declare
   selected_plan public.subscription_plans%rowtype;
-  current_subscription public.account_subscriptions%rowtype;
   new_subscription_id uuid;
   selected_amount numeric(14, 2);
 begin
@@ -87,23 +86,10 @@ begin
     select 1 from public.account_subscriptions
     where website_user_id = p_website_user_id
       and status = 'active'
-      and starts_at > now()
       and expires_at > now()
   ) then
-    raise exception 'A subscription is already scheduled' using errcode = '22023';
-  end if;
-
-  select * into current_subscription
-  from public.account_subscriptions
-  where website_user_id = p_website_user_id
-    and status = 'active'
-    and starts_at <= now()
-    and expires_at > now()
-  order by expires_at desc
-  limit 1;
-
-  if found and current_subscription.plan_id is distinct from selected_plan.id then
-    raise exception 'While your subscription is active, you can only renew your current plan' using errcode = '22023';
+    raise exception 'Your subscription is active or already scheduled. You can choose a new plan after it expires.'
+      using errcode = '22023';
   end if;
 
   insert into public.account_subscriptions (
@@ -194,7 +180,12 @@ begin
   limit 1
   for update;
 
-  subscription_start := greatest(now(), coalesce(current_subscription.expires_at, now()));
+  if found then
+    raise exception 'The account already has an active or scheduled subscription. This request cannot be approved until it expires.'
+      using errcode = '22023';
+  end if;
+
+  subscription_start := now();
 
   update public.account_subscriptions
   set status = 'active',

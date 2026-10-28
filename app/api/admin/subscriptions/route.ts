@@ -119,6 +119,7 @@ export async function PATCH(request: Request) {
     });
     if (error?.code === "P0002") return NextResponse.json({ error: "That payment request is no longer pending." }, { status: 404 });
     if (error?.code === "42501") return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    if (error?.code === "22023") return NextResponse.json({ error: error.message }, { status: 409 });
     if (error) throw error;
     return NextResponse.json({ subscription: data }, { headers: { "Cache-Control": "no-store" } });
   } catch {

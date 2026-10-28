@@ -1929,6 +1929,10 @@ export default function Marketplace() {
       setScheduledSubscription(result.scheduledSubscription as AccountSubscription | null);
       setPendingUserSubscription(result.pendingSubscription as AccountSubscription | null);
       setPreviousSubscription(result.previousSubscription as AccountSubscription | null);
+      if (result.activeSubscription || result.scheduledSubscription || result.pendingSubscription) {
+        setSelectedSubscriptionRequest(null);
+        setSubscriptionReceiptName("");
+      }
       setUserSubscriptionError("");
       setUserSubscriptionLoaded(true);
     } catch (error) {
@@ -1955,6 +1959,34 @@ export default function Marketplace() {
       removeResumeListener();
     };
   }, [role, dialog]);
+  useEffect(() => {
+    if (!isSupabaseConfigured || role !== "admin" || activeAdminPanel !== "accounts") return;
+    let active = true;
+    let isLoading = false;
+    const refreshAccountSubscriptions = async () => {
+      if (!active || isLoading || document.visibilityState !== "visible") return;
+      isLoading = true;
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const accounts = await loadAdminAccounts(session.access_token);
+        if (active) setWebsiteAccounts(accounts);
+      } catch (error) {
+        if (active) setNotice(error instanceof Error ? error.message : "Could not refresh account subscription statuses.");
+      } finally {
+        isLoading = false;
+      }
+    };
+    void refreshAccountSubscriptions();
+    const interval = window.setInterval(() => void refreshAccountSubscriptions(), 60_000);
+    const removeResumeListener = onBrowserResume(refreshAccountSubscriptions);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      removeResumeListener();
+    };
+  }, [role, activeAdminPanel]);
   const saveSubscriptionPlan = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await withProgress("subscription-plan-save", async () => {
@@ -3250,13 +3282,12 @@ export default function Marketplace() {
             <strong>Payment awaiting admin confirmation</strong>
             <span>{pendingUserSubscription.months} month{pendingUserSubscription.months === 1 ? "" : "s"} · {money(Number(pendingUserSubscription.amount).toFixed(pendingUserSubscription.currency === "USD" ? 2 : 0), pendingUserSubscription.currency)} · Requested {new Date(pendingUserSubscription.requested_at).toLocaleString()}</span>
             {pendingUserSubscription.payment_reference && <span>Payment reference: {pendingUserSubscription.payment_reference}</span>}
-            <span>Your subscription period starts after payment is confirmed. If renewing early, your current subscription remains active until its expiry.</span>
+            <span>Your subscription period starts after the admin confirms the payment.</span>
           </div>}
-          {!pendingUserSubscription && previousSubscription && (previousSubscription.status === "rejected" || !activeSubscription) && <div className={`user-subscription-status is-${previousSubscription.status}`}>
+          {!activeSubscription && !pendingUserSubscription && previousSubscription && <div className={`user-subscription-status is-${previousSubscription.status}`}>
             <strong>{previousSubscription.status === "expired" ? "Your previous subscription has expired" : "A previous subscription request was rejected"}</strong>
             {previousSubscription.expires_at && <span>It expired {new Date(previousSubscription.expires_at).toLocaleString()}.</span>}
             {previousSubscription.status === "rejected" && previousSubscription.review_note && <span>Admin’s reason: {previousSubscription.review_note}</span>}
-            {previousSubscription.status === "rejected" && activeSubscription && <span>Your current subscription remains active until {activeSubscription.expires_at ? new Date(activeSubscription.expires_at).toLocaleString() : "its expiry"}. The rejection applies only to the earlier request; you can submit a corrected same-plan renewal request.</span>}
             {previousSubscription.status === "rejected" && !activeSubscription && <span>You can submit a corrected request with a new payment reference and receipt.</span>}
           </div>}
           <div className="user-subscription-plan-list">
@@ -3265,8 +3296,7 @@ export default function Marketplace() {
               const currentActive = Boolean(activeSubscription?.expires_at && Date.parse(activeSubscription.expires_at) > now);
               const hasValidScheduled = Boolean(scheduledSubscription?.expires_at && Date.parse(scheduledSubscription.expires_at) > now);
               const isCurrentPlan = (currentActive && activeSubscription?.plan_id === plan.id) || (hasValidScheduled && scheduledSubscription?.plan_id === plan.id);
-              const canRenewCurrentPlan = currentActive && activeSubscription?.plan_id === plan.id;
-              const planLocked = Boolean(pendingUserSubscription) || hasValidScheduled || (currentActive && !canRenewCurrentPlan);
+              const planLocked = Boolean(pendingUserSubscription) || hasValidScheduled || currentActive;
               const planStatus = currentActive && activeSubscription?.plan_id === plan.id
                 ? "Current plan"
                 : hasValidScheduled && scheduledSubscription?.plan_id === plan.id
@@ -3276,10 +3306,10 @@ export default function Marketplace() {
                 <div className="user-subscription-plan-heading"><strong>{plan.months} month{plan.months === 1 ? "" : "s"}</strong>{planStatus && <span>{planStatus}</span>}</div>
                 <div className="user-subscription-prices"><span>{money(Number(plan.price_tzs).toFixed(0), "TZS")}</span><span>${Number(plan.price_usd).toFixed(2)} USD</span></div>
                 <div className="user-subscription-actions">
-                  <button className="button button-dark" type="button" disabled={planLocked || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => { setSelectedSubscriptionRequest({ planId: plan.id, currency: "TZS" }); setSubscriptionReceiptName(""); }}>{canRenewCurrentPlan ? "Renew same plan · TSh" : planStatus ?? "Choose TSh"}</button>
-                  <button className="button button-outline" type="button" disabled={planLocked || !usdEnabled || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => { setSelectedSubscriptionRequest({ planId: plan.id, currency: "USD" }); setSubscriptionReceiptName(""); }}>{planLocked ? planStatus ?? "Unavailable" : !usdEnabled ? "USD unavailable" : canRenewCurrentPlan ? "Renew same plan · USD" : "Choose USD"}</button>
+                  <button className="button button-dark" type="button" disabled={planLocked || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => { setSelectedSubscriptionRequest({ planId: plan.id, currency: "TZS" }); setSubscriptionReceiptName(""); }}>{currentActive ? "Already subscribed" : hasValidScheduled ? "Already scheduled" : pendingUserSubscription ? "Awaiting confirmation" : "Choose TSh"}</button>
+                  <button className="button button-outline" type="button" disabled={planLocked || !usdEnabled || busyActions.has(`subscription-request-${plan.id}`)} onClick={() => { setSelectedSubscriptionRequest({ planId: plan.id, currency: "USD" }); setSubscriptionReceiptName(""); }}>{currentActive ? "Already subscribed" : hasValidScheduled ? "Already scheduled" : pendingUserSubscription ? "Awaiting confirmation" : !usdEnabled ? "USD unavailable" : "Choose USD"}</button>
                 </div>
-                {selectedSubscriptionRequest?.planId === plan.id && <form className="user-subscription-request-form" onSubmit={(event) => void requestSubscription(event, plan)}>
+                {selectedSubscriptionRequest?.planId === plan.id && !planLocked && <form className="user-subscription-request-form" onSubmit={(event) => void requestSubscription(event, plan)}>
                   <input type="hidden" name="planId" value={plan.id} />
                   <input type="hidden" name="currency" value={selectedSubscriptionRequest.currency} />
                   <p>After paying <strong>{money(Number(selectedSubscriptionRequest.currency === "USD" ? plan.price_usd : plan.price_tzs).toFixed(selectedSubscriptionRequest.currency === "USD" ? 2 : 0), selectedSubscriptionRequest.currency)}</strong>, enter the transaction reference and attach the receipt.</p>
