@@ -99,6 +99,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-market-hours-status > div > strong.is-closed { color: #925144; }
 .admin-market-hours-status > small { color: #778075; font-size: 10px; line-height: 1.5; }
 .admin-market-hours-editor { max-width: 720px; }
+.admin-market-manual-control { max-width: 720px; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0 18px; padding: 14px 16px; border: 1px solid #e1e5dd; background: #fbfcf9; }
+.admin-market-manual-control > div { display: grid; gap: 4px; }
+.admin-market-manual-control strong { color: #354b39; font-size: 11px; }
+.admin-market-manual-control span { color: #778075; font-size: 10px; line-height: 1.5; }
 .admin-market-days { min-width: 0; margin: 0; padding: 0; border: 0; }
 .admin-market-days legend { margin-bottom: 10px; color: #354b39; font-size: 12px; font-weight: 650; }
 .admin-market-days > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }

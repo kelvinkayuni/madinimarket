@@ -9,25 +9,27 @@ function scheduleFromRow(row: {
   market_open_time: string;
   market_close_time: string;
   market_hours_updated_at: string | null;
+  market_manually_closed?: boolean | null;
 }): MarketHoursSchedule {
   return {
     openDays: row.market_open_days,
     openTime: row.market_open_time.slice(0, 5),
     closeTime: row.market_close_time.slice(0, 5),
     updatedAt: row.market_hours_updated_at,
+    manuallyClosed: row.market_manually_closed === true,
   };
 }
 
 function responseForSchedule(schedule: MarketHoursSchedule) {
   const now = new Date();
-  const isOpen = isMarketOpenAt(schedule, now);
+  const isOpen = !schedule.manuallyClosed && isMarketOpenAt(schedule, now);
   return {
     schedule,
     timeZone: MARKET_TIME_ZONE,
     isOpen,
     currentHours: isOpen ? getCurrentMarketHoursLabel(schedule, now) : null,
-    nextOpenAt: getNextMarketOpening(schedule, now),
-    nextTransitionAt: getNextMarketTransition(schedule, now),
+    nextOpenAt: schedule.manuallyClosed ? null : getNextMarketOpening(schedule, now),
+    nextTransitionAt: schedule.manuallyClosed ? null : getNextMarketTransition(schedule, now),
   };
 }
 
@@ -35,7 +37,7 @@ export async function GET() {
   try {
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin.from("marketplace_settings")
-      .select("market_open_days, market_open_time, market_close_time, market_hours_updated_at")
+      .select("market_open_days, market_open_time, market_close_time, market_hours_updated_at, market_manually_closed")
       .eq("id", true)
       .single();
     if (error) throw error;
@@ -67,6 +69,25 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Enter a valid weekly market schedule." }, { status: 400 });
     }
     const values = body as Record<string, unknown>;
+    const service = createSupabaseAdminClient();
+
+    if (typeof values.manuallyClosed === "boolean") {
+      const updatedAt = new Date().toISOString();
+      const { data, error } = await service.from("marketplace_settings")
+        .update({
+          market_manually_closed: values.manuallyClosed,
+          market_hours_updated_at: updatedAt,
+          market_hours_updated_by: user.id,
+        })
+        .eq("id", true)
+        .select("market_open_days, market_open_time, market_close_time, market_hours_updated_at, market_manually_closed")
+        .single();
+      if (error) throw error;
+      return NextResponse.json(responseForSchedule(scheduleFromRow(data)), {
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+
     const openDays = values.openDays;
     const openTime = values.openTime;
     const closeTime = values.closeTime;
@@ -78,7 +99,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Choose at least one valid day and valid 24-hour opening and closing times." }, { status: 400 });
     }
 
-    const service = createSupabaseAdminClient();
     const { data, error } = await service.from("marketplace_settings")
       .update({
         market_open_days: [...openDays].sort((a, b) => a - b),
@@ -88,7 +108,7 @@ export async function PATCH(request: Request) {
         market_hours_updated_by: user.id,
       })
       .eq("id", true)
-      .select("market_open_days, market_open_time, market_close_time, market_hours_updated_at")
+      .select("market_open_days, market_open_time, market_close_time, market_hours_updated_at, market_manually_closed")
       .single();
     if (error) throw error;
     return NextResponse.json(responseForSchedule(scheduleFromRow(data)), {

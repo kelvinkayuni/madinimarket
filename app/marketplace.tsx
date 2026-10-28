@@ -77,6 +77,7 @@ const defaultMarketHours: MarketHoursSchedule = {
   openTime: "00:00",
   closeTime: "00:00",
   updatedAt: null,
+  manuallyClosed: false,
 };
 const marketWeekdays = [
   { day: 1, label: "Monday" },
@@ -1075,6 +1076,7 @@ export default function Marketplace() {
         if (!Array.isArray(schedule?.openDays) || !schedule.openDays.length ||
           schedule.openDays.some((day) => !Number.isInteger(day) || day < 0 || day > 6) ||
           typeof schedule.openTime !== "string" || typeof schedule.closeTime !== "string" ||
+          typeof schedule.manuallyClosed !== "boolean" ||
           typeof result.isOpen !== "boolean" ||
           !(result.currentHours === null || typeof result.currentHours === "string") ||
           !(result.nextOpenAt === null || typeof result.nextOpenAt === "string") ||
@@ -1788,6 +1790,7 @@ export default function Marketplace() {
         const savedSchedule = result.schedule as MarketHoursSchedule;
         if (!Array.isArray(savedSchedule?.openDays) || !savedSchedule.openDays.length ||
           typeof savedSchedule.openTime !== "string" || typeof savedSchedule.closeTime !== "string" ||
+          typeof savedSchedule.manuallyClosed !== "boolean" ||
           typeof result.isOpen !== "boolean" ||
           !(result.currentHours === null || typeof result.currentHours === "string") ||
           !(result.nextOpenAt === null || typeof result.nextOpenAt === "string")) {
@@ -1804,6 +1807,41 @@ export default function Marketplace() {
         setNotice("Weekly market hours updated.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not update market hours.");
+      }
+    });
+  };
+  const updateManualMarketClosure = async (manuallyClosed: boolean) => {
+    if (manuallyClosed && !window.confirm("Close the market now? It will remain closed regardless of the saved weekly schedule.")) return;
+    await withProgress("market-hours-setting", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/market-hours", {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ manuallyClosed }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not update the manual market closure.");
+        const savedSchedule = result.schedule as MarketHoursSchedule;
+        if (!savedSchedule || typeof savedSchedule.manuallyClosed !== "boolean" || typeof result.isOpen !== "boolean") {
+          throw new Error("The manual market closure response is invalid.");
+        }
+        setMarketHours(savedSchedule);
+        setMarketHoursDraft(savedSchedule);
+        setMarketIsOpen(result.isOpen);
+        setCurrentMarketHours(result.currentHours);
+        setNextMarketOpenAt(result.nextOpenAt);
+        setMarketHoursLoaded(true);
+        setMarketHoursError("");
+        marketHoursDraftDirty.current = false;
+        setNotice(manuallyClosed ? "Market closed manually." : "Manual closure removed; the saved schedule is active again.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update the manual market closure.");
       }
     });
   };
@@ -2933,9 +2971,15 @@ export default function Marketplace() {
             <div><span>MARKET STATUS</span><strong className={marketHoursLoaded && marketIsOpen ? "is-open" : "is-closed"}>
               {!marketHoursLoaded ? "Checking schedule…" : marketHoursError ? "Unavailable" : marketIsOpen ? "Open" : "Closed"}
             </strong></div>
-            <small>{marketHoursLoaded && !marketHoursError && !marketIsOpen && nextMarketOpenAt
-              ? `Opens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time`
-              : marketHoursError || "Schedule time zone: Africa/Dar_es_Salaam"}</small>
+            <small>{marketHoursLoaded && !marketHoursError && marketHours.manuallyClosed
+              ? "Closed manually; turning this off restores the saved schedule"
+              : marketHoursLoaded && !marketHoursError && !marketIsOpen && nextMarketOpenAt
+                ? `Opens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time`
+                : marketHoursError || "Schedule time zone: Africa/Dar_es_Salaam"}</small>
+          </div>
+          <div className="admin-market-manual-control">
+            <div><strong>Close market manually</strong><span>{marketHours.manuallyClosed ? "The market is closed now, regardless of saved hours." : "When off, the market follows the saved weekly schedule."}</span></div>
+            <button className={`admin-currency-switch${marketHours.manuallyClosed ? " is-on" : ""}`} type="button" role="switch" aria-checked={marketHours.manuallyClosed} aria-label="Close market manually" disabled={!marketHoursLoaded || busyActions.has("market-hours-setting")} onClick={() => void updateManualMarketClosure(!marketHours.manuallyClosed)}><span /></button>
           </div>
           <div className="admin-listing-fee-editor admin-market-hours-editor">
             <fieldset className="admin-market-days">

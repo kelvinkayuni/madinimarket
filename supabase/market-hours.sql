@@ -2,6 +2,7 @@ alter table public.marketplace_settings
   add column if not exists market_open_days smallint[] not null default array[0, 1, 2, 3, 4, 5, 6]::smallint[],
   add column if not exists market_open_time time without time zone not null default time '00:00',
   add column if not exists market_close_time time without time zone not null default time '00:00',
+  add column if not exists market_manually_closed boolean not null default false,
   add column if not exists market_hours_updated_at timestamptz,
   add column if not exists market_hours_updated_by uuid references public.profiles (id) on delete set null;
 
@@ -31,6 +32,10 @@ begin
     where settings.id = true;
 
   if not found then
+    return false;
+  end if;
+
+  if schedule.market_manually_closed then
     return false;
   end if;
 
@@ -82,7 +87,11 @@ using (
   and (select private.is_website_account_active(website_user_id))
 );
 
-create or replace view public.marketplace_listings
+drop view if exists public.marketplace_listings cascade;
+drop view if exists public.marketplace_buy_requests cascade;
+drop view if exists public.market_listing_feed cascade;
+
+create view public.marketplace_listings
 with (security_barrier = true)
 as
 select listing.id, listing.mineral_name, listing.weight, listing.unit, listing.price, listing.currency,
@@ -100,19 +109,20 @@ where private.is_market_open()
   and listing.is_active = true
   and (listing.website_user_id is null or private.is_website_account_active(listing.website_user_id));
 
-create or replace view public.marketplace_buy_requests
+create view public.marketplace_buy_requests
 with (security_barrier = true)
 as
 select request.id, request.mineral_name, request.weight, request.unit, request.color,
   request.shape, request.quality, request.offer, request.currency, request.location,
-  request.status, request.created_at, request.is_active
+  request.status, request.created_at, request.is_active,
+  (request.website_user_id is not null) as offer_enabled
 from public.buy_requests as request
 where private.is_market_open()
   and request.status = 'approved'
   and request.is_active = true
   and (request.website_user_id is null or private.is_website_account_active(request.website_user_id));
 
-create or replace view public.market_listing_feed
+create view public.market_listing_feed
 with (security_barrier = true)
 as
 select listing.*,

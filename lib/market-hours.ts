@@ -5,6 +5,7 @@ export type MarketHoursSchedule = {
   openTime: string;
   closeTime: string;
   updatedAt: string | null;
+  manuallyClosed: boolean;
 };
 
 const weekdayNumbers: Record<string, number> = {
