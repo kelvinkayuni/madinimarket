@@ -145,11 +145,14 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
             {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
             {item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
           </div>
-          {["paid", "shipped"].includes(item.status) && <button className="button button-outline" type="button" disabled={busy === `delivered-${item.id}`} onClick={() => {
-            if (window.confirm("Confirm that the carrier's tracking shows this parcel as delivered?")) {
-              void act(`delivered-${item.id}`, { action: "mark_delivered", itemId: item.id });
-            }
-          }}>Confirm carrier delivery</button>}
+          {["paid", "shipped"].includes(item.status) && <div className="commerce-item-actions">
+            <button className="button button-outline" type="button" disabled={busy === `delivered-${item.id}` || !item.shipping_carrier?.trim() || !item.tracking_number?.trim()} onClick={() => {
+              if (window.confirm("Confirm that the carrier's tracking shows this parcel as delivered?")) {
+                void act(`delivered-${item.id}`, { action: "mark_delivered", itemId: item.id });
+              }
+            }}>Confirm carrier delivery</button>
+            {(!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) && <small className="commerce-warning">The seller must enter both carrier and tracking number before delivery can be confirmed.</small>}
+          </div>}
           {item.status === "disputed" && <div className="commerce-item-actions">
             <button className="button button-dark" type="button" disabled={busy === `seller-resolution-${item.id}`} onClick={() => void act(`seller-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "seller" })}>Resolve for seller (payout due)</button>
             <button className="button button-outline" type="button" disabled={busy === `buyer-resolution-${item.id}`} onClick={() => void act(`buyer-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "buyer" })}>Resolve for buyer (refund due)</button>

@@ -91,14 +91,25 @@ export async function PATCH(request: Request) {
     }
 
     if (action === "mark_delivered") {
+      const { data: item, error: itemError } = await service.from("marketplace_order_items")
+        .select("id, status, shipping_carrier, tracking_number")
+        .eq("id", itemId)
+        .in("status", ["paid", "shipped"])
+        .maybeSingle();
+      if (itemError) throw itemError;
+      if (!item) return NextResponse.json({ error: "This item is no longer awaiting carrier delivery confirmation." }, { status: 409 });
+      if (!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) {
+        return NextResponse.json({ error: "The seller must provide both a carrier and tracking number before delivery can be confirmed." }, { status: 409 });
+      }
+
       const { data, error } = await service.from("marketplace_order_items").update({
         status: "delivered",
         delivered_at: new Date().toISOString(),
       }).eq("id", itemId).in("status", ["paid", "shipped"])
-        .not("shipping_carrier", "is", null).not("tracking_number", "is", null)
+        .eq("shipping_carrier", item.shipping_carrier).eq("tracking_number", item.tracking_number)
         .select("id, order_id").maybeSingle();
       if (error) throw error;
-      if (!data) return NextResponse.json({ error: "A paid item must have seller-provided carrier and tracking details before delivery can be confirmed." }, { status: 409 });
+      if (!data) return NextResponse.json({ error: "The order changed while confirming delivery. Refresh the orders panel and try again." }, { status: 409 });
       return NextResponse.json({ ok: true });
     }
 
