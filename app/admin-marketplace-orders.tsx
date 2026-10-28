@@ -21,6 +21,7 @@ type Item = {
   delivered_at: string | null;
   dispute_reason: string | null;
   payout_reference: string | null;
+  payout_receipt_url: string | null;
   refund_reference: string | null;
 };
 type Order = {
@@ -58,6 +59,7 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [payoutReferences, setPayoutReferences] = useState<Record<string, string>>({});
+  const [payoutReceipts, setPayoutReceipts] = useState<Record<string, File | undefined>>({});
   const [refundReferences, setRefundReferences] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
@@ -120,6 +122,41 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
     }
   };
 
+  const recordPayout = async (itemId: string) => {
+    const reference = payoutReferences[itemId]?.trim() ?? "";
+    const receipt = payoutReceipts[itemId];
+    if (reference.length < 3 || !receipt) {
+      onNotice("Enter the payout reference and attach its receipt.");
+      return;
+    }
+
+    setBusy(`payout-${itemId}`);
+    try {
+      const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+      if (error) throw error;
+      if (!session) throw new Error("Admin session expired.");
+      const form = new FormData();
+      form.set("itemId", itemId);
+      form.set("reference", reference);
+      form.set("receipt", receipt);
+      const response = await fetch("/api/admin/marketplace-orders", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not record the seller payout.");
+      await load();
+      setPayoutReferences((current) => ({ ...current, [itemId]: "" }));
+      setPayoutReceipts((current) => ({ ...current, [itemId]: undefined }));
+      onNotice("Seller payout and receipt recorded.");
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not record the seller payout.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   if (loading) return <section className="admin-overview"><p>Loading marketplace orders…</p></section>;
   return <section className="admin-overview admin-commerce-orders">
     <div className="admin-page-heading">
@@ -147,6 +184,7 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
             {item.shipping_carrier && <small>Tracking: {item.shipping_carrier} · {item.tracking_number}</small>}
             {item.dispute_reason && <p className="commerce-warning">Buyer dispute: {item.dispute_reason}</p>}
             {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
+            {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
             {item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
           </div>
           {["paid", "shipped"].includes(item.status) && <div className="commerce-item-actions">
@@ -163,19 +201,15 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
           </div>}
           {item.status === "payout_due" && <form className="admin-reference-form" onSubmit={(event) => {
             event.preventDefault();
-            const reference = payoutReferences[item.id]?.trim() ?? "";
-            if (reference.length < 3) {
-              onNotice("Enter the completed seller payout transaction reference.");
-              return;
-            }
-            void act(`payout-${item.id}`, { action: "mark_payout_paid", itemId: item.id, reference }).then((success) => {
-              if (success) setPayoutReferences((current) => ({ ...current, [item.id]: "" }));
-            });
+            void recordPayout(item.id);
           }}>
             <label className="field-label">Seller payout transaction reference
               <input className="text-input" required minLength={3} maxLength={120} value={payoutReferences[item.id] ?? ""} onChange={(event) => setPayoutReferences((current) => ({ ...current, [item.id]: event.target.value }))} />
             </label>
-            <button className="button button-dark" type="submit" disabled={busy === `payout-${item.id}` || (payoutReferences[item.id]?.trim().length ?? 0) < 3}>{busy === `payout-${item.id}` ? "Recording…" : "Record seller payout"}</button>
+            <label className="field-label">Payout receipt (PDF, JPEG, or PNG; up to 4 MB)
+              <input className="text-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required onChange={(event) => setPayoutReceipts((current) => ({ ...current, [item.id]: event.target.files?.[0] }))} />
+            </label>
+            <button className="button button-dark" type="submit" disabled={busy === `payout-${item.id}` || (payoutReferences[item.id]?.trim().length ?? 0) < 3 || !payoutReceipts[item.id]}>{busy === `payout-${item.id}` ? "Recording…" : "Record seller payout"}</button>
           </form>}
           {item.status === "refund_due" && <form className="admin-reference-form" onSubmit={(event) => {
             event.preventDefault();

@@ -40,6 +40,7 @@ type OrderItem = {
   disputed_at: string | null;
   dispute_reason: string | null;
   payout_reference: string | null;
+  payout_receipt_url?: string | null;
   order?: {
     id: string;
     control_number: string;
@@ -414,6 +415,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
       <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : statusLabel(item.status)}</small>
       <small>Seller receives {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
+      {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
+      {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
     </div>
     {item.status === "awaiting_seller" && <div className="commerce-item-actions">
       <button className="button button-dark" type="button" disabled={busy === `available-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>Available</button>

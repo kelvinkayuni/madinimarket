@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
@@ -5,8 +7,18 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 type Body = Record<string, unknown>;
 
+const PAYOUT_RECEIPT_BUCKET = "marketplace-seller-payout-receipts";
+const MAX_PAYOUT_RECEIPT_BYTES = 4 * 1024 * 1024;
+
 function text(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+function validReceiptSignature(type: string, bytes: Buffer) {
+  if (type === "application/pdf") return bytes.subarray(0, 5).toString("ascii") === "%PDF-";
+  if (type === "image/jpeg") return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (type === "image/png") return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  return false;
 }
 
 async function readBody(request: Request): Promise<Body | null> {
@@ -39,17 +51,99 @@ export async function GET(request: Request) {
   }
   try {
     const orders = await Promise.all((data ?? []).map(async (order) => {
-      if (!order.payment_proof_path) return order;
-      const { data: proof, error: proofError } = await admin.storage.from("marketplace-payment-proofs")
-        .createSignedUrl(order.payment_proof_path, 10 * 60);
-      if (proofError) throw proofError;
-      return { ...order, payment_proof_url: proof.signedUrl };
+      const paymentProof = order.payment_proof_path
+        ? await admin.storage.from("marketplace-payment-proofs").createSignedUrl(order.payment_proof_path, 10 * 60)
+        : null;
+      if (paymentProof?.error) throw paymentProof.error;
+      const items = await Promise.all((order.items ?? []).map(async (item: Record<string, unknown> & { payout_receipt_path?: string | null }) => {
+        const { payout_receipt_path: receiptPath, ...safeItem } = item;
+        if (!receiptPath) return safeItem;
+        const { data: receipt, error: receiptError } = await admin.storage.from(PAYOUT_RECEIPT_BUCKET)
+          .createSignedUrl(receiptPath, 10 * 60);
+        if (receiptError) throw receiptError;
+        return { ...safeItem, payout_receipt_url: receipt.signedUrl };
+      }));
+      return {
+        ...order,
+        ...(paymentProof ? { payment_proof_url: paymentProof.data.signedUrl } : {}),
+        items,
+      };
     }));
     return NextResponse.json({ orders });
   } catch (proofError) {
-    console.error("Admin could not create signed payment proof links", proofError);
-    return NextResponse.json({ error: "Could not load private payment proof documents." }, { status: 503 });
+    console.error("Admin could not create signed marketplace order document links", proofError);
+    return NextResponse.json({ error: "Could not load private order documents." }, { status: 503 });
   }
+}
+
+export async function POST(request: Request) {
+  const admin = await getAdminClient(request);
+  if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "Submit a payout reference and receipt file." }, { status: 400 });
+  }
+  const itemId = text(form.get("itemId"), 60);
+  const reference = text(form.get("reference"), 120);
+  const file = form.get("receipt");
+  if (!/^[0-9a-f-]{36}$/i.test(itemId) || reference.length < 3 || !(file instanceof File)) {
+    return NextResponse.json({ error: "Enter the payout reference and attach its receipt." }, { status: 400 });
+  }
+  if (file.size < 1 || file.size > MAX_PAYOUT_RECEIPT_BYTES) {
+    return NextResponse.json({ error: "The payout receipt must be a non-empty PDF, JPEG, or PNG up to 4 MB." }, { status: 400 });
+  }
+
+  const extensionByType: Record<string, string> = {
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+  };
+  const extension = extensionByType[file.type];
+  const bytes = Buffer.from(await file.arrayBuffer());
+  if (!extension || !validReceiptSignature(file.type, bytes)) {
+    return NextResponse.json({ error: "The payout receipt must be a valid PDF, JPEG, or PNG file." }, { status: 400 });
+  }
+
+  const service = createSupabaseAdminClient();
+  const { data: item, error: itemError } = await service.from("marketplace_order_items")
+    .select("id, seller_id").eq("id", itemId).eq("status", "payout_due").maybeSingle();
+  if (itemError) {
+    console.error("Could not verify seller payout before receipt upload", itemError);
+    return NextResponse.json({ error: "Could not verify the seller payout." }, { status: 503 });
+  }
+  if (!item || !item.seller_id) {
+    return NextResponse.json({ error: "This seller payout is not due or has no seller account." }, { status: 409 });
+  }
+
+  const receiptPath = `${item.seller_id}/${itemId}/${randomUUID()}.${extension}`;
+  const { error: uploadError } = await service.storage.from(PAYOUT_RECEIPT_BUCKET).upload(receiptPath, bytes, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (uploadError) {
+    console.error("Could not store seller payout receipt", uploadError);
+    return NextResponse.json({ error: "Could not securely upload the payout receipt. Please retry." }, { status: 503 });
+  }
+
+  const { data: updated, error: updateError } = await service.from("marketplace_order_items").update({
+    status: "payout_paid",
+    payout_paid_at: new Date().toISOString(),
+    payout_reference: reference,
+    payout_receipt_path: receiptPath,
+  }).eq("id", itemId).eq("status", "payout_due").select("id").maybeSingle();
+  if (updateError || !updated) {
+    const { error: cleanupError } = await service.storage.from(PAYOUT_RECEIPT_BUCKET).remove([receiptPath]);
+    if (cleanupError) console.error("Could not remove unassociated seller payout receipt", cleanupError);
+    if (updateError) {
+      console.error("Could not record seller payout and receipt", updateError);
+      return NextResponse.json({ error: "Could not record the seller payout. Please retry." }, { status: 503 });
+    }
+    return NextResponse.json({ error: "This seller payout is no longer due." }, { status: 409 });
+  }
+  return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(request: Request) {
@@ -123,19 +217,6 @@ export async function PATCH(request: Request) {
       }).eq("id", itemId).eq("status", "disputed").select("id").maybeSingle();
       if (error) throw error;
       if (!data) return NextResponse.json({ error: "This item does not have an open dispute." }, { status: 409 });
-      return NextResponse.json({ ok: true });
-    }
-
-    if (action === "mark_payout_paid") {
-      const reference = text(body.reference, 120);
-      if (reference.length < 3) return NextResponse.json({ error: "Enter the payout transaction reference." }, { status: 400 });
-      const { data, error } = await service.from("marketplace_order_items").update({
-        status: "payout_paid",
-        payout_paid_at: new Date().toISOString(),
-        payout_reference: reference,
-      }).eq("id", itemId).eq("status", "payout_due").select("id").maybeSingle();
-      if (error) throw error;
-      if (!data) return NextResponse.json({ error: "This seller payout is not yet due." }, { status: 409 });
       return NextResponse.json({ ok: true });
     }
 

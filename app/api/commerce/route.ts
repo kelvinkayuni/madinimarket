@@ -19,6 +19,21 @@ async function readBody(request: Request): Promise<Body | null> {
   }
 }
 
+async function sellerItemWithReceipt<T extends { payout_receipt_path?: string | null }>(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  item: T,
+) {
+  const { payout_receipt_path: receiptPath, ...safeItem } = item;
+  if (!receiptPath) return safeItem;
+  const { data, error } = await admin.storage.from("marketplace-seller-payout-receipts")
+    .createSignedUrl(receiptPath, 10 * 60);
+  if (error) {
+    console.error("Could not create seller payout receipt link", error);
+    throw error;
+  }
+  return { ...safeItem, payout_receipt_url: data.signedUrl };
+}
+
 export async function GET(request: Request) {
   const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in to view your cart and orders." }, { status: 401 });
@@ -47,7 +62,7 @@ export async function GET(request: Request) {
           ...order,
           items: ((order.items ?? []) as Record<string, unknown>[]).map((item) => Object.fromEntries(
             Object.entries(item).filter(([key]) => ![
-              "seller_email", "seller_id", "payment_proof_path",
+              "seller_email", "seller_id", "payment_proof_path", "payout_receipt_path",
               "availability_email_sent_at", "availability_expired_at",
               "seller_availability_timeout_email_sent_at", "dispatch_email_sent_at",
             ].includes(key)),
@@ -65,11 +80,11 @@ export async function GET(request: Request) {
         console.error("Failed to load seller order history", error);
         return NextResponse.json({ error: "Could not load seller order history." }, { status: 503 });
       }
-      const safeItems = (items ?? []).map((item) => {
+      const safeItems = await Promise.all((items ?? []).map(async (item) => {
         const order = Array.isArray(item.order) ? item.order[0] : item.order;
         const canSeeDelivery = ["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status);
         return {
-          ...item,
+          ...await sellerItemWithReceipt(admin, item),
           order: order ? {
             id: order.id,
             control_number: order.control_number,
@@ -87,7 +102,7 @@ export async function GET(request: Request) {
             } : {}),
           } : null,
         };
-      });
+      }));
       return NextResponse.json({ sellerItems: safeItems, hasMore: safeItems.length === pageSize });
     }
 
@@ -135,11 +150,11 @@ export async function GET(request: Request) {
     const buyerHistoryCount = (buyerOrderStates ?? []).length - buyerOpenOrderIds.size;
     const sellerHistoryItemCount = (sellerOrderStates ?? []).filter((item) => completedItemStatuses.has(item.status)).length;
 
-    const safeSellerItems = (sellerItems ?? []).map((item) => {
+    const safeSellerItems = await Promise.all((sellerItems ?? []).map(async (item) => {
       const order = Array.isArray(item.order) ? item.order[0] : item.order;
       const canSeeDelivery = ["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status);
       return {
-        ...item,
+        ...await sellerItemWithReceipt(admin, item),
         order: order ? {
           id: order.id,
           control_number: order.control_number,
@@ -157,12 +172,12 @@ export async function GET(request: Request) {
           } : {}),
         } : null,
       };
-    });
+    }));
     const safeBuyerOrders = (buyerOrders ?? []).map((order) => ({
         ...order,
         items: ((order.items ?? []) as Record<string, unknown>[]).map((item) => Object.fromEntries(
           Object.entries(item).filter(([key]) => ![
-            "seller_email", "seller_id", "payment_proof_path",
+            "seller_email", "seller_id", "payment_proof_path", "payout_receipt_path",
             "availability_email_sent_at", "availability_expired_at",
             "seller_availability_timeout_email_sent_at", "dispatch_email_sent_at",
           ].includes(key)),
