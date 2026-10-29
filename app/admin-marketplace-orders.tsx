@@ -64,6 +64,13 @@ const money = (value: string | number, currency: Currency) =>
     maximumFractionDigits: currency === "USD" ? 2 : 0,
   }).format(Number(value))}`;
 
+function orderIsCompleted(order: Order) {
+  const terminalItemStatuses = ["unavailable", "payout_paid", "refunded", "expired", "cancelled"];
+  return order.payment_status === "paid" &&
+    order.items.length > 0 &&
+    order.items.every((item) => terminalItemStatuses.includes(item.status));
+}
+
 function orderQueueLabel(order: Order) {
   if (order.payment_status === "payment_submitted") return "Payment verification";
   if (order.items.some((item) => item.status === "disputed")) return "Open dispute";
@@ -72,6 +79,7 @@ function orderQueueLabel(order: Order) {
   if (order.items.some((item) =>
     ["paid", "shipped"].includes(item.status) && item.shipping_carrier?.trim() && item.tracking_number?.trim(),
   )) return "Delivery confirmation";
+  if (orderIsCompleted(order)) return "Completed";
   return order.payment_status.replaceAll("_", " ");
 }
 
@@ -255,7 +263,7 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
           <span>{order.buyer_name} · {order.buyer_email}</span>
           <span>{money(order.total_amount, order.currency)}</span>
           <span>{new Date(order.created_at).toLocaleDateString()}</span>
-          <span className={orderNeedsAdminAttention(order) ? "admin-order-status needs-action" : "admin-order-status"}>{orderQueueLabel(order)}</span>
+          <span className={`admin-order-status${orderNeedsAdminAttention(order) ? " needs-action" : orderIsCompleted(order) ? " completed" : ""}`}>{orderQueueLabel(order)}</span>
         </summary>
         <div className="admin-commerce-order-details">
         <p>{money(order.total_amount, order.currency)} · Created {new Date(order.created_at).toLocaleString()}</p>

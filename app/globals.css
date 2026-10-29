@@ -657,6 +657,7 @@ h1, h2, h3, p { margin-top: 0; }
 .admin-commerce-summary > span { overflow: hidden; color: #667366; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .admin-order-status { justify-self: start; padding: 4px 7px; border-radius: 999px; background: #edf1e9; color: #556657 !important; text-transform: capitalize; }
 .admin-order-status.needs-action { background: #fff0dc; color: #8d521e !important; }
+.admin-order-status.completed { background: #e2f1e4; color: #315d3b !important; font-weight: 700; }
 .admin-commerce-order-details { display: grid; gap: 8px; padding: 12px 14px; border-top: 1px solid #e2e8df; }
 .admin-commerce-order-details > p { margin: 0; color: #667366; font-size: 10px; }
 .admin-commerce-item { display: grid; gap: 10px; padding: 12px 0; border-top: 1px solid #e8ece5; }
