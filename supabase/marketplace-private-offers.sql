@@ -1012,7 +1012,7 @@ begin
 
   update public.buy_requests
   set is_active = false
-  where id = selected_request_id and status = 'approved' and is_active = true;
+  where id = selected_request_id and status = 'approved';
 
   return new;
 end;

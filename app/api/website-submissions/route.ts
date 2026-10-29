@@ -60,14 +60,11 @@ async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminC
     .order("created_at", { ascending: false });
   if (error) throw error;
   const requests = data ?? [];
-  const inactiveRequestIds = requests.filter((request) => !request.is_active).map((request) => request.id);
-  if (inactiveRequestIds.length === 0) {
-    return requests.map((request) => ({ ...request, marketplace_status: "available" }));
-  }
+  if (requests.length === 0) return [];
 
   const { data: threads, error: threadError } = await admin.from("marketplace_private_offer_threads")
     .select("id, request_id")
-    .in("request_id", inactiveRequestIds);
+    .in("request_id", requests.map((request) => request.id));
   if (threadError) throw threadError;
   const threadIds = (threads ?? []).map((thread) => thread.id);
   const { data: offers, error: offerError } = threadIds.length
@@ -76,7 +73,7 @@ async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminC
   if (offerError) throw offerError;
   const offerIds = (offers ?? []).map((offer) => offer.id);
   const { data: orderItems, error: orderItemError } = offerIds.length
-    ? await admin.from("marketplace_order_items").select("private_offer_id, status").in("private_offer_id", offerIds)
+    ? await admin.from("marketplace_order_items").select("private_offer_id").in("private_offer_id", offerIds).eq("status", "payout_paid")
     : { data: [], error: null };
   if (orderItemError) throw orderItemError;
 
@@ -88,15 +85,13 @@ async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminC
   }
   const fulfilledRequestIds = new Set<number>();
   for (const item of orderItems ?? []) {
-    if (item.status !== "payout_paid" || !item.private_offer_id) continue;
+    if (!item.private_offer_id) continue;
     const requestId = requestIdByOfferId.get(item.private_offer_id);
     if (requestId !== undefined) fulfilledRequestIds.add(requestId);
   }
-  return requests.map((request) => ({
+  return requests.filter((request) => !fulfilledRequestIds.has(request.id)).map((request) => ({
     ...request,
-    marketplace_status: request.is_active
-      ? "available"
-      : fulfilledRequestIds.has(request.id) ? "fulfilled" : "temporarily_unavailable",
+    marketplace_status: request.is_active ? "available" : "temporarily_unavailable",
   }));
 }
 
