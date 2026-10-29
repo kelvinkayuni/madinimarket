@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
     const { data: expiredAvailabilityItems, error: expiredAvailabilityError } = await admin.from("marketplace_order_items")
       .select("id, seller_email, mineral_name, order:marketplace_orders!inner(control_number, seller_response_deadline)")
-      .eq("status", "unavailable")
+      .eq("status", "expired")
       .not("availability_expired_at", "is", null)
       .is("seller_availability_timeout_email_sent_at", null)
       .limit(5);
@@ -45,8 +45,8 @@ export async function GET(request: Request) {
       try {
         await sendGmailEmail({
           to: item.seller_email,
-          subject: `Mineral hidden after no availability response for order ${order.control_number}`,
-          text: `The availability response deadline (${responseDeadline} Tanzania time) passed for ${item.mineral_name} in order ${order.control_number}. This mineral has been hidden from the public market. If you confirm that it is in stock, sign in to My orders and choose Confirm stock and relist.\n\nMadinimarket`,
+          subject: `Availability request expired for order ${order.control_number}`,
+          text: `The availability response deadline (${responseDeadline} Tanzania time) passed for ${item.mineral_name} in order ${order.control_number}. This order item was cancelled for the buyer, and the listing has been released back to the public market for other buyers.\n\nMadinimarket`,
         });
         const { error } = await admin.from("marketplace_order_items")
           .update({ seller_availability_timeout_email_sent_at: new Date().toISOString() })
@@ -57,6 +57,81 @@ export async function GET(request: Request) {
       } catch (error) {
         emailFailures += 1;
         console.error(`Availability timeout notification failed for order item ${item.id}`, error);
+      }
+    }
+
+    const [sellerUnavailableBuyerItems, sellerTimeoutBuyerItems] = await Promise.all([
+      admin.from("marketplace_order_items")
+        .select("id, status, mineral_name, availability_expired_at, order:marketplace_orders!inner(control_number, buyer_email, buyer_name, payment_status)")
+        .eq("status", "unavailable")
+        .is("buyer_availability_result_email_sent_at", null)
+        .limit(20),
+      admin.from("marketplace_order_items")
+        .select("id, status, mineral_name, availability_expired_at, order:marketplace_orders!inner(control_number, buyer_email, buyer_name, payment_status)")
+        .eq("status", "expired")
+        .not("availability_expired_at", "is", null)
+        .is("buyer_availability_result_email_sent_at", null)
+        .limit(20),
+    ]);
+    if (sellerUnavailableBuyerItems.error) throw sellerUnavailableBuyerItems.error;
+    if (sellerTimeoutBuyerItems.error) throw sellerTimeoutBuyerItems.error;
+    const buyerAvailabilityItems = [
+      ...(sellerUnavailableBuyerItems.data ?? []),
+      ...(sellerTimeoutBuyerItems.data ?? []),
+    ];
+    const reclaimBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    for (const item of buyerAvailabilityItems) {
+      const order = Array.isArray(item.order) ? item.order[0] : item.order;
+      if (!order) {
+        emailFailures += 1;
+        console.error(`Buyer availability result email has no parent order for item ${item.id}`);
+        continue;
+      }
+      const claimedAt = new Date().toISOString();
+      const { data: claimedItem, error: claimError } = await admin.from("marketplace_order_items")
+        .update({ buyer_availability_result_email_claimed_at: claimedAt })
+        .eq("id", item.id)
+        .is("buyer_availability_result_email_sent_at", null)
+        .or(`buyer_availability_result_email_claimed_at.is.null,buyer_availability_result_email_claimed_at.lt.${reclaimBefore}`)
+        .select("id")
+        .maybeSingle();
+      if (claimError) throw claimError;
+      if (!claimedItem) continue;
+
+      const isUnavailable = item.status === "unavailable" && !item.availability_expired_at;
+      const statusText = isUnavailable
+        ? "The seller confirmed that this mineral is unavailable, so it has been removed from the public market."
+        : "The seller did not respond before the deadline. This item has been cancelled for you and released back to the market for other buyers.";
+      const orderNextStep = order.payment_status === "awaiting_payment"
+        ? "You can proceed with payment for the other confirmed items shown in My orders."
+        : order.payment_status === "cancelled"
+          ? "No items in this order were confirmed, so the order is cancelled."
+          : "Any other items in this order will be updated as their sellers respond.";
+      try {
+        await sendGmailEmail({
+          to: order.buyer_email,
+          subject: `Availability update for ${item.mineral_name} · order ${order.control_number}`,
+          text: `Hello ${order.buyer_name},\n\n${statusText}\n\nNo payment is due for this item. ${orderNextStep}\n\nView your order history in My orders.\n\nMadinimarket`,
+        });
+        const { error: sentUpdateError } = await admin.from("marketplace_order_items")
+          .update({
+            buyer_availability_result_email_sent_at: new Date().toISOString(),
+            buyer_availability_result_email_claimed_at: null,
+          })
+          .eq("id", item.id)
+          .eq("buyer_availability_result_email_claimed_at", claimedAt)
+          .is("buyer_availability_result_email_sent_at", null);
+        if (sentUpdateError) throw sentUpdateError;
+        sentCount += 1;
+      } catch (error) {
+        emailFailures += 1;
+        console.error(`Buyer availability result email failed for order item ${item.id}`, error);
+        const { error: releaseError } = await admin.from("marketplace_order_items")
+          .update({ buyer_availability_result_email_claimed_at: null })
+          .eq("id", item.id)
+          .eq("buyer_availability_result_email_claimed_at", claimedAt)
+          .is("buyer_availability_result_email_sent_at", null);
+        if (releaseError) console.error("Could not release failed buyer availability email claim for retry.", releaseError);
       }
     }
 
@@ -102,27 +177,6 @@ export async function GET(request: Request) {
       } catch (error) {
         emailFailures += 1;
         console.error(`Payment verification email failed for order ${order.id}`, error);
-      }
-    }
-
-    const { data: unavailableOrders, error: unavailableError } = await admin.from("marketplace_orders")
-      .select("id, control_number, buyer_email, buyer_name")
-      .eq("payment_status", "cancelled").is("buyer_unavailable_email_sent_at", null).limit(5);
-    if (unavailableError) throw unavailableError;
-    for (const order of unavailableOrders ?? []) {
-      try {
-        await sendGmailEmail({
-          to: order.buyer_email,
-          subject: `No items available for order ${order.control_number}`,
-          text: `Hello ${order.buyer_name},\n\nThe seller response period ended for order ${order.control_number}, and no items were available. The order is closed; your cart items were released back to the market. No payment is due.\n\nMadinimarket`,
-        });
-        const { error } = await admin.from("marketplace_orders")
-          .update({ buyer_unavailable_email_sent_at: new Date().toISOString() }).eq("id", order.id).is("buyer_unavailable_email_sent_at", null);
-        if (error) throw error;
-        sentCount += 1;
-      } catch (error) {
-        emailFailures += 1;
-        console.error(`Unavailable order email failed for order ${order.id}`, error);
       }
     }
 

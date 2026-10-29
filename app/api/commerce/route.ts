@@ -6,6 +6,18 @@ import { sendPendingSellerAvailabilityEmails } from "@/lib/marketplace-availabil
 
 type Body = Record<string, unknown>;
 
+const completedHistoryItemStatuses = ["unavailable", "payout_paid", "refunded", "expired", "cancelled"];
+
+function isBuyerHistoryOrder(order: {
+  payment_status: string;
+  items?: Array<{ status: string }> | null;
+}) {
+  if (["expired", "cancelled"].includes(order.payment_status)) return true;
+  const items = order.items ?? [];
+  return order.payment_status === "paid" && items.length > 0 &&
+    items.every((item) => completedHistoryItemStatuses.includes(item.status));
+}
+
 function text(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
@@ -52,6 +64,7 @@ export async function GET(request: Request) {
         const { data: orders, error } = await admin.from("marketplace_orders")
           .select("*, items:marketplace_order_items(*)")
           .eq("buyer_id", accountId)
+          .is("buyer_history_hidden_at", null)
           .order("created_at", { ascending: false })
           .range(offset, offset + pageSize - 1);
         if (error) {
@@ -60,13 +73,18 @@ export async function GET(request: Request) {
         }
         const safeOrders = (orders ?? []).map((order) => ({
           ...order,
-          items: ((order.items ?? []) as Record<string, unknown>[]).map((item) => Object.fromEntries(
-            Object.entries(item).filter(([key]) => ![
-              "seller_email", "seller_id", "payment_proof_path", "payout_receipt_path",
-              "availability_email_sent_at", "availability_expired_at",
-              "seller_availability_timeout_email_sent_at", "dispatch_email_sent_at",
-            ].includes(key)),
-          )),
+          items: ((order.items ?? []) as Record<string, unknown>[]).map((item) => ({
+            ...Object.fromEntries(
+              Object.entries(item).filter(([key]) => ![
+                "seller_email", "seller_id", "payment_proof_path", "payout_receipt_path",
+                "availability_email_sent_at", "availability_expired_at",
+                "seller_availability_timeout_email_sent_at", "buyer_availability_result_email_sent_at",
+                "buyer_availability_result_email_claimed_at", "dispatch_email_sent_at",
+                "seller_history_hidden_at",
+              ].includes(key)),
+            ),
+            seller_response_timed_out: Boolean(item.availability_expired_at),
+          })),
         }));
         return NextResponse.json({ buyerOrders: safeOrders, hasMore: safeOrders.length === pageSize });
       }
@@ -74,6 +92,7 @@ export async function GET(request: Request) {
       const { data: items, error } = await admin.from("marketplace_order_items")
         .select("*, order:marketplace_orders!inner(id, control_number, payment_status, payment_deadline, currency, created_at, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)")
         .eq("seller_id", accountId)
+        .is("seller_history_hidden_at", null)
         .order("created_at", { ascending: false })
         .range(offset, offset + pageSize - 1);
       if (error) {
@@ -85,6 +104,7 @@ export async function GET(request: Request) {
         const canSeeDelivery = ["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status);
         return {
           ...await sellerItemWithReceipt(admin, item),
+          seller_response_timed_out: Boolean(item.availability_expired_at),
           order: order ? {
             id: order.id,
             control_number: order.control_number,
@@ -121,10 +141,10 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       admin.from("website_accounts").select("id, display_name, email, phone, delivery_country, delivery_region, delivery_district, delivery_address, is_active").eq("id", accountId).single(),
       admin.from("marketplace_cart_items").select("id, listing_id, created_at, listing:listings(id, mineral_name, listing_type, weight, unit, price, seller_price, platform_fee_amount, currency, image_path, website_user_id, seller_name, status, is_active, marketplace_state)").eq("buyer_id", accountId).order("created_at"),
-      admin.from("marketplace_orders").select("*, items:marketplace_order_items(*)").eq("buyer_id", accountId).order("created_at", { ascending: false }).limit(50),
-      admin.from("marketplace_order_items").select("*, order:marketplace_orders!inner(id, control_number, payment_status, payment_deadline, currency, created_at, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)").eq("seller_id", accountId).order("created_at", { ascending: false }).limit(100),
-      admin.from("marketplace_orders").select("id, payment_status, items:marketplace_order_items(status)").eq("buyer_id", accountId),
-      admin.from("marketplace_order_items").select("order_id, status").eq("seller_id", accountId),
+      admin.from("marketplace_orders").select("*, items:marketplace_order_items(*)").eq("buyer_id", accountId).is("buyer_history_hidden_at", null).order("created_at", { ascending: false }).limit(50),
+      admin.from("marketplace_order_items").select("*, order:marketplace_orders!inner(id, control_number, payment_status, payment_deadline, currency, created_at, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)").eq("seller_id", accountId).is("seller_history_hidden_at", null).order("created_at", { ascending: false }).limit(100),
+      admin.from("marketplace_orders").select("id, payment_status, buyer_history_hidden_at, items:marketplace_order_items(status)").eq("buyer_id", accountId),
+      admin.from("marketplace_order_items").select("order_id, status, seller_history_hidden_at").eq("seller_id", accountId),
       admin.from("listings").select("id", { count: "exact", head: true }).eq("website_user_id", accountId).eq("status", "approved").eq("is_active", true),
       admin.from("buy_requests").select("id", { count: "exact", head: true }).eq("website_user_id", accountId).eq("status", "approved").eq("is_active", true),
       admin.from("marketplace_private_offer_threads").select("id, buyer_id, seller_id, buyer_deleted_at, seller_deleted_at")
@@ -137,7 +157,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Could not load your cart and orders." }, { status: 503 });
     }
 
-    const completedItemStatuses = new Set(["unavailable", "payout_paid", "refunded", "expired", "cancelled"]);
+    const completedItemStatuses = new Set(completedHistoryItemStatuses);
     const closedPaymentStatuses = new Set(["expired", "cancelled"]);
     const buyerOpenOrderIds = new Set((buyerOrderStates ?? []).filter((order) => {
       if (closedPaymentStatuses.has(order.payment_status)) return false;
@@ -147,8 +167,12 @@ export async function GET(request: Request) {
     const sellerOpenOrderIds = new Set((sellerOrderStates ?? [])
       .filter((item) => !completedItemStatuses.has(item.status))
       .map((item) => item.order_id));
-    const buyerHistoryCount = (buyerOrderStates ?? []).length - buyerOpenOrderIds.size;
-    const sellerHistoryItemCount = (sellerOrderStates ?? []).filter((item) => completedItemStatuses.has(item.status)).length;
+    const buyerHistoryCount = (buyerOrderStates ?? []).filter((order) =>
+      !order.buyer_history_hidden_at && isBuyerHistoryOrder(order)
+    ).length;
+    const sellerHistoryItemCount = (sellerOrderStates ?? []).filter((item) =>
+      !item.seller_history_hidden_at && completedItemStatuses.has(item.status)
+    ).length;
     const privateOfferThreadIds = (privateOfferThreads ?? []).map((thread) => thread.id);
     const { data: privateOfferRows, error: privateOfferRowsError } = privateOfferThreadIds.length
       ? await admin.from("marketplace_private_offers").select("id, thread_id").in("thread_id", privateOfferThreadIds)
@@ -178,6 +202,7 @@ export async function GET(request: Request) {
       const canSeeDelivery = ["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status);
       return {
         ...await sellerItemWithReceipt(admin, item),
+        seller_response_timed_out: Boolean(item.availability_expired_at),
         order: order ? {
           id: order.id,
           control_number: order.control_number,
@@ -198,13 +223,18 @@ export async function GET(request: Request) {
     }));
     const safeBuyerOrders = (buyerOrders ?? []).map((order) => ({
         ...order,
-        items: ((order.items ?? []) as Record<string, unknown>[]).map((item) => Object.fromEntries(
-          Object.entries(item).filter(([key]) => ![
-            "seller_email", "seller_id", "payment_proof_path", "payout_receipt_path",
-            "availability_email_sent_at", "availability_expired_at",
-            "seller_availability_timeout_email_sent_at", "dispatch_email_sent_at",
-          ].includes(key)),
-        )),
+        items: ((order.items ?? []) as Record<string, unknown>[]).map((item) => ({
+          ...Object.fromEntries(
+            Object.entries(item).filter(([key]) => ![
+              "seller_email", "seller_id", "payment_proof_path", "payout_receipt_path",
+              "availability_email_sent_at", "availability_expired_at",
+              "seller_availability_timeout_email_sent_at", "buyer_availability_result_email_sent_at",
+              "buyer_availability_result_email_claimed_at", "dispatch_email_sent_at",
+              "seller_history_hidden_at",
+            ].includes(key)),
+          ),
+          seller_response_timed_out: Boolean(item.availability_expired_at),
+        })),
     }));
 
     return NextResponse.json({
@@ -280,6 +310,98 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === "hide_order_history" || action === "clear_order_history") {
+      const side = text(body.side, 10);
+      if (side !== "buyer" && side !== "seller") {
+        return NextResponse.json({ error: "Choose buying or selling order history." }, { status: 400 });
+      }
+
+      if (action === "hide_order_history") {
+        const entryId = text(body.entryId, 36);
+        if (!/^[0-9a-f-]{36}$/i.test(entryId)) {
+          return NextResponse.json({ error: "Choose a valid order history entry." }, { status: 400 });
+        }
+
+        if (side === "buyer") {
+          const { data: order, error } = await admin.from("marketplace_orders")
+            .select("id, payment_status, buyer_history_hidden_at, items:marketplace_order_items(status)")
+            .eq("id", entryId).eq("buyer_id", accountId).maybeSingle();
+          if (error) throw error;
+          if (!order) return NextResponse.json({ error: "Buying order history entry not found." }, { status: 404 });
+          if (!isBuyerHistoryOrder(order)) {
+            return NextResponse.json({ error: "Active orders and unresolved disputes cannot be hidden." }, { status: 409 });
+          }
+          if (!order.buyer_history_hidden_at) {
+            const { error: updateError } = await admin.from("marketplace_orders")
+              .update({ buyer_history_hidden_at: new Date().toISOString() })
+              .eq("id", entryId).eq("buyer_id", accountId).is("buyer_history_hidden_at", null);
+            if (updateError) throw updateError;
+          }
+        } else {
+          const { data: item, error } = await admin.from("marketplace_order_items")
+            .select("id, status, seller_history_hidden_at")
+            .eq("id", entryId).eq("seller_id", accountId).maybeSingle();
+          if (error) throw error;
+          if (!item) return NextResponse.json({ error: "Selling order history entry not found." }, { status: 404 });
+          if (!completedHistoryItemStatuses.includes(item.status)) {
+            return NextResponse.json({ error: "Active orders and unresolved disputes cannot be hidden." }, { status: 409 });
+          }
+          if (!item.seller_history_hidden_at) {
+            const { error: updateError } = await admin.from("marketplace_order_items")
+              .update({ seller_history_hidden_at: new Date().toISOString() })
+              .eq("id", entryId).eq("seller_id", accountId).is("seller_history_hidden_at", null);
+            if (updateError) throw updateError;
+          }
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      const pageSize = 500;
+      let offset = 0;
+      let hiddenCount = 0;
+      while (true) {
+        if (side === "buyer") {
+          const { data: orders, error } = await admin.from("marketplace_orders")
+            .select("id, payment_status, buyer_history_hidden_at, items:marketplace_order_items(status)")
+            .eq("buyer_id", accountId)
+            .order("created_at", { ascending: false })
+            .range(offset, offset + pageSize - 1);
+          if (error) throw error;
+          const eligibleIds = (orders ?? [])
+            .filter((order) => !order.buyer_history_hidden_at && isBuyerHistoryOrder(order))
+            .map((order) => order.id);
+          if (eligibleIds.length) {
+            const { error: updateError } = await admin.from("marketplace_orders")
+              .update({ buyer_history_hidden_at: new Date().toISOString() })
+              .eq("buyer_id", accountId).is("buyer_history_hidden_at", null).in("id", eligibleIds);
+            if (updateError) throw updateError;
+            hiddenCount += eligibleIds.length;
+          }
+          if ((orders ?? []).length < pageSize) break;
+        } else {
+          const { data: items, error } = await admin.from("marketplace_order_items")
+            .select("id, status, seller_history_hidden_at")
+            .eq("seller_id", accountId)
+            .order("created_at", { ascending: false })
+            .range(offset, offset + pageSize - 1);
+          if (error) throw error;
+          const eligibleIds = (items ?? [])
+            .filter((item) => !item.seller_history_hidden_at && completedHistoryItemStatuses.includes(item.status))
+            .map((item) => item.id);
+          if (eligibleIds.length) {
+            const { error: updateError } = await admin.from("marketplace_order_items")
+              .update({ seller_history_hidden_at: new Date().toISOString() })
+              .eq("seller_id", accountId).is("seller_history_hidden_at", null).in("id", eligibleIds);
+            if (updateError) throw updateError;
+            hiddenCount += eligibleIds.length;
+          }
+          if ((items ?? []).length < pageSize) break;
+        }
+        offset += pageSize;
+      }
+      return NextResponse.json({ ok: true, hiddenCount });
+    }
+
     if (action === "delete_expired_order") {
       const orderId = text(body.orderId, 36);
       if (!/^[0-9a-f-]{36}$/i.test(orderId)) return NextResponse.json({ error: "Choose a valid expired order." }, { status: 400 });
@@ -288,15 +410,12 @@ export async function POST(request: Request) {
       if (orderError) throw orderError;
       if (!order) return NextResponse.json({ error: "This order could not be found in your account." }, { status: 404 });
       if (order.payment_status !== "expired") {
-        return NextResponse.json({ error: "Only expired orders can be deleted." }, { status: 409 });
+        return NextResponse.json({ error: "Only expired orders can be hidden from your history." }, { status: 409 });
       }
-      const { error: itemsError } = await admin.from("marketplace_order_items").delete().eq("order_id", orderId);
-      if (itemsError) throw itemsError;
-      const { data: deletedOrder, error: deleteError } = await admin.from("marketplace_orders")
-        .delete().eq("id", orderId).eq("buyer_id", accountId).eq("payment_status", "expired")
-        .select("id").maybeSingle();
-      if (deleteError) throw deleteError;
-      if (!deletedOrder) return NextResponse.json({ error: "This expired order has already been deleted." }, { status: 404 });
+      const { error: updateError } = await admin.from("marketplace_orders")
+        .update({ buyer_history_hidden_at: new Date().toISOString() })
+        .eq("id", orderId).eq("buyer_id", accountId).is("buyer_history_hidden_at", null);
+      if (updateError) throw updateError;
       return NextResponse.json({ ok: true });
     }
 
@@ -329,7 +448,13 @@ export async function POST(request: Request) {
       } catch (notificationError) {
         console.error(`Could not send immediate seller availability emails for order ${createdOrder.control_number}; the order cron will retry.`, notificationError);
       }
-      return NextResponse.json({ order: { id: createdOrder.id, control_number: createdOrder.control_number } }, { status: 201 });
+      return NextResponse.json({
+        order: {
+          id: createdOrder.id,
+          control_number: createdOrder.control_number,
+          seller_response_deadline: createdOrder.seller_response_deadline,
+        },
+      }, { status: 201 });
     }
 
     if (action === "seller_availability") {

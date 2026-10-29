@@ -86,8 +86,14 @@ create table if not exists public.marketplace_order_items (
   created_at timestamptz not null default now()
 );
 
+alter table public.marketplace_orders
+  add column if not exists buyer_history_hidden_at timestamptz;
+
 alter table public.marketplace_order_items
-  add column if not exists availability_email_claimed_at timestamptz;
+  add column if not exists availability_email_claimed_at timestamptz,
+  add column if not exists buyer_availability_result_email_sent_at timestamptz,
+  add column if not exists buyer_availability_result_email_claimed_at timestamptz,
+  add column if not exists seller_history_hidden_at timestamptz;
 
 alter table public.marketplace_order_items drop constraint if exists marketplace_order_items_status_check;
 alter table public.marketplace_order_items add constraint marketplace_order_items_status_check check (
@@ -435,7 +441,8 @@ begin
     for update
   loop
     update public.marketplace_order_items
-    set status = 'unavailable', seller_responded_at = now()
+    set status = 'expired',
+        availability_expired_at = now()
     where order_id = order_row.id and status = 'awaiting_seller';
 
     if exists (select 1 from public.marketplace_order_items where order_id = order_row.id and status = 'awaiting_payment') then
@@ -495,7 +502,10 @@ as $hide_reserved_marketplace_listings$
 begin
   if new.status in ('awaiting_seller', 'awaiting_payment', 'payment_submitted', 'paid', 'shipped', 'delivered', 'disputed', 'payout_due', 'refund_due') then
     update public.listings set is_active = false where id = new.listing_id;
-  elsif new.status in ('unavailable', 'expired', 'cancelled') then
+  elsif new.status = 'unavailable' then
+    update public.listings set is_active = false
+    where id = new.listing_id and status = 'approved';
+  elsif new.status in ('expired', 'cancelled') then
     update public.listings set is_active = true
     where id = new.listing_id and status = 'approved';
   end if;

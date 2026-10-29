@@ -7,7 +7,9 @@ alter table public.listings add constraint listings_marketplace_state_check
 
 alter table public.marketplace_order_items
   add column if not exists availability_expired_at timestamptz,
-  add column if not exists seller_availability_timeout_email_sent_at timestamptz;
+  add column if not exists seller_availability_timeout_email_sent_at timestamptz,
+  add column if not exists buyer_availability_result_email_sent_at timestamptz,
+  add column if not exists buyer_availability_result_email_claimed_at timestamptz;
 
 create table if not exists private.marketplace_listing_reservation_backfill (
   id boolean primary key default true check (id),
@@ -242,8 +244,7 @@ begin
     for update
   loop
     update public.marketplace_order_items
-    set status = 'unavailable',
-        seller_responded_at = now(),
+    set status = 'expired',
         availability_expired_at = now()
     where order_id = order_row.id and status = 'awaiting_seller';
 

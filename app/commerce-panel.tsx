@@ -32,6 +32,7 @@ type OrderItem = {
   platform_fee_amount: string | number;
   currency: Currency;
   status: string;
+  seller_response_timed_out?: boolean;
   seller_response_deadline: string;
   seller_responded_at: string | null;
   shipping_carrier: string | null;
@@ -186,7 +187,17 @@ function isBuyerOrderHistory(order: BuyerOrder) {
 }
 
 function buyerOrderHistoryLabel(order: BuyerOrder) {
+  if (order.payment_status === "cancelled" &&
+    order.items.some((item) => item.seller_response_timed_out)) {
+    return "Availability not confirmed in time";
+  }
   return ["expired", "cancelled"].includes(order.payment_status) ? statusLabel(order.payment_status) : "completed";
+}
+
+function orderItemStatusLabel(item: OrderItem) {
+  if (item.seller_response_timed_out) return "Seller didn’t confirm availability in time";
+  if (item.status === "unavailable") return "Seller confirmed unavailable";
+  return statusLabel(item.status);
 }
 
 export default function CommercePanel({ onNotice, onCounters }: {
@@ -309,7 +320,13 @@ export default function CommercePanel({ onNotice, onCounters }: {
       if (!response.ok) throw new Error(result.error ?? "The request could not be completed.");
       if (result.warning) onNotice(result.warning);
       if (action === "relist_unavailable") onNotice("You confirmed the mineral is in stock and relisted it on the market.");
-      if (action === "delete_expired_order") onNotice("The expired order was deleted.");
+      if (action === "hide_order_history") {
+        onNotice(`Removed this entry from your ${values.side === "buyer" ? "buying" : "selling"} order history. Transaction records remain available to Madinimarket.`);
+      }
+      if (action === "clear_order_history") {
+        onNotice(`Cleared ${result.hiddenCount} entries from your ${values.side === "buyer" ? "buying" : "selling"} order history. Transaction records remain available to Madinimarket.`);
+      }
+      if (action === "delete_expired_order") onNotice("The expired order was removed from your history. Transaction records remain available to Madinimarket.");
       await refresh();
       return result;
     } catch (error) {
@@ -392,7 +409,10 @@ export default function CommercePanel({ onNotice, onCounters }: {
       buyerName, buyerPhone, country, region, district, address,
     });
     if (result?.order?.control_number) {
-      onNotice(`Order ${result.order.control_number} confirmed. Sellers have 6 hours to respond.`);
+      const deadline = result.order.seller_response_deadline
+        ? new Date(result.order.seller_response_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })
+        : "the deadline shown in My orders";
+      onNotice(`Order ${result.order.control_number} confirmed. Sellers have until ${deadline} Tanzania time to confirm availability.`);
     }
   };
 
@@ -493,11 +513,11 @@ export default function CommercePanel({ onNotice, onCounters }: {
     </summary>
     <div className="commerce-order-details">
     <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
-    {order.payment_status === "expired" && <button className="button button-outline" type="button" disabled={busy === `delete-order-${order.id}`} onClick={() => {
-      if (window.confirm(`Permanently delete expired order ${order.control_number}?`)) {
-        void perform(`delete-order-${order.id}`, "delete_expired_order", { orderId: order.id });
+    {history && <button className="button button-outline commerce-history-entry-delete" type="button" disabled={busy !== ""} onClick={() => {
+      if (window.confirm(`Remove order ${order.control_number} from your buying history? It will remain in Madinimarket records.`)) {
+        void perform(`hide-buyer-history-${order.id}`, "hide_order_history", { side: "buyer", entryId: order.id });
       }
-    }}>{busy === `delete-order-${order.id}` ? "Deleting…" : "Delete expired order"}</button>}
+    }}>{busy === `hide-buyer-history-${order.id}` ? "Removing…" : "Delete from history"}</button>}
     {order.payment_status === "awaiting_payment" && <form className="commerce-payment-form" onSubmit={(event) => void submitPaymentProof(event, order.id)}>
       {data.paymentMethods.length
         ? <div className="commerce-payment-methods">
@@ -525,7 +545,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
       <div>
         <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-        <small>{statusLabel(item.status)} · Total {amount(item.total_price, item.currency)}</small>
+        <small>{orderItemStatusLabel(item)} · Total {amount(item.total_price, item.currency)}</small>
         {(item.shipping_carrier || item.tracking_number) && <div className="commerce-delivery-details">
           <strong>Tracking details</strong>
           {item.shipping_carrier && <span>Carrier: {item.shipping_carrier}</span>}
@@ -543,14 +563,19 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const renderSellerItem = (item: OrderItem, history = false) => <details className="commerce-seller-order-item" key={item.id}>
     <summary className="commerce-order-summary">
       <span><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>Order {item.order?.control_number}</small></span>
-      <span className="commerce-order-summary-status">{history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : statusLabel(item.status)}</span>
+      <span className="commerce-order-summary-status">{history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : orderItemStatusLabel(item)}</span>
       <strong className="commerce-order-summary-total">{amount(item.seller_amount, item.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
     </summary>
     <div className="commerce-order-details">
+    {history && <button className="button button-outline commerce-history-entry-delete" type="button" disabled={busy !== ""} onClick={() => {
+      if (window.confirm(`Remove this item from your selling history? It will remain in Madinimarket records.`)) {
+        void perform(`hide-seller-history-${item.id}`, "hide_order_history", { side: "seller", entryId: item.id });
+      }
+    }}>{busy === `hide-seller-history-${item.id}` ? "Removing…" : "Delete from history"}</button>}
     <div className="commerce-order-item">
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-      <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : statusLabel(item.status)}</small>
+      <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : orderItemStatusLabel(item)}</small>
       <small>Seller receives {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
       {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
       {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
@@ -558,7 +583,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     {item.status === "awaiting_seller" && <div className="commerce-item-actions">
       <button className="button button-dark" type="button" disabled={busy === `available-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>Available</button>
       <button className="button button-outline" type="button" disabled={busy === `unavailable-${item.id}`} onClick={() => void perform(`unavailable-${item.id}`, "seller_availability", { itemId: item.id, available: false })}>Unavailable</button>
-      <small>Respond by {new Date(item.seller_response_deadline).toLocaleString()}</small>
+      <small>Respond by {new Date(item.seller_response_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>
     </div>}
     {["unavailable", "refunded"].includes(item.status) && item.listing_id && <div className="commerce-item-actions">
       <p className="commerce-warning">This mineral is hidden from the public market. Confirm that it is in stock before relisting it.</p>
@@ -641,7 +666,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <details className="commerce-checkout-disclosure">
           <summary>Confirm your order and delivery address <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
           <form className="commerce-checkout" onSubmit={checkout}>
-          <p className="commerce-note">Items stay available to other buyers while in your cart. Confirming locks the cart and reserves the minerals; sellers will be asked to confirm availability. Unavailable items will be removed before payment.</p>
+          <p className="commerce-note">Items stay available to other buyers while in your cart. Confirming reserves them while sellers check availability. A seller-confirmed unavailable mineral is removed from the market; if a seller does not respond by the deadline, that item is cancelled and released back to the market. You only pay for seller-confirmed items.</p>
           <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
           <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
           <div className="field-row">
@@ -675,6 +700,11 @@ export default function CommercePanel({ onNotice, onCounters }: {
       {renderOrderPagination(filteredActiveBuyerOrders.length, currentBuyerActivePage, buyerActivePageCount, "active buying orders", setBuyerActivePage)}
       <details className="commerce-history">
         <summary>Buying order history <span className="commerce-section-count">{data.buyerHistoryCount}</span></summary>
+        {data.buyerHistoryCount > 0 && <button className="button button-outline commerce-history-clear" type="button" disabled={busy !== ""} onClick={() => {
+          if (window.confirm("Hide all entries from your buying order history? This only removes them from your view; transaction records remain available to Madinimarket.")) {
+            void perform("clear-buyer-history", "clear_order_history", { side: "buyer" });
+          }
+        }}>{busy === "clear-buyer-history" ? "Clearing…" : "Clear all buying history"}</button>}
         {filteredBuyerHistory.length
           ? <div className="commerce-list commerce-history-list">{visibleBuyerHistory.map((order) => renderBuyerOrder(order, true))}</div>
           : <p className="commerce-note">{buyerOrderHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
@@ -691,6 +721,11 @@ export default function CommercePanel({ onNotice, onCounters }: {
       {renderOrderPagination(filteredActiveSellerItems.length, currentSellerActivePage, sellerActivePageCount, "active selling orders", setSellerActivePage)}
       <details className="commerce-history">
         <summary>Selling order history · items <span className="commerce-section-count">{data.sellerHistoryItemCount}</span></summary>
+        {data.sellerHistoryItemCount > 0 && <button className="button button-outline commerce-history-clear" type="button" disabled={busy !== ""} onClick={() => {
+          if (window.confirm("Hide all entries from your selling order history? This only removes them from your view; transaction records remain available to Madinimarket.")) {
+            void perform("clear-seller-history", "clear_order_history", { side: "seller" });
+          }
+        }}>{busy === "clear-seller-history" ? "Clearing…" : "Clear all selling history"}</button>}
         {filteredSellerHistory.length
           ? <div className="commerce-list commerce-history-list">{visibleSellerHistory.map((item) => renderSellerItem(item, true))}</div>
           : <p className="commerce-note">{sellerItemHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
