@@ -3099,7 +3099,7 @@ export default function Marketplace() {
           <section className="admin-queue" aria-labelledby="admin-sellers-heading">
             <div className="admin-queue-heading"><div><span>SELLERS</span><h2 id="admin-sellers-heading">Mineral listings</h2></div><strong>{pendingSellers.length}</strong></div>
             {pendingSellers.length ? <div className="admin-queue-list">{pendingSellers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-seller-${item.id}`}>
-              <summary className="admin-review-title admin-submission-toggle"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3></div><strong>{money(item.price, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
+              <summary className="admin-review-title admin-submission-toggle"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3><small>{item.seller} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.price, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
               <div className="admin-submission-details">
                 <p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {item.seller}</p>
                 {item.platform_fee_rate ? <p>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}
@@ -3115,7 +3115,7 @@ export default function Marketplace() {
           <section className="admin-queue" aria-labelledby="admin-buyers-heading">
             <div className="admin-queue-heading"><div><span>BUYERS</span><h2 id="admin-buyers-heading">Buying requests</h2></div><strong>{pendingBuyers.length}</strong></div>
             {pendingBuyers.length ? <div className="admin-queue-list">{pendingBuyers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-buyer-${item.id}`}>
-              <summary className="admin-review-title admin-submission-toggle"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3></div><strong>{money(item.offer, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
+              <summary className="admin-review-title admin-submission-toggle"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3><small>{item.buyer} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.offer, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
               <div className="admin-submission-details">
                 <p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{item.location} · {item.buyer} · {item.phone} · {item.email}</p>
                 <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} />
