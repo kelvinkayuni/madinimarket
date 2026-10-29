@@ -15,6 +15,7 @@ const PAGE_SIZE = 500;
 const INCLUDED_ITEM_STATUSES = [
   "paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due",
 ];
+const TERMINAL_ITEM_STATUSES = ["unavailable", "payout_paid", "refunded", "expired", "cancelled"];
 
 function dateParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
     const orders = [];
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data, error } = await admin.from("marketplace_orders")
-        .select("id, control_number, payment_verified_at, items:marketplace_order_items(id, mineral_name, status, total_price, seller_amount, platform_fee_rate, platform_fee_amount, currency)")
+        .select("id, control_number, payment_status, payment_verified_at, items:marketplace_order_items(id, mineral_name, status, total_price, seller_amount, platform_fee_rate, platform_fee_amount, currency)")
         .eq("payment_status", "paid")
         .not("payment_verified_at", "is", null)
         .order("payment_verified_at", { ascending: false })
@@ -82,6 +83,9 @@ export async function GET(request: Request) {
     const current = periodKeys(new Date());
     for (const order of orders) {
       if (!order.payment_verified_at) continue;
+      const orderCompleted = order.payment_status === "paid" &&
+        order.items.length > 0 &&
+        order.items.every((item) => TERMINAL_ITEM_STATUSES.includes(item.status));
       const keys = periodKeys(new Date(order.payment_verified_at));
       const buckets = [
         ...(keys.day === current.day ? [periods.today] : []),
@@ -105,7 +109,7 @@ export async function GET(request: Request) {
           controlNumber: order.control_number,
           verifiedAt: order.payment_verified_at,
           mineralName: item.mineral_name,
-          status: item.status,
+          status: orderCompleted ? "completed" : item.status,
           currency,
           grossSales,
           sellerAmount,

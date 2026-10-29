@@ -55,6 +55,7 @@ type OrderFilter =
   | "disputes"
   | "payout_due"
   | "refund_due"
+  | "completed"
   | "history"
   | "all";
 
@@ -251,6 +252,7 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
           <option value="disputes">Open disputes</option>
           <option value="payout_due">Seller payouts due</option>
           <option value="refund_due">Buyer refunds due</option>
+          <option value="completed">Completed</option>
           <option value="history">Order history</option>
           <option value="all">All orders</option>
         </select>

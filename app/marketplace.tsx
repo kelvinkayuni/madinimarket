@@ -3179,7 +3179,7 @@ export default function Marketplace() {
                         setSalesLedgerPage(1);
                       }}>
                         <option value="all">All statuses</option>
-                        {Array.from(new Set(adminSalesLedger.transactions.map((transaction) => transaction.status))).sort().map((status) =>
+                        {Array.from(new Set([...adminSalesLedger.transactions.map((transaction) => transaction.status), "completed"])).sort().map((status) =>
                           <option value={status} key={status}>{status.replaceAll("_", " ")}</option>,
                         )}
                       </select>

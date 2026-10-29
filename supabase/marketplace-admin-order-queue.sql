@@ -81,6 +81,10 @@ as $$
           select 1 from public.marketplace_order_items i
           where i.order_id = classified.id and i.status = 'refund_due'
         )
+        when 'completed' then
+          payment_status = 'paid'
+          and item_count > 0
+          and item_count = completed_item_count
         when 'history' then is_history
         when 'all' then true
         else false
