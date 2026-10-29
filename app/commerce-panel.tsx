@@ -154,6 +154,11 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
+function buyerOrderStatusLabel(status: string) {
+  if (status === "awaiting_sellers" || status === "awaiting_seller") return "Awaiting seller to confirm availability";
+  return statusLabel(status);
+}
+
 function privateOfferStatusLabel(status: string, side: "buyer" | "seller", closeReason?: string | null, threadState?: string) {
   if (status === "pending") return side === "buyer" ? "New offer · review needed" : "Waiting for buyer response";
   if (status === "accepted") return side === "buyer" ? "Seller finalizing mineral details" : "Your confirmation is needed";
@@ -514,7 +519,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const renderBuyerOrder = (order: BuyerOrder, history = false) => <details className="commerce-order" key={order.id}>
     <summary className="commerce-order-summary">
       <span><strong>Order {order.control_number}</strong><small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small></span>
-      <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : statusLabel(order.payment_status)}</span>
+      <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : buyerOrderStatusLabel(order.payment_status)}</span>
       <strong className="commerce-order-summary-total">{amount(order.total_amount, order.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
     </summary>
@@ -729,7 +734,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div className="commerce-order-tools">
         <label className="commerce-order-search">Search buying orders<input className="text-input" type="search" value={buyerOrderSearch} placeholder="Order number or mineral" onChange={(event) => { setBuyerOrderSearch(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }} /></label>
         <label className="commerce-order-filter">Status<select className="text-input" value={buyerStatusFilter} onChange={(event) => { setBuyerStatusFilter(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }}>
-        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="awaiting_seller">Awaiting seller</option><option value="paid">Paid</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="awaiting_seller">Awaiting seller to confirm availability</option><option value="paid">Paid</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
       </div>
       <div className="commerce-order-subsection">
