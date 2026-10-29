@@ -1,6 +1,7 @@
 alter table public.marketplace_private_offer_threads
   add column if not exists closed_at timestamptz,
   add column if not exists closed_by uuid references public.website_accounts (id) on delete set null,
+  add column if not exists close_reason text,
   add column if not exists buyer_deleted_at timestamptz,
   add column if not exists seller_deleted_at timestamptz;
 

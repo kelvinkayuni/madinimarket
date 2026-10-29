@@ -357,7 +357,11 @@ export default function CommercePanel({ onNotice, onCounters }: {
       if (values.action === "checkout_offer" && result.order?.control_number) {
         onNotice(`Private order ${result.order.control_number} confirmed. The seller response deadline is shown in My orders.`);
       } else if (values.action === "decide_offer") {
-        onNotice(values.agree ? "Offer accepted. The seller will confirm the mineral details." : "Offer declined. The seller may send a revised offer if attempts remain.");
+        onNotice(values.agree
+          ? "Offer accepted. Your buyer request is temporarily unavailable and other offers have been closed while checkout proceeds."
+          : "Offer declined. The seller may send a revised offer if attempts remain.");
+      } else if (values.action === "cancel_offer_acceptance") {
+        onNotice("Checkout cancelled. Your buyer request is available for new offers again.");
       } else if (values.action === "confirm_offer") {
         onNotice("Mineral details confirmed and sent to the buyer for checkout.");
       } else if (values.action === "close_offer_thread") {
@@ -721,8 +725,14 @@ export default function CommercePanel({ onNotice, onCounters }: {
           <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
           <div className="field-row"><label className="field-label">Country<input className="text-input" required value={country} onChange={(event) => setCountry(event.target.value)} /></label><label className="field-label">Region<input className="text-input" required value={region} onChange={(event) => setRegion(event.target.value)} /></label><label className="field-label">District<input className="text-input" required value={district} onChange={(event) => setDistrict(event.target.value)} /></label><label className="field-label">Street / address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label></div>
           <button className="button button-dark" type="submit">Confirm and continue</button>
+          <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => {
+            const offer = selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1];
+            if (window.confirm("Cancel this accepted offer and make your buyer request available for new offers again?")) {
+              void performPrivateOffer(`cancel-acceptance-${offer.id}`, { action: "cancel_offer_acceptance", offerId: offer.id });
+            }
+          }}>Cancel accepted offer</button>
         </form>}
-        {selectedPrivateThread.side === "seller" && selectedPrivateThread.state === "open" && selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "declined" && selectedPrivateThread.attempt_count < 3 && selectedPrivateThread.request && data.privateOffers.feeRate !== null && <div className="commerce-revised-offer"><h4>Send a revised offer ({selectedPrivateThread.attempt_count}/3 used)</h4><PrivateOfferForm requestId={selectedPrivateThread.request_id} threadId={selectedPrivateThread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? selectedPrivateThread.request.currency : "TZS"} submitting={busy === `revise-offer-${selectedPrivateThread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${selectedPrivateThread.id}`, details)} /></div>}
+        {selectedPrivateThread.side === "seller" && selectedPrivateThread.state === "open" && ["declined", "closed"].includes(selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status ?? "") && selectedPrivateThread.attempt_count < 3 && selectedPrivateThread.request && data.privateOffers.feeRate !== null && <div className="commerce-revised-offer"><h4>{selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "closed" ? "Send a new offer" : "Send a revised offer"} ({selectedPrivateThread.attempt_count}/3 used)</h4><PrivateOfferForm requestId={selectedPrivateThread.request_id} threadId={selectedPrivateThread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? selectedPrivateThread.request.currency : "TZS"} submitting={busy === `revise-offer-${selectedPrivateThread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${selectedPrivateThread.id}`, details)} /></div>}
         <div className="dialog-actions">
           {selectedPrivateThread.state === "open" && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Close this private offer? No more offers or revised attempts can be sent.")) void performPrivateOffer(`close-offer-${selectedPrivateThread.id}`, { action: "close_offer_thread", threadId: selectedPrivateThread.id }); }}>Close offer</button>}
           {selectedPrivateThread.state === "closed" && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Delete this closed private offer from your view?")) void performPrivateOffer(`delete-offer-${selectedPrivateThread.id}`, { action: "delete_closed_offer_thread", threadId: selectedPrivateThread.id }); }}>Delete closed offer</button>}

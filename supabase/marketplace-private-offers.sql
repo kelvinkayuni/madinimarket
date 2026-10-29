@@ -8,10 +8,22 @@ create table if not exists public.marketplace_private_offer_threads (
   state text not null default 'open'
     check (state in ('open', 'accepted', 'awaiting_buyer_checkout', 'ordered', 'closed')),
   attempt_count smallint not null default 0 check (attempt_count between 0 and 3),
+  closed_at timestamptz,
+  closed_by uuid references public.website_accounts (id) on delete set null,
+  close_reason text,
+  buyer_deleted_at timestamptz,
+  seller_deleted_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (request_id, seller_id)
 );
+
+alter table public.marketplace_private_offer_threads
+  add column if not exists closed_at timestamptz,
+  add column if not exists closed_by uuid references public.website_accounts (id) on delete set null,
+  add column if not exists close_reason text,
+  add column if not exists buyer_deleted_at timestamptz,
+  add column if not exists seller_deleted_at timestamptz;
 
 create table if not exists public.marketplace_private_offers (
   id uuid primary key default gen_random_uuid(),
@@ -298,7 +310,7 @@ begin
   end if;
   if exists (
     select 1 from public.marketplace_private_offers
-    where thread_id = selected_thread.id and status <> 'declined'
+    where thread_id = selected_thread.id and status not in ('declined', 'closed')
   ) then
     raise exception 'Wait for the buyer to decline the current offer before sending another.' using errcode = '22023';
   end if;
@@ -355,8 +367,17 @@ as $decide_marketplace_private_offer$
 declare
   selected_offer public.marketplace_private_offers%rowtype;
   selected_thread public.marketplace_private_offer_threads%rowtype;
+  request_row public.buy_requests%rowtype;
   next_state text;
 begin
+  select request.* into request_row
+  from public.buy_requests as request
+  join public.marketplace_private_offer_threads as threads on threads.request_id = request.id
+  join public.marketplace_private_offers as offers on offers.thread_id = threads.id
+  where offers.id = p_offer_id and threads.buyer_id = p_buyer_id
+  for update of request;
+  if not found then raise exception 'Private offer not found.' using errcode = 'P0002'; end if;
+
   select offers.* into selected_offer
   from public.marketplace_private_offers as offers
   join public.marketplace_private_offer_threads as threads on threads.id = offers.thread_id
@@ -373,10 +394,39 @@ begin
   end if;
 
   if p_agree then
+    if request_row.status <> 'approved' or request_row.is_active is not true then
+      raise exception 'This buyer request is no longer accepting offers.' using errcode = '22023';
+    end if;
+
+    update public.buy_requests
+    set is_active = false
+    where id = request_row.id and is_active = true;
+
     update public.marketplace_private_offers set status = 'awaiting_buyer_checkout' where id = p_offer_id;
     update public.marketplace_private_offer_threads
     set state = 'awaiting_buyer_checkout', updated_at = now()
     where id = selected_thread.id;
+    update public.marketplace_private_offers
+    set status = 'closed'
+    where thread_id in (
+      select competing_thread.id
+      from public.marketplace_private_offer_threads as competing_thread
+      where competing_thread.request_id = request_row.id
+        and competing_thread.id <> selected_thread.id
+        and competing_thread.state in ('open', 'accepted', 'awaiting_buyer_checkout')
+    )
+      and status <> 'closed';
+    update public.marketplace_private_offer_threads as competing_thread
+    set state = 'closed',
+        closed_at = now(),
+        closed_by = p_buyer_id,
+        close_reason = 'buyer_accepted_another_offer',
+        buyer_deleted_at = now(),
+        seller_deleted_at = now(),
+        updated_at = now()
+    where competing_thread.request_id = request_row.id
+      and competing_thread.id <> selected_thread.id
+      and competing_thread.state in ('open', 'accepted', 'awaiting_buyer_checkout');
     next_state := 'awaiting_buyer_checkout';
   else
     update public.marketplace_private_offers set status = 'declined' where id = p_offer_id;
@@ -388,6 +438,80 @@ begin
   return jsonb_build_object('thread_state', next_state, 'attempt_count', selected_thread.attempt_count);
 end;
 $decide_marketplace_private_offer$;
+
+create or replace function public.cancel_marketplace_private_offer_acceptance(
+  p_buyer_id uuid,
+  p_offer_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $cancel_marketplace_private_offer_acceptance$
+declare
+  selected_offer public.marketplace_private_offers%rowtype;
+  selected_thread public.marketplace_private_offer_threads%rowtype;
+  request_row public.buy_requests%rowtype;
+begin
+  select request.* into request_row
+  from public.buy_requests as request
+  join public.marketplace_private_offer_threads as threads on threads.request_id = request.id
+  join public.marketplace_private_offers as offers on offers.thread_id = threads.id
+  where offers.id = p_offer_id and threads.buyer_id = p_buyer_id
+  for update of request;
+  if not found then raise exception 'Private offer not found.' using errcode = 'P0002'; end if;
+
+  select * into selected_offer from public.marketplace_private_offers
+  where id = p_offer_id for update;
+  if not found then raise exception 'Private offer not found.' using errcode = 'P0002'; end if;
+  select * into selected_thread from public.marketplace_private_offer_threads
+  where id = selected_offer.thread_id and buyer_id = p_buyer_id for update;
+  if not found or selected_offer.status <> 'awaiting_buyer_checkout'
+    or selected_thread.state <> 'awaiting_buyer_checkout' then
+    raise exception 'This accepted offer can no longer be cancelled from checkout.' using errcode = '22023';
+  end if;
+  if exists (
+    select 1 from public.marketplace_order_items
+    where private_offer_id = p_offer_id
+  ) then
+    raise exception 'This accepted offer already has an order and cannot be cancelled from checkout.' using errcode = '22023';
+  end if;
+
+  update public.buy_requests
+  set is_active = true
+  where id = request_row.id and status = 'approved';
+
+  update public.marketplace_private_offers
+  set status = 'closed'
+  where id = p_offer_id;
+  update public.marketplace_private_offer_threads
+  set state = case when attempt_count < 3 then 'open' else 'closed' end,
+      closed_at = case when attempt_count < 3 then null else now() end,
+      closed_by = case when attempt_count < 3 then null else p_buyer_id end,
+      close_reason = case when attempt_count < 3 then null else 'buyer_cancelled_checkout' end,
+      updated_at = now()
+  where id = selected_thread.id;
+
+  update public.marketplace_private_offer_threads as competing_thread
+  set state = 'open',
+      closed_at = null,
+      closed_by = null,
+      close_reason = null,
+      buyer_deleted_at = null,
+      seller_deleted_at = null,
+      updated_at = now()
+  where competing_thread.request_id = request_row.id
+    and competing_thread.id <> selected_thread.id
+    and competing_thread.state = 'closed'
+    and competing_thread.close_reason = 'buyer_accepted_another_offer'
+    and competing_thread.attempt_count < 3;
+
+  return jsonb_build_object(
+    'request_state', 'available',
+    'thread_state', case when selected_thread.attempt_count < 3 then 'open' else 'closed' end
+  );
+end;
+$cancel_marketplace_private_offer_acceptance$;
 
 drop function if exists public.confirm_marketplace_private_offer(uuid, uuid);
 create or replace function public.confirm_marketplace_private_offer(
@@ -642,12 +766,92 @@ begin
 end;
 $create_marketplace_private_offer_order$;
 
+create or replace function private.restore_private_request_after_offer_order_release()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $restore_private_request_after_offer_order_release$
+declare
+  selected_thread public.marketplace_private_offer_threads%rowtype;
+begin
+  if new.private_offer_id is null
+    or new.status not in ('unavailable', 'expired', 'cancelled', 'refunded')
+    or old.status = new.status then
+    return new;
+  end if;
+
+  select threads.* into selected_thread
+  from public.marketplace_private_offers as offers
+  join public.marketplace_private_offer_threads as threads on threads.id = offers.thread_id
+  where offers.id = new.private_offer_id;
+  if not found then return new; end if;
+
+  perform 1 from public.buy_requests
+  where id = selected_thread.request_id
+  for update;
+
+  if exists (
+    select 1
+    from public.marketplace_order_items as other_item
+    join public.marketplace_private_offers as other_offer on other_offer.id = other_item.private_offer_id
+    join public.marketplace_private_offer_threads as other_thread on other_thread.id = other_offer.thread_id
+    where other_thread.request_id = selected_thread.request_id
+      and other_item.id <> new.id
+      and other_item.status in (
+        'awaiting_seller', 'awaiting_payment', 'payment_submitted', 'paid', 'shipped',
+        'delivered', 'disputed', 'payout_due', 'payout_paid', 'refund_due'
+      )
+  ) then
+    return new;
+  end if;
+
+  update public.buy_requests
+  set is_active = true
+  where id = selected_thread.request_id and status = 'approved';
+
+  update public.marketplace_private_offers
+  set status = 'closed'
+  where id = new.private_offer_id and status <> 'closed';
+  update public.marketplace_private_offer_threads
+  set state = 'closed',
+      closed_at = now(),
+      close_reason = 'private_order_failed',
+      updated_at = now()
+  where id = selected_thread.id;
+
+  update public.marketplace_private_offer_threads as competing_thread
+  set state = 'open',
+      closed_at = null,
+      closed_by = null,
+      close_reason = null,
+      buyer_deleted_at = null,
+      seller_deleted_at = null,
+      updated_at = now()
+  where competing_thread.request_id = selected_thread.request_id
+    and competing_thread.id <> selected_thread.id
+    and competing_thread.state = 'closed'
+    and competing_thread.close_reason = 'buyer_accepted_another_offer'
+    and competing_thread.attempt_count < 3;
+
+  return new;
+end;
+$restore_private_request_after_offer_order_release$;
+
+revoke all on function private.restore_private_request_after_offer_order_release() from public, anon, authenticated;
+drop trigger if exists restore_private_request_after_offer_order_release on public.marketplace_order_items;
+create trigger restore_private_request_after_offer_order_release
+after update of status on public.marketplace_order_items
+for each row execute function private.restore_private_request_after_offer_order_release();
+
 revoke all on function public.send_marketplace_private_offer(uuid, bigint, uuid, text, text, numeric, text, numeric, numeric, text, text, text, text, text, text, text, text, numeric, text) from public, anon, authenticated;
 revoke all on function public.decide_marketplace_private_offer(uuid, uuid, boolean) from public, anon, authenticated;
+revoke all on function public.cancel_marketplace_private_offer_acceptance(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.confirm_marketplace_private_offer(uuid, uuid, text, text, numeric, text, numeric, numeric, text, text, text, text, text, text, text) from public, anon, authenticated;
 revoke all on function public.create_marketplace_private_offer_order(uuid, uuid, text, text, text, text, text, text) from public, anon, authenticated;
 grant execute on function public.send_marketplace_private_offer(uuid, bigint, uuid, text, text, numeric, text, numeric, numeric, text, text, text, text, text, text, text, text, numeric, text) to service_role;
 grant execute on function public.decide_marketplace_private_offer(uuid, uuid, boolean) to service_role;
+grant execute on function public.cancel_marketplace_private_offer_acceptance(uuid, uuid) to service_role;
 grant execute on function public.confirm_marketplace_private_offer(uuid, uuid, text, text, numeric, text, numeric, numeric, text, text, text, text, text, text, text) to service_role;
 grant execute on function public.create_marketplace_private_offer_order(uuid, uuid, text, text, text, text, text, text) to service_role;
 

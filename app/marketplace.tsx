@@ -31,7 +31,9 @@ type AdminCertificate = CertificateSubmission & { website_user_id: string; accou
 type Seller = { id: number; user_id?: string; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; is_own?: boolean; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type AccountMarketListing = Pick<Seller, "id" | "mineral" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image">;
-type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location">;
+type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location"> & {
+  marketplace_status?: "available" | "temporarily_unavailable" | "fulfilled";
+};
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
@@ -1388,10 +1390,11 @@ export default function Marketplace() {
           setMyWantedMinerals((result.marketBuyers ?? []).map((item: {
             id: number; mineral_name: string; weight: string | number; unit: Unit; color: string; shape: Buyer["shape"];
             quality: string; offer: string | number; currency: Currency; location: string;
+            marketplace_status?: AccountWantedMineral["marketplace_status"];
           }) => ({
             id: Number(item.id), mineral: item.mineral_name, weight: String(item.weight), unit: item.unit,
             color: item.color, shape: item.shape, quality: item.quality, offer: String(item.offer),
-            currency: item.currency, location: item.location,
+            currency: item.currency, location: item.location, marketplace_status: item.marketplace_status ?? "available",
           })));
         } else {
           setMyMarketMinerals(sellers.filter((item) => item.user_id === userId && item.status === "approved").map((item) => ({
@@ -1404,6 +1407,7 @@ export default function Marketplace() {
           setMyWantedMinerals(buyers.filter((item) => item.user_id === userId && item.status === "approved").map((item) => ({
             id: item.id, mineral: item.mineral, weight: item.weight, unit: item.unit, color: item.color,
             shape: item.shape, quality: item.quality, offer: item.offer, currency: item.currency, location: item.location,
+            marketplace_status: "available" as const,
           })));
         }
         openDialog(next);
@@ -3630,7 +3634,7 @@ export default function Marketplace() {
         <label className="user-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search your approved buyer requests" placeholder="Search minerals or location" value={userAccountListSearch} onChange={(event) => { setUserAccountListSearch(event.target.value); setUserAccountListPage(1); accountListScroll.current.wanted = 0; if (wantedListRef.current) wantedListRef.current.scrollTop = 0; }} /></label>
         <div className="submission-list account-scroll-list user-account-records" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>
           {visibleWantedMinerals.map((item) => <details className="user-account-record" key={`wanted-mineral-${item.id}`}>
-            <summary><span><strong data-no-translate>{item.mineral}</strong><small>{item.weight} {item.unit} · {money(item.offer, item.currency)}</small></span><span className="submission-status status-approved">Looking to buy</span><ChevronDown size={16} aria-hidden="true" /></summary>
+            <summary><span><strong data-no-translate>{item.mineral}</strong><small>{item.weight} {item.unit} · {money(item.offer, item.currency)}</small></span><span className={`submission-status ${item.marketplace_status === "temporarily_unavailable" ? "status-pending" : "status-approved"}`}>{item.marketplace_status === "fulfilled" ? "Fulfilled" : item.marketplace_status === "temporarily_unavailable" ? "Temporarily unavailable" : "Looking to buy"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
             <div className="user-account-record-details"><p data-no-translate>{item.color} · {item.shape} · {item.quality}</p><p data-no-translate>{item.location}</p></div>
           </details>)}
           {!myWantedMinerals.length && <div className="empty-search">You have no approved buying requests.</div>}

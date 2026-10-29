@@ -54,13 +54,50 @@ async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminC
     }));
   }
   const { data, error } = await admin.from("buy_requests")
-    .select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location")
+    .select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location, is_active")
     .eq("website_user_id", accountId)
     .eq("status", "approved")
-    .eq("is_active", true)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  const requests = data ?? [];
+  const inactiveRequestIds = requests.filter((request) => !request.is_active).map((request) => request.id);
+  if (inactiveRequestIds.length === 0) {
+    return requests.map((request) => ({ ...request, marketplace_status: "available" }));
+  }
+
+  const { data: threads, error: threadError } = await admin.from("marketplace_private_offer_threads")
+    .select("id, request_id")
+    .in("request_id", inactiveRequestIds);
+  if (threadError) throw threadError;
+  const threadIds = (threads ?? []).map((thread) => thread.id);
+  const { data: offers, error: offerError } = threadIds.length
+    ? await admin.from("marketplace_private_offers").select("id, thread_id").in("thread_id", threadIds)
+    : { data: [], error: null };
+  if (offerError) throw offerError;
+  const offerIds = (offers ?? []).map((offer) => offer.id);
+  const { data: orderItems, error: orderItemError } = offerIds.length
+    ? await admin.from("marketplace_order_items").select("private_offer_id, status").in("private_offer_id", offerIds)
+    : { data: [], error: null };
+  if (orderItemError) throw orderItemError;
+
+  const requestIdByThreadId = new Map((threads ?? []).map((thread) => [thread.id, thread.request_id]));
+  const requestIdByOfferId = new Map<string, number>();
+  for (const offer of offers ?? []) {
+    const requestId = requestIdByThreadId.get(offer.thread_id);
+    if (requestId !== undefined) requestIdByOfferId.set(offer.id, requestId);
+  }
+  const fulfilledRequestIds = new Set<number>();
+  for (const item of orderItems ?? []) {
+    if (item.status !== "payout_paid" || !item.private_offer_id) continue;
+    const requestId = requestIdByOfferId.get(item.private_offer_id);
+    if (requestId !== undefined) fulfilledRequestIds.add(requestId);
+  }
+  return requests.map((request) => ({
+    ...request,
+    marketplace_status: request.is_active
+      ? "available"
+      : fulfilledRequestIds.has(request.id) ? "fulfilled" : "temporarily_unavailable",
+  }));
 }
 
 async function websiteAccountHasMarketAccess(admin: ReturnType<typeof createSupabaseAdminClient>, accountId: string) {

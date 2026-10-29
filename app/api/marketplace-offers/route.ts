@@ -363,6 +363,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ...data });
     }
 
+    if (action === "cancel_offer_acceptance") {
+      const offerId = text(body.offerId, 36);
+      if (!uuidPattern.test(offerId)) return NextResponse.json({ error: "Choose a valid private offer." }, { status: 400 });
+      const { data, error } = await admin.rpc("cancel_marketplace_private_offer_acceptance", {
+        p_buyer_id: accountId,
+        p_offer_id: offerId,
+      });
+      if (error) return fail(error);
+      return NextResponse.json({ ok: true, ...data });
+    }
+
     if (action === "confirm_offer") {
       const offerId = text(body.offerId, 36);
       if (!uuidPattern.test(offerId)) return NextResponse.json({ error: "Choose a valid private offer." }, { status: 400 });
