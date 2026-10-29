@@ -500,6 +500,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-card { display: flex; min-width: 0; height: auto; flex-direction: column; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; }
 .seller-photo { position: relative; flex: 0 0 auto; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
 .seller-photo::after { position: absolute; inset: 45% 0 0; content: ""; background: linear-gradient(transparent, #13231e55); pointer-events: none; }
+.seller-photo-image { z-index: 0; object-fit: cover; }
 .photo-tag { position: absolute; z-index: 1; top: 10px; left: 10px; display: flex; align-items: center; gap: 6px; padding: 6px 7px; background: #ffffffed; color: #415446; font-size: 8px; font-weight: 700; }
 .photo-tag span { width: 5px; height: 5px; border-radius: 50%; background: #62a46a; }
 .reservation-photo-tag { top: auto; right: 8px; bottom: 8px; left: 8px; display: block; line-height: 1.4; }
