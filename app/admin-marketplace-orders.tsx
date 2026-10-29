@@ -80,6 +80,7 @@ function orderQueueLabel(order: Order) {
   if (order.items.some((item) =>
     ["paid", "shipped"].includes(item.status) && item.shipping_carrier?.trim() && item.tracking_number?.trim(),
   )) return "Delivery confirmation";
+  if (order.items.some((item) => item.status === "delivered")) return "Orders awaiting receipt confirmation";
   if (orderIsCompleted(order)) return "Completed";
   return order.payment_status.replaceAll("_", " ");
 }
