@@ -1030,10 +1030,86 @@ h1, h2, h3, p { margin-top: 0; }
 .support-resolved-note { color: var(--muted); font-size: 11px; }
 .support-actions { display: flex; gap: 8px; }
 .dialog-panel:has(.support-inbox) { width: min(980px, calc(100vw - 28px)); max-height: calc(100vh - 28px); }
+.support-mobile-back { display: none; }
 @media (max-width: 720px) {
-  .support-inbox { height: min(760px, calc(100vh - 28px)); min-height: 560px; grid-template-columns: 1fr; grid-template-rows: 300px minmax(260px, 1fr); }
+  .support-inbox {
+    height: min(760px, calc(100vh - 220px));
+    height: min(760px, calc(100dvh - 220px));
+    min-height: min(380px, calc(100vh - 220px));
+    min-height: min(380px, calc(100dvh - 220px));
+    max-height: calc(100vh - 220px);
+    max-height: calc(100dvh - 220px);
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .support-filter-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .support-filter-toolbar .field-label:nth-child(2),
+  .support-date-range { grid-column: 1 / -1; }
   .support-thread-list { max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
-  .support-conversation { min-height: 0; }
+  .support-conversation { min-height: 0; overflow-y: auto; }
   .support-message { width: 92%; }
+  .support-message-list { flex: 0 0 min(34vh, 240px); min-height: 140px; }
   .support-admin-tools { grid-template-columns: 1fr; align-items: stretch; }
+  .support-inbox:not(.is-conversation-open) .support-conversation { display: none; }
+  .support-inbox.is-conversation-open { grid-template-rows: minmax(0, 1fr); }
+  .support-inbox.is-conversation-open .support-thread-list { display: none; }
+  .support-inbox.is-conversation-open .support-conversation { display: flex; }
+  .support-mobile-back {
+    display: inline-flex;
+    min-height: 38px;
+    align-items: center;
+    margin: 0 0 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #35553e;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .support-detail-heading { padding: 10px 12px; }
+  .support-message-list { padding: 12px; }
+  .support-reply { padding: 10px 12px; }
+}
+@media (max-width: 650px) {
+  .admin-content > section,
+  .admin-content > section > *,
+  .admin-content .admin-ledger-table-wrap,
+  .admin-content .admin-commerce-orders { min-width: 0; max-width: 100%; }
+  .admin-page-heading h1 { overflow-wrap: anywhere; }
+  .admin-review-title { flex-wrap: wrap; }
+  .admin-review-item .submission-actions { flex-wrap: wrap; }
+  .admin-review-item .submission-actions .button { flex: 1 1 120px; }
+  .admin-site-setting,
+  .admin-market-manual-control { align-items: flex-start; flex-direction: column; }
+  .admin-account-control-row { align-items: flex-start; flex-direction: column; }
+  .admin-homepage-announcement-actions { flex-wrap: wrap; justify-content: flex-start; }
+  .admin-homepage-announcement-actions > span { flex-basis: 100%; margin-right: 0; }
+  .admin-subscription-plan { align-items: flex-start; flex-direction: column; }
+  .admin-subscription-plan > .button { width: 100%; min-height: 40px; }
+  .admin-subscription-request-actions .button,
+  .admin-listing-fee-actions .button,
+  .admin-payment-method-actions .button { min-height: 40px; }
+  .admin-ledger-table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .admin-ledger-table { min-width: 720px; }
+  .admin-sales-table { min-width: 920px; }
+  .admin-summary > div { min-width: 0; }
+  .admin-summary > div > span,
+  .admin-summary small { overflow-wrap: anywhere; }
+  .admin-menu-popover { max-height: calc(100vh - 76px); overflow-y: auto; overscroll-behavior: contain; }
+  .commerce-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .commerce-tab { min-height: 42px; }
+}
+@media (max-width: 390px) {
+  .admin-header { gap: 8px; }
+  .admin-brand { gap: 0; }
+  .admin-brand-name,
+  .admin-brand > span:not(.admin-brand-name) { display: none; }
+  .admin-header-actions { gap: 7px; }
+  .admin-account { max-width: 82px; }
+  .admin-header-actions .text-button { font-size: 10px; }
+  .admin-menu-trigger { width: 38px; height: 38px; }
+  .commerce-tabs { gap: 4px; padding: 4px; }
+  .commerce-tab { font-size: 9px; }
+  .dialog-panel .field-row { grid-template-columns: 1fr; }
 }
