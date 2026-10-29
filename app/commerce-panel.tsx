@@ -91,6 +91,7 @@ type PrivateOffer = {
   currency: Currency;
   status: string;
   availability_confirmed_at?: string | null;
+  checkout_deadline?: string | null;
   signed_image_url: string | null;
   signed_certificate_url: string | null;
   certificate_file_name: string | null;
@@ -103,6 +104,7 @@ type PrivateOfferThread = {
   request_id: number;
   side: "buyer" | "seller";
   state: string;
+  close_reason: string | null;
   attempt_count: number;
   seller_username: string;
   request: { mineral_name: string; weight: string | number; unit: string; color: string; shape: string; quality: string; offer: string | number; currency: Currency; location: string } | null;
@@ -151,11 +153,16 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
-function privateOfferStatusLabel(status: string, side: "buyer" | "seller") {
-  if (status === "accepted") return side === "buyer" ? "You accepted this offer" : "Buyer accepted your offer";
+function privateOfferStatusLabel(status: string, side: "buyer" | "seller", closeReason?: string | null, threadState?: string) {
+  if (status === "pending") return side === "buyer" ? "New offer · review needed" : "Waiting for buyer response";
+  if (status === "accepted") return side === "buyer" ? "Seller finalizing mineral details" : "Your confirmation is needed";
   if (status === "declined") return side === "buyer" ? "You declined this offer" : "Buyer declined your offer";
-  if (status === "awaiting_buyer_checkout") return side === "buyer" ? "You accepted this offer" : "Buyer accepted your offer";
-  if (status === "ordered") return "Ordered";
+  if (status === "awaiting_buyer_checkout") return side === "buyer" ? "Accepted · checkout required" : "Buyer accepted · checkout pending";
+  if (status === "ordered") return "Order placed · see My orders";
+  if (status === "closed" && threadState === "open") return "Checkout cancelled · request reopened";
+  if (status === "closed" && closeReason === "buyer_checkout_expired") return "Checkout expired · request reopened";
+  if (status === "closed" && closeReason === "buyer_cancelled_checkout") return "Checkout cancelled · request reopened";
+  if (status === "closed") return "Offer closed";
   return statusLabel(status);
 }
 
@@ -380,9 +387,14 @@ export default function CommercePanel({ onNotice, onCounters }: {
           onNotice(`Private order ${result.order.control_number} confirmed. The seller response deadline is shown in My orders.`);
         }
       } else if (values.action === "decide_offer") {
-        onNotice(values.agree
-          ? "Offer accepted. Your buyer request is temporarily unavailable and other offers have been closed while checkout proceeds."
-          : "Offer declined. The seller may send a revised offer if attempts remain.");
+        if (values.agree) {
+          const checkoutDeadline = result.checkout_deadline
+            ? new Date(result.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })
+            : "the deadline shown in your private offer";
+          onNotice(`Offer accepted. Complete checkout by ${checkoutDeadline} Tanzania time. The mineral is reserved for you during this 30-minute window.`);
+        } else {
+          onNotice("Offer declined. The seller may send a revised offer if attempts remain.");
+        }
       } else if (values.action === "cancel_offer_acceptance") {
         onNotice("Checkout cancelled. Your buyer request is available for new offers again.");
       } else if (values.action === "confirm_offer") {
@@ -622,7 +634,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {visibleBuyerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
               <span className="commerce-private-card-main"><span className="commerce-private-card-role">Buyer · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span>Seller @{thread.seller_username}</span></span>
-              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "buyer")}</span><span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "buyer", thread.close_reason, thread.state)}</span>{latest?.status === "awaiting_buyer_checkout" && latest.checkout_deadline && <span className="commerce-private-card-meta">Complete by {new Date(latest.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</span>}<span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span></span>
             </button>; })}
           </div>
           {!visibleBuyerPrivateThreads.length && <p className="commerce-note">No offers received as a buyer match the current filter.</p>}
@@ -633,7 +645,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {visibleSellerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; const remaining = Math.max(0, 3 - thread.attempt_count); return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
               <span className="commerce-private-card-main"><span className="commerce-private-card-role">Seller · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span>Buyer request</span></span>
-              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "seller")}</span><span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "seller", thread.close_reason, thread.state)}</span>{latest?.status === "awaiting_buyer_checkout" && latest.checkout_deadline && <span className="commerce-private-card-meta">Checkout deadline: {new Date(latest.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</span>}<span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span></span>
             </button>; })}
           </div>
           {!visibleSellerPrivateThreads.length && <p className="commerce-note">No offers sent as a seller match the current filter.</p>}
@@ -738,7 +750,10 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <div className="dialog-kicker">{selectedPrivateThread.side === "buyer" ? "OFFERS AS BUYER" : "OFFERS AS SELLER"}</div>
         <h2 id="private-thread-title">{selectedPrivateThread.request?.mineral_name ?? "Private mineral offer"} · Request #{selectedPrivateThread.request_id}</h2>
         {selectedPrivateThread.offers.map((offer) => <div className="commerce-private-offer" key={offer.id}>
-          <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{privateOfferStatusLabel(offer.status, selectedPrivateThread.side)}</span></div>
+          <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{privateOfferStatusLabel(offer.status, selectedPrivateThread.side, selectedPrivateThread.close_reason)}</span></div>
+          {offer.status === "awaiting_buyer_checkout" && offer.checkout_deadline && <p className="commerce-note">Checkout must be completed by {new Date(offer.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time. If the deadline passes, the acceptance is cancelled, the request reopens, and other eligible offers become available again.</p>}
+          {offer.status === "closed" && selectedPrivateThread.close_reason === "buyer_checkout_expired" && <p className="commerce-note">The checkout deadline passed before an order was created. No payment was taken; the buyer request and eligible competing offers are available again.</p>}
+          {offer.status === "ordered" && <p className="commerce-note">The order has been created. Continue with payment, shipping, delivery confirmation, and dispute handling in My orders.</p>}
           {offer.signed_image_url && <div className="commerce-private-image"><Image src={offer.signed_image_url} alt={`${offer.mineral_name} private offer`} width={800} height={800} unoptimized /></div>}
           {selectedPrivateThread.request
             ? <div className="private-offer-comparison">
@@ -763,8 +778,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
         {selectedPrivateThread.side === "buyer" && selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => { event.preventDefault(); const offer = selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]; void performPrivateOffer(`checkout-offer-${offer.id}`, { action: "checkout_offer", offerId: offer.id, buyerName, buyerPhone, country, region, district, address }); }}>
           <h4>Confirm mineral and delivery details</h4>
           <p className="commerce-note">{selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.availability_confirmed_at
-            ? "The seller confirmed availability when sending this offer. Confirming checkout reserves the mineral and starts the payment deadline shown in My orders."
-            : "Confirming checkout starts the seller availability check. The payment window begins after the seller responds."}</p>
+            ? "The seller confirmed availability when sending this offer. Confirm your delivery details to create the order; the payment deadline starts after checkout."
+            : "Confirm your delivery details to create the order. The seller must confirm availability before the payment window begins."}</p>
           <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
           <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
           <div className="field-row"><label className="field-label">Country<input className="text-input" required value={country} onChange={(event) => setCountry(event.target.value)} /></label><label className="field-label">Region<input className="text-input" required value={region} onChange={(event) => setRegion(event.target.value)} /></label><label className="field-label">District<input className="text-input" required value={district} onChange={(event) => setDistrict(event.target.value)} /></label><label className="field-label">Street / address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label></div>

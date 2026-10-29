@@ -23,8 +23,79 @@ export async function GET(request: Request) {
     const admin = createSupabaseAdminClient();
     const { data: processed, error: processError } = await admin.rpc("process_marketplace_orders");
     if (processError) throw processError;
+    const { data: processedPrivateOffers, error: privateOfferProcessError } = await admin.rpc("process_marketplace_private_offer_checkouts");
+    if (privateOfferProcessError) throw privateOfferProcessError;
     let sentCount = 0;
     let emailFailures = 0;
+
+    const offerClaimCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: pendingPrivateOffers, error: pendingPrivateOffersError } = await admin.from("marketplace_private_offers")
+      .select("id, thread_id, mineral_name, total_price, currency")
+      .eq("status", "pending")
+      .is("buyer_offer_email_sent_at", null)
+      .or(`buyer_offer_email_claimed_at.is.null,buyer_offer_email_claimed_at.lt.${offerClaimCutoff}`)
+      .order("created_at")
+      .limit(10);
+    if (pendingPrivateOffersError) throw pendingPrivateOffersError;
+
+    for (const offer of pendingPrivateOffers ?? []) {
+      const claimedAt = new Date().toISOString();
+      const { data: claimedOffer, error: claimError } = await admin.from("marketplace_private_offers")
+        .update({ buyer_offer_email_claimed_at: claimedAt })
+        .eq("id", offer.id)
+        .eq("status", "pending")
+        .is("buyer_offer_email_sent_at", null)
+        .or(`buyer_offer_email_claimed_at.is.null,buyer_offer_email_claimed_at.lt.${offerClaimCutoff}`)
+        .select("id")
+        .maybeSingle();
+      if (claimError) throw claimError;
+      if (!claimedOffer) continue;
+
+      try {
+        const { data: thread, error: threadError } = await admin.from("marketplace_private_offer_threads")
+          .select("buyer_id, seller_id")
+          .eq("id", offer.thread_id)
+          .maybeSingle();
+        if (threadError) throw threadError;
+        if (!thread) throw new Error("The private-offer thread no longer exists.");
+
+        const { data: accounts, error: accountsError } = await admin.from("website_accounts")
+          .select("id, email, username, display_name")
+          .in("id", [thread.buyer_id, thread.seller_id]);
+        if (accountsError) throw accountsError;
+        const buyer = (accounts ?? []).find((account) => account.id === thread.buyer_id);
+        const seller = (accounts ?? []).find((account) => account.id === thread.seller_id);
+        if (!buyer?.email) throw new Error("The buyer email address is unavailable.");
+
+        const signInUrl = new URL("/", getPublicAppUrl());
+        signInUrl.searchParams.set("signin", "1");
+        signInUrl.searchParams.set("returnTo", "orders");
+        await sendGmailEmail({
+          to: buyer.email,
+          subject: `New private mineral offer from ${seller?.username ?? "a Madinimarket seller"}`,
+          text: `Hello ${buyer.display_name ?? "buyer"},\n\n${seller?.username ?? "A seller"} has sent you a private offer for ${offer.mineral_name}. The total price is ${offer.currency} ${Number(offer.total_price).toLocaleString()}.\n\nSign in to review the mineral details and certificate (if provided), then accept or decline the offer. Accepting does not charge you; you will still confirm checkout details and submit payment proof for admin verification.\n\n${signInUrl.toString()}\n\nMadinimarket`,
+        });
+        const { error: sentUpdateError } = await admin.from("marketplace_private_offers")
+          .update({
+            buyer_offer_email_sent_at: new Date().toISOString(),
+            buyer_offer_email_claimed_at: null,
+          })
+          .eq("id", offer.id)
+          .eq("buyer_offer_email_claimed_at", claimedAt)
+          .is("buyer_offer_email_sent_at", null);
+        if (sentUpdateError) throw sentUpdateError;
+        sentCount += 1;
+      } catch (error) {
+        emailFailures += 1;
+        console.error(`Private offer notification failed for offer ${offer.id}`, error);
+        const { error: releaseError } = await admin.from("marketplace_private_offers")
+          .update({ buyer_offer_email_claimed_at: null })
+          .eq("id", offer.id)
+          .eq("buyer_offer_email_claimed_at", claimedAt)
+          .is("buyer_offer_email_sent_at", null);
+        if (releaseError) console.error("Could not release failed private offer email claim for retry.", releaseError);
+      }
+    }
 
     const availabilityNotifications = await sendPendingSellerAvailabilityEmails();
     sentCount += availabilityNotifications.sentCount;
@@ -306,7 +377,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, processed, sentCount, emailFailures }, { status: emailFailures ? 503 : 200 });
+    return NextResponse.json({ ok: true, processed, processedPrivateOffers, sentCount, emailFailures }, { status: emailFailures ? 503 : 200 });
   } catch (error) {
     console.error("Marketplace order cron failed", error);
     return NextResponse.json({ error: "Marketplace order processing failed." }, { status: 503 });

@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const admin = createSupabaseAdminClient();
     const [{ data: threads, error: threadError }, { data: settings, error: settingsError }] = await Promise.all([
       admin.from("marketplace_private_offer_threads")
-        .select("id, request_id, buyer_id, seller_id, state, attempt_count, buyer_deleted_at, seller_deleted_at, created_at, updated_at")
+        .select("id, request_id, buyer_id, seller_id, state, attempt_count, closed_at, close_reason, buyer_deleted_at, seller_deleted_at, created_at, updated_at")
         .or(`buyer_id.eq.${accountId},seller_id.eq.${accountId}`)
         .order("updated_at", { ascending: false })
         .limit(100),
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     const requestIds = [...new Set((threads ?? []).map((thread) => thread.request_id))];
     const accountIds = [...new Set((threads ?? []).flatMap((thread) => [thread.seller_id, thread.buyer_id]))];
     const [{ data: offers, error: offerError }, { data: requests, error: requestError }, { data: accounts, error: accountError }] = await Promise.all([
-      admin.from("marketplace_private_offers").select("id, thread_id, attempt_number, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, color, shape, quality, image_path, certificate_path, certificate_file_name, certificate_content_type, decline_reason, decline_explanation, declined_at, country, region, district, seller_amount, platform_fee_rate, platform_fee_amount, total_price, currency, status, availability_confirmed_at, created_at").in("thread_id", threadIds).order("attempt_number"),
+      admin.from("marketplace_private_offers").select("id, thread_id, attempt_number, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, color, shape, quality, image_path, certificate_path, certificate_file_name, certificate_content_type, decline_reason, decline_explanation, declined_at, country, region, district, seller_amount, platform_fee_rate, platform_fee_amount, total_price, currency, status, availability_confirmed_at, checkout_deadline, created_at").in("thread_id", threadIds).order("attempt_number"),
       admin.from("buy_requests").select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location")
         .in("id", requestIds),
       admin.from("website_accounts").select("id, username").in("id", accountIds),
@@ -371,13 +371,23 @@ export async function POST(request: Request) {
         p_agree: body.agree,
       });
       if (error) return fail(error);
+      let checkoutDeadline: string | null = null;
+      if (body.agree) {
+        const { data: acceptedOffer, error: acceptedOfferError } = await admin.from("marketplace_private_offers")
+          .select("checkout_deadline")
+          .eq("id", offerId)
+          .eq("status", "awaiting_buyer_checkout")
+          .maybeSingle();
+        if (acceptedOfferError) throw acceptedOfferError;
+        checkoutDeadline = acceptedOffer?.checkout_deadline ?? null;
+      }
       if (!body.agree) {
         const { error: declineError } = await admin.from("marketplace_private_offers")
           .update({ decline_reason: declineReason, decline_explanation: declineExplanation || null, declined_at: new Date().toISOString() })
           .eq("id", offerId);
         if (declineError) throw declineError;
       }
-      return NextResponse.json({ ok: true, ...data });
+      return NextResponse.json({ ok: true, ...data, checkout_deadline: checkoutDeadline });
     }
 
     if (action === "cancel_offer_acceptance") {
