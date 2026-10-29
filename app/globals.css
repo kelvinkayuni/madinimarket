@@ -463,6 +463,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-announcement { flex: 0 0 auto; margin-top: 12px; border: 1px solid #d9a1a1; border-radius: 5px; background: #fff6f4; padding: 9px 12px; color: #b42318; font-size: 12px; font-weight: 800; line-height: 1.4; text-align: center; animation: madini-homepage-notice 1.2s ease-in-out infinite alternate; }
 @keyframes madini-homepage-notice { from { color: #b42318; border-color: #d9a1a1; background: #fff6f4; } to { color: #ef2b1f; border-color: #ef8b82; background: #fffafa; } }
 .market-intro { flex: 0 0 auto; padding: 12px 0 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.market-intro > div:first-child { min-width: 0; flex: 1 1 0; }
 .market-intro-tools { display: flex; align-items: center; gap: 8px; width: min(100%, 400px); flex-shrink: 0; }
 .mobile-market-search { display: flex; flex: 0 0 142px; width: 142px; height: 37px; gap: 7px; padding: 0 9px; }
 .mobile-market-search input { font-size: 9px; }
@@ -473,7 +474,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .eyebrow-line { width: 20px; height: 1px; background: var(--red); }
 .eyebrow-year { margin-left: 3px; color: #a1a79e; font-size: 8px; }
 h1, h2, h3, p { margin-top: 0; }
-.market-intro h1 { margin: 10px 0 4px; font-family: var(--font-display), Georgia, serif; font-size: var(--homepage-headline-font-size, 49px); line-height: 1.05; font-weight: 500; }
+.market-intro h1 { margin: 10px 0 4px; overflow-wrap: anywhere; font-family: var(--font-display), Georgia, serif; font-size: var(--homepage-headline-font-size, 49px); line-height: 1.05; font-weight: 500; }
 .market-intro h1 em { color: #55755e; font-weight: 500; }
 .market-status { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .market-status strong, .market-status small { display: block; }
@@ -936,7 +937,7 @@ h1, h2, h3, p { margin-top: 0; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
   .market-intro { display: block; padding: 8px 0 16px; }
-  .market-intro h1 { max-width: none; margin-top: 9px; font-size: min(var(--homepage-headline-font-size, 36px), 8.8vw); white-space: nowrap; }
+  .market-intro h1 { max-width: none; margin-top: 9px; font-size: min(var(--homepage-headline-font-size, 36px), 8.8vw); white-space: normal; }
   .market-status { margin-top: 0; }
   .market-status { gap: 4px; margin-bottom: 2px; }
   .market-status strong { font-size: 9px; }
