@@ -478,13 +478,13 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const filteredActiveSellerItems = activeSellerItems.filter((item) => matchesSellerSearch(item) && matchesSellerStatus(item));
   const filteredSellerHistory = sellerItemHistory.filter((item) => matchesSellerSearch(item) && matchesSellerStatus(item));
   const orderPageSize = 10;
-  const isCartListingAvailable = (item: CartItem) => Boolean(item.listing && item.listing.is_active && item.listing.status === "approved" && item.listing.marketplace_state === "available");
+  const isCartListingMarketListed = (item: CartItem) => Boolean(item.listing && item.listing.is_active && item.listing.status === "approved" && item.listing.marketplace_state === "available");
   const filteredCartItems = data.cartItems.filter((item) => {
     const matchesSearch = !cartSearch.trim() || `${item.listing?.mineral_name ?? ""} ${item.listing?.seller_name ?? ""}`.toLocaleLowerCase().includes(cartSearch.trim().toLocaleLowerCase());
-    const matchesStatus = cartStatusFilter === "all" || (cartStatusFilter === "available" ? isCartListingAvailable(item) : !isCartListingAvailable(item));
+    const matchesStatus = cartStatusFilter === "all" || (cartStatusFilter === "listed" ? isCartListingMarketListed(item) : !isCartListingMarketListed(item));
     return matchesSearch && matchesStatus;
   });
-  const unavailableCartItemsCount = data.cartItems.filter((item) => !isCartListingAvailable(item)).length;
+  const unavailableCartItemsCount = data.cartItems.filter((item) => !isCartListingMarketListed(item)).length;
   const filteredPrivateThreads = data.privateOffers.threads.filter((thread) => {
     const latestOffer = thread.offers[thread.offers.length - 1];
     const matchesSearch = !privateOfferSearch.trim() ||
@@ -672,18 +672,18 @@ export default function CommercePanel({ onNotice, onCounters }: {
             </div>
             <div className="commerce-collection-tools">
               <label className="commerce-order-search">Search cart<input className="text-input" type="search" value={cartSearch} placeholder="Mineral or seller" onChange={(event) => setCartSearch(event.target.value)} /></label>
-              <label className="commerce-order-filter">Listing status<select className="text-input" value={cartStatusFilter} onChange={(event) => setCartStatusFilter(event.target.value)}><option value="all">All items</option><option value="available">Available</option><option value="unavailable">Unavailable</option></select></label>
+              <label className="commerce-order-filter">Market status<select className="text-input" value={cartStatusFilter} onChange={(event) => setCartStatusFilter(event.target.value)}><option value="all">All items</option><option value="listed">Currently listed</option><option value="unavailable">Unavailable</option></select></label>
             </div>
             <div className="commerce-cart-item-list" aria-label="Items in your cart">
               {filteredCartItems.map((item) => {
-                const available = isCartListingAvailable(item);
-                const itemStatus = available ? "Available" : item.listing?.marketplace_state === "reserved" ? "Reserved" : "Unavailable";
+                const marketListed = isCartListingMarketListed(item);
+                const itemStatus = marketListed ? "Listed" : item.listing?.marketplace_state === "reserved" ? "Reserved" : "Unavailable";
                 return <article className="commerce-cart-item-card" key={item.id}>
                   <div className="commerce-cart-item-info">
                     <strong>{item.listing?.mineral_name ?? "Listing no longer available"}</strong>
                     <span>{item.listing ? `${item.listing.listing_type === "batch" ? "Batch · " : ""}${item.listing.weight} ${item.listing.unit} · ${amount(item.listing.price, item.listing.currency)}` : "This listing is no longer available."}</span>
                   </div>
-                  <span className={`commerce-cart-item-status${available ? " is-available" : ""}`}>{itemStatus}</span>
+                  <span className={`commerce-cart-item-status${marketListed ? " is-available" : ""}`}>{itemStatus}</span>
                   <button className="button button-outline commerce-cart-remove" type="button" aria-label={`Remove ${item.listing?.mineral_name ?? "unavailable item"} from cart`} disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
                 </article>;
               })}
@@ -693,7 +693,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           <aside className="commerce-cart-checkout" aria-labelledby="commerce-cart-checkout-heading">
             <div className="commerce-cart-checkout-heading">
               <h4 id="commerce-cart-checkout-heading">Delivery and order form</h4>
-              <p>This form submits all {data.cartItems.length} items in your cart as one order.</p>
+              <p>This form submits all {data.cartItems.length} items in your cart as one order. “Listed” means currently on the market; it is not the seller’s order-specific confirmation.</p>
             </div>
             <ul className="commerce-cart-order-summary" aria-label="Items included in this order">
               {data.cartItems.map((item) => <li key={item.id}>
@@ -704,7 +704,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             <p className="commerce-total">Cart total <strong>{amount(total, cartCurrency)}</strong></p>
             {unavailableCartItemsCount > 0 && <p className="commerce-warning commerce-cart-unavailable-note">Remove or wait for the {unavailableCartItemsCount} unavailable {unavailableCartItemsCount === 1 ? "item" : "items"} before submitting the order.</p>}
             <form className="commerce-checkout" onSubmit={checkout}>
-              <p className="commerce-note">Items stay available to other buyers while in your cart. Confirming reserves them while sellers check availability. A seller-confirmed unavailable mineral is removed from the market; if a seller does not respond by the deadline, that item is cancelled and released back to the market. You only pay for seller-confirmed items.</p>
+              <p className="commerce-note">After you submit the order, each seller must confirm their item’s availability. Items stay available to other buyers while in your cart; submitting reserves them while sellers check. A seller-confirmed unavailable mineral is removed from the market; if a seller does not respond by the deadline, that item is cancelled and released back to the market. You only pay for seller-confirmed items.</p>
               <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
               <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
               <div className="field-row">
