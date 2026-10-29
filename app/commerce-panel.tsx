@@ -593,7 +593,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     <div className="commerce-order-item">
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
       <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</small>
-      <small>Seller receives {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
+      <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
       {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
       {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
     </div>
