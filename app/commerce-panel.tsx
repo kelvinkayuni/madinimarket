@@ -158,6 +158,7 @@ function buyerOrderStatusLabel(status: string) {
   if (status === "awaiting_sellers" || status === "awaiting_seller") return "Awaiting seller to confirm availability";
   if (status === "awaiting_payment") return "Awaiting you to pay";
   if (status === "payment_submitted") return "You submitted payment for verification";
+  if (status === "paid") return "Your payment is verified. Awaiting seller to dispatch your order.";
   return statusLabel(status);
 }
 
@@ -218,7 +219,7 @@ function orderItemStatusLabel(item: OrderItem) {
 function sellerOrderItemStatusLabel(item: OrderItem) {
   if (item.status === "awaiting_seller") return "Awaiting you to confirm availability";
   if (item.status === "awaiting_payment" || item.status === "payment_submitted") return "Awaiting buyer to pay";
-  if (item.status === "paid") return "Buyer payment verified";
+  if (item.status === "paid") return "Buyer payment verified. Deliver the order and submit carrier and tracking number.";
   return orderItemStatusLabel(item);
 }
 
@@ -622,7 +623,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     {item.status === "paid" && <div className="commerce-item-actions">
       <label className="field-label">Carrier<input className="text-input" value={shipping[item.id]?.carrier ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [item.id]: { carrier: event.target.value, tracking: current[item.id]?.tracking ?? "" } }))} /></label>
       <label className="field-label">Tracking number<input className="text-input" value={shipping[item.id]?.tracking ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [item.id]: { carrier: current[item.id]?.carrier ?? "", tracking: event.target.value } }))} /></label>
-      <button className="button button-dark" type="button" disabled={busy === `dispatch-${item.id}`} onClick={() => void perform(`dispatch-${item.id}`, "seller_dispatch", { itemId: item.id, carrier: shipping[item.id]?.carrier, trackingNumber: shipping[item.id]?.tracking })}>Mark sent</button>
+      <button className="button button-dark" type="button" disabled={busy === `dispatch-${item.id}`} onClick={() => void perform(`dispatch-${item.id}`, "seller_dispatch", { itemId: item.id, carrier: shipping[item.id]?.carrier, trackingNumber: shipping[item.id]?.tracking })}>{busy === `dispatch-${item.id}` ? "Submitting…" : "Submit"}</button>
     </div>}
     {item.status === "disputed" && <p className="commerce-warning">Buyer dispute: {item.dispute_reason ?? "Awaiting admin review."}</p>}
     </div>
@@ -746,7 +747,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div className="commerce-order-tools">
         <label className="commerce-order-search">Search buying orders<input className="text-input" type="search" value={buyerOrderSearch} placeholder="Order number or mineral" onChange={(event) => { setBuyerOrderSearch(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }} /></label>
         <label className="commerce-order-filter">Status<select className="text-input" value={buyerStatusFilter} onChange={(event) => { setBuyerStatusFilter(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }}>
-        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting you to pay</option><option value="payment_submitted">You submitted payment for verification</option><option value="awaiting_seller">Awaiting seller to confirm availability</option><option value="paid">Paid</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting you to pay</option><option value="payment_submitted">You submitted payment for verification</option><option value="awaiting_seller">Awaiting seller to confirm availability</option><option value="paid">Your payment is verified. Awaiting seller to dispatch your order.</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
       </div>
       <div className="commerce-order-subsection">
@@ -778,7 +779,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div className="commerce-order-tools">
         <label className="commerce-order-search">Search selling orders<input className="text-input" type="search" value={sellerOrderSearch} placeholder="Order number or mineral" onChange={(event) => { setSellerOrderSearch(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }} /></label>
         <label className="commerce-order-filter">Status<select className="text-input" value={sellerStatusFilter} onChange={(event) => { setSellerStatusFilter(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }}>
-        <option value="all">All statuses</option><option value="awaiting_seller">Awaiting you to confirm availability</option><option value="awaiting_payment">Awaiting buyer to pay</option><option value="paid">Buyer payment verified</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+        <option value="all">All statuses</option><option value="awaiting_seller">Awaiting you to confirm availability</option><option value="awaiting_payment">Awaiting buyer to pay</option><option value="paid">Buyer payment verified. Deliver the order and submit carrier and tracking number.</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
       </div>
       <div className="commerce-order-subsection">
