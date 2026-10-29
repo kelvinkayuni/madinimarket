@@ -149,6 +149,29 @@ export async function GET(request: Request) {
       .map((item) => item.order_id));
     const buyerHistoryCount = (buyerOrderStates ?? []).length - buyerOpenOrderIds.size;
     const sellerHistoryItemCount = (sellerOrderStates ?? []).filter((item) => completedItemStatuses.has(item.status)).length;
+    const privateOfferThreadIds = (privateOfferThreads ?? []).map((thread) => thread.id);
+    const { data: privateOfferRows, error: privateOfferRowsError } = privateOfferThreadIds.length
+      ? await admin.from("marketplace_private_offers").select("id, thread_id").in("thread_id", privateOfferThreadIds)
+      : { data: [], error: null };
+    if (privateOfferRowsError) {
+      console.error("Failed to load private offer completion status", privateOfferRowsError);
+      return NextResponse.json({ error: "Could not load your cart and orders." }, { status: 503 });
+    }
+    const privateOfferIds = (privateOfferRows ?? []).map((offer) => offer.id);
+    const { data: completedPrivateOrderItems, error: completedPrivateOrderItemsError } = privateOfferIds.length
+      ? await admin.from("marketplace_order_items").select("private_offer_id")
+        .in("private_offer_id", privateOfferIds).eq("status", "payout_paid")
+      : { data: [], error: null };
+    if (completedPrivateOrderItemsError) {
+      console.error("Failed to load completed private offers", completedPrivateOrderItemsError);
+      return NextResponse.json({ error: "Could not load your cart and orders." }, { status: 503 });
+    }
+    const completedPrivateOfferIds = new Set((completedPrivateOrderItems ?? []).map((item) => item.private_offer_id));
+    const completedPrivateThreadIds = new Set(
+      (privateOfferRows ?? [])
+        .filter((offer) => completedPrivateOfferIds.has(offer.id))
+        .map((offer) => offer.thread_id),
+    );
 
     const safeSellerItems = await Promise.all((sellerItems ?? []).map(async (item) => {
       const order = Array.isArray(item.order) ? item.order[0] : item.order;
@@ -195,7 +218,10 @@ export async function GET(request: Request) {
         buyerOpenOrdersCount: buyerOpenOrderIds.size,
         buyerHistoryCount,
         sellerHistoryItemCount,
-      privateOffersCount: (privateOfferThreads ?? []).filter((thread) => thread.buyer_id === accountId ? !thread.buyer_deleted_at : !thread.seller_deleted_at).length,
+      privateOffersCount: (privateOfferThreads ?? []).filter((thread) =>
+        !completedPrivateThreadIds.has(thread.id) &&
+        (thread.buyer_id === accountId ? !thread.buyer_deleted_at : !thread.seller_deleted_at)
+      ).length,
       sellingCount: profile.is_active && activeSubscription ? sellingCount ?? 0 : 0,
       buyingCount: profile.is_active && activeSubscription ? buyingCount ?? 0 : 0,
       paymentMethods: marketplaceSettings.payment_methods,

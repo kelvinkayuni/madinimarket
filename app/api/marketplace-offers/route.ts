@@ -49,9 +49,6 @@ export async function GET(request: Request) {
       admin.from("marketplace_settings").select("listing_fee_rate, usd_enabled").eq("id", true).single(),
     ]);
     if (threadError || settingsError) throw threadError ?? settingsError;
-    const sellerThreadIds = new Set(
-      (threads ?? []).filter((thread) => thread.seller_id === accountId).map((thread) => thread.id),
-    );
     const threadIds = (threads ?? []).map((thread) => thread.id);
     if (threadIds.length === 0) return NextResponse.json({
       threads: [],
@@ -59,6 +56,9 @@ export async function GET(request: Request) {
       usdEnabled: settings.usd_enabled,
     });
 
+    const sellerThreadIds = new Set(
+      (threads ?? []).filter((thread) => thread.seller_id === accountId).map((thread) => thread.id),
+    );
     const requestIds = [...new Set((threads ?? []).map((thread) => thread.request_id))];
     const accountIds = [...new Set((threads ?? []).flatMap((thread) => [thread.seller_id, thread.buyer_id]))];
     const [{ data: offers, error: offerError }, { data: requests, error: requestError }, { data: accounts, error: accountError }] = await Promise.all([
@@ -69,10 +69,24 @@ export async function GET(request: Request) {
     ]);
     if (offerError || requestError || accountError) throw offerError ?? requestError ?? accountError;
 
+    const offerIds = (offers ?? []).map((offer) => offer.id);
+    const { data: completedOrderItems, error: completedOrderItemsError } = offerIds.length
+      ? await admin.from("marketplace_order_items").select("private_offer_id")
+        .in("private_offer_id", offerIds).eq("status", "payout_paid")
+      : { data: [], error: null };
+    if (completedOrderItemsError) throw completedOrderItemsError;
+    const completedOfferIds = new Set((completedOrderItems ?? []).map((item) => item.private_offer_id));
+    const completedThreadIds = new Set(
+      (offers ?? [])
+        .filter((offer) => completedOfferIds.has(offer.id))
+        .map((offer) => offer.thread_id),
+    );
+    const visibleThreads = (threads ?? []).filter((thread) => !completedThreadIds.has(thread.id));
+    const visibleOffers = (offers ?? []).filter((offer) => !completedOfferIds.has(offer.id));
     const requestById = new Map((requests ?? []).map((request) => [request.id, request]));
     const usernameById = new Map((accounts ?? []).map((account) => [account.id, account.username]));
     const safeOffersByThread = new Map<string, Array<Record<string, unknown>>>();
-    const safeOffers = await Promise.all((offers ?? []).map(async (offer) => {
+    const safeOffers = await Promise.all(visibleOffers.map(async (offer) => {
       const {
         image_path: imagePath,
         certificate_path: certificatePath,
@@ -117,7 +131,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       feeRate: sellerThreadIds.size > 0 ? Number(settings.listing_fee_rate) : null,
       usdEnabled: settings.usd_enabled,
-      threads: (threads ?? []).filter((thread) =>
+      threads: visibleThreads.filter((thread) =>
         thread.buyer_id === accountId ? !thread.buyer_deleted_at : !thread.seller_deleted_at
       ).map(({ buyer_id: buyerId, seller_id: sellerId, ...thread }) => ({
         ...thread,
