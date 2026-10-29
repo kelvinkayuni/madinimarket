@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     const requestIds = [...new Set((threads ?? []).map((thread) => thread.request_id))];
     const accountIds = [...new Set((threads ?? []).flatMap((thread) => [thread.seller_id, thread.buyer_id]))];
     const [{ data: offers, error: offerError }, { data: requests, error: requestError }, { data: accounts, error: accountError }] = await Promise.all([
-      admin.from("marketplace_private_offers").select("id, thread_id, attempt_number, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, color, shape, quality, image_path, certificate_path, certificate_file_name, certificate_content_type, decline_reason, decline_explanation, declined_at, country, region, district, seller_amount, platform_fee_rate, platform_fee_amount, total_price, currency, status, created_at").in("thread_id", threadIds).order("attempt_number"),
+      admin.from("marketplace_private_offers").select("id, thread_id, attempt_number, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, color, shape, quality, image_path, certificate_path, certificate_file_name, certificate_content_type, decline_reason, decline_explanation, declined_at, country, region, district, seller_amount, platform_fee_rate, platform_fee_amount, total_price, currency, status, availability_confirmed_at, created_at").in("thread_id", threadIds).order("attempt_number"),
       admin.from("buy_requests").select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location")
         .in("id", requestIds),
       admin.from("website_accounts").select("id, username").in("id", accountIds),
@@ -224,6 +224,9 @@ export async function POST(request: Request) {
       const threadId = body.threadId === null || body.threadId === undefined || body.threadId === ""
         ? null
         : text(body.threadId, 36);
+      if (body.availabilityConfirmed !== true) {
+        return NextResponse.json({ error: "Confirm that the mineral is available before sending this offer." }, { status: 400 });
+      }
       if (!Number.isSafeInteger(requestId) || requestId < 1 || (threadId !== null && !uuidPattern.test(threadId))) {
         return NextResponse.json({ error: "Choose a valid buyer request." }, { status: 400 });
       }

@@ -50,6 +50,7 @@ create table if not exists public.marketplace_private_offers (
   region text not null,
   district text not null,
   inventory_key text not null,
+  availability_confirmed_at timestamptz,
   seller_amount numeric(14, 2) not null check (seller_amount > 0),
   platform_fee_rate numeric(7, 6) not null check (platform_fee_rate between 0 and 1),
   platform_fee_amount numeric(14, 2) not null check (platform_fee_amount >= 0),
@@ -72,6 +73,12 @@ create table if not exists public.marketplace_private_offers (
   ),
   check (total_price = seller_amount + platform_fee_amount)
 );
+
+alter table public.marketplace_private_offers
+  add column if not exists availability_confirmed_at timestamptz;
+
+alter table public.marketplace_private_offers
+  alter column availability_confirmed_at set default now();
 
 create index if not exists marketplace_private_offer_threads_buyer_state_idx
   on public.marketplace_private_offer_threads (buyer_id, state, updated_at desc);
@@ -703,19 +710,28 @@ begin
     insert into public.marketplace_order_items (
       order_id, listing_id, seller_id, seller_email, mineral_name, listing_type, weight, unit,
       image_path, currency, total_price, seller_amount, platform_fee_rate, platform_fee_amount, seller_response_deadline,
-      private_offer_id, mineral_color, mineral_shape, mineral_quality, mineral_country, mineral_region, mineral_district,
+      status, seller_responded_at, private_offer_id, mineral_color, mineral_shape, mineral_quality, mineral_country, mineral_region, mineral_district,
       private_inventory_key
     ) values (
       new_order.id, null, seller.id, seller.email, selected_offer.mineral_name, selected_offer.listing_type,
       selected_offer.weight, selected_offer.unit, selected_offer.image_path, selected_offer.currency, selected_offer.total_price,
       selected_offer.seller_amount, selected_offer.platform_fee_rate, selected_offer.platform_fee_amount,
-      new_order.seller_response_deadline, selected_offer.id, selected_offer.color, selected_offer.shape,
+      new_order.seller_response_deadline,
+      case when selected_offer.availability_confirmed_at is not null then 'awaiting_payment' else 'awaiting_seller' end,
+      case when selected_offer.availability_confirmed_at is not null then now() else null end,
+      selected_offer.id, selected_offer.color, selected_offer.shape,
       selected_offer.quality, selected_offer.country, selected_offer.region, selected_offer.district,
       selected_offer.inventory_key
     );
   exception when unique_violation then
     raise exception 'This mineral is already reserved by another active order.' using errcode = '23505';
   end;
+  if selected_offer.availability_confirmed_at is not null then
+    update public.marketplace_orders
+    set payment_status = 'awaiting_payment', updated_at = now()
+    where id = new_order.id
+    returning * into new_order;
+  end if;
   update public.marketplace_private_offers
   set status = 'closed'
   where thread_id in (

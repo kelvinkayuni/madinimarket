@@ -72,7 +72,7 @@ export async function GET(request: Request) {
         await sendGmailEmail({
           to: order.buyer_email,
           subject: `Your order ${order.control_number} is ready for payment`,
-          text: `Hello ${order.buyer_name},\n\nSeller responses are complete for order ${order.control_number}. Unavailable items have been removed. Sign in to My orders and submit your payment reference by ${paymentDeadline} Tanzania time.\n\nMadinimarket`,
+          text: `Hello ${order.buyer_name},\n\nOrder ${order.control_number} is ready for payment. Its items are reserved until ${paymentDeadline} Tanzania time. Sign in to My orders and submit your payment reference before then.\n\nMadinimarket`,
         });
         const { error } = await admin.from("marketplace_orders")
           .update({ payment_ready_email_sent_at: new Date().toISOString() }).eq("id", order.id).is("payment_ready_email_sent_at", null);
