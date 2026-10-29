@@ -1199,26 +1199,34 @@ export default function Marketplace() {
             }
           }
           if (active && isAdmin && session) {
-            try {
-              setWebsiteAccounts(await loadAdminAccounts(session.access_token));
-              setAdminCertificates(await loadAdminCertificates(session.access_token));
-              setTranslationPairs(await loadAdminTranslations(session.access_token));
-              const siteContent = await loadAdminSiteContent(session.access_token);
-              setSwahiliEnabled(siteContent.swahiliEnabled);
-              setAccountCreationDisabled(siteContent.accountCreationDisabled);
-              setNonAdminSignInDisabled(siteContent.nonAdminSignInDisabled);
-              setHomepageAnnouncement(siteContent.homepageAnnouncement);
-              if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
-              setHomepageHeadlineFontSize(siteContent.headlineFontSize);
-              setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
-              setSiteContentLoaded(true);
-              setHomepageHeadlines(siteContent.headlines);
-              const subscriptions = await loadAdminSubscriptions(session.access_token);
-              setSubscriptionPlans(subscriptions.plans);
-              setPendingSubscriptions(subscriptions.pendingSubscriptions);
-            } catch {
-              setNotice("Could not load admin accounts, licences, or translations.");
-            }
+            const adminLoadLabels = ["accounts", "licences", "translations", "site settings", "subscriptions"];
+            void Promise.allSettled([
+              loadAdminAccounts(session.access_token).then(setWebsiteAccounts),
+              loadAdminCertificates(session.access_token).then(setAdminCertificates),
+              loadAdminTranslations(session.access_token).then(setTranslationPairs),
+              loadAdminSiteContent(session.access_token).then((siteContent) => {
+                setSwahiliEnabled(siteContent.swahiliEnabled);
+                setAccountCreationDisabled(siteContent.accountCreationDisabled);
+                setNonAdminSignInDisabled(siteContent.nonAdminSignInDisabled);
+                setHomepageAnnouncement(siteContent.homepageAnnouncement);
+                if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
+                setHomepageHeadlineFontSize(siteContent.headlineFontSize);
+                setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
+                setSiteContentLoaded(true);
+                setHomepageHeadlines(siteContent.headlines);
+              }),
+              loadAdminSubscriptions(session.access_token).then((subscriptions) => {
+                setSubscriptionPlans(subscriptions.plans);
+                setPendingSubscriptions(subscriptions.pendingSubscriptions);
+              }),
+            ]).then((results) => {
+              const failures = results.map((result, index) => result.status === "rejected" ? { label: adminLoadLabels[index], result } : null).filter((item): item is { label: string; result: PromiseRejectedResult } => item !== null);
+              if (failures.length && active) {
+                const first = failures[0];
+                const detail = first.result.reason instanceof Error ? first.result.reason.message : "";
+                setNotice(detail ? `${detail} (${first.label})` : `Could not load admin ${first.label}. Refresh or retry this panel.`);
+              }
+            });
           }
         } catch {
           if (active) {
