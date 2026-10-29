@@ -471,7 +471,7 @@ using (
     or exists (select 1 from public.marketplace_listings where image_path = name)
   )
 );
-create policy "Public can read approved mineral images" on storage.objects for select to anon
+create policy "Public can read approved mineral images" on storage.objects for select to anon, authenticated
 using (
   bucket_id = 'mineral-images'
   and exists (select 1 from public.marketplace_listings where image_path = name)

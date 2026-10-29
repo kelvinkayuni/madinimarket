@@ -66,7 +66,6 @@ const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
 const USER_STORAGE_KEY = "madinimarket:user:v1";
 const SALES_LEDGER_PAGE_SIZE = 25;
 const signedMineralImageUrls = new Map<string, { url: string; expiresAt: number }>();
-const publicListingImageUrl = (listingId: number) => `/api/marketplace-listing-image?id=${listingId}`;
 
 function salesLedgerPeriodKeys(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -213,10 +212,16 @@ async function getSignedMineralImageUrl(
   if (cached && cached.expiresAt > Date.now() + 30_000) return cached.url;
 
   try {
-    const url = refreshedUrl ?? (await supabase.storage.from("mineral-images").createSignedUrl(imagePath, 3600)).data?.signedUrl ?? "";
+    let url = refreshedUrl ?? "";
+    if (!url) {
+      const { data, error } = await supabase.storage.from("mineral-images").createSignedUrl(imagePath, 3600);
+      if (error) throw error;
+      url = data.signedUrl;
+    }
     if (url) signedMineralImageUrls.set(imagePath, { url, expiresAt: Date.now() + 50 * 60 * 1000 });
     return url;
-  } catch {
+  } catch (error) {
+    console.error("Could not create a signed mineral image URL.", error);
     return "";
   }
 }
@@ -320,9 +325,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
   const sellers = await Promise.all(sellerRows.map(async (row) => {
     let image = "";
     if (row.image_path) {
-      image = row.status === "approved"
-        ? publicListingImageUrl(Number(row.id))
-        : await getSignedMineralImageUrl(supabase, row.image_path, row.signed_image_url);
+      image = await getSignedMineralImageUrl(supabase, row.image_path, row.signed_image_url);
     }
     return {
       id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
