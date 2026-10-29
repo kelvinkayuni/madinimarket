@@ -517,17 +517,32 @@ h1, h2, h3, p { margin-top: 0; }
 .account-menu-counts { display: grid; justify-items: end; gap: 2px; margin-left: auto; color: #68766a; }
 .account-menu-counts small { font-size: 9px; white-space: nowrap; }
 .account-menu-counts strong { color: #355443; font-size: 10px; }
-.commerce-panel { display: grid; gap: 21px; }
+.dialog-panel:has(.commerce-panel) { width: min(980px, calc(100vw - 32px)); padding: 28px 32px; }
+.commerce-panel { display: grid; gap: 14px; }
 .commerce-panel > h2 { margin: -15px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 26px; font-weight: 500; }
+.commerce-tabs { position: sticky; top: -1px; z-index: 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; padding: 6px; border: 1px solid #dfe5dc; background: #f5f7f2; }
+.commerce-tab { min-width: 0; min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 8px; border: 1px solid transparent; background: transparent; color: #647064; font: 650 11px var(--font-body), sans-serif; cursor: pointer; }
+.commerce-tab:hover { background: #fff; color: #304b39; }
+.commerce-tab.is-active { border-color: #d8e2d2; background: #fff; color: #244f3a; box-shadow: 0 2px 6px rgba(48, 75, 57, .07); }
+.commerce-tab > span { min-width: 20px; height: 20px; display: inline-grid; place-items: center; padding: 0 5px; border-radius: 12px; background: #e7ede2; color: #355443; font-size: 9px; }
 .commerce-section { display: grid; gap: 12px; }
 .commerce-order-section { padding: 14px; border: 1px solid #dfe5dc; background: #fff; }
 .commerce-section > h3 { margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-family: var(--font-display), Georgia, serif; font-size: 18px; font-weight: 600; }
+.commerce-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.commerce-section-heading > div { display: grid; gap: 4px; }
+.commerce-section-heading h3 { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: 19px; font-weight: 600; }
+.commerce-section-heading p { margin: 0; color: #788277; font-size: 10px; }
+.commerce-section-heading > .commerce-section-count { min-width: auto; height: auto; padding: 5px 9px; border-radius: 14px; font-size: 9px; white-space: nowrap; }
+.commerce-order-subsection { display: grid; gap: 10px; }
+.commerce-order-subsection > h4 { display: flex; align-items: center; gap: 5px; margin: 0; color: #405544; font-size: 12px; font-weight: 700; }
 .commerce-section-count { min-width: 21px; height: 21px; display: inline-grid; place-items: center; margin-left: 5px; border-radius: 50%; background: #e6eddf; color: #355443; font: 600 10px var(--font-body), sans-serif; vertical-align: 2px; }
 .commerce-history { display: grid; gap: 12px; padding-top: 4px; }
 .commerce-order-section > .commerce-history { gap: 10px; padding: 10px 12px; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-history-list { max-height: 390px; padding-right: 5px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .commerce-history > summary { cursor: pointer; color: #526052; font-size: 12px; font-weight: 600; list-style-position: inside; }
 .commerce-history[open] > summary { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.commerce-history-clear { justify-self: start; }
+.commerce-history-entry-delete { justify-self: start; }
 .commerce-history-more { justify-self: start; }
 .commerce-private-thread { display: block; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-private-thread > .commerce-order-summary { padding: 10px 12px; }
@@ -671,6 +686,12 @@ h1, h2, h3, p { margin-top: 0; }
 .admin-order-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #69766a; font-size: 10px; }
 .admin-order-pagination > div { display: flex; align-items: center; gap: 10px; }
 @media (max-width: 560px) {
+  .dialog-panel:has(.commerce-panel) { width: 100%; padding: 27px 17px 28px; }
+  .commerce-tabs { grid-template-columns: repeat(4, minmax(72px, 1fr)); overflow-x: auto; }
+  .commerce-tab { min-height: 39px; gap: 5px; padding: 6px 5px; font-size: 10px; }
+  .commerce-section-heading { align-items: flex-start; }
+  .commerce-section-heading p { max-width: 210px; line-height: 1.45; }
+  .commerce-order-subsection > h4 { font-size: 11px; }
   .admin-payment-method-row { grid-template-columns: minmax(0, 1fr); }
   .commerce-checkout .field-row { grid-template-columns: 1fr; }
   .commerce-order-tools { grid-template-columns: 1fr; }
