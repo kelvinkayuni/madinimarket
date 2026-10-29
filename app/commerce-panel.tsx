@@ -684,7 +684,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
               {item.listing && item.listing.marketplace_state === "seller_unavailable" && <small className="commerce-warning">The seller confirmed this mineral is unavailable. It has been removed from the market.</small>}
               {item.listing && (!item.listing.is_active || item.listing.status !== "approved" || item.listing.marketplace_state === "sold") && <small className="commerce-warning">This listing is no longer available.</small>}
               <div className="commerce-cart-item-actions">
-                <button className="button button-dark" type="button" aria-expanded={checkoutCartItemId === item.id} aria-controls={checkoutCartItemId === item.id ? `cart-checkout-${item.id}` : undefined} onClick={() => setCheckoutCartItemId((current) => current === item.id ? null : item.id)}>{checkoutCartItemId === item.id ? "Close order form" : "Confirm order"}</button>
+                <button className="button button-dark" type="button" aria-expanded={checkoutCartItemId === item.id} aria-controls={checkoutCartItemId === item.id ? `cart-checkout-${item.id}` : undefined} onClick={() => setCheckoutCartItemId((current) => current === item.id ? null : item.id)}>{checkoutCartItemId === item.id ? "Close order form" : "Open order form"}</button>
                 <button className="button button-outline" type="button" disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
               </div>
               {checkoutCartItemId === item.id && <div className="commerce-cart-checkout" id={`cart-checkout-${item.id}`}>
