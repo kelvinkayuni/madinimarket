@@ -154,7 +154,9 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
-function buyerOrderStatusLabel(status: string) {
+function buyerOrderStatusLabel(order: BuyerOrder) {
+  if (order.items.some((item) => item.status === "shipped")) return "Your order has shipped. Check the tracking details for updates.";
+  const status = order.payment_status;
   if (status === "awaiting_sellers" || status === "awaiting_seller") return "Awaiting seller to confirm availability";
   if (status === "awaiting_payment") return "Awaiting you to pay";
   if (status === "payment_submitted") return "You submitted payment for verification";
@@ -213,6 +215,7 @@ function buyerOrderHistoryLabel(order: BuyerOrder) {
 function orderItemStatusLabel(item: OrderItem) {
   if (item.seller_response_timed_out) return "Seller didn’t confirm availability in time";
   if (item.status === "unavailable") return "Seller confirmed unavailable";
+  if (item.status === "shipped") return "Your order has shipped. Check the tracking details for updates.";
   return statusLabel(item.status);
 }
 
@@ -532,7 +535,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const renderBuyerOrder = (order: BuyerOrder, history = false) => <details className="commerce-order" key={order.id}>
     <summary className="commerce-order-summary">
       <span><strong>Order {order.control_number}</strong><small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small></span>
-      <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : buyerOrderStatusLabel(order.payment_status)}</span>
+      <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : buyerOrderStatusLabel(order)}</span>
       <strong className="commerce-order-summary-total">{amount(order.total_amount, order.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
     </summary>
@@ -747,7 +750,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div className="commerce-order-tools">
         <label className="commerce-order-search">Search buying orders<input className="text-input" type="search" value={buyerOrderSearch} placeholder="Order number or mineral" onChange={(event) => { setBuyerOrderSearch(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }} /></label>
         <label className="commerce-order-filter">Status<select className="text-input" value={buyerStatusFilter} onChange={(event) => { setBuyerStatusFilter(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }}>
-        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting you to pay</option><option value="payment_submitted">You submitted payment for verification</option><option value="awaiting_seller">Awaiting seller to confirm availability</option><option value="paid">Your payment is verified. Awaiting seller to dispatch your order.</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting you to pay</option><option value="payment_submitted">You submitted payment for verification</option><option value="awaiting_seller">Awaiting seller to confirm availability</option><option value="paid">Your payment is verified. Awaiting seller to dispatch your order.</option><option value="shipped">Your order has shipped. Check the tracking details for updates.</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
       </div>
       <div className="commerce-order-subsection">
