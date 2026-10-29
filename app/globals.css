@@ -652,9 +652,21 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-item-actions .review-message { min-height: 68px; }
 .commerce-order-tools { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr)); align-items: end; gap: 10px; padding: 12px; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-collection-tools { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: end; gap: 10px; }
-.commerce-cart-item-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.commerce-cart-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); align-items: start; gap: 14px; }
+.commerce-cart-items { display: grid; min-width: 0; gap: 10px; }
+.commerce-cart-items-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.commerce-cart-items-heading h4 { margin: 0; color: #405544; font-size: 12px; }
+.commerce-cart-items-heading > span { color: #788277; font-size: 9px; white-space: nowrap; }
+.commerce-cart-item-list { max-height: 645px; display: grid; align-content: start; gap: 7px; overflow-y: auto; padding: 1px 5px 1px 1px; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.commerce-cart-item-card { min-width: 0; height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid #e2e8df; background: #fff; }
+.commerce-cart-item-info { min-width: 0; display: grid; gap: 4px; }
+.commerce-cart-item-info > strong, .commerce-cart-item-info > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commerce-cart-item-info > strong { color: #304b39; font-size: 11px; }
+.commerce-cart-item-info > span { color: #788277; font-size: 9px; }
+.commerce-cart-item-status { padding: 4px 6px; background: #fff0dc; color: #8d521e; font-size: 8px; font-weight: 700; white-space: nowrap; }
+.commerce-cart-item-status.is-available { background: #e8f1e4; color: #355d3d; }
+.commerce-cart-remove { min-height: 30px; padding: 0 8px; font-size: 9px; }
 .commerce-cart-checkout { display: grid; min-width: 0; gap: 10px; padding: 13px; border: 1px solid #dfe5dc; background: #f7f8f4; }
-.commerce-item-details > .commerce-cart-checkout { width: 100%; margin-top: 4px; }
 .commerce-cart-checkout-heading { display: grid; gap: 4px; }
 .commerce-cart-checkout-heading h4 { margin: 0; color: #304b39; font-size: 14px; }
 .commerce-cart-checkout-heading p { margin: 0; color: #788277; font-size: 10px; line-height: 1.5; }
@@ -667,6 +679,9 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-cart-unavailable-note { line-height: 1.5; }
 .commerce-cart-checkout .commerce-checkout { padding: 0; border: 0; background: transparent; }
 .commerce-cart-checkout .commerce-checkout .field-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) {
+  .commerce-cart-layout { grid-template-columns: minmax(0, 1fr); }
+}
 .commerce-order-search, .commerce-order-filter { display: grid; gap: 5px; margin: 0; color: #526052; font-size: 9px; font-weight: 650; }
 .commerce-order-search .text-input, .commerce-order-filter .text-input { min-height: 36px; font-size: 10px; }
 .commerce-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #69766a; font-size: 9px; }
@@ -709,8 +724,13 @@ h1, h2, h3, p { margin-top: 0; }
   .commerce-order-subsection > h4 { font-size: 11px; }
   .admin-payment-method-row { grid-template-columns: minmax(0, 1fr); }
   .commerce-checkout .field-row { grid-template-columns: 1fr; }
+  .commerce-cart-checkout .commerce-checkout .field-row { grid-template-columns: 1fr; }
   .commerce-order-tools { grid-template-columns: 1fr; }
   .commerce-collection-tools { grid-template-columns: 1fr; }
+  .commerce-cart-item-card { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
+  .commerce-cart-item-info { grid-row: 1 / 3; }
+  .commerce-cart-item-status { grid-column: 2; grid-row: 1; justify-self: end; }
+  .commerce-cart-remove { grid-column: 2; grid-row: 2; justify-self: end; min-height: 24px; }
   .commerce-order-summary { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 10px; }
   .commerce-order-summary-status { grid-column: 1; grid-row: 2; }
   .commerce-order-summary-total { grid-column: 2; grid-row: 2; }

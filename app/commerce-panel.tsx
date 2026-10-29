@@ -227,8 +227,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [sellerStatusFilter, setSellerStatusFilter] = useState("all");
   const [cartSearch, setCartSearch] = useState("");
   const [cartStatusFilter, setCartStatusFilter] = useState("all");
-  const [cartPage, setCartPage] = useState(1);
-  const [checkoutCartItemId, setCheckoutCartItemId] = useState<string | null>(null);
   const [privateOfferSearch, setPrivateOfferSearch] = useState("");
   const [privateOfferStatusFilter, setPrivateOfferStatusFilter] = useState("all");
   const [selectedPrivateThreadId, setSelectedPrivateThreadId] = useState<string | null>(null);
@@ -425,7 +423,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
       buyerName, buyerPhone, country, region, district, address,
     });
     if (result?.order?.control_number) {
-      setCheckoutCartItemId(null);
       const deadline = result.order.seller_response_deadline
         ? new Date(result.order.seller_response_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })
         : "the deadline shown in My orders";
@@ -488,9 +485,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
     return matchesSearch && matchesStatus;
   });
   const unavailableCartItemsCount = data.cartItems.filter((item) => !isCartListingAvailable(item)).length;
-  const cartPageCount = Math.max(1, Math.ceil(filteredCartItems.length / orderPageSize));
-  const currentCartPage = Math.min(cartPage, cartPageCount);
-  const visibleCartItems = filteredCartItems.slice((currentCartPage - 1) * orderPageSize, currentCartPage * orderPageSize);
   const filteredPrivateThreads = data.privateOffers.threads.filter((thread) => {
     const latestOffer = thread.offers[thread.offers.length - 1];
     const matchesSearch = !privateOfferSearch.trim() ||
@@ -670,56 +664,61 @@ export default function CommercePanel({ onNotice, onCounters }: {
     {activeTab === "cart" && <section className="commerce-section commerce-order-section">
       <h3>My cart ({data.cartItems.length})</h3>
       {data.cartItems.length ? <>
-        <div className="commerce-collection-tools">
-          <label className="commerce-order-search">Search cart<input className="text-input" type="search" value={cartSearch} placeholder="Mineral or seller" onChange={(event) => { setCartSearch(event.target.value); setCartPage(1); }} /></label>
-          <label className="commerce-order-filter">Listing status<select className="text-input" value={cartStatusFilter} onChange={(event) => { setCartStatusFilter(event.target.value); setCartPage(1); }}><option value="all">All items</option><option value="available">Available</option><option value="unavailable">Unavailable</option></select></label>
-        </div>
-        <div className="commerce-list">
-          {visibleCartItems.map((item) => <details className="commerce-item" key={item.id}>
-            <summary className="commerce-item-summary"><span><strong>{item.listing?.mineral_name ?? "Listing no longer available"}</strong>
-              {item.listing && <small>{item.listing.listing_type === "batch" ? "Batch · " : ""}{item.listing.weight} {item.listing.unit} · {amount(item.listing.price, item.listing.currency)}</small>}
-            </span>{(!item.listing || !item.listing.is_active || item.listing.status !== "approved" || item.listing.marketplace_state !== "available") && <span className="commerce-order-summary-status commerce-warning">{item.listing?.marketplace_state === "reserved" ? "Reserved" : "Unavailable"}</span>}<span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span></summary>
-            <div className="commerce-item-details">
-              {item.listing && item.listing.marketplace_state === "reserved" && <small className="commerce-warning">This mineral is temporarily reserved by another confirmed order. Cart items are not reserved until you confirm an order.</small>}
-              {item.listing && item.listing.marketplace_state === "seller_unavailable" && <small className="commerce-warning">The seller confirmed this mineral is unavailable. It has been removed from the market.</small>}
-              {item.listing && (!item.listing.is_active || item.listing.status !== "approved" || item.listing.marketplace_state === "sold") && <small className="commerce-warning">This listing is no longer available.</small>}
-              <div className="commerce-cart-item-actions">
-                <button className="button button-dark" type="button" aria-expanded={checkoutCartItemId === item.id} aria-controls={checkoutCartItemId === item.id ? `cart-checkout-${item.id}` : undefined} onClick={() => setCheckoutCartItemId((current) => current === item.id ? null : item.id)}>{checkoutCartItemId === item.id ? "Close order form" : "Open order form"}</button>
-                <button className="button button-outline" type="button" disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
-              </div>
-              {checkoutCartItemId === item.id && <div className="commerce-cart-checkout" id={`cart-checkout-${item.id}`}>
-                <div className="commerce-cart-checkout-heading">
-                  <h4>Confirm this cart order</h4>
-                  <p>This order includes all {data.cartItems.length} items currently in your cart.</p>
-                </div>
-                <ul className="commerce-cart-order-summary" aria-label="Items included in this order">
-                  {data.cartItems.map((cartItem) => <li key={cartItem.id}>
-                    <span>{cartItem.listing?.mineral_name ?? "Listing no longer available"}</span>
-                    <strong>{cartItem.listing ? amount(cartItem.listing.price, cartItem.listing.currency) : "Unavailable"}</strong>
-                  </li>)}
-                </ul>
-                <p className="commerce-total">Cart total <strong>{amount(total, cartCurrency)}</strong></p>
-                {unavailableCartItemsCount > 0 && <p className="commerce-warning commerce-cart-unavailable-note">Remove or wait for the {unavailableCartItemsCount} unavailable {unavailableCartItemsCount === 1 ? "item" : "items"} before confirming this order.</p>}
-                <form className="commerce-checkout" onSubmit={checkout}>
-                  <p className="commerce-note">Items stay available to other buyers while in your cart. Confirming reserves them while sellers check availability. A seller-confirmed unavailable mineral is removed from the market; if a seller does not respond by the deadline, that item is cancelled and released back to the market. You only pay for seller-confirmed items.</p>
-                  <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
-                  <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
-                  <div className="field-row">
-                    <label className="field-label">Country<input className="text-input" required maxLength={100} value={country} onChange={(event) => setCountry(event.target.value)} /></label>
-                    <label className="field-label">Region<input className="text-input" required maxLength={100} value={region} onChange={(event) => setRegion(event.target.value)} /></label>
-                  </div>
-                  <div className="field-row">
-                    <label className="field-label">District<input className="text-input" required maxLength={100} value={district} onChange={(event) => setDistrict(event.target.value)} /></label>
-                    <label className="field-label">Street / delivery address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
-                  </div>
-                  <button className="button button-dark" type="submit" disabled={busy === "checkout" || unavailableCartItemsCount > 0}>{busy === "checkout" ? "Confirming…" : "Submit cart order"}</button>
-                </form>
-              </div>}
+        <div className="commerce-cart-layout">
+          <div className="commerce-cart-items">
+            <div className="commerce-cart-items-heading">
+              <h4>Items to order</h4>
+              <span>{filteredCartItems.length} shown · {data.cartItems.length} total</span>
             </div>
-          </details>)}
-          {!visibleCartItems.length && <p className="commerce-note">No cart items match your search and status filter.</p>}
+            <div className="commerce-collection-tools">
+              <label className="commerce-order-search">Search cart<input className="text-input" type="search" value={cartSearch} placeholder="Mineral or seller" onChange={(event) => setCartSearch(event.target.value)} /></label>
+              <label className="commerce-order-filter">Listing status<select className="text-input" value={cartStatusFilter} onChange={(event) => setCartStatusFilter(event.target.value)}><option value="all">All items</option><option value="available">Available</option><option value="unavailable">Unavailable</option></select></label>
+            </div>
+            <div className="commerce-cart-item-list" aria-label="Items in your cart">
+              {filteredCartItems.map((item) => {
+                const available = isCartListingAvailable(item);
+                const itemStatus = available ? "Available" : item.listing?.marketplace_state === "reserved" ? "Reserved" : "Unavailable";
+                return <article className="commerce-cart-item-card" key={item.id}>
+                  <div className="commerce-cart-item-info">
+                    <strong>{item.listing?.mineral_name ?? "Listing no longer available"}</strong>
+                    <span>{item.listing ? `${item.listing.listing_type === "batch" ? "Batch · " : ""}${item.listing.weight} ${item.listing.unit} · ${amount(item.listing.price, item.listing.currency)}` : "This listing is no longer available."}</span>
+                  </div>
+                  <span className={`commerce-cart-item-status${available ? " is-available" : ""}`}>{itemStatus}</span>
+                  <button className="button button-outline commerce-cart-remove" type="button" aria-label={`Remove ${item.listing?.mineral_name ?? "unavailable item"} from cart`} disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
+                </article>;
+              })}
+              {!filteredCartItems.length && <p className="commerce-note">No cart items match your search and status filter.</p>}
+            </div>
+          </div>
+          <aside className="commerce-cart-checkout" aria-labelledby="commerce-cart-checkout-heading">
+            <div className="commerce-cart-checkout-heading">
+              <h4 id="commerce-cart-checkout-heading">Delivery and order form</h4>
+              <p>This form submits all {data.cartItems.length} items in your cart as one order.</p>
+            </div>
+            <ul className="commerce-cart-order-summary" aria-label="Items included in this order">
+              {data.cartItems.map((item) => <li key={item.id}>
+                <span>{item.listing?.mineral_name ?? "Listing no longer available"}</span>
+                <strong>{item.listing ? amount(item.listing.price, item.listing.currency) : "Unavailable"}</strong>
+              </li>)}
+            </ul>
+            <p className="commerce-total">Cart total <strong>{amount(total, cartCurrency)}</strong></p>
+            {unavailableCartItemsCount > 0 && <p className="commerce-warning commerce-cart-unavailable-note">Remove or wait for the {unavailableCartItemsCount} unavailable {unavailableCartItemsCount === 1 ? "item" : "items"} before submitting the order.</p>}
+            <form className="commerce-checkout" onSubmit={checkout}>
+              <p className="commerce-note">Items stay available to other buyers while in your cart. Confirming reserves them while sellers check availability. A seller-confirmed unavailable mineral is removed from the market; if a seller does not respond by the deadline, that item is cancelled and released back to the market. You only pay for seller-confirmed items.</p>
+              <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
+              <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
+              <div className="field-row">
+                <label className="field-label">Country<input className="text-input" required maxLength={100} value={country} onChange={(event) => setCountry(event.target.value)} /></label>
+                <label className="field-label">Region<input className="text-input" required maxLength={100} value={region} onChange={(event) => setRegion(event.target.value)} /></label>
+              </div>
+              <div className="field-row">
+                <label className="field-label">District<input className="text-input" required maxLength={100} value={district} onChange={(event) => setDistrict(event.target.value)} /></label>
+                <label className="field-label">Street / delivery address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+              </div>
+              <button className="button button-dark" type="submit" disabled={busy === "checkout" || unavailableCartItemsCount > 0}>{busy === "checkout" ? "Submitting…" : "Submit cart order"}</button>
+            </form>
+          </aside>
         </div>
-        {renderOrderPagination(filteredCartItems.length, currentCartPage, cartPageCount, "cart items", setCartPage)}
       </> : <p className="commerce-note">Your cart is empty. Add a mineral from the market to begin.</p>}
     </section>}
     {activeTab === "buying" && <section className="commerce-section commerce-order-section">
