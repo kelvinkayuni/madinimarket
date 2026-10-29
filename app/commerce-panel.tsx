@@ -217,7 +217,8 @@ function orderItemStatusLabel(item: OrderItem) {
 
 function sellerOrderItemStatusLabel(item: OrderItem) {
   if (item.status === "awaiting_seller") return "Awaiting you to confirm availability";
-  if (item.status === "awaiting_payment") return "Awaiting buyer to pay";
+  if (item.status === "awaiting_payment" || item.status === "payment_submitted") return "Awaiting buyer to pay";
+  if (item.status === "paid") return "Buyer payment verified";
   return orderItemStatusLabel(item);
 }
 
@@ -485,7 +486,10 @@ export default function CommercePanel({ onNotice, onCounters }: {
     order.payment_status === buyerStatusFilter || order.items.some((item) => item.status === buyerStatusFilter);
   const matchesSellerSearch = (item: OrderItem) => !sellerSearchTerm ||
     `${item.order?.control_number ?? ""} ${item.mineral_name} ${item.status}`.toLocaleLowerCase().includes(sellerSearchTerm);
-  const matchesSellerStatus = (item: OrderItem) => sellerStatusFilter === "all" || item.status === sellerStatusFilter;
+  const matchesSellerStatus = (item: OrderItem) => sellerStatusFilter === "all"
+    || (sellerStatusFilter === "awaiting_payment"
+      ? ["awaiting_payment", "payment_submitted"].includes(item.status)
+      : item.status === sellerStatusFilter);
   const filteredActiveBuyerOrders = activeBuyerOrders.filter((order) => matchesBuyerSearch(order) && matchesBuyerStatus(order));
   const filteredBuyerHistory = buyerOrderHistory.filter((order) => matchesBuyerSearch(order) && matchesBuyerStatus(order));
   const filteredActiveSellerItems = activeSellerItems.filter((item) => matchesSellerSearch(item) && matchesSellerStatus(item));
@@ -774,7 +778,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div className="commerce-order-tools">
         <label className="commerce-order-search">Search selling orders<input className="text-input" type="search" value={sellerOrderSearch} placeholder="Order number or mineral" onChange={(event) => { setSellerOrderSearch(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }} /></label>
         <label className="commerce-order-filter">Status<select className="text-input" value={sellerStatusFilter} onChange={(event) => { setSellerStatusFilter(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }}>
-        <option value="all">All statuses</option><option value="awaiting_seller">Awaiting you to confirm availability</option><option value="awaiting_payment">Awaiting buyer to pay</option><option value="paid">Ready to dispatch</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+        <option value="all">All statuses</option><option value="awaiting_seller">Awaiting you to confirm availability</option><option value="awaiting_payment">Awaiting buyer to pay</option><option value="paid">Buyer payment verified</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Payout paid</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
       </div>
       <div className="commerce-order-subsection">
