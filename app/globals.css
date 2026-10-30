@@ -732,6 +732,7 @@ h1, h2, h3, p { margin-top: 0; }
 .admin-order-pagination > div { display: flex; align-items: center; gap: 10px; }
 @media (max-width: 560px) {
   .dialog-panel:has(.commerce-panel) { width: 100%; padding: 27px 17px 28px; }
+  .commerce-cart-item-list { max-height: none; overflow: visible; padding-right: 1px; overscroll-behavior: auto; scrollbar-gutter: auto; }
   .commerce-tabs { grid-template-columns: repeat(4, minmax(72px, 1fr)); overflow-x: auto; }
   .commerce-tab { min-height: 39px; gap: 5px; padding: 6px 5px; font-size: 10px; }
   .commerce-section-heading { align-items: flex-start; }
