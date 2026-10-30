@@ -86,7 +86,7 @@ export async function GET(request: Request) {
             seller_response_timed_out: Boolean(item.availability_expired_at),
           })),
         }));
-        return NextResponse.json({ buyerOrders: safeOrders, hasMore: safeOrders.length === pageSize });
+        return NextResponse.json({ buyerOrders: safeOrders, hasMore: safeOrders.length === pageSize }, { headers: { "Cache-Control": "no-store" } });
       }
 
       const { data: items, error } = await admin.from("marketplace_order_items")
@@ -123,7 +123,7 @@ export async function GET(request: Request) {
           } : null,
         };
       }));
-      return NextResponse.json({ sellerItems: safeItems, hasMore: safeItems.length === pageSize });
+      return NextResponse.json({ sellerItems: safeItems, hasMore: safeItems.length === pageSize }, { headers: { "Cache-Control": "no-store" } });
     }
 
     const [
@@ -256,7 +256,7 @@ export async function GET(request: Request) {
       buyingCount: profile.is_active && activeSubscription ? buyingCount ?? 0 : 0,
       paymentMethods: marketplaceSettings.payment_methods,
       paymentInstructions: marketplaceSettings.payment_instructions.trim(),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Commerce account request failed", error);
     return NextResponse.json({ error: "Could not load your cart and orders." }, { status: 503 });

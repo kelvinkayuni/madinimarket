@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import PrivateOfferForm from "./private-offer-form";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
@@ -213,6 +213,7 @@ function buyerOrderHistoryLabel(order: BuyerOrder) {
     order.items.some((item) => item.seller_response_timed_out)) {
     return "Availability not confirmed in time";
   }
+  if (order.items.some((item) => item.status === "payout_paid")) return "Payout paid";
   return ["expired", "cancelled"].includes(order.payment_status) ? statusLabel(order.payment_status) : "completed";
 }
 
@@ -283,13 +284,16 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [declineOffer, setDeclineOffer] = useState<PrivateOffer | null>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [declineExplanation, setDeclineExplanation] = useState("");
+  const refreshSequence = useRef(0);
 
   const refresh = useCallback(async () => {
+    const requestSequence = ++refreshSequence.current;
     const [response, offersResponse] = await Promise.all([
       fetchWithWebsiteSession("/api/commerce", { cache: "no-store" }),
       fetchWithWebsiteSession("/api/marketplace-offers", { cache: "no-store" }),
     ]);
     const [result, offersResult] = await Promise.all([response.json(), offersResponse.json()]);
+    if (requestSequence !== refreshSequence.current) return;
     if (!response.ok) throw new Error(result.error ?? "Could not load your cart and orders.");
     if (!offersResponse.ok) throw new Error(offersResult.error ?? "Could not load private offers.");
     const commerce = { ...result, privateOffers: offersResult } as CommerceData;
@@ -310,29 +314,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
 
   useEffect(() => {
     let active = true;
-    void Promise.all([
-      fetchWithWebsiteSession("/api/commerce", { cache: "no-store" }),
-      fetchWithWebsiteSession("/api/marketplace-offers", { cache: "no-store" }),
-    ]).then(async ([response, offersResponse]) => {
-      const [result, offersResult] = await Promise.all([response.json(), offersResponse.json()]);
-      if (!response.ok) throw new Error(result.error ?? "Could not load your cart and orders.");
-      if (!offersResponse.ok) throw new Error(offersResult.error ?? "Could not load private offers.");
-      return { ...result, privateOffers: offersResult } as CommerceData;
-    }).then((commerce) => {
-      if (!active) return;
-      setData(commerce);
-      setBuyerOlderOrders([]);
-      setSellerOlderItems([]);
-      setBuyerHistoryHasMore(commerce.buyerOrdersHasMore);
-      setSellerHistoryHasMore(commerce.sellerItemsHasMore);
-      onCounters({ ...commerce, cartListingIds: commerce.cartItems.map((item) => item.listing_id) });
-      setBuyerName(commerce.profile.display_name || "");
-      setBuyerPhone(commerce.profile.phone || "");
-      setCountry(commerce.profile.delivery_country || "");
-      setRegion(commerce.profile.delivery_region || "");
-      setDistrict(commerce.profile.delivery_district || "");
-      setAddress(commerce.profile.delivery_address || "");
-    }).catch((error: unknown) => {
+    void refresh().catch((error: unknown) => {
       if (active) onNotice(error instanceof Error ? error.message : "Could not load your cart and orders.");
     }).finally(() => {
       if (active) setLoading(false);
@@ -342,14 +324,14 @@ export default function CommercePanel({ onNotice, onCounters }: {
         if (active) onNotice(error instanceof Error ? error.message : "Could not refresh your orders.");
       });
     };
-    const interval = window.setInterval(refreshIfVisible, 30_000);
+    const interval = window.setInterval(refreshIfVisible, 10_000);
     document.addEventListener("visibilitychange", refreshIfVisible);
     return () => {
       active = false;
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", refreshIfVisible);
     };
-  }, [onCounters, onNotice, refresh]);
+  }, [onNotice, refresh]);
 
   const perform = async (key: string, action: string, values: Record<string, unknown>) => {
     setBusy(key);
@@ -607,7 +589,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const renderSellerItem = (item: OrderItem, history = false) => <details className="commerce-seller-order-item" key={item.id}>
     <summary className="commerce-order-summary">
       <span><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>Order {item.order?.control_number}</small></span>
-      <span className="commerce-order-summary-status">{history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</span>
+      <span className="commerce-order-summary-status">{history && !["expired", "cancelled", "unavailable", "refunded", "payout_paid"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</span>
       <strong className="commerce-order-summary-total">{amount(item.seller_amount, item.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
     </summary>
@@ -619,7 +601,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     }}>{busy === `hide-seller-history-${item.id}` ? "Removing…" : "Delete from history"}</button>}
     <div className="commerce-order-item">
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-      <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</small>
+      <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded", "payout_paid"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</small>
       <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
       {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
       {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
