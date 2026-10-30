@@ -157,6 +157,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Could not load your cart and orders." }, { status: 503 });
     }
 
+    const { data: realtimeAccount, error: realtimeAccountError } = await admin.from("website_accounts")
+      .select("order_status_channel_token").eq("id", accountId).single();
+    let orderStatusChannel: string | null = null;
+    if (realtimeAccountError && ["42703", "PGRST204"].includes(realtimeAccountError.code ?? "")) {
+      console.warn("Live order status refresh is not configured. Apply supabase/marketplace-order-status-realtime.sql.");
+    } else if (realtimeAccountError) {
+      throw realtimeAccountError;
+    } else {
+      orderStatusChannel = realtimeAccount.order_status_channel_token;
+    }
+
     const completedItemStatuses = new Set(completedHistoryItemStatuses);
     const closedPaymentStatuses = new Set(["expired", "cancelled"]);
     const buyerOpenOrderIds = new Set((buyerOrderStates ?? []).filter((order) => {
@@ -238,6 +249,7 @@ export async function GET(request: Request) {
     }));
 
     return NextResponse.json({
+        orderStatusChannel,
         profile,
         cartItems: cart ?? [],
         buyerOrders: safeBuyerOrders,

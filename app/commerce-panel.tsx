@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import PrivateOfferForm from "./private-offer-form";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 
 type Currency = "TZS" | "USD";
 type CartListing = {
@@ -111,6 +112,7 @@ type PrivateOfferThread = {
   offers: PrivateOffer[];
 };
 type CommerceData = {
+  orderStatusChannel: string | null;
   profile: {
     display_name: string;
     email: string;
@@ -160,6 +162,7 @@ function buyerOrderStatusLabel(order: BuyerOrder) {
   if (order.items.some((item) => item.status === "payout_due")) return "Payout due";
   if (order.items.some((item) => item.status === "delivered")) return "After your order is delivered, confirm receipt.";
   if (order.items.some((item) => item.status === "shipped")) return "Your order has shipped. Check the tracking details for updates.";
+  if (order.items.length > 0 && order.items.every((item) => item.status === "payout_paid")) return "Payout paid";
   const status = order.payment_status;
   if (status === "awaiting_sellers" || status === "awaiting_seller") return "Awaiting seller to confirm availability";
   if (status === "awaiting_payment") return "Awaiting you to pay";
@@ -324,14 +327,45 @@ export default function CommercePanel({ onNotice, onCounters }: {
         if (active) onNotice(error instanceof Error ? error.message : "Could not refresh your orders.");
       });
     };
-    const interval = window.setInterval(refreshIfVisible, 10_000);
     document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("focus", refreshIfVisible);
     return () => {
       active = false;
-      window.clearInterval(interval);
       document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("focus", refreshIfVisible);
     };
   }, [onNotice, refresh]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !data?.orderStatusChannel) return;
+    let active = true;
+    let refreshTimer: number | undefined;
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible" || refreshTimer !== undefined) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        void refresh().catch((error: unknown) => {
+          if (active) onNotice(error instanceof Error ? error.message : "Could not refresh your orders.");
+        });
+      }, 200);
+    };
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`marketplace-order-status:${data.orderStatusChannel}`)
+      .on("broadcast", { event: "order_status_changed" }, scheduleRefresh)
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          scheduleRefresh();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`Order status Realtime subscription status: ${status}.`);
+        }
+      });
+    return () => {
+      active = false;
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [data?.orderStatusChannel, onNotice, refresh]);
 
   const perform = async (key: string, action: string, values: Record<string, unknown>) => {
     setBusy(key);
