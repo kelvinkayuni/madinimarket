@@ -40,7 +40,7 @@ async function readOwnedRows(admin: ReturnType<typeof createSupabaseAdminClient>
 async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminClient>, table: "listings" | "buy_requests", accountId: string) {
   if (table === "listings") {
     const { data, error } = await admin.from("listings")
-      .select("id, mineral_name, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, seller_price, platform_fee_rate, platform_fee_amount, price, currency, country, region, district, image_path")
+      .select("id, mineral_name, color, comment, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, seller_price, platform_fee_rate, platform_fee_amount, price, currency, country, region, district, image_path")
       .eq("website_user_id", accountId)
       .eq("status", "approved")
       .eq("is_active", true)
@@ -224,6 +224,12 @@ export async function POST(request: Request) {
 
   if (kind === "seller") {
     const mineralName = text(values, "mineral_name", 120);
+    const color = text(values, "color", 60);
+    const comment = text(values, "comment", 100);
+    if ((typeof values.color === "string" && values.color.length > 60) ||
+      (typeof values.comment === "string" && (values.comment.length > 100 || /[\r\n]/.test(values.comment)))) {
+      return NextResponse.json({ error: "Color must be 60 characters or fewer and the comment must be one line of up to 100 characters." }, { status: 400 });
+    }
     const listingType = text(values, "listing_type", 10) ?? "single";
     const weight = positiveNumber(values, "weight");
     const unit = text(values, "unit", 10);
@@ -301,7 +307,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Choose a mineral photo before submitting." }, { status: 400 });
     }
     rowValues = {
-      ...common, mineral_name: mineralName, listing_type: listingType, weight, unit,
+      ...common, mineral_name: mineralName, color, comment, listing_type: listingType, weight, unit,
       smallest_stone_weight: smallestStoneWeight, largest_stone_weight: largestStoneWeight,
       stone_weight_unit: stoneWeightUnit, seller_price: pricing.sellerPrice,
       platform_fee_rate: pricing.platformFeeRate, platform_fee_amount: pricing.platformFeeAmount,

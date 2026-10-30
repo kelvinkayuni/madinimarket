@@ -140,7 +140,7 @@ export async function GET(request: Request) {
       { data: marketplaceSettings, error: marketplaceSettingsError },
     ] = await Promise.all([
       admin.from("website_accounts").select("id, display_name, email, phone, delivery_country, delivery_region, delivery_district, delivery_address, is_active").eq("id", accountId).single(),
-      admin.from("marketplace_cart_items").select("id, listing_id, created_at, listing:listings(id, mineral_name, listing_type, weight, unit, price, seller_price, platform_fee_amount, currency, image_path, website_user_id, seller_name, status, is_active, marketplace_state)").eq("buyer_id", accountId).order("created_at"),
+      admin.from("marketplace_cart_items").select("id, listing_id, created_at, listing:listings(id, mineral_name, color, comment, listing_type, weight, unit, price, seller_price, platform_fee_amount, currency, image_path, website_user_id, seller_name, country, region, district, street, stone_certificate_path, status, is_active, marketplace_state)").eq("buyer_id", accountId).order("created_at"),
       admin.from("marketplace_orders").select("*, items:marketplace_order_items(*)").eq("buyer_id", accountId).is("buyer_history_hidden_at", null).order("created_at", { ascending: false }).limit(50),
       admin.from("marketplace_order_items").select("*, order:marketplace_orders!inner(id, control_number, payment_status, payment_deadline, currency, created_at, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)").eq("seller_id", accountId).is("seller_history_hidden_at", null).order("created_at", { ascending: false }).limit(100),
       admin.from("marketplace_orders").select("id, payment_status, buyer_history_hidden_at, items:marketplace_order_items(status)").eq("buyer_id", accountId),
@@ -167,6 +167,28 @@ export async function GET(request: Request) {
     } else {
       orderStatusChannel = realtimeAccount.order_status_channel_token;
     }
+
+    const cartItemsWithImages = await Promise.all((cart ?? []).map(async (item) => {
+      const listing = Array.isArray(item.listing) ? item.listing[0] : item.listing;
+      if (!listing) return { ...item, listing: null };
+      if (!listing.image_path) return { ...item, listing: { ...listing, signed_image_url: null } };
+      const { data: image, error: imageError } = await admin.storage.from("mineral-images")
+        .createSignedUrl(listing.image_path, 10 * 60);
+      if (imageError) throw imageError;
+      return { ...item, listing: { ...listing, signed_image_url: image.signedUrl } };
+    }));
+    const cartSellerIds = [...new Set(cartItemsWithImages
+      .map((item) => item.listing?.website_user_id)
+      .filter((id): id is string => typeof id === "string"))];
+    const { data: verifiedSellerRows, error: verifiedSellerError } = cartSellerIds.length
+      ? await admin.from("website_account_certificates").select("website_user_id")
+        .eq("status", "approved").in("website_user_id", cartSellerIds)
+      : { data: [], error: null };
+    if (verifiedSellerError) throw verifiedSellerError;
+    const verifiedSellerIds = new Set((verifiedSellerRows ?? []).map((certificate) => certificate.website_user_id));
+    const cartItemsWithListingDetails = cartItemsWithImages.map((item) => item.listing
+      ? { ...item, listing: { ...item.listing, verified_seller: verifiedSellerIds.has(item.listing.website_user_id) } }
+      : item);
 
     const completedItemStatuses = new Set(completedHistoryItemStatuses);
     const closedPaymentStatuses = new Set(["expired", "cancelled"]);
@@ -251,7 +273,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
         orderStatusChannel,
         profile,
-        cartItems: cart ?? [],
+        cartItems: cartItemsWithListingDetails,
         buyerOrders: safeBuyerOrders,
         buyerOrdersHasMore: (buyerOrders ?? []).length === 50,
         sellerItems: safeSellerItems,

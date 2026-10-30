@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import PrivateOfferForm from "./private-offer-form";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
@@ -10,13 +11,22 @@ type Currency = "TZS" | "USD";
 type CartListing = {
   id: number;
   mineral_name: string;
+  color: string | null;
+  comment: string | null;
   listing_type: string;
   weight: number;
   unit: string;
   price: number | string;
   currency: Currency;
   image_path: string | null;
+  signed_image_url: string | null;
   seller_name: string;
+  verified_seller: boolean;
+  country: string;
+  region: string;
+  district: string;
+  street: string;
+  stone_certificate_path: string | null;
   status: string;
   is_active: boolean;
   marketplace_state: string;
@@ -262,6 +272,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [sellerStatusFilter, setSellerStatusFilter] = useState("all");
   const [cartSearch, setCartSearch] = useState("");
   const [cartStatusFilter, setCartStatusFilter] = useState("all");
+  const [expandedCartItemId, setExpandedCartItemId] = useState<string | null>(null);
   const [privateOfferSearch, setPrivateOfferSearch] = useState("");
   const [privateOfferStatusFilter, setPrivateOfferStatusFilter] = useState("all");
   const [selectedPrivateThreadId, setSelectedPrivateThreadId] = useState<string | null>(null);
@@ -314,6 +325,27 @@ export default function CommercePanel({ onNotice, onCounters }: {
     setAddress((current) => current || commerce.profile.delivery_address || "");
     setLoading(false);
   }, [onCounters]);
+
+  const openCartListingCertificate = async (listingId: number) => {
+    const certificateTab = window.open("about:blank", "_blank");
+    if (!certificateTab) {
+      onNotice("Allow pop-ups to open this certificate.");
+      return;
+    }
+    try {
+      const response = await fetchWithWebsiteSession(`/api/listing-certificate?id=${listingId}`);
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error ?? "Could not open this certificate.");
+      }
+      const certificateUrl = URL.createObjectURL(await response.blob());
+      certificateTab.location.href = certificateUrl;
+      window.setTimeout(() => URL.revokeObjectURL(certificateUrl), 60_000);
+    } catch (error) {
+      certificateTab.close();
+      onNotice(error instanceof Error ? error.message : "Could not open this certificate.");
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -533,7 +565,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const orderPageSize = 10;
   const isCartListingMarketListed = (item: CartItem) => Boolean(item.listing && item.listing.is_active && item.listing.status === "approved" && item.listing.marketplace_state === "available");
   const filteredCartItems = data.cartItems.filter((item) => {
-    const matchesSearch = !cartSearch.trim() || `${item.listing?.mineral_name ?? ""} ${item.listing?.seller_name ?? ""}`.toLocaleLowerCase().includes(cartSearch.trim().toLocaleLowerCase());
+    const matchesSearch = !cartSearch.trim() || `${item.listing?.mineral_name ?? ""} ${item.listing?.color ?? ""} ${item.listing?.comment ?? ""} ${item.listing?.seller_name ?? ""}`.toLocaleLowerCase().includes(cartSearch.trim().toLocaleLowerCase());
     const matchesStatus = cartStatusFilter === "all" || (cartStatusFilter === "listed" ? isCartListingMarketListed(item) : !isCartListingMarketListed(item));
     return matchesSearch && matchesStatus;
   });
@@ -731,13 +763,34 @@ export default function CommercePanel({ onNotice, onCounters }: {
               {filteredCartItems.map((item) => {
                 const marketListed = isCartListingMarketListed(item);
                 const itemStatus = marketListed ? "Listed" : item.listing?.marketplace_state === "reserved" ? "Reserved" : "Unavailable";
-                return <article className="commerce-cart-item-card" key={item.id}>
-                  <div className="commerce-cart-item-info">
-                    <strong>{item.listing?.mineral_name ?? "Listing no longer available"}</strong>
-                    <span>{item.listing ? `${item.listing.listing_type === "batch" ? "Batch · " : ""}${item.listing.weight} ${item.listing.unit} · ${amount(item.listing.price, item.listing.currency)}` : "This listing is no longer available."}</span>
+                const expanded = expandedCartItemId === item.id;
+                return <article className="commerce-cart-item-entry" key={item.id}>
+                  <div className="commerce-cart-item-card">
+                    <button className="commerce-cart-item-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedCartItemId(expanded ? null : item.id)}>
+                      <span className="commerce-cart-item-info">
+                        <strong>{item.listing?.mineral_name ?? "Listing no longer available"}<ChevronDown size={13} aria-hidden="true" /></strong>
+                        <span>{item.listing ? `${item.listing.listing_type === "batch" ? "Batch · " : ""}${item.listing.weight} ${item.listing.unit} · ${amount(item.listing.price, item.listing.currency)}` : "This listing is no longer available."}</span>
+                      </span>
+                    </button>
+                    <span className={`commerce-cart-item-status${marketListed ? " is-available" : ""}`}>{itemStatus}</span>
+                    <button className="button button-outline commerce-cart-remove" type="button" aria-label={`Remove ${item.listing?.mineral_name ?? "unavailable item"} from cart`} disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
                   </div>
-                  <span className={`commerce-cart-item-status${marketListed ? " is-available" : ""}`}>{itemStatus}</span>
-                  <button className="button button-outline commerce-cart-remove" type="button" aria-label={`Remove ${item.listing?.mineral_name ?? "unavailable item"} from cart`} disabled={busy === `remove-${item.id}`} onClick={() => void perform(`remove-${item.id}`, "remove_from_cart", { cartItemId: item.id })}>Remove</button>
+                  {expanded && item.listing && <div className="commerce-cart-listing-details">
+                    {item.listing.signed_image_url && <Image src={item.listing.signed_image_url} alt={item.listing.mineral_name} width={120} height={120} unoptimized />}
+                    <div className="commerce-cart-listing-description">
+                      <strong>{item.listing.mineral_name}{item.listing.color ? ` · ${item.listing.color}` : ""}</strong>
+                      {item.listing.verified_seller && <span className="commerce-cart-verified-seller">Verified seller</span>}
+                      <span>Seller: {item.listing.seller_name}</span>
+                      <span>{item.listing.listing_type === "batch" ? "Batch · " : ""}{item.listing.weight} {item.listing.unit}</span>
+                      {item.listing.comment && <span>{item.listing.comment}</span>}
+                      <span>{amount(item.listing.price, item.listing.currency)}</span>
+                      <span>{[item.listing.street, item.listing.district, item.listing.region, item.listing.country].filter(Boolean).join(", ") || "Location not provided"}</span>
+                      {item.listing.stone_certificate_path && <a href={`/api/listing-certificate?id=${item.listing.id}`} onClick={(event) => {
+                        event.preventDefault();
+                        void openCartListingCertificate(item.listing!.id);
+                      }}>See certificate</a>}
+                    </div>
+                  </div>}
                 </article>;
               })}
               {!filteredCartItems.length && <p className="commerce-note">No cart items match your search and status filter.</p>}
