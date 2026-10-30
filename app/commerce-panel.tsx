@@ -588,7 +588,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         </div>}
       </div>
       {item.status === "delivered" && <div className="commerce-item-actions">
-        <button className="button button-dark" type="button" disabled={busy === `receipt-${item.id}`} onClick={() => void perform(`receipt-${item.id}`, "confirm_receipt", { itemId: item.id })}>Confirm receipt</button>
+        <button className="button button-dark" type="button" disabled={busy === `receipt-${item.id}`} onClick={() => void perform(`receipt-${item.id}`, "confirm_receipt", { itemId: item.id })}>{busy === `receipt-${item.id}` ? "Confirming receipt…" : "Confirm receipt"}</button>
         <label className="field-label">Report a delivery issue<textarea className="review-message" minLength={10} maxLength={500} value={disputeReasons[item.id] ?? ""} onChange={(event) => setDisputeReasons((current) => ({ ...current, [item.id]: event.target.value }))} /></label>
         <button className="button button-outline" type="button" disabled={busy === `dispute-${item.id}`} onClick={() => void perform(`dispute-${item.id}`, "dispute_delivery", { itemId: item.id, reason: disputeReasons[item.id] })}>Open dispute</button>
       </div>}
