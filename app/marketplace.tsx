@@ -565,6 +565,7 @@ export default function Marketplace() {
   const [user, setUser] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [userId, setUserId] = useState("");
+  const [accountOrderStatusChannel, setAccountOrderStatusChannel] = useState("");
   const [marketplaceOrdersNeedingAction, setMarketplaceOrdersNeedingAction] = useState(0);
   const [cartListingIds, setCartListingIds] = useState<Set<number>>(() => new Set());
   const [cartListingAccountId, setCartListingAccountId] = useState("");
@@ -699,6 +700,7 @@ export default function Marketplace() {
           setBuyingCount(Number(result.buyingCount) || 0);
           setCartListingIds(new Set((result.cartItems ?? []).map((item: { listing_id: number }) => Number(item.listing_id)).filter(Number.isSafeInteger)));
           setCartListingAccountId(userId);
+          setAccountOrderStatusChannel(typeof result.orderStatusChannel === "string" ? result.orderStatusChannel : "");
         }
       } catch (error) {
         if (active) console.error("Could not refresh account counts.", error);
@@ -715,6 +717,52 @@ export default function Marketplace() {
       removeResumeListener();
     };
   }, [role, userId]);
+  useEffect(() => {
+    if (role !== "user" || !userId || !accountOrderStatusChannel || !isSupabaseConfigured) return;
+    let active = true;
+    let loading = false;
+    let refreshTimer: number | undefined;
+    const refreshCartCount = async () => {
+      if (loading || document.visibilityState !== "visible") return;
+      loading = true;
+      try {
+        const response = await fetchWithWebsiteSession("/api/commerce", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not refresh cart count.");
+        if (active) {
+          setCartListingIds(new Set((result.cartItems ?? []).map((item: { listing_id: number }) => Number(item.listing_id)).filter(Number.isSafeInteger)));
+          setCartListingAccountId(userId);
+        }
+      } catch (error) {
+        if (active) console.error("Could not refresh cart count.", error);
+      } finally {
+        loading = false;
+      }
+    };
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible" || refreshTimer !== undefined) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        void refreshCartCount();
+      }, 200);
+    };
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`marketplace-order-status:${accountOrderStatusChannel}`)
+      .on("broadcast", { event: "cart_changed" }, scheduleRefresh)
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          scheduleRefresh();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`Cart count Realtime subscription status: ${status}.`);
+        }
+      });
+    return () => {
+      active = false;
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [accountOrderStatusChannel, role, userId]);
   useEffect(() => {
     if (role !== "admin" || !userId || !isSupabaseConfigured) return;
     let active = true;
@@ -3443,7 +3491,7 @@ export default function Marketplace() {
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("support"); setMenuOpen(false); }}>Help / Contact admin <ArrowUpRight size={15} /></button>{role === "user" && <><button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders and Cart <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOpenOrdersCount}</strong> buying active</small><small><strong>{sellerOpenOrdersCount}</strong> selling active</small></span></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions <ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("support"); setMenuOpen(false); }}>Help / Contact admin <ArrowUpRight size={15} /></button>{role === "user" && <>        <button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders and Cart <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOpenOrdersCount}</strong> buying active</small><small><strong>{sellerOpenOrdersCount}</strong> selling active</small><small><strong>{cartListingAccountId === userId ? cartListingIds.size : 0}</strong> cart</small></span></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} priority /><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
       {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
