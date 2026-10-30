@@ -565,7 +565,7 @@ export default function Marketplace() {
   const [user, setUser] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [userId, setUserId] = useState("");
-  const [pendingMarketplacePayments, setPendingMarketplacePayments] = useState(0);
+  const [marketplaceOrdersNeedingAction, setMarketplaceOrdersNeedingAction] = useState(0);
   const [cartListingIds, setCartListingIds] = useState<Set<number>>(() => new Set());
   const [cartListingAccountId, setCartListingAccountId] = useState("");
   const [sellerOpenOrdersCount, setSellerOpenOrdersCount] = useState(0);
@@ -719,7 +719,8 @@ export default function Marketplace() {
     if (role !== "admin" || !userId || !isSupabaseConfigured) return;
     let active = true;
     let loading = false;
-    const refreshPendingMarketplacePayments = async () => {
+    let refreshTimer: number | undefined;
+    const refreshMarketplaceOrdersNeedingAction = async () => {
       if (loading || document.visibilityState !== "visible") return;
       loading = true;
       try {
@@ -731,23 +732,40 @@ export default function Marketplace() {
           cache: "no-store",
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error ?? "Could not load pending payment count.");
-        if (!Number.isInteger(result.pendingPaymentCount) || result.pendingPaymentCount < 0) {
-          throw new Error("Pending payment count is invalid.");
+        if (!response.ok) throw new Error(result.error ?? "Could not load marketplace orders needing action.");
+        if (!Number.isSafeInteger(result.marketplaceOrdersNeedingAction) || result.marketplaceOrdersNeedingAction < 0) {
+          throw new Error("Marketplace orders needing action count is invalid.");
         }
-        if (active) setPendingMarketplacePayments(result.pendingPaymentCount);
+        if (active) setMarketplaceOrdersNeedingAction(result.marketplaceOrdersNeedingAction);
       } catch (error) {
-        if (active) console.error("Could not refresh pending marketplace payments.", error);
+        if (active) console.error("Could not refresh marketplace orders needing action.", error);
       } finally {
         loading = false;
       }
     };
-    void refreshPendingMarketplacePayments();
-    const interval = window.setInterval(() => void refreshPendingMarketplacePayments(), 30_000);
-    const removeResumeListener = onBrowserResume(refreshPendingMarketplacePayments);
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible" || refreshTimer !== undefined) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        void refreshMarketplaceOrdersNeedingAction();
+      }, 200);
+    };
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel("admin-marketplace-order-count", { config: { private: true } })
+      .on("broadcast", { event: "marketplace_orders_changed" }, scheduleRefresh)
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          scheduleRefresh();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`Marketplace order count Realtime subscription status: ${status}.`);
+        }
+      });
+    const removeResumeListener = onBrowserResume(refreshMarketplaceOrdersNeedingAction);
     return () => {
       active = false;
-      window.clearInterval(interval);
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
       removeResumeListener();
     };
   }, [role, userId]);
@@ -2942,7 +2960,7 @@ export default function Marketplace() {
               <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
               <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
               <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
-              <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${pendingMarketplacePayments} payments awaiting verification`}>{pendingMarketplacePayments}</span></button>
+              <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
               <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>
               <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
               <div className="admin-menu-currency">
@@ -3376,7 +3394,7 @@ export default function Marketplace() {
             </div>
           </> : <p className="admin-empty">No accounts match the selected filters{accountSearch.trim() ? ` and “${accountSearch.trim()}”` : ""}.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
-        {activeAdminPanel === "orders" && <AdminMarketplaceOrders onNotice={setNotice} pendingPaymentCount={pendingMarketplacePayments} />}
+        {activeAdminPanel === "orders" && <AdminMarketplaceOrders onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} />}
         {activeAdminPanel === "order-time-limits" && <AdminOrderTimeLimits onNotice={setNotice} />}
         {activeAdminPanel === "payment-instructions" && <AdminPaymentInstructions onNotice={setNotice} />}
         {activeAdminPanel === "subscriptions" && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">

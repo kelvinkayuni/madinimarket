@@ -35,14 +35,40 @@ export async function GET(request: Request) {
   if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
   const searchParams = new URL(request.url).searchParams;
   if (searchParams.get("summary") === "1") {
-    const { count, error } = await admin.from("marketplace_orders")
-      .select("id", { count: "exact", head: true })
-      .eq("payment_status", "payment_submitted");
-    if (error) {
-      console.error("Admin could not load pending marketplace payment count", error);
-      return NextResponse.json({ error: "Could not load pending payment count." }, { status: 503 });
+    const [allOrdersResult, completedOrdersResult] = await Promise.all([
+      admin.rpc("admin_marketplace_order_queue", {
+        p_filter: "all",
+        p_search: "",
+        p_offset: 0,
+        p_limit: 1,
+      }),
+      admin.rpc("admin_marketplace_order_queue", {
+        p_filter: "completed",
+        p_search: "",
+        p_offset: 0,
+        p_limit: 1,
+      }),
+    ]);
+    if (allOrdersResult.error || completedOrdersResult.error) {
+      console.error("Admin could not load marketplace orders needing action", {
+        allOrdersError: allOrdersResult.error,
+        completedOrdersError: completedOrdersResult.error,
+      });
+      return NextResponse.json({ error: "Could not load marketplace orders needing action." }, { status: 503 });
     }
-    return NextResponse.json({ pendingPaymentCount: count ?? 0 }, { headers: { "Cache-Control": "no-store" } });
+    const allOrders = allOrdersResult.data as { total_count: number | string }[] | null;
+    const completedOrders = completedOrdersResult.data as { total_count: number | string }[] | null;
+    const totalCount = Number(allOrders?.[0]?.total_count ?? 0);
+    const completedCount = Number(completedOrders?.[0]?.total_count ?? 0);
+    if (!Number.isSafeInteger(totalCount) || !Number.isSafeInteger(completedCount) ||
+      totalCount < 0 || completedCount < 0 || completedCount > totalCount) {
+      console.error("Admin received invalid marketplace order counts", { totalCount, completedCount });
+      return NextResponse.json({ error: "Could not load marketplace orders needing action." }, { status: 503 });
+    }
+    return NextResponse.json(
+      { marketplaceOrdersNeedingAction: totalCount - completedCount },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   }
   const filters = new Set([
     "needs_action", "active", "payment_submitted", "awaiting_sellers", "awaiting_payment",

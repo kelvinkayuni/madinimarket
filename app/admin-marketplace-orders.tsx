@@ -93,9 +93,9 @@ function orderNeedsAdminAttention(order: Order) {
   );
 }
 
-export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }: {
+export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeedingAction }: {
   onNotice: (message: string) => void;
-  pendingPaymentCount: number;
+  marketplaceOrdersNeedingAction: number;
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -217,7 +217,7 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
   return <section className="admin-overview admin-commerce-orders">
     <div className="admin-page-heading">
       <div><div className="dialog-kicker">BUYER PAYMENTS & SELLER PAYOUTS</div><h1>Marketplace orders</h1>
-        <p><strong>{pendingPaymentCount}</strong> payment{pendingPaymentCount === 1 ? "" : "s"} awaiting verification. Orders needing admin attention are shown first.</p></div>
+        <p><strong>{marketplaceOrdersNeedingAction}</strong> order{marketplaceOrdersNeedingAction === 1 ? "" : "s"} not yet completed and needing admin action. Orders requiring the most urgent action are shown first.</p></div>
       <button className="button button-outline" type="button" disabled={busy === "refresh"} onClick={() => {
         setBusy("refresh");
         void load().then(() => onNotice("Marketplace orders refreshed.")).catch((error: unknown) => onNotice(error instanceof Error ? error.message : "Could not refresh orders.")).finally(() => setBusy(""));
