@@ -155,6 +155,9 @@ function statusLabel(status: string) {
 }
 
 function buyerOrderStatusLabel(order: BuyerOrder) {
+  if (order.items.some((item) => item.status === "disputed")) return "disputed";
+  if (order.items.some((item) => item.status === "refund_due")) return "refund due";
+  if (order.items.some((item) => item.status === "payout_due")) return "Payout due";
   if (order.items.some((item) => item.status === "delivered")) return "After your order is delivered, confirm receipt.";
   if (order.items.some((item) => item.status === "shipped")) return "Your order has shipped. Check the tracking details for updates.";
   const status = order.payment_status;
@@ -216,6 +219,9 @@ function buyerOrderHistoryLabel(order: BuyerOrder) {
 function orderItemStatusLabel(item: OrderItem) {
   if (item.seller_response_timed_out) return "Seller didn’t confirm availability in time";
   if (item.status === "unavailable") return "Seller confirmed unavailable";
+  if (item.status === "payout_due") return "Payout due";
+  if (item.status === "payout_paid") return "Payout paid";
+  if (item.status === "refund_due") return "Refund due";
   if (item.status === "delivered") return "After your order is delivered, confirm receipt.";
   if (item.status === "shipped") return "Your order has shipped. Check the tracking details for updates.";
   return statusLabel(item.status);
@@ -227,6 +233,9 @@ function sellerOrderItemStatusLabel(item: OrderItem) {
   if (item.status === "paid") return "Buyer payment verified. Deliver the order and submit carrier and tracking number.";
   if (item.status === "shipped") return "You submitted tracking details. Awaiting delivery confirmation.";
   if (item.status === "delivered") return "Order delivered. Awaiting buyer to confirm receipt.";
+  if (item.status === "payout_due") return "Payout due";
+  if (item.status === "payout_paid") return "Payout paid";
+  if (item.status === "refund_due") return "Refund due";
   return orderItemStatusLabel(item);
 }
 
