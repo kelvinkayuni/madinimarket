@@ -811,7 +811,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {unavailableCartItemsCount > 0 && <p className="commerce-warning commerce-cart-unavailable-note">Remove or wait for the {unavailableCartItemsCount} unavailable {unavailableCartItemsCount === 1 ? "item" : "items"} before submitting the order.</p>}
             <form className="commerce-checkout" onSubmit={checkout}>
               <p className="commerce-note">After you submit the order, each seller must confirm their item’s availability. Items stay available to other buyers while in your cart; submitting reserves them while sellers check. A seller-confirmed unavailable mineral is removed from the market; if a seller does not respond by the deadline, that item is cancelled and released back to the market. You only pay for seller-confirmed items.</p>
-              <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
+              <label className="field-label">Your name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
               <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
               <div className="field-row">
                 <label className="field-label">Country<input className="text-input" required maxLength={100} value={country} onChange={(event) => setCountry(event.target.value)} /></label>
