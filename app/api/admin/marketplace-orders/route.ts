@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   }
   const filters = new Set([
     "needs_action", "active", "payment_submitted", "awaiting_sellers", "awaiting_payment",
-    "delivery_due", "disputes", "payout_due", "refund_due", "completed", "history", "all",
+    "delivery_due", "receipt_confirmation", "disputes", "payout_due", "refund_due", "completed", "history", "all",
   ]);
   const requestedFilter = searchParams.get("filter") ?? "needs_action";
   if (!filters.has(requestedFilter)) {

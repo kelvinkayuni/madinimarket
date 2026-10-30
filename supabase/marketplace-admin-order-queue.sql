@@ -69,6 +69,10 @@ as $$
         when 'awaiting_sellers' then payment_status = 'awaiting_sellers'
         when 'awaiting_payment' then payment_status = 'awaiting_payment'
         when 'delivery_due' then can_confirm_delivery
+        when 'receipt_confirmation' then exists (
+          select 1 from public.marketplace_order_items i
+          where i.order_id = classified.id and i.status = 'delivered'
+        )
         when 'disputes' then exists (
           select 1 from public.marketplace_order_items i
           where i.order_id = classified.id and i.status = 'disputed'

@@ -52,6 +52,7 @@ type OrderFilter =
   | "awaiting_sellers"
   | "awaiting_payment"
   | "delivery_due"
+  | "receipt_confirmation"
   | "disputes"
   | "payout_due"
   | "refund_due"
@@ -250,6 +251,7 @@ export default function AdminMarketplaceOrders({ onNotice, pendingPaymentCount }
           <option value="awaiting_sellers">Awaiting seller responses</option>
           <option value="awaiting_payment">Awaiting buyer payment</option>
           <option value="delivery_due">Delivery confirmation</option>
+          <option value="receipt_confirmation">Orders awaiting receipt confirmation</option>
           <option value="disputes">Open disputes</option>
           <option value="payout_due">Seller payouts due</option>
           <option value="refund_due">Buyer refunds due</option>
