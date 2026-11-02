@@ -119,7 +119,7 @@ export default function BankInformationPanel({ onNotice }: { onNotice: (message:
         onNotice(message);
       }).finally(() => setLoading(false));
     }}>Try again</button></div> : <>
-      {hasBankInformation && <p className="bank-information-lock-warning"><strong>Important:</strong> Once saved, your bank account details cannot be edited or deleted for a period of six (6) months. Please verify all information carefully before submitting.</p>}
+      {canEdit && <p className="bank-information-lock-warning"><strong>Important:</strong> Once saved, your bank account details cannot be edited or deleted for a period of six (6) months. Please verify all information carefully before submitting.</p>}
       {editUnlocked && <p className="bank-information-unlocked">An administrator has allowed one update. Your account will be locked again after you save.</p>}
       {!canEdit && editableAt && <p className="bank-information-lock-status">You can edit these details after {formatBankDate(editableAt)} unless an administrator grants a one-time edit.</p>}
       <form className="form-stack bank-information-form" onSubmit={save}>

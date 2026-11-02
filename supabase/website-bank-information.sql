@@ -80,6 +80,17 @@ begin
   where account.id = p_account_id
   returning * into current_account;
 
+  update public.marketplace_order_items as item
+  set payout_bank_name = current_account.bank_name,
+      payout_bank_account_number = current_account.bank_account_number,
+      payout_bank_account_holder_name = current_account.bank_account_holder_name,
+      payout_bank_snapshot_at = now()
+  where item.seller_id = current_account.id
+    and item.status = 'payout_due'
+    and item.payout_bank_name is null
+    and item.payout_bank_account_number is null
+    and item.payout_bank_account_holder_name is null;
+
   return query select
     current_account.bank_name,
     current_account.bank_account_number,
@@ -103,6 +114,11 @@ begin
   if new.status = 'payout_due'
     and (tg_op = 'INSERT' or old.status is distinct from new.status)
   then
+    new.payout_bank_name = null;
+    new.payout_bank_account_number = null;
+    new.payout_bank_account_holder_name = null;
+    new.payout_bank_snapshot_at = null;
+
     if new.seller_id is not null then
       select
         account.bank_name,
@@ -115,7 +131,13 @@ begin
       from public.website_accounts as account
       where account.id = new.seller_id;
     end if;
-    new.payout_bank_snapshot_at = now();
+
+    if new.payout_bank_name is not null
+      and new.payout_bank_account_number is not null
+      and new.payout_bank_account_holder_name is not null
+    then
+      new.payout_bank_snapshot_at = now();
+    end if;
   end if;
   return new;
 end;
@@ -132,10 +154,13 @@ update public.marketplace_order_items as item
 set payout_bank_name = account.bank_name,
     payout_bank_account_number = account.bank_account_number,
     payout_bank_account_holder_name = account.bank_account_holder_name,
-    payout_bank_snapshot_at = coalesce(item.payout_bank_snapshot_at, item.payout_due_at, now())
+    payout_bank_snapshot_at = now()
 from public.website_accounts as account
 where item.status = 'payout_due'
-  and item.payout_bank_snapshot_at is null
+  and item.payout_bank_name is null
+  and item.payout_bank_account_number is null
+  and item.payout_bank_account_holder_name is null
   and item.seller_id = account.id
-  and account.bank_info_added_at <= coalesce(item.payout_due_at, now())
-  and account.bank_info_updated_at <= coalesce(item.payout_due_at, now());
+  and account.bank_name is not null
+  and account.bank_account_number is not null
+  and account.bank_account_holder_name is not null;
