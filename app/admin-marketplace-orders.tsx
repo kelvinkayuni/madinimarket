@@ -300,6 +300,15 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             {item.shipping_carrier && <small>Tracking: {item.shipping_carrier} · {item.tracking_number}</small>}
             {item.dispute_reason && <p className="commerce-warning">Buyer dispute: {item.dispute_reason}</p>}
             {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
+            {item.status === "payout_paid" && <div className="admin-payout-bank-details">
+              <strong>Bank account paid to</strong>
+              {item.payout_bank_name && item.payout_bank_account_number && item.payout_bank_account_holder_name ? <>
+                <span>Bank Name: {item.payout_bank_name}</span>
+                <span>Account Number: {item.payout_bank_account_number}</span>
+                <span>Account Holder Name: {item.payout_bank_account_holder_name}</span>
+                {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+              </> : <span className="commerce-warning">No bank account details were recorded for this payout.</span>}
+            </div>}
             {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
             {item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
           </div>

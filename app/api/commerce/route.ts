@@ -42,10 +42,6 @@ async function sellerItemWithReceipt<T extends {
   item: T,
 ) {
   const { payout_receipt_path: receiptPath, ...safeItem } = item;
-  delete safeItem.payout_bank_name;
-  delete safeItem.payout_bank_account_number;
-  delete safeItem.payout_bank_account_holder_name;
-  delete safeItem.payout_bank_snapshot_at;
   if (!receiptPath) return safeItem;
   const { data, error } = await admin.storage.from("marketplace-seller-payout-receipts")
     .createSignedUrl(receiptPath, 10 * 60);
@@ -271,6 +267,7 @@ export async function GET(request: Request) {
           ...Object.fromEntries(
             Object.entries(item).filter(([key]) => ![
               "seller_email", "seller_id", "payment_proof_path", "payout_receipt_path",
+              "payout_bank_name", "payout_bank_account_number", "payout_bank_account_holder_name", "payout_bank_snapshot_at",
               "availability_email_sent_at", "availability_expired_at",
               "seller_availability_timeout_email_sent_at", "buyer_availability_result_email_sent_at",
               "buyer_availability_result_email_claimed_at", "dispatch_email_sent_at",

@@ -53,6 +53,10 @@ type OrderItem = {
   dispute_reason: string | null;
   payout_reference: string | null;
   payout_receipt_url?: string | null;
+  payout_bank_name?: string | null;
+  payout_bank_account_number?: string | null;
+  payout_bank_account_holder_name?: string | null;
+  payout_bank_snapshot_at?: string | null;
   order?: {
     id: string;
     control_number: string;
@@ -672,6 +676,15 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
       {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market will send your payout to your registered bank account. This status will update once payment is sent, and the receipt will appear here.</small>}
       {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
+      {item.status === "payout_paid" && <div className="commerce-delivery-details">
+        <strong>Bank account used for this payout</strong>
+        {item.payout_bank_name && item.payout_bank_account_number && item.payout_bank_account_holder_name ? <>
+          <span>Bank Name: {item.payout_bank_name}</span>
+          <span>Account Number: {item.payout_bank_account_number}</span>
+          <span>Account Holder Name: {item.payout_bank_account_holder_name}</span>
+          {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+        </> : <span>No bank account details were recorded for this payout.</span>}
+      </div>}
       {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View receipt</a></small>}
     </div>
     {item.status === "awaiting_seller" && <div className="commerce-item-actions">
