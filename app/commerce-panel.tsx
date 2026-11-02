@@ -247,7 +247,7 @@ function sellerOrderItemStatusLabel(item: OrderItem) {
   if (item.status === "paid") return "Buyer payment verified. Deliver the order and submit carrier and tracking number.";
   if (item.status === "shipped") return "You submitted tracking details. Awaiting delivery confirmation.";
   if (item.status === "delivered") return "Order delivered. Awaiting buyer to confirm receipt.";
-  if (item.status === "payout_due") return "Payout due";
+  if (item.status === "payout_due") return "Your payout is due";
   if (item.status === "payout_paid") return "Your payout has been sent, view receipt.";
   if (item.status === "refund_due") return "Refund due";
   return orderItemStatusLabel(item);
@@ -670,6 +670,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
       <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded", "payout_paid"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</small>
       <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
+      {item.status === "payout_due" && <small>Your order is complete. Madini Market will send your payout to your registered bank account. This status will update once payment is sent, and the receipt will appear here.</small>}
       {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
       {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View receipt</a></small>}
     </div>
@@ -868,7 +869,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div className="commerce-order-tools">
         <label className="commerce-order-search">Search selling orders<input className="text-input" type="search" value={sellerOrderSearch} placeholder="Order number or mineral" onChange={(event) => { setSellerOrderSearch(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }} /></label>
         <label className="commerce-order-filter">Status<select className="text-input" value={sellerStatusFilter} onChange={(event) => { setSellerStatusFilter(event.target.value); setSellerActivePage(1); setSellerHistoryPage(1); }}>
-        <option value="all">All statuses</option><option value="awaiting_seller">Awaiting you to confirm availability</option><option value="awaiting_payment">Awaiting buyer to pay</option><option value="paid">Buyer payment verified. Deliver the order and submit carrier and tracking number.</option><option value="shipped">You submitted tracking details. Awaiting delivery confirmation.</option><option value="delivered">Order delivered. Awaiting buyer to confirm receipt.</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Your payout has been sent, view receipt.</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+        <option value="all">All statuses</option><option value="awaiting_seller">Awaiting you to confirm availability</option><option value="awaiting_payment">Awaiting buyer to pay</option><option value="paid">Buyer payment verified. Deliver the order and submit carrier and tracking number.</option><option value="shipped">You submitted tracking details. Awaiting delivery confirmation.</option><option value="delivered">Order delivered. Awaiting buyer to confirm receipt.</option><option value="disputed">Disputed</option><option value="payout_due">Your payout is due</option><option value="payout_paid">Your payout has been sent, view receipt.</option><option value="refund_due">Refund due</option><option value="refunded">Refunded</option><option value="unavailable">Unavailable</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
       </div>
       <div className="commerce-order-subsection">
