@@ -169,7 +169,7 @@ function statusLabel(status: string) {
 function buyerOrderStatusLabel(order: BuyerOrder) {
   if (order.items.some((item) => item.status === "disputed")) return "disputed";
   if (order.items.some((item) => item.status === "refund_due")) return "refund due";
-  if (order.items.some((item) => item.status === "payout_due")) return "Payout due";
+  if (order.items.some((item) => item.status === "payout_due")) return "Seller payout pending";
   if (order.items.some((item) => item.status === "delivered")) return "After your order is delivered, confirm receipt.";
   if (order.items.some((item) => item.status === "shipped")) return "Your order has shipped. Check the tracking details for updates.";
   if (order.items.length > 0 && order.items.every((item) => item.status === "payout_paid")) return "Completed. The seller has been paid.";
@@ -233,7 +233,7 @@ function buyerOrderHistoryLabel(order: BuyerOrder) {
 function orderItemStatusLabel(item: OrderItem) {
   if (item.seller_response_timed_out) return "Seller didn’t confirm availability in time";
   if (item.status === "unavailable") return "Seller confirmed unavailable";
-  if (item.status === "payout_due") return "Payout due";
+  if (item.status === "payout_due") return "Seller payout pending";
   if (item.status === "payout_paid") return "Completed. The seller has been paid.";
   if (item.status === "refund_due") return "Refund due";
   if (item.status === "delivered") return "After your order is delivered, confirm receipt.";
@@ -638,6 +638,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div>
         <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
         <small>{orderItemStatusLabel(item)} · Total {amount(item.total_price, item.currency)}</small>
+        {item.status === "payout_due" && <small>Your order is complete. Madini Market is arranging the seller’s payment. No action is needed from you.</small>}
         {(item.shipping_carrier || item.tracking_number) && <div className="commerce-delivery-details">
           <strong>Tracking details</strong>
           {item.shipping_carrier && <span>Carrier: {item.shipping_carrier}</span>}
@@ -835,7 +836,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div className="commerce-order-tools">
         <label className="commerce-order-search">Search buying orders<input className="text-input" type="search" value={buyerOrderSearch} placeholder="Order number or mineral" onChange={(event) => { setBuyerOrderSearch(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }} /></label>
         <label className="commerce-order-filter">Status<select className="text-input" value={buyerStatusFilter} onChange={(event) => { setBuyerStatusFilter(event.target.value); setBuyerActivePage(1); setBuyerHistoryPage(1); }}>
-        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting you to pay</option><option value="payment_submitted">You submitted payment for verification</option><option value="awaiting_seller">Awaiting seller to confirm availability</option><option value="paid">Your payment is verified. Awaiting seller to dispatch your order.</option><option value="shipped">Your order has shipped. Check the tracking details for updates.</option><option value="delivered">After your order is delivered, confirm receipt.</option><option value="disputed">Disputed</option><option value="payout_due">Payout due</option><option value="payout_paid">Completed. The seller has been paid.</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+        <option value="all">All statuses</option><option value="awaiting_payment">Awaiting you to pay</option><option value="payment_submitted">You submitted payment for verification</option><option value="awaiting_seller">Awaiting seller to confirm availability</option><option value="paid">Your payment is verified. Awaiting seller to dispatch your order.</option><option value="shipped">Your order has shipped. Check the tracking details for updates.</option><option value="delivered">After your order is delivered, confirm receipt.</option><option value="disputed">Disputed</option><option value="payout_due">Seller payout pending</option><option value="payout_paid">Completed. The seller has been paid.</option><option value="refunded">Refunded</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
       </select></label>
       </div>
       <div className="commerce-order-subsection">
