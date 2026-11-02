@@ -638,7 +638,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div>
         <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
         <small>{orderItemStatusLabel(item)} · Total {amount(item.total_price, item.currency)}</small>
-        {item.status === "payout_due" && <small>Your order is complete. Madini Market is arranging the seller’s payment. No action is needed from you.</small>}
+        {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market is arranging the seller’s payment. No action is needed from you.</small>}
         {(item.shipping_carrier || item.tracking_number) && <div className="commerce-delivery-details">
           <strong>Tracking details</strong>
           {item.shipping_carrier && <span>Carrier: {item.shipping_carrier}</span>}
@@ -670,7 +670,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
       <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded", "payout_paid"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</small>
       <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
-      {item.status === "payout_due" && <small>Your order is complete. Madini Market will send your payout to your registered bank account. This status will update once payment is sent, and the receipt will appear here.</small>}
+      {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market will send your payout to your registered bank account. This status will update once payment is sent, and the receipt will appear here.</small>}
       {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
       {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View receipt</a></small>}
     </div>
