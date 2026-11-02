@@ -23,6 +23,10 @@ type Item = {
   payout_reference: string | null;
   payout_receipt_url: string | null;
   refund_reference: string | null;
+  payout_bank_name: string | null;
+  payout_bank_account_number: string | null;
+  payout_bank_account_holder_name: string | null;
+  payout_bank_snapshot_at: string | null;
 };
 type Order = {
   id: string;
@@ -282,6 +286,17 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             <small>Status: {item.status.replaceAll("_", " ")} · Buyer total {money(item.total_price, item.currency)}</small>
             <small>Seller amount {money(item.seller_amount, item.currency)} · Market fee {money(item.platform_fee_amount, item.currency)}</small>
             <small>Seller contact: {item.seller_email}</small>
+            {item.status === "payout_due" && <div className="admin-payout-bank-details">
+              <strong>Seller bank details</strong>
+              {item.payout_bank_name && item.payout_bank_account_number && item.payout_bank_account_holder_name ? <>
+                <span>Bank Name: {item.payout_bank_name}</span>
+                <span>Account Number: {item.payout_bank_account_number}</span>
+                <span>Account Holder Name: {item.payout_bank_account_holder_name}</span>
+                {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+              </> : item.payout_bank_snapshot_at
+                ? <span className="commerce-warning">No bank details were available when this payout became due.</span>
+                : <span className="commerce-warning">No historical bank detail snapshot is available for this payout. Verify the seller’s current bank information before transferring.</span>}
+            </div>}
             {item.shipping_carrier && <small>Tracking: {item.shipping_carrier} · {item.tracking_number}</small>}
             {item.dispute_reason && <p className="commerce-warning">Buyer dispute: {item.dispute_reason}</p>}
             {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}

@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const admin = await getAdminClient(request);
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const [accountsResult, listingsResult, requestsResult] = await Promise.all([
-      admin.from("website_accounts").select("id, display_name, username, email, phone, is_active, created_at").order("created_at", { ascending: false }),
+      admin.from("website_accounts").select("id, display_name, username, email, phone, is_active, created_at, bank_name, bank_account_number, bank_account_holder_name, bank_info_added_at, bank_info_edit_unlocked").order("created_at", { ascending: false }),
       admin.from("listings").select("website_user_id, status").not("website_user_id", "is", null),
       admin.from("buy_requests").select("website_user_id, status").not("website_user_id", "is", null),
     ]);
@@ -75,7 +75,8 @@ export async function GET(request: Request) {
       subscription: subscriptionsByAccount.get(account.id) ?? null,
     }));
     return NextResponse.json({ accounts: resultAccounts }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
+  } catch (error) {
+    console.error("Could not load website accounts for admin.", error);
     return NextResponse.json({ error: "Could not load website accounts." }, { status: 503 });
   }
 }
@@ -90,7 +91,21 @@ export async function PATCH(request: Request) {
     }
     const values = body as Record<string, unknown>;
     const id = typeof values.id === "string" ? values.id : "";
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) || typeof values.is_active !== "boolean") {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
+    }
+    const bankEditPermission = values.bank_info_edit_unlocked;
+    if (typeof bankEditPermission === "boolean") {
+      const { data, error } = await admin.from("website_accounts")
+        .update({ bank_info_edit_unlocked: bankEditPermission })
+        .eq("id", id)
+        .select("id, bank_info_edit_unlocked")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return NextResponse.json({ error: "Account not found." }, { status: 404 });
+      return NextResponse.json({ account: data });
+    }
+    if (typeof values.is_active !== "boolean") {
       return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
     }
     const { data, error } = await admin.from("website_accounts").update({ is_active: values.is_active })
@@ -98,7 +113,8 @@ export async function PATCH(request: Request) {
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Account not found." }, { status: 404 });
     return NextResponse.json({ account: data });
-  } catch {
+  } catch (error) {
+    console.error("Could not update website account.", error);
     return NextResponse.json({ error: "Could not update that account." }, { status: 503 });
   }
 }

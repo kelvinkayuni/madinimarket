@@ -359,6 +359,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-account-identity span, .admin-account-identity small { overflow-wrap: anywhere; color: #778075; font-size: 10px; }
 .admin-account-counts { color: #778075; font-size: 9px; line-height: 1.5; }
 .admin-account-counts strong { color: #3f5947; }
+.admin-account-bank-details { display: grid; gap: 4px; margin-top: 6px; padding: 9px 10px; border: 1px solid #e1e7de; background: #f8faf6; overflow-wrap: anywhere; }
+.admin-account-bank-details > strong { color: #304b39; font-size: 10px; }
+.admin-account-bank-details > .admin-account-control-row { margin-top: 5px; padding-top: 8px; border-top: 1px solid #e1e7de; }
+.admin-account-bank-details .admin-account-control-row > div strong { color: #304b39; font-size: 9px; }
+.admin-account-bank-details .admin-account-control-row > div span { font-size: 9px; }
 .admin-account-status-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .admin-account-status { padding: 5px 8px; font-size: 9px; font-weight: 700; }
 .admin-account-status.is-license-pending { background: #f5eddc; color: #806131; }
@@ -725,11 +730,23 @@ h1, h2, h3, p { margin-top: 0; }
 .admin-commerce-item { display: grid; gap: 10px; padding: 12px 0; border-top: 1px solid #e8ece5; }
 .admin-commerce-item > div:first-child { display: grid; gap: 5px; }
 .admin-commerce-item small { color: #69766a; font-size: 10px; }
+.admin-payout-bank-details { display: grid; gap: 4px; padding: 9px 10px; border: 1px solid #dfe5dc; background: #f7f9f4; color: #526052; font-size: 10px; overflow-wrap: anywhere; }
+.admin-payout-bank-details > strong { color: #304b39; font-size: 11px; }
+.admin-payout-bank-details > small { color: #788277; font-size: 9px; }
 .admin-reference-form { display: grid; justify-items: start; gap: 8px; max-width: 360px; }
 .admin-reference-form .field-label { width: 100%; margin: 0; font-size: 10px; }
 .admin-reference-form .text-input { min-height: 36px; font-size: 12px; }
 .admin-order-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #69766a; font-size: 10px; }
 .admin-order-pagination > div { display: flex; align-items: center; gap: 10px; }
+.bank-information-panel { display: grid; gap: 12px; }
+.bank-information-panel .dialog-copy { margin-bottom: 0; }
+.bank-information-lock-warning, .bank-information-unlocked, .bank-information-lock-status, .bank-information-added-date { margin: 0; padding: 10px 12px; color: #596653; background: #f4f6f1; font-size: 10px; line-height: 1.6; }
+.bank-information-lock-warning { border-left: 3px solid #c99740; background: #fbf7ed; }
+.bank-information-unlocked { border-left: 3px solid #4f8656; background: #edf5eb; }
+.bank-information-lock-status { color: #6d776c; }
+.bank-information-added-date { padding: 0; background: transparent; }
+.bank-information-error { color: #8e3d32; font-size: 11px; }
+.bank-information-form .text-input:disabled { background: #f5f6f3; color: #687368; }
 @media (max-width: 560px) {
   .dialog-panel:has(.commerce-panel) { width: 100%; padding: 27px 17px 28px; }
   .commerce-cart-item-list { max-height: none; overflow: visible; padding-right: 1px; overscroll-behavior: auto; scrollbar-gutter: auto; }

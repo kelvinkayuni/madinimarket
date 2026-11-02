@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, use
 import type { Session } from "@supabase/supabase-js";
 
 import AdminMarketplaceOrders from "./admin-marketplace-orders";
+import BankInformationPanel from "./bank-information-panel";
 import AdminPaymentInstructions from "./admin-payment-instructions";
 import AdminOrderTimeLimits from "./admin-order-time-limits";
 import SupportInbox from "./support-inbox";
@@ -47,7 +48,7 @@ type AccountWantedRequest = {
   location: string;
   marketplace_status?: AccountWantedMineral["marketplace_status"];
 };
-type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
+type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder_name: string | null; bank_info_added_at: string | null; bank_info_edit_unlocked: boolean; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
 type SalesLedgerTotals = Record<Currency, { transactions: number; grossSales: number; sellerAmount: number; marketplaceFee: number }>;
@@ -59,7 +60,7 @@ type SubscriptionPlan = { id: string; months: number; price_tzs: string; price_u
 type SubscriptionPaymentMethod = { method: string; accountNumber: string };
 type AccountSubscription = { id: string; website_user_id?: string; plan_id: string | null; months: number; currency: Currency; amount: string; status: "pending" | "active" | "expired" | "rejected"; requested_at: string; starts_at: string | null; expires_at: string | null; paid_at: string | null; payment_reference?: string | null; payment_receipt_url?: string | null; review_note?: string | null; account?: { display_name: string; username: string; email: string } | null };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
-type Dialog = "create" | "signin" | "forgot-password" | "sell" | "buy" | "review" | "submissions" | "subscription" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "commerce" | "private-offer" | "certificate-ready" | "support" | "signout" | null;
+type Dialog = "create" | "signin" | "forgot-password" | "sell" | "buy" | "review" | "submissions" | "subscription" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "commerce" | "bank-information" | "private-offer" | "certificate-ready" | "support" | "signout" | null;
 
 const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
@@ -2488,6 +2489,29 @@ export default function Marketplace() {
       setBusyAccountId(null);
     }
   };
+  const updateWebsiteAccountBankEditPermission = async (account: WebsiteAccount, unlocked: boolean) => {
+    if (unlocked && !window.confirm(`Allow ${account.username} to make one bank information update? Access will lock again automatically after the user saves.`)) return;
+    setBusyAccountId(account.id);
+    try {
+      const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
+      if (!session) throw new Error("Admin session expired.");
+      const response = await fetch("/api/admin/website-accounts", {
+        method: "PATCH",
+        headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
+        body: JSON.stringify({ id: account.id, bank_info_edit_unlocked: unlocked }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not update bank information access.");
+      await refreshAdminAccounts();
+      setNotice(unlocked
+        ? `One bank information update enabled for ${account.username}.`
+        : `Bank information editing disabled for ${account.username}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not update bank information access.");
+    } finally {
+      setBusyAccountId(null);
+    }
+  };
   const deleteWebsiteAccount = async (account: WebsiteAccount) => {
     if (!window.confirm(`Permanently delete ${account.username} and all of its submissions and drafts? This cannot be undone.`)) return;
     setBusyAccountId(account.id);
@@ -3411,6 +3435,19 @@ export default function Marketplace() {
                 <span><strong>{totalPosts}</strong> total posted</span>
                 <span>Selling: <strong>{account.listings.total}</strong> ({account.listings.pending} pending · {account.listings.approved} approved · {account.listings.rejected} rejected)</span>
                 <span>Buying: <strong>{account.buying_requests.total}</strong> ({account.buying_requests.pending} pending · {account.buying_requests.approved} approved · {account.buying_requests.rejected} rejected)</span>
+                <div className="admin-account-bank-details">
+                  <strong>Bank information</strong>
+                  {account.bank_info_added_at ? <>
+                    <span>Bank Name: {account.bank_name}</span>
+                    <span>Account Number: {account.bank_account_number}</span>
+                    <span>Account Holder Name: {account.bank_account_holder_name}</span>
+                    <span>Date Added: {new Date(account.bank_info_added_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</span>
+                  </> : <span>No bank information saved.</span>}
+                  <div className="admin-account-control-row">
+                    <div><strong>One-time bank edit</strong><span>{account.bank_info_edit_unlocked ? "Enabled; automatically locks after the user saves." : "Disabled; the six-month lock applies."}</span></div>
+                    <button className={`admin-currency-switch${account.bank_info_edit_unlocked ? " is-on" : ""}`} type="button" role="switch" aria-checked={account.bank_info_edit_unlocked} aria-label={`Allow one bank information update for ${account.username}`} disabled={busy || busyActions.has(`account-${account.id}-bank-edit`)} onClick={() => void withProgress(`account-${account.id}-bank-edit`, () => updateWebsiteAccountBankEditPermission(account, !account.bank_info_edit_unlocked))}><span /></button>
+                  </div>
+                </div>
                 {account.subscription && <span className="admin-account-subscription-details">
                   <strong>Subscription:</strong> {account.subscription.months} month{account.subscription.months === 1 ? "" : "s"} · Starts {new Date(account.subscription.starts_at).toLocaleString()} · Ends {new Date(account.subscription.expires_at).toLocaleString()}
                 </span>}
@@ -3499,7 +3536,7 @@ export default function Marketplace() {
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions {accountSubmissionEntries.length > 0 && <span className="account-menu-count" aria-label={`${accountSubmissionEntries.length} pending or rejected submissions`}><strong>{accountSubmissionEntries.length}</strong></span>}<ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("support"); setMenuOpen(false); }}>Help / Contact admin <ArrowUpRight size={15} /></button>{role === "user" && <>        <button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders and Cart <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOpenOrdersCount}</strong> buying active</small><small><strong>{sellerOpenOrdersCount}</strong> selling active</small><small><strong>{cartListingAccountId === userId ? cartListingIds.size : 0}</strong> cart</small></span></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions {accountSubmissionEntries.length > 0 && <span className="account-menu-count" aria-label={`${accountSubmissionEntries.length} pending or rejected submissions`}><strong>{accountSubmissionEntries.length}</strong></span>}<ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("support"); setMenuOpen(false); }}>Help / Contact admin <ArrowUpRight size={15} /></button>{role === "user" && <>        <button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders and Cart <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOpenOrdersCount}</strong> buying active</small><small><strong>{sellerOpenOrdersCount}</strong> selling active</small><small><strong>{cartListingAccountId === userId ? cartListingIds.size : 0}</strong> cart</small></span></button><button type="button" onClick={() => { setDialog("bank-information"); setMenuOpen(false); }}>Bank Information <ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} priority /><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
       {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
@@ -3691,6 +3728,7 @@ export default function Marketplace() {
       </>}
       {dialog === "support" && role === "user" && <SupportInbox onNotice={setNotice} />}
       {dialog === "commerce" && <CommercePanel onNotice={setNotice} onCounters={updateAccountMenuCounts} />}
+      {dialog === "bank-information" && role === "user" && <BankInformationPanel onNotice={setNotice} />}
       {dialog === "private-offer" && privateOfferRequest && <><div className="dialog-kicker">PRIVATE OFFER · REQUEST #{privateOfferRequest.id}</div><h2 id="dialog-title">Offer a mineral privately.</h2><p className="dialog-copy">Send a mineral card and price to this buyer. Your contact details stay private. The current marketplace fee is saved with this offer and included in the buyer total.</p><div className="private-offer-request-summary"><strong>{privateOfferRequest.mineral}</strong><span>{privateOfferRequest.weight} {privateOfferRequest.unit} · {privateOfferRequest.color} · {privateOfferRequest.shape} · {privateOfferRequest.quality}</span><span>Buyer’s request offer: {money(privateOfferRequest.offer, privateOfferRequest.currency)}</span></div>{listingFeeSettingsLoaded ? <PrivateOfferForm requestId={privateOfferRequest.id} threadId={null} feeRate={listingFeePercent / 100} usdEnabled={usdEnabled && currencySettingsLoaded} defaultCurrency={usdEnabled && currencySettingsLoaded ? privateOfferRequest.currency : "TZS"} submitting={busyActions.has("private-offer-submit")} onSubmit={(details) => void sendPrivateOffer(details)} /> : <p className="admin-empty">Loading current marketplace pricing…</p>}</>}
       {dialog === "submissions" && <><div className="dialog-kicker">YOUR ACCOUNT</div><h2 id="dialog-title">Your submissions</h2><p className="dialog-copy">Pending items are waiting for admin review. Rejected items can be edited or deleted.</p>
         <div className="user-account-list-tools"><label className="user-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search submissions by mineral" placeholder="Search submissions" value={userAccountListSearch} onChange={(event) => { setUserAccountListSearch(event.target.value); setUserAccountListPage(1); accountListScroll.current.submissions = 0; if (submissionsListRef.current) submissionsListRef.current.scrollTop = 0; }} /></label>
