@@ -685,7 +685,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
         </> : <span>No bank account details were recorded for this payout.</span>}
       </div>}
-      {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View receipt</a></small>}
+      {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
     </div>
     {item.status === "awaiting_seller" && <div className="commerce-item-actions">
       <button className="button button-dark" type="button" disabled={busy === `available-${item.id}` || busy === `unavailable-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>{busy === `available-${item.id}` ? "Confirming availability…" : "Available"}</button>
