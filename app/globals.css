@@ -734,6 +734,11 @@ h1, h2, h3, p { margin-top: 0; }
 .admin-shipment-group > span { overflow-wrap: anywhere; }
 .admin-shipment-group > small { color: #69766a; font-size: 10px; }
 .admin-shipment-group > ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; }
+.admin-payout-groups { display: grid; gap: 10px; }
+.admin-payout-group { display: grid; justify-items: start; gap: 8px; padding: 12px; border: 1px solid #d6e0d1; border-left: 3px solid #718a65; background: #f5f8f2; color: #455644; font-size: 11px; }
+.admin-payout-group > strong { color: #304b39; font-size: 12px; }
+.admin-payout-group > span { overflow-wrap: anywhere; }
+.admin-payout-group > ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; }
 .admin-commerce-item { display: grid; gap: 10px; padding: 12px 0; border-top: 1px solid #e8ece5; }
 .admin-commerce-item > div:first-child { display: grid; gap: 5px; }
 .admin-commerce-item small { color: #69766a; font-size: 10px; }

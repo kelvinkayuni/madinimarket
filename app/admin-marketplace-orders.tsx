@@ -184,9 +184,9 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
     }
   };
 
-  const recordPayout = async (itemId: string) => {
-    const reference = payoutReferences[itemId]?.trim() ?? "";
-    const receipt = payoutReceipts[itemId];
+  const recordPayout = async (itemId: string, payoutKey = itemId) => {
+    const reference = payoutReferences[payoutKey]?.trim() ?? "";
+    const receipt = payoutReceipts[payoutKey];
     if (reference.length < 3 || !receipt) {
       onNotice("Enter the payout reference and attach its receipt.");
       return;
@@ -209,9 +209,9 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not record the seller payout.");
       await load();
-      setPayoutReferences((current) => ({ ...current, [itemId]: "" }));
-      setPayoutReceipts((current) => ({ ...current, [itemId]: undefined }));
-      onNotice("Seller payout and receipt recorded.");
+      setPayoutReferences((current) => ({ ...current, [payoutKey]: "" }));
+      setPayoutReceipts((current) => ({ ...current, [payoutKey]: undefined }));
+      onNotice(`Seller payout and receipt recorded for ${Number(result.itemCount ?? 1)} ${Number(result.itemCount ?? 1) === 1 ? "item" : "items"}.`);
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not record the seller payout.");
     } finally {
@@ -308,22 +308,61 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             })}
           </div>;
         })()}
+        {(() => {
+          const payoutGroups = new Map<string, Item[]>();
+          for (const item of order.items) {
+            if (item.status !== "payout_due" || !item.seller_id) continue;
+            const payoutKey = item.shipping_carrier?.trim() && item.tracking_number?.trim()
+              ? JSON.stringify([
+                order.id, item.seller_id, item.shipping_carrier, item.tracking_number,
+                item.payout_bank_name, item.payout_bank_account_number, item.payout_bank_account_holder_name,
+              ])
+              : JSON.stringify([order.id, item.seller_id, item.id]);
+            const group = payoutGroups.get(payoutKey) ?? [];
+            group.push(item);
+            payoutGroups.set(payoutKey, group);
+          }
+          return payoutGroups.size > 0 && <div className="admin-payout-groups">
+            {[...payoutGroups.entries()].map(([payoutKey, items]) => {
+              const firstItem = items[0];
+              const sellerAmount = items.reduce((total, item) => total + Number(item.seller_amount), 0);
+              return <div className="admin-payout-group" key={payoutKey}>
+                <strong>Seller payout · {items.length} {items.length === 1 ? "item" : "items"}</strong>
+                <span>Order {order.control_number}{firstItem.shipping_carrier && firstItem.tracking_number
+                  ? ` · ${firstItem.shipping_carrier} tracking ${firstItem.tracking_number}`
+                  : " · No shared shipment tracking"}</span>
+                <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}: {money(item.seller_amount, item.currency)}</li>)}</ul>
+                <strong>Total seller payout: {money(sellerAmount, firstItem.currency)}</strong>
+                <div className="admin-payout-bank-details">
+                  <strong>Bank details for this payout</strong>
+                  {firstItem.payout_bank_name && firstItem.payout_bank_account_number && firstItem.payout_bank_account_holder_name ? <>
+                    <span>Bank Name: {firstItem.payout_bank_name}</span>
+                    <span>Account Number: {firstItem.payout_bank_account_number}</span>
+                    <span>Account Holder Name: {firstItem.payout_bank_account_holder_name}</span>
+                    {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+                  </> : <span className="commerce-warning">No bank detail snapshot is available. Verify the seller’s bank details before transferring.</span>}
+                </div>
+                <form className="admin-reference-form" onSubmit={(event) => {
+                  event.preventDefault();
+                  void recordPayout(firstItem.id, payoutKey);
+                }}>
+                  <label className="field-label">Seller payout transaction reference
+                    <input className="text-input" required minLength={3} maxLength={120} value={payoutReferences[payoutKey] ?? ""} onChange={(event) => setPayoutReferences((current) => ({ ...current, [payoutKey]: event.target.value }))} />
+                  </label>
+                  <label className="field-label">Payout receipt (PDF, JPEG, or PNG; up to 4 MB)
+                    <input className="text-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required onChange={(event) => setPayoutReceipts((current) => ({ ...current, [payoutKey]: event.target.files?.[0] }))} />
+                  </label>
+                  <button className="button button-dark" type="submit" disabled={busy === `payout-${firstItem.id}` || (payoutReferences[payoutKey]?.trim().length ?? 0) < 3 || !payoutReceipts[payoutKey]}>{busy === `payout-${firstItem.id}` ? "Recording…" : `Record payout for all ${items.length} ${items.length === 1 ? "item" : "items"}`}</button>
+                </form>
+              </div>;
+            })}
+          </div>;
+        })()}
         {order.items.map((item) => <div className="admin-commerce-item" key={item.id}>
           <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
             <small>Status: {item.status.replaceAll("_", " ")} · Buyer total {money(item.total_price, item.currency)}</small>
             <small>Seller amount {money(item.seller_amount, item.currency)} · Market fee {money(item.platform_fee_amount, item.currency)}</small>
             <small>Seller contact: {item.seller_email}</small>
-            {item.status === "payout_due" && <div className="admin-payout-bank-details">
-              <strong>Seller bank details</strong>
-              {item.payout_bank_name && item.payout_bank_account_number && item.payout_bank_account_holder_name ? <>
-                <span>Bank Name: {item.payout_bank_name}</span>
-                <span>Account Number: {item.payout_bank_account_number}</span>
-                <span>Account Holder Name: {item.payout_bank_account_holder_name}</span>
-                {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
-              </> : item.payout_bank_snapshot_at
-                ? <span className="commerce-warning">No bank details were available when this payout became due.</span>
-                : <span className="commerce-warning">No historical bank detail snapshot is available for this payout. Verify the seller’s current bank information before transferring.</span>}
-            </div>}
             {item.shipping_carrier && <small>Tracking: {item.shipping_carrier} · {item.tracking_number}</small>}
             {item.dispute_reason && <p className="commerce-warning">Buyer dispute: {item.dispute_reason}</p>}
             {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
@@ -344,18 +383,6 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             <button className="button button-dark" type="button" disabled={busy === `seller-resolution-${item.id}`} onClick={() => void act(`seller-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "seller" })}>Resolve for seller (payout due)</button>
             <button className="button button-outline" type="button" disabled={busy === `buyer-resolution-${item.id}`} onClick={() => void act(`buyer-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "buyer" })}>Resolve for buyer (refund due)</button>
           </div>}
-          {item.status === "payout_due" && <form className="admin-reference-form" onSubmit={(event) => {
-            event.preventDefault();
-            void recordPayout(item.id);
-          }}>
-            <label className="field-label">Seller payout transaction reference
-              <input className="text-input" required minLength={3} maxLength={120} value={payoutReferences[item.id] ?? ""} onChange={(event) => setPayoutReferences((current) => ({ ...current, [item.id]: event.target.value }))} />
-            </label>
-            <label className="field-label">Payout receipt (PDF, JPEG, or PNG; up to 4 MB)
-              <input className="text-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required onChange={(event) => setPayoutReceipts((current) => ({ ...current, [item.id]: event.target.files?.[0] }))} />
-            </label>
-            <button className="button button-dark" type="submit" disabled={busy === `payout-${item.id}` || (payoutReferences[item.id]?.trim().length ?? 0) < 3 || !payoutReceipts[item.id]}>{busy === `payout-${item.id}` ? "Recording…" : "Record seller payout"}</button>
-          </form>}
           {item.status === "refund_due" && <form className="admin-reference-form" onSubmit={(event) => {
             event.preventDefault();
             const reference = refundReferences[item.id]?.trim() ?? "";

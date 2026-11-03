@@ -157,7 +157,8 @@ export async function POST(request: Request) {
 
   const service = createSupabaseAdminClient();
   const { data: item, error: itemError } = await service.from("marketplace_order_items")
-    .select("id, seller_id").eq("id", itemId).eq("status", "payout_due").maybeSingle();
+    .select("id, order_id, seller_id, shipping_carrier, tracking_number, payout_bank_name, payout_bank_account_number, payout_bank_account_holder_name")
+    .eq("id", itemId).eq("status", "payout_due").maybeSingle();
   if (itemError) {
     console.error("Could not verify seller payout before receipt upload", itemError);
     return NextResponse.json({ error: "Could not verify the seller payout." }, { status: 503 });
@@ -166,7 +167,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This seller payout is not due or has no seller account." }, { status: 409 });
   }
 
-  const receiptPath = `${item.seller_id}/${itemId}/${randomUUID()}.${extension}`;
+  let payoutGroupQuery = service.from("marketplace_order_items")
+    .select("id, payout_bank_name, payout_bank_account_number, payout_bank_account_holder_name")
+    .eq("order_id", item.order_id)
+    .eq("seller_id", item.seller_id)
+    .eq("status", "payout_due");
+  if (item.shipping_carrier?.trim() && item.tracking_number?.trim()) {
+    payoutGroupQuery = payoutGroupQuery
+      .eq("shipping_carrier", item.shipping_carrier)
+      .eq("tracking_number", item.tracking_number);
+  } else {
+    payoutGroupQuery = payoutGroupQuery.eq("id", item.id);
+  }
+  payoutGroupQuery = item.payout_bank_name === null
+    ? payoutGroupQuery.is("payout_bank_name", null)
+    : payoutGroupQuery.eq("payout_bank_name", item.payout_bank_name);
+  payoutGroupQuery = item.payout_bank_account_number === null
+    ? payoutGroupQuery.is("payout_bank_account_number", null)
+    : payoutGroupQuery.eq("payout_bank_account_number", item.payout_bank_account_number);
+  payoutGroupQuery = item.payout_bank_account_holder_name === null
+    ? payoutGroupQuery.is("payout_bank_account_holder_name", null)
+    : payoutGroupQuery.eq("payout_bank_account_holder_name", item.payout_bank_account_holder_name);
+  const { data: payoutItems, error: payoutItemsError } = await payoutGroupQuery;
+  if (payoutItemsError) {
+    console.error("Could not verify items in seller payout batch", payoutItemsError);
+    return NextResponse.json({ error: "Could not verify the items in this seller payout." }, { status: 503 });
+  }
+  if (!payoutItems?.length) {
+    return NextResponse.json({ error: "No items in this shipment are awaiting payout." }, { status: 409 });
+  }
+  const receiptPath = `${item.seller_id}/${item.order_id}/${randomUUID()}.${extension}`;
   const { error: uploadError } = await service.storage.from(PAYOUT_RECEIPT_BUCKET).upload(receiptPath, bytes, {
     contentType: file.type,
     upsert: false,
@@ -176,22 +206,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not securely upload the payout receipt. Please retry." }, { status: 503 });
   }
 
-  const { data: updated, error: updateError } = await service.from("marketplace_order_items").update({
+  let payoutUpdate = service.from("marketplace_order_items").update({
     status: "payout_paid",
     payout_paid_at: new Date().toISOString(),
     payout_reference: reference,
     payout_receipt_path: receiptPath,
-  }).eq("id", itemId).eq("status", "payout_due").select("id").maybeSingle();
-  if (updateError || !updated) {
+  }).eq("order_id", item.order_id).eq("seller_id", item.seller_id).eq("status", "payout_due");
+  if (item.shipping_carrier?.trim() && item.tracking_number?.trim()) {
+    payoutUpdate = payoutUpdate
+      .eq("shipping_carrier", item.shipping_carrier)
+      .eq("tracking_number", item.tracking_number);
+  } else {
+    payoutUpdate = payoutUpdate.eq("id", item.id);
+  }
+  payoutUpdate = item.payout_bank_name === null
+    ? payoutUpdate.is("payout_bank_name", null)
+    : payoutUpdate.eq("payout_bank_name", item.payout_bank_name);
+  payoutUpdate = item.payout_bank_account_number === null
+    ? payoutUpdate.is("payout_bank_account_number", null)
+    : payoutUpdate.eq("payout_bank_account_number", item.payout_bank_account_number);
+  payoutUpdate = item.payout_bank_account_holder_name === null
+    ? payoutUpdate.is("payout_bank_account_holder_name", null)
+    : payoutUpdate.eq("payout_bank_account_holder_name", item.payout_bank_account_holder_name);
+  const { data: updated, error: updateError } = await payoutUpdate.select("id");
+  if (updateError || !updated?.length) {
     const { error: cleanupError } = await service.storage.from(PAYOUT_RECEIPT_BUCKET).remove([receiptPath]);
     if (cleanupError) console.error("Could not remove unassociated seller payout receipt", cleanupError);
     if (updateError) {
       console.error("Could not record seller payout and receipt", updateError);
       return NextResponse.json({ error: "Could not record the seller payout. Please retry." }, { status: 503 });
     }
-    return NextResponse.json({ error: "This seller payout is no longer due." }, { status: 409 });
+    return NextResponse.json({ error: "These seller payouts are no longer due." }, { status: 409 });
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, itemCount: updated.length });
 }
 
 export async function PATCH(request: Request) {
