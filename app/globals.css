@@ -658,6 +658,9 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-delivery-details { padding: 10px; background: #f1f4ee; color: #556657; font-size: 10px; line-height: 1.55; }
 .commerce-delivery-details strong { color: #304b39; }
 .commerce-delivery-details span { overflow-wrap: anywhere; }
+.commerce-seller-payout-groups { display: grid; gap: 8px; }
+.commerce-seller-payout-groups > h4 { margin: 0; font-size: 12px; }
+.commerce-seller-payout-group > ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; }
 .commerce-order-item .commerce-payout-note { display: block; padding: 8px 10px; border-left: 2px solid #aebd9f; border-radius: 2px; background: #f3f6ef; color: #586b50; }
 .commerce-item-actions .review-message { min-height: 68px; }
 .commerce-order-tools { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr)); align-items: end; gap: 10px; padding: 12px; border: 1px solid #e2e8df; background: #fbfcf9; }

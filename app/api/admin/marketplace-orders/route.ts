@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
+import { marketplacePayoutGroupKey } from "@/lib/marketplace-payouts";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 type Body = Record<string, unknown>;
@@ -102,13 +103,18 @@ export async function GET(request: Request) {
         ? await admin.storage.from("marketplace-payment-proofs").createSignedUrl(order.payment_proof_path, 10 * 60)
         : null;
       if (paymentProof?.error) throw paymentProof.error;
-      const items = await Promise.all((order.items ?? []).map(async (item: Record<string, unknown> & { payout_receipt_path?: string | null }) => {
+      const items = await Promise.all((order.items ?? []).map(async (item: Record<string, unknown> & {
+        order_id: string;
+        seller_id: string | null;
+        payout_receipt_path?: string | null;
+      }) => {
         const { payout_receipt_path: receiptPath, ...safeItem } = item;
-        if (!receiptPath) return safeItem;
+        const payout_group_key = marketplacePayoutGroupKey(item.order_id, item.seller_id, receiptPath ?? null);
+        if (!receiptPath) return { ...safeItem, payout_group_key };
         const { data: receipt, error: receiptError } = await admin.storage.from(PAYOUT_RECEIPT_BUCKET)
           .createSignedUrl(receiptPath, 10 * 60);
         if (receiptError) throw receiptError;
-        return { ...safeItem, payout_receipt_url: receipt.signedUrl };
+        return { ...safeItem, payout_group_key, payout_receipt_url: receipt.signedUrl };
       }));
       return {
         ...order,

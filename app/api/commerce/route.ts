@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getWebsiteAccountId } from "@/lib/website-session";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { sendPendingSellerAvailabilityEmails } from "@/lib/marketplace-availability-email";
+import { marketplacePayoutGroupKey } from "@/lib/marketplace-payouts";
 
 type Body = Record<string, unknown>;
 
@@ -43,6 +44,8 @@ async function readBody(request: Request): Promise<Body | null> {
 }
 
 async function sellerItemWithReceipt<T extends {
+  order_id?: string;
+  seller_id?: string | null;
   payout_receipt_path?: string | null;
   payout_bank_name?: string | null;
   payout_bank_account_number?: string | null;
@@ -53,14 +56,17 @@ async function sellerItemWithReceipt<T extends {
   item: T,
 ) {
   const { payout_receipt_path: receiptPath, ...safeItem } = item;
-  if (!receiptPath) return safeItem;
+  const payout_group_key = item.order_id
+    ? marketplacePayoutGroupKey(item.order_id, item.seller_id ?? null, receiptPath ?? null)
+    : null;
+  if (!receiptPath) return { ...safeItem, payout_group_key };
   const { data, error } = await admin.storage.from("marketplace-seller-payout-receipts")
     .createSignedUrl(receiptPath, 10 * 60);
   if (error) {
     console.error("Could not create seller payout receipt link", error);
     throw error;
   }
-  return { ...safeItem, payout_receipt_url: data.signedUrl };
+  return { ...safeItem, payout_group_key, payout_receipt_url: data.signedUrl };
 }
 
 export async function GET(request: Request) {

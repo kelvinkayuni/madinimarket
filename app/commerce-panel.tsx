@@ -53,6 +53,7 @@ type OrderItem = {
   disputed_at: string | null;
   dispute_reason: string | null;
   payout_reference: string | null;
+  payout_group_key?: string | null;
   payout_receipt_url?: string | null;
   payout_bank_name?: string | null;
   payout_bank_account_number?: string | null;
@@ -610,6 +611,17 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const visibleBuyerHistory = filteredBuyerHistory.slice((currentBuyerHistoryPage - 1) * orderPageSize, currentBuyerHistoryPage * orderPageSize);
   const visibleActiveSellerItems = filteredActiveSellerItems.slice((currentSellerActivePage - 1) * orderPageSize, currentSellerActivePage * orderPageSize);
   const visibleSellerHistory = filteredSellerHistory.slice((currentSellerHistoryPage - 1) * orderPageSize, currentSellerHistoryPage * orderPageSize);
+  const completedSellerPayoutGroups = new Map<string, OrderItem[]>();
+  for (const item of allSellerItems) {
+    if (item.status !== "payout_paid" || !item.payout_group_key) continue;
+    const group = completedSellerPayoutGroups.get(item.payout_group_key) ?? [];
+    group.push(item);
+    completedSellerPayoutGroups.set(item.payout_group_key, group);
+  }
+  const visibleCompletedSellerPayoutGroups = [...completedSellerPayoutGroups.entries()].filter(([, group]) =>
+    (sellerStatusFilter === "all" || sellerStatusFilter === "payout_paid") &&
+    group.some(matchesSellerSearch)
+  );
   const renderOrderPagination = (totalItems: number, page: number, pageCount: number, label: string, onPageChange: (page: number) => void) => totalItems > orderPageSize
     ? <div className="commerce-pagination"><span>Showing {(page - 1) * orderPageSize + 1}–{Math.min(page * orderPageSize, totalItems)} of {totalItems} {label}</span><div><button className="button button-outline" type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>Previous</button><span>Page {page} of {pageCount}</span><button className="button button-outline" type="button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)}>Next</button></div></div>
     : totalItems > 0 ? <p className="commerce-results-count">Showing {totalItems} {label}</p> : null;
@@ -715,8 +727,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded", "payout_paid"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</small>
       <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
       {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market will send your payout to your registered bank account. This status will update once payment is sent, and the receipt will appear here.</small>}
-      {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
-      {item.status === "payout_paid" && <div className="commerce-delivery-details">
+      {item.payout_reference && !item.payout_group_key && <small>Seller payout reference: {item.payout_reference}</small>}
+      {item.status === "payout_paid" && !item.payout_group_key && <div className="commerce-delivery-details">
         <strong>Bank account used for this payout</strong>
         {item.payout_bank_name && item.payout_bank_account_number && item.payout_bank_account_holder_name ? <>
           <span>Bank Name: {item.payout_bank_name}</span>
@@ -725,7 +737,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
         </> : <span>No bank account details were recorded for this payout.</span>}
       </div>}
-      {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
+      {item.payout_receipt_url && !item.payout_group_key && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
     </div>
     {item.status === "awaiting_seller" && <div className="commerce-item-actions">
       <button className="button button-dark" type="button" disabled={busy === `available-${item.id}` || busy === `unavailable-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>{busy === `available-${item.id}` ? "Confirming availability…" : "Available"}</button>
@@ -955,6 +967,27 @@ export default function CommercePanel({ onNotice, onCounters }: {
             void perform("clear-seller-history", "clear_order_history", { side: "seller" });
           }
         }}>{busy === "clear-seller-history" ? "Clearing…" : "Clear all selling history"}</button>}
+        {visibleCompletedSellerPayoutGroups.length > 0 && <div className="commerce-seller-payout-groups">
+          <h4>Completed seller payouts</h4>
+          {visibleCompletedSellerPayoutGroups.map(([payoutGroupKey, items]) => {
+            const firstItem = items[0];
+            const sellerAmount = items.reduce((total, item) => total + Number(item.seller_amount), 0);
+            return <div className="commerce-delivery-details commerce-seller-payout-group" key={payoutGroupKey}>
+              <strong>Order {firstItem.order?.control_number} · {items.length} {items.length === 1 ? "item" : "items"}</strong>
+              {firstItem.shipping_carrier && firstItem.tracking_number && <span>Shipment: {firstItem.shipping_carrier} · Tracking {firstItem.tracking_number}</span>}
+              <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}: {amount(item.seller_amount, item.currency)}</li>)}</ul>
+              <strong>Total payout: {amount(sellerAmount, firstItem.currency)}</strong>
+              {firstItem.payout_bank_name && firstItem.payout_bank_account_number && firstItem.payout_bank_account_holder_name ? <>
+                <span>Bank Name: {firstItem.payout_bank_name}</span>
+                <span>Account Number: {firstItem.payout_bank_account_number}</span>
+                <span>Account Holder Name: {firstItem.payout_bank_account_holder_name}</span>
+                {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+              </> : <span>No bank account details were recorded for this payout.</span>}
+              {firstItem.payout_reference && <span>Transaction reference: {firstItem.payout_reference}</span>}
+              {firstItem.payout_receipt_url && <a className="certificate-file-link" href={firstItem.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a>}
+            </div>;
+          })}
+        </div>}
         {filteredSellerHistory.length
           ? <div className="commerce-list commerce-history-list">{visibleSellerHistory.map((item) => renderSellerItem(item, true))}</div>
           : <p className="commerce-note">{sellerItemHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}

@@ -22,6 +22,7 @@ type Item = {
   delivered_at: string | null;
   dispute_reason: string | null;
   payout_reference: string | null;
+  payout_group_key?: string | null;
   payout_receipt_url: string | null;
   refund_reference: string | null;
   payout_bank_name: string | null;
@@ -358,6 +359,39 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             })}
           </div>;
         })()}
+        {(() => {
+          const completedPayoutGroups = new Map<string, Item[]>();
+          for (const item of order.items) {
+            if (item.status !== "payout_paid" || !item.payout_group_key) continue;
+            const group = completedPayoutGroups.get(item.payout_group_key) ?? [];
+            group.push(item);
+            completedPayoutGroups.set(item.payout_group_key, group);
+          }
+          return completedPayoutGroups.size > 0 && <div className="admin-payout-groups">
+            {[...completedPayoutGroups.entries()].map(([payoutGroupKey, items]) => {
+              const firstItem = items[0];
+              const sellerAmount = items.reduce((total, item) => total + Number(item.seller_amount), 0);
+              return <div className="admin-payout-group" key={payoutGroupKey}>
+                <strong>Completed seller payout · {items.length} {items.length === 1 ? "item" : "items"}</strong>
+                <span>Order {order.control_number} · {firstItem.seller_email}</span>
+                {firstItem.shipping_carrier && firstItem.tracking_number && <span>Shipment: {firstItem.shipping_carrier} · Tracking {firstItem.tracking_number}</span>}
+                <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}: {money(item.seller_amount, item.currency)}</li>)}</ul>
+                <strong>Total seller payout: {money(sellerAmount, firstItem.currency)}</strong>
+                <div className="admin-payout-bank-details">
+                  <strong>Bank account used for this payout</strong>
+                  {firstItem.payout_bank_name && firstItem.payout_bank_account_number && firstItem.payout_bank_account_holder_name ? <>
+                    <span>Bank Name: {firstItem.payout_bank_name}</span>
+                    <span>Account Number: {firstItem.payout_bank_account_number}</span>
+                    <span>Account Holder Name: {firstItem.payout_bank_account_holder_name}</span>
+                    {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+                  </> : <span className="commerce-warning">No bank account details were recorded for this payout.</span>}
+                </div>
+                {firstItem.payout_reference && <span>Transaction reference: {firstItem.payout_reference}</span>}
+                {firstItem.payout_receipt_url && <a className="certificate-file-link" href={firstItem.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a>}
+              </div>;
+            })}
+          </div>;
+        })()}
         {order.items.map((item) => <div className="admin-commerce-item" key={item.id}>
           <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
             <small>Status: {item.status.replaceAll("_", " ")} · Buyer total {money(item.total_price, item.currency)}</small>
@@ -365,8 +399,8 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             <small>Seller contact: {item.seller_email}</small>
             {item.shipping_carrier && <small>Tracking: {item.shipping_carrier} · {item.tracking_number}</small>}
             {item.dispute_reason && <p className="commerce-warning">Buyer dispute: {item.dispute_reason}</p>}
-            {item.payout_reference && <small>Seller payout reference: {item.payout_reference}</small>}
-            {item.status === "payout_paid" && <div className="admin-payout-bank-details">
+            {item.payout_reference && !item.payout_group_key && <small>Seller payout reference: {item.payout_reference}</small>}
+            {item.status === "payout_paid" && !item.payout_group_key && <div className="admin-payout-bank-details">
               <strong>Bank account paid to</strong>
               {item.payout_bank_name && item.payout_bank_account_number && item.payout_bank_account_holder_name ? <>
                 <span>Bank Name: {item.payout_bank_name}</span>
@@ -375,7 +409,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                 {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
               </> : <span className="commerce-warning">No bank account details were recorded for this payout.</span>}
             </div>}
-            {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
+            {item.payout_receipt_url && !item.payout_group_key && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
             {item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
           </div>
           {["paid", "shipped"].includes(item.status) && (!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) && <small className="commerce-warning">The seller must enter both carrier and tracking number before delivery can be confirmed.</small>}
