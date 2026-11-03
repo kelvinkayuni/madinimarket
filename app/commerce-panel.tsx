@@ -296,6 +296,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [paymentProofFiles, setPaymentProofFiles] = useState<Record<string, string>>({});
   const [shipping, setShipping] = useState<Record<string, { carrier: string; tracking: string }>>({});
   const [disputeReasons, setDisputeReasons] = useState<Record<string, string>>({});
+  const [disputeItems, setDisputeItems] = useState<Record<string, string>>({});
   const [acceptOffer, setAcceptOffer] = useState<PrivateOffer | null>(null);
   const [acceptRequestOffer, setAcceptRequestOffer] = useState<string | number | null>(null);
   const [acceptRequestCurrency, setAcceptRequestCurrency] = useState<Currency>("TZS");
@@ -612,7 +613,17 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const renderOrderPagination = (totalItems: number, page: number, pageCount: number, label: string, onPageChange: (page: number) => void) => totalItems > orderPageSize
     ? <div className="commerce-pagination"><span>Showing {(page - 1) * orderPageSize + 1}–{Math.min(page * orderPageSize, totalItems)} of {totalItems} {label}</span><div><button className="button button-outline" type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>Previous</button><span>Page {page} of {pageCount}</span><button className="button button-outline" type="button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)}>Next</button></div></div>
     : totalItems > 0 ? <p className="commerce-results-count">Showing {totalItems} {label}</p> : null;
-  const renderBuyerOrder = (order: BuyerOrder, history = false) => <details className="commerce-order" key={order.id}>
+  const renderBuyerOrder = (order: BuyerOrder, history = false) => {
+    const shipmentGroups = new Map<string, OrderItem[]>();
+    for (const item of order.items ?? []) {
+      if (!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) continue;
+      const shipmentGroupKey = item.shipment_group_key ?? item.id;
+      const group = shipmentGroups.get(shipmentGroupKey) ?? [];
+      group.push(item);
+      shipmentGroups.set(shipmentGroupKey, group);
+    }
+
+    return <details className="commerce-order" key={order.id}>
     <summary className="commerce-order-summary">
       <span><strong>Order {order.control_number}</strong><small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small></span>
       <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : buyerOrderStatusLabel(order)}</span>
@@ -650,31 +661,40 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <input type="hidden" name="orderId" value={order.id} />
       <button className="button button-dark" type="submit" disabled={busy === `payment-${order.id}` || !data.paymentMethods.length}>{busy === `payment-${order.id}` ? "Submitting…" : !data.paymentMethods.length ? "Payment details unavailable" : "Submit proof for verification"}</button>
     </form>}
-    {(order.items ?? []).map((item, index, items) => {
-      const shipmentGroupKey = item.shipment_group_key ?? item.id;
-      const isFirstDeliveredShipmentItem = !items.slice(0, index).some((candidate) =>
-        candidate.status === "delivered" && (candidate.shipment_group_key ?? candidate.id) === shipmentGroupKey
-      );
-      return <div className="commerce-order-item" key={item.id}>
+    {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
       <div>
         <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
         <small>{orderItemStatusLabel(item)} · Total {amount(item.total_price, item.currency)}</small>
         {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market is arranging the seller’s payment. No action is needed from you.</small>}
-        {(item.shipping_carrier || item.tracking_number) && <div className="commerce-delivery-details">
-          <strong>Tracking details</strong>
-          {item.shipping_carrier && <span>Carrier: {item.shipping_carrier}</span>}
-          {item.tracking_number && <span>Tracking number: {item.tracking_number}</span>}
-        </div>}
       </div>
-      {item.status === "delivered" && <div className="commerce-item-actions">
-        {isFirstDeliveredShipmentItem && <button className="button button-dark" type="button" disabled={busy === `receipt-${item.id}`} onClick={() => void perform(`receipt-${item.id}`, "confirm_receipt", { itemId: item.id })}>{busy === `receipt-${item.id}` ? "Confirming receipt…" : "Confirm receipt for shipment"}</button>}
-        <label className="field-label">Report a delivery issue<textarea className="review-message" minLength={10} maxLength={500} value={disputeReasons[item.id] ?? ""} onChange={(event) => setDisputeReasons((current) => ({ ...current, [item.id]: event.target.value }))} /></label>
-        <button className="button button-outline" type="button" disabled={busy === `dispute-${item.id}`} onClick={() => void perform(`dispute-${item.id}`, "dispute_delivery", { itemId: item.id, reason: disputeReasons[item.id] })}>Open dispute</button>
-      </div>}
-    </div>;
+    </div>)}
+    {[...shipmentGroups.entries()].map(([shipmentGroupKey, items]) => {
+      const deliveredItem = items.find((item) => item.status === "delivered");
+      const disputeCandidates = items.filter((item) => ["shipped", "delivered"].includes(item.status));
+      const firstDisputeItem = disputeCandidates[0];
+      const selectedDisputeItem = disputeCandidates.find((item) => item.id === disputeItems[shipmentGroupKey]) ?? firstDisputeItem;
+      return <div className="commerce-delivery-details" key={shipmentGroupKey}>
+        <strong>Shipment · {items.length} {items.length === 1 ? "item" : "items"}</strong>
+        <span>Carrier: {items[0].shipping_carrier} · Tracking number: {items[0].tracking_number}</span>
+        <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit} — {orderItemStatusLabel(item)}</li>)}</ul>
+        {deliveredItem && <div className="commerce-item-actions">
+          <button className="button button-dark" type="button" disabled={busy === `receipt-${deliveredItem.id}`} onClick={() => void perform(`receipt-${deliveredItem.id}`, "confirm_receipt", { itemId: deliveredItem.id })}>{busy === `receipt-${deliveredItem.id}` ? "Confirming receipt…" : "Confirm receipt for shipment"}</button>
+        </div>}
+        {selectedDisputeItem && <div className="commerce-item-actions">
+          {disputeCandidates.length > 1 && <label className="field-label">Item to report
+            <select className="text-input" value={selectedDisputeItem.id} onChange={(event) => setDisputeItems((current) => ({ ...current, [shipmentGroupKey]: event.target.value }))}>
+              {disputeCandidates.map((item) => <option value={item.id} key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</option>)}
+            </select>
+          </label>}
+          <label className="field-label">Report a delivery issue<textarea className="review-message" minLength={10} maxLength={500} value={disputeReasons[shipmentGroupKey] ?? ""} onChange={(event) => setDisputeReasons((current) => ({ ...current, [shipmentGroupKey]: event.target.value }))} /></label>
+          <button className="button button-outline" type="button" disabled={busy === `dispute-${selectedDisputeItem.id}`} onClick={() => void perform(`dispute-${selectedDisputeItem.id}`, "dispute_delivery", { itemId: selectedDisputeItem.id, reason: disputeReasons[shipmentGroupKey] })}>Open dispute for selected item</button>
+          <small>Disputes are reviewed per item.</small>
+        </div>}
+      </div>;
     })}
     </div>
   </details>;
+  };
   const renderSellerItem = (item: OrderItem, history = false) => <details className="commerce-seller-order-item" key={item.id}>
     <summary className="commerce-order-summary">
       <span><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>Order {item.order?.control_number}</small></span>
