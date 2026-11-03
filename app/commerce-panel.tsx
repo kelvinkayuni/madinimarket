@@ -48,6 +48,7 @@ type OrderItem = {
   seller_responded_at: string | null;
   shipping_carrier: string | null;
   tracking_number: string | null;
+  shipment_group_key?: string | null;
   delivered_at: string | null;
   disputed_at: string | null;
   dispute_reason: string | null;
@@ -248,7 +249,7 @@ function orderItemStatusLabel(item: OrderItem) {
 function sellerOrderItemStatusLabel(item: OrderItem) {
   if (item.status === "awaiting_seller") return "Awaiting you to confirm availability";
   if (item.status === "awaiting_payment" || item.status === "payment_submitted") return "Awaiting buyer to pay";
-  if (item.status === "paid") return "Buyer payment verified. Deliver the order and submit carrier and tracking number.";
+  if (item.status === "paid") return "Buyer payment verified. Include this item in its order shipment.";
   if (item.status === "shipped") return "You submitted tracking details. Awaiting delivery confirmation.";
   if (item.status === "delivered") return "Order delivered. Awaiting buyer to confirm receipt.";
   if (item.status === "payout_due") return "Your payout is due";
@@ -566,6 +567,17 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const filteredBuyerHistory = buyerOrderHistory.filter((order) => matchesBuyerSearch(order) && matchesBuyerStatus(order));
   const filteredActiveSellerItems = activeSellerItems.filter((item) => matchesSellerSearch(item) && matchesSellerStatus(item));
   const filteredSellerHistory = sellerItemHistory.filter((item) => matchesSellerSearch(item) && matchesSellerStatus(item));
+  const pendingShipmentGroupsByOrder = new Map<string, OrderItem[]>();
+  for (const item of allSellerItems) {
+    if (item.status !== "paid" || item.shipping_carrier?.trim() || item.tracking_number?.trim() || !item.order?.id) continue;
+    const group = pendingShipmentGroupsByOrder.get(item.order.id) ?? [];
+    group.push(item);
+    pendingShipmentGroupsByOrder.set(item.order.id, group);
+  }
+  const visiblePendingShipmentGroups = [...pendingShipmentGroupsByOrder.values()].filter((group) =>
+    (sellerStatusFilter === "all" || sellerStatusFilter === "paid") &&
+    group.some(matchesSellerSearch)
+  );
   const orderPageSize = 10;
   const isCartListingMarketListed = (item: CartItem) => Boolean(item.listing && item.listing.is_active && item.listing.status === "approved" && item.listing.marketplace_state === "available");
   const filteredCartItems = data.cartItems.filter((item) => {
@@ -638,7 +650,12 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <input type="hidden" name="orderId" value={order.id} />
       <button className="button button-dark" type="submit" disabled={busy === `payment-${order.id}` || !data.paymentMethods.length}>{busy === `payment-${order.id}` ? "Submitting…" : !data.paymentMethods.length ? "Payment details unavailable" : "Submit proof for verification"}</button>
     </form>}
-    {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
+    {(order.items ?? []).map((item, index, items) => {
+      const shipmentGroupKey = item.shipment_group_key ?? item.id;
+      const isFirstDeliveredShipmentItem = !items.slice(0, index).some((candidate) =>
+        candidate.status === "delivered" && (candidate.shipment_group_key ?? candidate.id) === shipmentGroupKey
+      );
+      return <div className="commerce-order-item" key={item.id}>
       <div>
         <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
         <small>{orderItemStatusLabel(item)} · Total {amount(item.total_price, item.currency)}</small>
@@ -650,11 +667,12 @@ export default function CommercePanel({ onNotice, onCounters }: {
         </div>}
       </div>
       {item.status === "delivered" && <div className="commerce-item-actions">
-        <button className="button button-dark" type="button" disabled={busy === `receipt-${item.id}`} onClick={() => void perform(`receipt-${item.id}`, "confirm_receipt", { itemId: item.id })}>{busy === `receipt-${item.id}` ? "Confirming receipt…" : "Confirm receipt"}</button>
+        {isFirstDeliveredShipmentItem && <button className="button button-dark" type="button" disabled={busy === `receipt-${item.id}`} onClick={() => void perform(`receipt-${item.id}`, "confirm_receipt", { itemId: item.id })}>{busy === `receipt-${item.id}` ? "Confirming receipt…" : "Confirm receipt for shipment"}</button>}
         <label className="field-label">Report a delivery issue<textarea className="review-message" minLength={10} maxLength={500} value={disputeReasons[item.id] ?? ""} onChange={(event) => setDisputeReasons((current) => ({ ...current, [item.id]: event.target.value }))} /></label>
         <button className="button button-outline" type="button" disabled={busy === `dispute-${item.id}`} onClick={() => void perform(`dispute-${item.id}`, "dispute_delivery", { itemId: item.id, reason: disputeReasons[item.id] })}>Open dispute</button>
       </div>}
-    </div>)}
+    </div>;
+    })}
     </div>
   </details>;
   const renderSellerItem = (item: OrderItem, history = false) => <details className="commerce-seller-order-item" key={item.id}>
@@ -701,11 +719,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <span>{item.order.buyer_name} · {item.order.buyer_phone}</span>
       <span>{item.order.delivery_address}, {item.order.delivery_district}, {item.order.delivery_region}, {item.order.delivery_country}</span>
       {item.shipping_carrier && <span>Carrier: {item.shipping_carrier} · Tracking: {item.tracking_number}</span>}
-    </div>}
-    {item.status === "paid" && <div className="commerce-item-actions">
-      <label className="field-label">Carrier<input className="text-input" value={shipping[item.id]?.carrier ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [item.id]: { carrier: event.target.value, tracking: current[item.id]?.tracking ?? "" } }))} /></label>
-      <label className="field-label">Tracking number<input className="text-input" value={shipping[item.id]?.tracking ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [item.id]: { carrier: current[item.id]?.carrier ?? "", tracking: event.target.value } }))} /></label>
-      <button className="button button-dark" type="button" disabled={busy === `dispatch-${item.id}`} onClick={() => void perform(`dispatch-${item.id}`, "seller_dispatch", { itemId: item.id, carrier: shipping[item.id]?.carrier, trackingNumber: shipping[item.id]?.tracking })}>{busy === `dispatch-${item.id}` ? "Submitting…" : "Submit"}</button>
     </div>}
     {item.status === "disputed" && <p className="commerce-warning">Buyer dispute: {item.dispute_reason ?? "Awaiting admin review."}</p>}
     </div>
@@ -887,6 +900,27 @@ export default function CommercePanel({ onNotice, onCounters }: {
       </div>
       <div className="commerce-order-subsection">
       <h4>Active orders <span className="commerce-section-count">{data.sellerOpenOrdersCount}</span></h4>
+      {visiblePendingShipmentGroups.length > 0 && <div className="commerce-order-subsection">
+        <h4>Ready to ship together</h4>
+        <div className="commerce-list">
+          {visiblePendingShipmentGroups.map((group) => {
+            const firstItem = group[0];
+            const shipment = shipping[firstItem.id];
+            return <div className="commerce-order-item" key={`shipment-${firstItem.order?.id}`}>
+              <div>
+                <strong>Order {firstItem.order?.control_number}</strong>
+                <small>Enter one carrier and tracking number for these {group.length} {group.length === 1 ? "item" : "items"} going to the same delivery address.</small>
+                {group.map((item) => <span key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</span>)}
+              </div>
+              <div className="commerce-item-actions">
+                <label className="field-label">Carrier<input className="text-input" value={shipment?.carrier ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [firstItem.id]: { carrier: event.target.value, tracking: current[firstItem.id]?.tracking ?? "" } }))} /></label>
+                <label className="field-label">Tracking number<input className="text-input" value={shipment?.tracking ?? ""} onChange={(event) => setShipping((current) => ({ ...current, [firstItem.id]: { carrier: current[firstItem.id]?.carrier ?? "", tracking: event.target.value } }))} /></label>
+                <button className="button button-dark" type="button" disabled={busy === `dispatch-${firstItem.id}` || !shipment?.carrier?.trim() || !shipment?.tracking?.trim()} onClick={() => void perform(`dispatch-${firstItem.id}`, "seller_dispatch", { itemId: firstItem.id, carrier: shipment?.carrier, trackingNumber: shipment?.tracking })}>{busy === `dispatch-${firstItem.id}` ? "Submitting…" : `Submit tracking for ${group.length} ${group.length === 1 ? "item" : "items"}`}</button>
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>}
       {filteredActiveSellerItems.length
         ? <div className="commerce-list">{visibleActiveSellerItems.map((item) => renderSellerItem(item))}</div>
         : <p className="commerce-note">{activeSellerItems.length ? "No active selling orders match your search and status filter." : data.sellerOpenOrdersCount ? "Some older active orders are outside the recent list. Open Selling order history and load older orders to find them." : "No active selling orders."}</p>}

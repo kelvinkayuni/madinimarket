@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { getWebsiteAccountId } from "@/lib/website-session";
@@ -20,6 +21,16 @@ function isBuyerHistoryOrder(order: {
 
 function text(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+function buyerShipmentGroupKey(orderId: string, item: Record<string, unknown>) {
+  const carrier = typeof item.shipping_carrier === "string" ? item.shipping_carrier.trim() : "";
+  const trackingNumber = typeof item.tracking_number === "string" ? item.tracking_number.trim() : "";
+  if (!carrier || !trackingNumber) return null;
+  const sellerId = typeof item.seller_id === "string" ? item.seller_id : "";
+  return createHash("sha256")
+    .update(JSON.stringify([orderId, sellerId, carrier, trackingNumber]))
+    .digest("hex");
 }
 
 async function readBody(request: Request): Promise<Body | null> {
@@ -90,6 +101,7 @@ export async function GET(request: Request) {
                 "seller_history_hidden_at",
               ].includes(key)),
             ),
+            shipment_group_key: buyerShipmentGroupKey(order.id, item),
             seller_response_timed_out: Boolean(item.availability_expired_at),
           })),
         }));
@@ -274,6 +286,7 @@ export async function GET(request: Request) {
               "seller_history_hidden_at",
             ].includes(key)),
           ),
+          shipment_group_key: buyerShipmentGroupKey(order.id, item),
           seller_response_timed_out: Boolean(item.availability_expired_at),
         })),
     }));
@@ -561,14 +574,16 @@ export async function POST(request: Request) {
       if (!/^[0-9a-f-]{36}$/i.test(itemId) || !carrier || !trackingNumber) {
         return NextResponse.json({ error: "Enter the delivery carrier and tracking number." }, { status: 400 });
       }
-      const { data, error } = await admin.from("marketplace_order_items").update({
-        status: "shipped",
-        shipped_at: new Date().toISOString(),
-        shipping_carrier: carrier,
-        tracking_number: trackingNumber,
-      }).eq("id", itemId).eq("seller_id", accountId).eq("status", "paid")
-        .select("id").maybeSingle();
-      if (error) throw error;
+      const { data, error } = await admin.rpc("dispatch_marketplace_order_shipment", {
+        p_order_item_id: itemId,
+        p_seller_id: accountId,
+        p_carrier: carrier,
+        p_tracking_number: trackingNumber,
+      });
+      if (error) {
+        if (error.code === "P0002" || error.code === "22023") return NextResponse.json({ error: error.message }, { status: 409 });
+        throw error;
+      }
       if (!data) return NextResponse.json({ error: "This order item is not ready to dispatch." }, { status: 409 });
       return NextResponse.json({ ok: true });
     }
@@ -577,18 +592,15 @@ export async function POST(request: Request) {
       const itemId = text(body.itemId, 60);
       if (!/^[0-9a-f-]{36}$/i.test(itemId)) return NextResponse.json({ error: "Invalid order item." }, { status: 400 });
       if (action === "confirm_receipt") {
-        const { data: buyerOrders, error: buyerOrdersError } = await admin.from("marketplace_orders")
-          .select("id").eq("buyer_id", accountId);
-        if (buyerOrdersError) throw buyerOrdersError;
-        const { data, error } = await admin.from("marketplace_order_items").update({
-          status: "payout_due",
-          buyer_received_at: new Date().toISOString(),
-          payout_due_at: new Date().toISOString(),
-        }).eq("id", itemId).eq("status", "delivered")
-          .in("order_id", (buyerOrders ?? []).map((order) => order.id))
-          .select("id").maybeSingle();
-        if (error) throw error;
-        if (!data) return NextResponse.json({ error: "Only the buyer can confirm an item marked delivered." }, { status: 409 });
+        const { data, error } = await admin.rpc("confirm_marketplace_order_shipment_receipt", {
+          p_order_item_id: itemId,
+          p_buyer_id: accountId,
+        });
+        if (error) {
+          if (error.code === "P0002" || error.code === "22023") return NextResponse.json({ error: error.message }, { status: 409 });
+          throw error;
+        }
+        if (!data) return NextResponse.json({ error: "This shipment is no longer awaiting receipt confirmation." }, { status: 409 });
       } else {
         const reason = text(body.reason, 500);
         if (reason.length < 10) return NextResponse.json({ error: "Please explain the delivery issue (at least 10 characters)." }, { status: 400 });

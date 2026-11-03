@@ -312,19 +312,35 @@ export async function GET(request: Request) {
     }
 
     const { data: shippedItems, error: shippedError } = await admin.from("marketplace_order_items")
-      .select("id, shipping_carrier, tracking_number, order:marketplace_orders!inner(control_number, buyer_email, buyer_name)")
+      .select("id, order_id, seller_id, shipping_carrier, tracking_number, order:marketplace_orders!inner(control_number, buyer_email, buyer_name)")
       .eq("status", "shipped").is("buyer_shipped_email_sent_at", null).limit(5);
     if (shippedError) throw shippedError;
+    const notifiedShipments = new Set<string>();
     for (const item of shippedItems ?? []) {
+      const shipmentKey = item.shipping_carrier && item.tracking_number
+        ? JSON.stringify([item.order_id, item.seller_id, item.shipping_carrier, item.tracking_number])
+        : item.id;
+      if (notifiedShipments.has(shipmentKey)) continue;
+      notifiedShipments.add(shipmentKey);
       const order = Array.isArray(item.order) ? item.order[0] : item.order;
       try {
         await sendGmailEmail({
           to: order.buyer_email,
-          subject: `A mineral from order ${order.control_number} has been sent`,
-          text: `Hello ${order.buyer_name},\n\nAn item in order ${order.control_number} has been sent via ${item.shipping_carrier ?? "the seller's carrier"}${item.tracking_number ? ` (tracking ${item.tracking_number})` : ""}. Sign in to My orders to follow the status and confirm receipt after the administrator confirms carrier delivery.\n\nMadinimarket`,
+          subject: `A shipment from order ${order.control_number} has been sent`,
+          text: `Hello ${order.buyer_name},\n\nA shipment from order ${order.control_number} has been sent via ${item.shipping_carrier ?? "the seller's carrier"}${item.tracking_number ? ` (tracking ${item.tracking_number})` : ""}. Sign in to My orders to follow the status and confirm receipt after the administrator confirms carrier delivery.\n\nMadinimarket`,
         });
-        const { error } = await admin.from("marketplace_order_items")
-          .update({ buyer_shipped_email_sent_at: new Date().toISOString() }).eq("id", item.id).is("buyer_shipped_email_sent_at", null);
+        const { error } = item.shipping_carrier && item.tracking_number && item.seller_id
+          ? await admin.from("marketplace_order_items").update({ buyer_shipped_email_sent_at: new Date().toISOString() })
+            .eq("order_id", item.order_id).eq("seller_id", item.seller_id)
+            .eq("shipping_carrier", item.shipping_carrier).eq("tracking_number", item.tracking_number)
+            .eq("status", "shipped").is("buyer_shipped_email_sent_at", null)
+          : item.shipping_carrier && item.tracking_number
+            ? await admin.from("marketplace_order_items").update({ buyer_shipped_email_sent_at: new Date().toISOString() })
+              .eq("order_id", item.order_id).is("seller_id", null)
+              .eq("shipping_carrier", item.shipping_carrier).eq("tracking_number", item.tracking_number)
+              .eq("status", "shipped").is("buyer_shipped_email_sent_at", null)
+            : await admin.from("marketplace_order_items").update({ buyer_shipped_email_sent_at: new Date().toISOString() })
+              .eq("id", item.id).eq("status", "shipped").is("buyer_shipped_email_sent_at", null);
         if (error) throw error;
         sentCount += 1;
       } catch (error) {
@@ -334,19 +350,35 @@ export async function GET(request: Request) {
     }
 
     const { data: deliveredItems, error: deliveredError } = await admin.from("marketplace_order_items")
-      .select("id, order:marketplace_orders!inner(control_number, buyer_email, buyer_name)")
+      .select("id, order_id, seller_id, shipping_carrier, tracking_number, order:marketplace_orders!inner(control_number, buyer_email, buyer_name)")
       .eq("status", "delivered").is("buyer_delivered_email_sent_at", null).limit(5);
     if (deliveredError) throw deliveredError;
+    const notifiedDeliveredShipments = new Set<string>();
     for (const item of deliveredItems ?? []) {
+      const shipmentKey = item.shipping_carrier && item.tracking_number
+        ? JSON.stringify([item.order_id, item.seller_id, item.shipping_carrier, item.tracking_number])
+        : item.id;
+      if (notifiedDeliveredShipments.has(shipmentKey)) continue;
+      notifiedDeliveredShipments.add(shipmentKey);
       const order = Array.isArray(item.order) ? item.order[0] : item.order;
       try {
         await sendGmailEmail({
           to: order.buyer_email,
-          subject: `Delivery recorded for order ${order.control_number}`,
-          text: `Hello ${order.buyer_name},\n\nCarrier delivery was confirmed for an item in order ${order.control_number}. Sign in to My orders to confirm receipt or open a dispute. If you do not confirm or dispute, seller payout becomes due seven days after delivery confirmation.\n\nMadinimarket`,
+          subject: `Delivery recorded for a shipment from order ${order.control_number}`,
+          text: `Hello ${order.buyer_name},\n\nCarrier delivery was confirmed for a shipment from order ${order.control_number}. Sign in to My orders to confirm receipt for this tracking number or open an item-level dispute. If you do not confirm or dispute, seller payout becomes due seven days after delivery confirmation.\n\nMadinimarket`,
         });
-        const { error } = await admin.from("marketplace_order_items")
-          .update({ buyer_delivered_email_sent_at: new Date().toISOString() }).eq("id", item.id).is("buyer_delivered_email_sent_at", null);
+        const { error } = item.shipping_carrier && item.tracking_number && item.seller_id
+          ? await admin.from("marketplace_order_items").update({ buyer_delivered_email_sent_at: new Date().toISOString() })
+            .eq("order_id", item.order_id).eq("seller_id", item.seller_id)
+            .eq("shipping_carrier", item.shipping_carrier).eq("tracking_number", item.tracking_number)
+            .eq("status", "delivered").is("buyer_delivered_email_sent_at", null)
+          : item.shipping_carrier && item.tracking_number
+            ? await admin.from("marketplace_order_items").update({ buyer_delivered_email_sent_at: new Date().toISOString() })
+              .eq("order_id", item.order_id).is("seller_id", null)
+              .eq("shipping_carrier", item.shipping_carrier).eq("tracking_number", item.tracking_number)
+              .eq("status", "delivered").is("buyer_delivered_email_sent_at", null)
+            : await admin.from("marketplace_order_items").update({ buyer_delivered_email_sent_at: new Date().toISOString() })
+              .eq("id", item.id).eq("status", "delivered").is("buyer_delivered_email_sent_at", null);
         if (error) throw error;
         sentCount += 1;
       } catch (error) {

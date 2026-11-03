@@ -7,6 +7,7 @@ import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 type Currency = "TZS" | "USD";
 type Item = {
   id: string;
+  seller_id: string | null;
   mineral_name: string;
   weight: string | number;
   unit: string;
@@ -281,7 +282,14 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         {order.payment_reference && <p>Buyer payment reference: <strong>{order.payment_reference}</strong>{order.payment_note ? ` · ${order.payment_note}` : ""}</p>}
         {order.payment_proof_url && <p><a className="certificate-file-link" href={order.payment_proof_url} target="_blank" rel="noreferrer">Open submitted payment proof</a></p>}
         {order.payment_status === "payment_submitted" && <button className="button button-dark" type="button" disabled={busy === `verify-${order.id}`} onClick={() => void act(`verify-${order.id}`, { action: "verify_payment", orderId: order.id })}>{busy === `verify-${order.id}` ? "Verifying payment & notifying sellers…" : "Verify payment & notify sellers"}</button>}
-        {order.items.map((item) => <div className="admin-commerce-item" key={item.id}>
+        {order.items.map((item) => {
+          const firstShipmentItem = order.items.find((candidate) =>
+            ["paid", "shipped"].includes(candidate.status) &&
+            candidate.seller_id === item.seller_id &&
+            candidate.shipping_carrier === item.shipping_carrier &&
+            candidate.tracking_number === item.tracking_number
+          );
+          return <div className="admin-commerce-item" key={item.id}>
           <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
             <small>Status: {item.status.replaceAll("_", " ")} · Buyer total {money(item.total_price, item.currency)}</small>
             <small>Seller amount {money(item.seller_amount, item.currency)} · Market fee {money(item.platform_fee_amount, item.currency)}</small>
@@ -312,12 +320,12 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
             {item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
           </div>
-          {["paid", "shipped"].includes(item.status) && <div className="commerce-item-actions">
+          {["paid", "shipped"].includes(item.status) && firstShipmentItem?.id === item.id && <div className="commerce-item-actions">
             <button className="button button-outline" type="button" disabled={busy === `delivered-${item.id}` || !item.shipping_carrier?.trim() || !item.tracking_number?.trim()} onClick={() => {
-              if (window.confirm("Confirm that the carrier's tracking shows this parcel as delivered?")) {
+              if (window.confirm("Confirm that the carrier's tracking shows this shipment as delivered?")) {
                 void act(`delivered-${item.id}`, { action: "mark_delivered", itemId: item.id });
               }
-            }}>Confirm carrier delivery</button>
+            }}>Confirm carrier delivery for shipment</button>
             {(!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) && <small className="commerce-warning">The seller must enter both carrier and tracking number before delivery can be confirmed.</small>}
           </div>}
           {item.status === "disputed" && <div className="commerce-item-actions">
@@ -352,7 +360,8 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             </label>
             <button className="button button-outline" type="submit" disabled={busy === `refund-${item.id}` || (refundReferences[item.id]?.trim().length ?? 0) < 3}>{busy === `refund-${item.id}` ? "Recording…" : "Record buyer refund"}</button>
           </form>}
-        </div>)}
+        </div>;
+        })}
         </div>
       </details>)}
     </div> : <p className="admin-empty">{loading ? "Loading marketplace orders…" : "No orders match this filter and search."}</p>}
