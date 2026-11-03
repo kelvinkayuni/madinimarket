@@ -671,23 +671,25 @@ export default function CommercePanel({ onNotice, onCounters }: {
     {[...shipmentGroups.entries()].map(([shipmentGroupKey, items]) => {
       const deliveredItem = items.find((item) => item.status === "delivered");
       const disputeCandidates = items.filter((item) => ["shipped", "delivered"].includes(item.status));
-      const firstDisputeItem = disputeCandidates[0];
-      const selectedDisputeItem = disputeCandidates.find((item) => item.id === disputeItems[shipmentGroupKey]) ?? firstDisputeItem;
+      const selectedDisputeItem = disputeCandidates.find((item) => item.id === disputeItems[shipmentGroupKey]);
       return <div className="commerce-delivery-details" key={shipmentGroupKey}>
         <strong>Shipment · {items.length} {items.length === 1 ? "item" : "items"}</strong>
         <span>Carrier: {items[0].shipping_carrier} · Tracking number: {items[0].tracking_number}</span>
         <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit} — {orderItemStatusLabel(item)}</li>)}</ul>
         {deliveredItem && <div className="commerce-item-actions">
-          <button className="button button-dark" type="button" disabled={busy === `receipt-${deliveredItem.id}`} onClick={() => void perform(`receipt-${deliveredItem.id}`, "confirm_receipt", { itemId: deliveredItem.id })}>{busy === `receipt-${deliveredItem.id}` ? "Confirming receipt…" : "Confirm receipt for shipment"}</button>
+          <button className="button button-dark" type="button" disabled={busy === `receipt-${deliveredItem.id}`} onClick={() => void perform(`receipt-${deliveredItem.id}`, "confirm_receipt", { itemId: deliveredItem.id })}>{busy === `receipt-${deliveredItem.id}` ? "Confirming receipt…" : "Confirm that you received this shipment"}</button>
         </div>}
-        {selectedDisputeItem && <div className="commerce-item-actions">
-          {disputeCandidates.length > 1 && <label className="field-label">Item to report
-            <select className="text-input" value={selectedDisputeItem.id} onChange={(event) => setDisputeItems((current) => ({ ...current, [shipmentGroupKey]: event.target.value }))}>
+        {disputeCandidates.length > 0 && <div className="commerce-item-actions">
+          <label className="field-label">Item to report
+            <select className="text-input" value={selectedDisputeItem?.id ?? ""} onChange={(event) => setDisputeItems((current) => ({ ...current, [shipmentGroupKey]: event.target.value }))}>
+              <option value="" disabled>Select an item</option>
               {disputeCandidates.map((item) => <option value={item.id} key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</option>)}
             </select>
-          </label>}
+          </label>
           <label className="field-label">Report a delivery issue<textarea className="review-message" minLength={10} maxLength={500} value={disputeReasons[shipmentGroupKey] ?? ""} onChange={(event) => setDisputeReasons((current) => ({ ...current, [shipmentGroupKey]: event.target.value }))} /></label>
-          <button className="button button-outline" type="button" disabled={busy === `dispute-${selectedDisputeItem.id}`} onClick={() => void perform(`dispute-${selectedDisputeItem.id}`, "dispute_delivery", { itemId: selectedDisputeItem.id, reason: disputeReasons[shipmentGroupKey] })}>Open dispute for selected item</button>
+          <button className="button button-outline" type="button" disabled={!selectedDisputeItem || busy === `dispute-${selectedDisputeItem.id}`} onClick={() => {
+            if (selectedDisputeItem) void perform(`dispute-${selectedDisputeItem.id}`, "dispute_delivery", { itemId: selectedDisputeItem.id, reason: disputeReasons[shipmentGroupKey] });
+          }}>Open dispute for selected item</button>
           <small>Disputes are reviewed per item.</small>
         </div>}
       </div>;
