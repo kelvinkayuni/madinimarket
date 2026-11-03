@@ -282,14 +282,33 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         {order.payment_reference && <p>Buyer payment reference: <strong>{order.payment_reference}</strong>{order.payment_note ? ` · ${order.payment_note}` : ""}</p>}
         {order.payment_proof_url && <p><a className="certificate-file-link" href={order.payment_proof_url} target="_blank" rel="noreferrer">Open submitted payment proof</a></p>}
         {order.payment_status === "payment_submitted" && <button className="button button-dark" type="button" disabled={busy === `verify-${order.id}`} onClick={() => void act(`verify-${order.id}`, { action: "verify_payment", orderId: order.id })}>{busy === `verify-${order.id}` ? "Verifying payment & notifying sellers…" : "Verify payment & notify sellers"}</button>}
-        {order.items.map((item) => {
-          const firstShipmentItem = order.items.find((candidate) =>
-            ["paid", "shipped"].includes(candidate.status) &&
-            candidate.seller_id === item.seller_id &&
-            candidate.shipping_carrier === item.shipping_carrier &&
-            candidate.tracking_number === item.tracking_number
-          );
-          return <div className="admin-commerce-item" key={item.id}>
+        {(() => {
+          const shipmentGroups = new Map<string, Item[]>();
+          for (const item of order.items) {
+            if (!["paid", "shipped"].includes(item.status) || !item.shipping_carrier?.trim() || !item.tracking_number?.trim()) continue;
+            const shipmentKey = JSON.stringify([item.seller_id, item.shipping_carrier, item.tracking_number]);
+            const group = shipmentGroups.get(shipmentKey) ?? [];
+            group.push(item);
+            shipmentGroups.set(shipmentKey, group);
+          }
+          return shipmentGroups.size > 0 && <div className="admin-shipment-groups">
+            {[...shipmentGroups.entries()].map(([shipmentKey, items]) => {
+              const firstItem = items[0];
+              return <div className="admin-shipment-group" key={shipmentKey}>
+                <strong>Shipment · {items.length} {items.length === 1 ? "item" : "items"}</strong>
+                <span>Carrier: {firstItem.shipping_carrier} · Tracking: {firstItem.tracking_number}</span>
+                <small>Confirming delivery will update every item below that shares this shipment tracking.</small>
+                <ul>{items.map((shipmentItem) => <li key={shipmentItem.id}>{shipmentItem.mineral_name} · {shipmentItem.weight} {shipmentItem.unit}</li>)}</ul>
+                <button className="button button-outline" type="button" disabled={busy === `delivered-${firstItem.id}`} onClick={() => {
+                  if (window.confirm(`Confirm that the carrier's tracking shows this shipment of ${items.length} ${items.length === 1 ? "item" : "items"} as delivered?`)) {
+                    void act(`delivered-${firstItem.id}`, { action: "mark_delivered", itemId: firstItem.id });
+                  }
+                }}>Confirm delivery for all {items.length} {items.length === 1 ? "item" : "items"}</button>
+              </div>;
+            })}
+          </div>;
+        })()}
+        {order.items.map((item) => <div className="admin-commerce-item" key={item.id}>
           <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
             <small>Status: {item.status.replaceAll("_", " ")} · Buyer total {money(item.total_price, item.currency)}</small>
             <small>Seller amount {money(item.seller_amount, item.currency)} · Market fee {money(item.platform_fee_amount, item.currency)}</small>
@@ -320,14 +339,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             {item.payout_receipt_url && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
             {item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
           </div>
-          {["paid", "shipped"].includes(item.status) && firstShipmentItem?.id === item.id && <div className="commerce-item-actions">
-            <button className="button button-outline" type="button" disabled={busy === `delivered-${item.id}` || !item.shipping_carrier?.trim() || !item.tracking_number?.trim()} onClick={() => {
-              if (window.confirm("Confirm that the carrier's tracking shows this shipment as delivered?")) {
-                void act(`delivered-${item.id}`, { action: "mark_delivered", itemId: item.id });
-              }
-            }}>Confirm carrier delivery for shipment</button>
-            {(!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) && <small className="commerce-warning">The seller must enter both carrier and tracking number before delivery can be confirmed.</small>}
-          </div>}
+          {["paid", "shipped"].includes(item.status) && (!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) && <small className="commerce-warning">The seller must enter both carrier and tracking number before delivery can be confirmed.</small>}
           {item.status === "disputed" && <div className="commerce-item-actions">
             <button className="button button-dark" type="button" disabled={busy === `seller-resolution-${item.id}`} onClick={() => void act(`seller-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "seller" })}>Resolve for seller (payout due)</button>
             <button className="button button-outline" type="button" disabled={busy === `buyer-resolution-${item.id}`} onClick={() => void act(`buyer-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "buyer" })}>Resolve for buyer (refund due)</button>
@@ -360,8 +372,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             </label>
             <button className="button button-outline" type="submit" disabled={busy === `refund-${item.id}` || (refundReferences[item.id]?.trim().length ?? 0) < 3}>{busy === `refund-${item.id}` ? "Recording…" : "Record buyer refund"}</button>
           </form>}
-        </div>;
-        })}
+        </div>)}
         </div>
       </details>)}
     </div> : <p className="admin-empty">{loading ? "Loading marketplace orders…" : "No orders match this filter and search."}</p>}
