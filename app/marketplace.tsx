@@ -497,9 +497,12 @@ export default function Marketplace() {
   const homepageAnnouncementDirty = useRef(false);
   const [siteContentLoaded, setSiteContentLoaded] = useState(false);
   const [homepageHeadlines, setHomepageHeadlines] = useState<HomepageHeadline[]>([]);
-  const [homepageHeadlineIndex, setHomepageHeadlineIndex] = useState(0);
   const [homepageHeadlineFontSize, setHomepageHeadlineFontSize] = useState(49);
   const [homepageHeadlineFontSizeInput, setHomepageHeadlineFontSizeInput] = useState("49");
+  const homepageHeadlineWindowRef = useRef<HTMLDivElement>(null);
+  const homepageHeadlineGroupRef = useRef<HTMLDivElement>(null);
+  const [homepageHeadlineOverflowing, setHomepageHeadlineOverflowing] = useState(false);
+  const [homepageHeadlineRepeatCount, setHomepageHeadlineRepeatCount] = useState(2);
   const [failedSellerImageIds, setFailedSellerImageIds] = useState<Set<number>>(() => new Set());
   const filteredSalesLedgerTransactions = useMemo(() => {
     const transactions = adminSalesLedger?.transactions ?? [];
@@ -527,9 +530,43 @@ export default function Marketplace() {
     (activeSalesLedgerPage - 1) * SALES_LEDGER_PAGE_SIZE,
     activeSalesLedgerPage * SALES_LEDGER_PAGE_SIZE,
   );
-  const activeHomepageHeadline = homepageHeadlines.length
-    ? homepageHeadlines[homepageHeadlineIndex % homepageHeadlines.length]
-    : null;
+  const homepageHeadlineStyle = {
+    "--homepage-headline-font-size": `${homepageHeadlineFontSize}px`,
+  } as CSSProperties & { "--homepage-headline-font-size": string };
+  useLayoutEffect(() => {
+    const windowElement = homepageHeadlineWindowRef.current;
+    const groupElement = homepageHeadlineGroupRef.current;
+    if (!windowElement || !groupElement || !homepageHeadlines.length) {
+      setHomepageHeadlineOverflowing(false);
+      setHomepageHeadlineRepeatCount(2);
+      return;
+    }
+
+    const measureOverflow = () => {
+      const groupWidth = groupElement.scrollWidth;
+      const containerWidth = windowElement.clientWidth;
+      const shouldScroll = homepageHeadlines.length > 1 || groupWidth > containerWidth + 1;
+      setHomepageHeadlineOverflowing(shouldScroll);
+      setHomepageHeadlineRepeatCount(shouldScroll && groupWidth > 0
+        ? Math.max(2, Math.ceil(containerWidth / groupWidth) + 1)
+        : 2);
+    };
+    const resizeObserver = new ResizeObserver(measureOverflow);
+    const mutationObserver = new MutationObserver(measureOverflow);
+    resizeObserver.observe(windowElement);
+    resizeObserver.observe(groupElement);
+    mutationObserver.observe(groupElement, { childList: true, characterData: true, subtree: true });
+    measureOverflow();
+
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, [
+    homepageHeadlines,
+    homepageHeadlineFontSize,
+    homepageHeadlineOverflowing,
+  ]);
   const [homepageHeadlineForm, setHomepageHeadlineForm] = useState({ mainPhrase: "", accentPhrase: "" });
   const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
   const [pendingSubscriptions, setPendingSubscriptions] = useState<AccountSubscription[]>([]);
@@ -1080,13 +1117,6 @@ export default function Marketplace() {
       removeResumeListener();
     };
   }, []);
-  useEffect(() => {
-    if (homepageHeadlines.length < 2) return;
-    const interval = window.setInterval(() => {
-      setHomepageHeadlineIndex((current) => (current + 1) % homepageHeadlines.length);
-    }, 60_000);
-    return () => window.clearInterval(interval);
-  }, [homepageHeadlines.length]);
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     let active = true;
@@ -3457,7 +3487,7 @@ export default function Marketplace() {
         </section>}
         {activeAdminPanel === "homepage" && <section className="admin-homepage-panel" aria-labelledby="admin-homepage-headlines-heading">
           <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
-          <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases rotate every minute; if all are deleted, the homepage shows no headline.</p>
+          <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases scroll continuously across the homepage; if all are deleted, the homepage shows no headline.</p>
           <form className="admin-homepage-font-size" onSubmit={(event) => void saveHomepageHeadlineFontSize(event)}>
             <label className="field-label" htmlFor="admin-homepage-headline-font-size">Headline font size (pixels)
               <input className="text-input" id="admin-homepage-headline-font-size" type="number" min={24} max={72} step={1} required value={homepageHeadlineFontSizeInput} onChange={(event) => setHomepageHeadlineFontSizeInput(event.target.value)} />
@@ -3645,7 +3675,34 @@ export default function Marketplace() {
 
     <div className="market-content" id="top">
       {homepageAnnouncement && <div className="market-announcement" role="status"><span>{homepageAnnouncement}</span></div>}
-      <section className="market-intro"><div>{activeHomepageHeadline && <h1 style={{ "--homepage-headline-font-size": `${homepageHeadlineFontSize}px` } as CSSProperties & { "--homepage-headline-font-size": string }}><span>{activeHomepageHeadline.main_phrase}</span>{activeHomepageHeadline.main_phrase && activeHomepageHeadline.accent_phrase ? " " : ""}<em>{activeHomepageHeadline.accent_phrase}</em></h1>}</div><div className="market-intro-tools"><div className="header-search mobile-market-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals here" /></div></div></section>
+      <section className="market-intro">
+        <div className={`market-intro-heading${homepageHeadlineOverflowing ? " is-overflowing" : ""}`} ref={homepageHeadlineWindowRef}>
+          <div
+            className="market-intro-heading-track"
+            style={{ "--homepage-headline-cycle": `${-100 / homepageHeadlineRepeatCount}%` } as CSSProperties & { "--homepage-headline-cycle": string }}
+          >
+            {homepageHeadlineOverflowing && Array.from({ length: homepageHeadlineRepeatCount }, (_, copyIndex) => (
+              <div className="market-intro-heading-group" key={`homepage-headlines-${copyIndex}`} ref={copyIndex === 0 ? homepageHeadlineGroupRef : undefined} aria-hidden={copyIndex > 0}>
+                {homepageHeadlines.map((headline, headlineIndex) => (
+                  headlineIndex === 0 && copyIndex === 0
+                    ? <h1 className="market-intro-heading-item" key={headline.id} style={homepageHeadlineStyle}>{headline.main_phrase}{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></h1>
+                    : <span className="market-intro-heading-item" key={headline.id} style={homepageHeadlineStyle}>{headline.main_phrase}{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></span>
+                ))}
+              </div>
+            ))}
+            {!homepageHeadlineOverflowing && homepageHeadlines.length > 0 && (
+              <div className="market-intro-heading-group" ref={homepageHeadlineGroupRef}>
+                {homepageHeadlines.map((headline, headlineIndex) => (
+                  headlineIndex === 0
+                    ? <h1 className="market-intro-heading-item" key={headline.id} style={homepageHeadlineStyle}>{headline.main_phrase}{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></h1>
+                    : <span className="market-intro-heading-item" key={headline.id} style={homepageHeadlineStyle}>{headline.main_phrase}{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="market-intro-tools"><div className="header-search mobile-market-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals here" /></div></div>
+      </section>
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>
