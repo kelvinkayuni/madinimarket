@@ -1336,5 +1336,5 @@ h1, h2, h3, p { margin-top: 0; }
 .buyer-rail { padding-bottom: 0; }
 
 @media (min-width: 651px) {
-  .market-intro h1 { max-width: min(100%, 320px); font-size: clamp(24px, 2.4vw, 32px); }
+  .market-intro h1 { font-size: clamp(22px, 2vw, 28px); }
 }
