@@ -523,7 +523,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #edf0ea; color: #858d83; font-size: 9px; }
 .seller-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seller-certificate-link { flex-shrink: 0; color: #395c46; font-size: 9px; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
-.add-to-cart-button { width: 100%; min-height: 34px; margin-top: 10px; font-size: 10px; }
+.add-to-cart-button { width: 100%; min-height: 34px; margin-top: 5px; font-size: 10px; }
 .account-menu-count { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: #68766a; }
 .account-menu-count strong { min-width: 20px; height: 20px; display: inline-grid; place-items: center; border-radius: 50%; background: #e6eddf; color: #355443; font-size: 9px; }
 .account-menu-count small { font-size: 9px; }
@@ -1230,7 +1230,7 @@ h1, h2, h3, p { margin-top: 0; }
   .seller-comment { font-size: 8px; }
   .seller-meta { margin-top: 2px; padding-top: 2px; font-size: 8px; }
   .seller-certificate-link { font-size: 8px; }
-  .add-to-cart-button { min-height: 24px; margin-top: 3px; font-size: 9px; }
+  .add-to-cart-button { min-height: 24px; margin-top: 1.5px; font-size: 9px; }
   .buyer-card { height: auto; align-self: start; padding: 6px 12px; }
   .buyer-card h3 { margin: 3px 0; font-size: clamp(16px, 2.3vh, 19px); }
   .buyer-specs { gap: 4px; padding: 4px 0; }
@@ -1291,7 +1291,7 @@ h1, h2, h3, p { margin-top: 0; }
   .seller-name-row h3 { font-size: 13px; }
   .seller-price-row { margin-top: 3px; }
   .seller-meta { margin-top: 4px; padding-top: 4px; }
-  .add-to-cart-button { min-height: 27px; margin-top: 5px; }
+  .add-to-cart-button { min-height: 27px; margin-top: 2.5px; }
   .buyer-card { padding: 6px 10px; }
   .buyer-card h3 { margin: 5px 0; font-size: 17px; }
   .buyer-specs { gap: 3px; padding: 5px 0; }
@@ -1326,7 +1326,7 @@ h1, h2, h3, p { margin-top: 0; }
   .seller-price-row { margin-top: 1px; }
   .seller-price { font-size: 10px; }
   .seller-meta { margin-top: 2px; padding-top: 2px; font-size: 8px; }
-  .add-to-cart-button { min-height: 22px; margin-top: 2px; font-size: 8px; }
+  .add-to-cart-button { min-height: 22px; margin-top: 1px; font-size: 8px; }
   .buyer-card { padding-top: 2px; padding-bottom: 2px; }
   .buyer-card h3 { margin: 1px 0; font-size: 13px; }
   .buyer-specs { gap: 1px; padding: 2px 0; }
