@@ -1211,11 +1211,11 @@ h1, h2, h3, p { margin-top: 0; }
   .market-intro h1 { margin: 6px 0 2px; font-size: clamp(28px, 5vh, 42px); }
   .listing-section, .seller-section, .buyer-section { min-height: 0; }
   .seller-section { flex: 1 1 0; padding: 10px 0 8px; }
-  .buyer-section { flex: 0 0 clamp(246px, 30vh, 270px); margin-top: 2px; padding-top: 10px; padding-bottom: 8px; }
+  .buyer-section { flex: 0 0 auto; margin-top: 2px; padding-top: 10px; padding-bottom: 8px; }
   .section-head { margin-bottom: 8px; }
   .section-head h2 { font-size: clamp(18px, 2.7vh, 23px); }
   .seller-rail, .buyer-rail { min-height: 0; grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
-  .buyer-rail { flex: 1 1 0; grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
+  .buyer-rail { flex: 0 0 auto; grid-template-rows: max-content; overflow-y: hidden; }
   .buyer-rail > .buyer-card { height: auto; align-self: start; animation: none; }
   .seller-section > .rail-hint { display: none; }
   .seller-card, .buyer-card { min-height: 0; }
