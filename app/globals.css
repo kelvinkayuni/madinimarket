@@ -830,10 +830,12 @@ h1, h2, h3, p { margin-top: 0; }
 .buyer-location { max-width: 120px; overflow: hidden; color: #a9b9ae; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .buyer-card h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 13px; font-family: var(--font-display), Georgia, serif; font-size: 21px; font-weight: 500; }
 .buyer-shape { padding: 4px 7px; border: 1px solid #5c796b; color: #c8d8c9; font-family: var(--font-body), sans-serif; font-size: 8px; }
-.buyer-specs { display: grid; gap: 8px; padding: 10px 0 12px; border-top: 1px solid #ffffff1c; border-bottom: 1px solid #ffffff1c; }
-.buyer-specs div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.buyer-specs { display: flex; flex-wrap: wrap; align-items: center; row-gap: 8px; padding: 10px 0 12px; border-top: 1px solid #ffffff1c; border-bottom: 1px solid #ffffff1c; }
+.buyer-specs div { display: flex; min-width: 0; flex: 0 1 auto; align-items: baseline; gap: 5px; padding: 0 8px; border-left: 1px solid #ffffff1c; }
+.buyer-specs div:first-child { padding-left: 0; border-left: 0; }
 .buyer-specs span, .buyer-card-bottom div > span { color: #9fb1a3; font-size: 8px; font-weight: 700; }
-.buyer-specs strong { max-width: 68%; overflow: hidden; color: #edf1eb; font-size: 9px; font-weight: 500; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.buyer-specs span { white-space: nowrap; }
+.buyer-specs strong { max-width: 100%; min-width: 0; overflow: hidden; color: #edf1eb; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .buyer-card-bottom { margin-top: 0; padding-top: 6px; }
 .buyer-card-bottom div > span, .buyer-card-bottom div > strong { display: block; }
 .buyer-card-bottom div > strong { margin-top: 3px; color: var(--lime); font-size: 14px; }
