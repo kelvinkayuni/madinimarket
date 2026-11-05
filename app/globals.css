@@ -1215,6 +1215,8 @@ h1, h2, h3, p { margin-top: 0; }
   .section-head { margin-bottom: 8px; }
   .section-head h2 { font-size: clamp(18px, 2.7vh, 23px); }
   .seller-rail, .buyer-rail { min-height: 0; grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
+  .buyer-rail { flex: 0 0 auto; grid-template-rows: max-content; overflow-y: visible; }
+  .buyer-rail > .buyer-card { align-self: start; }
   .seller-section > .rail-hint { display: none; }
   .seller-card, .buyer-card { min-height: 0; }
   .seller-card { height: 100%; align-self: stretch; }
@@ -1332,3 +1334,7 @@ h1, h2, h3, p { margin-top: 0; }
 
 .buyer-card { height: auto; align-self: end; padding-bottom: 0; }
 .buyer-rail { padding-bottom: 0; }
+
+@media (min-width: 651px) {
+  .market-intro h1 { max-width: min(100%, 320px); font-size: clamp(24px, 2.4vw, 32px); }
+}
