@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
     const admin = createSupabaseAdminClient();
     const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement").eq("id", true).single(),
+      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement").eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsError) throw settingsError;
@@ -45,6 +45,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       swahiliEnabled: settings.swahili_enabled,
       headlineFontSize: settings.homepage_headline_font_size,
+      sellerCardsPerColumn: settings.seller_cards_per_column,
+      buyerCardsPerColumn: settings.buyer_cards_per_column,
       accountCreationDisabled: settings.account_creation_disabled,
       nonAdminSignInDisabled: settings.non_admin_sign_in_disabled ?? false,
       homepageAnnouncement: settings.homepage_announcement ?? "",
@@ -128,9 +130,30 @@ export async function PATCH(request: Request) {
       if (error) throw error;
       return NextResponse.json({ headlineFontSize: data.homepage_headline_font_size }, { headers: { "Cache-Control": "no-store" } });
     }
-    return NextResponse.json({ error: "Choose a font size between 24 and 72 pixels." }, { status: 400 });
+    if (values && "headlineFontSize" in values) {
+      return NextResponse.json({ error: "Choose a font size between 24 and 72 pixels." }, { status: 400 });
+    }
+    if (values && Number.isSafeInteger(values.sellerCardsPerColumn) && typeof values.sellerCardsPerColumn === "number" && values.sellerCardsPerColumn >= 1) {
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ seller_cards_per_column: values.sellerCardsPerColumn })
+        .eq("id", true)
+        .select("seller_cards_per_column")
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ sellerCardsPerColumn: data.seller_cards_per_column }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (values && Number.isSafeInteger(values.buyerCardsPerColumn) && typeof values.buyerCardsPerColumn === "number" && values.buyerCardsPerColumn >= 1) {
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ buyer_cards_per_column: values.buyerCardsPerColumn })
+        .eq("id", true)
+        .select("buyer_cards_per_column")
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ buyerCardsPerColumn: data.buyer_cards_per_column }, { headers: { "Cache-Control": "no-store" } });
+    }
+    return NextResponse.json({ error: "Choose a valid site setting." }, { status: 400 });
   } catch {
-    return NextResponse.json({ error: "Could not update the language setting." }, { status: 503 });
+    return NextResponse.json({ error: "Could not update the site setting." }, { status: 503 });
   }
 }
 

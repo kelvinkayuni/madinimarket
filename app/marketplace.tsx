@@ -413,7 +413,7 @@ async function loadAdminTranslations(accessToken: string): Promise<TranslationPa
   return result.translations as TranslationPair[];
 }
 
-async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; headlines: HomepageHeadline[] }> {
+async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; headlines: HomepageHeadline[] }> {
   const response = await fetch("/api/admin/site-content", {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
@@ -421,7 +421,8 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "Could not load homepage and language settings.");
   if (typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || !Number.isInteger(result.headlineFontSize) ||
-    result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Array.isArray(result.headlines) ||
+    result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Number.isSafeInteger(result.sellerCardsPerColumn) || result.sellerCardsPerColumn < 1 ||
+    !Number.isSafeInteger(result.buyerCardsPerColumn) || result.buyerCardsPerColumn < 1 || !Array.isArray(result.headlines) ||
     !result.headlines.every((headline: unknown) =>
       typeof headline === "object" && headline !== null &&
       "id" in headline && typeof headline.id === "string" &&
@@ -433,6 +434,8 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
   return {
     swahiliEnabled: result.swahiliEnabled,
     headlineFontSize: result.headlineFontSize,
+    sellerCardsPerColumn: result.sellerCardsPerColumn,
+    buyerCardsPerColumn: result.buyerCardsPerColumn,
     accountCreationDisabled: result.accountCreationDisabled,
     nonAdminSignInDisabled: result.nonAdminSignInDisabled,
     homepageAnnouncement: result.homepageAnnouncement,
@@ -456,6 +459,8 @@ async function loadAdminSubscriptions(accessToken: string): Promise<{ plans: Sub
 export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
+  const [sellerCardsPerColumn, setSellerCardsPerColumn] = useState(4);
+  const [buyerCardsPerColumn, setBuyerCardsPerColumn] = useState(4);
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
   const [usdEnabled, setUsdEnabled] = useState(true);
   const [currencySettingsLoaded, setCurrencySettingsLoaded] = useState(!isSupabaseConfigured);
@@ -499,11 +504,15 @@ export default function Marketplace() {
   const [homepageHeadlines, setHomepageHeadlines] = useState<HomepageHeadline[]>([]);
   const [homepageHeadlineFontSize, setHomepageHeadlineFontSize] = useState(49);
   const [homepageHeadlineFontSizeInput, setHomepageHeadlineFontSizeInput] = useState("49");
+  const [sellerCardsPerColumnInput, setSellerCardsPerColumnInput] = useState("4");
+  const [buyerCardsPerColumnInput, setBuyerCardsPerColumnInput] = useState("4");
   const homepageHeadlineWindowRef = useRef<HTMLDivElement>(null);
   const homepageHeadlineGroupRef = useRef<HTMLDivElement>(null);
   const [homepageHeadlineOverflowing, setHomepageHeadlineOverflowing] = useState(false);
   const [homepageHeadlineRepeatCount, setHomepageHeadlineRepeatCount] = useState(2);
   const [failedSellerImageIds, setFailedSellerImageIds] = useState<Set<number>>(() => new Set());
+  const [sellerEmptySlotCount, setSellerEmptySlotCount] = useState(4);
+  const [buyerEmptySlotCount, setBuyerEmptySlotCount] = useState(4);
   const filteredSalesLedgerTransactions = useMemo(() => {
     const transactions = adminSalesLedger?.transactions ?? [];
     const query = salesLedgerSearch.trim().toLocaleLowerCase();
@@ -670,6 +679,7 @@ export default function Marketplace() {
     marketHoursDraft.openDays.some((day) => !marketHours.openDays.includes(day));
   const draftSaveTimers = useRef<{ seller: number | null; buyer: number | null }>({ seller: null, buyer: null });
   const draftRestoreDialog = useRef<Dialog>(null);
+  const sellerRail = useRef<HTMLDivElement>(null);
   const buyerRail = useRef<HTMLDivElement>(null);
   const filteredWebsiteAccounts = useMemo(() => {
     const certificatesByAccount = new Map<string, AdminCertificate[]>();
@@ -1061,7 +1071,8 @@ export default function Marketplace() {
         const response = await fetch("/api/site-content", { cache: "no-store" });
         const result = await response.json();
         if (!response.ok || typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || !Number.isInteger(result.headlineFontSize) ||
-          result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Array.isArray(result.headlines)) {
+          result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Number.isSafeInteger(result.sellerCardsPerColumn) || result.sellerCardsPerColumn < 1 ||
+          !Number.isSafeInteger(result.buyerCardsPerColumn) || result.buyerCardsPerColumn < 1 || !Array.isArray(result.headlines)) {
           throw new Error(result.error ?? "Could not load homepage and language settings.");
         }
         if (!active) return;
@@ -1071,6 +1082,10 @@ export default function Marketplace() {
         setHomepageAnnouncement(typeof result.homepageAnnouncement === "string" ? result.homepageAnnouncement : "");
         setHomepageHeadlineFontSize(result.headlineFontSize);
         setHomepageHeadlineFontSizeInput(String(result.headlineFontSize));
+        setSellerCardsPerColumn(result.sellerCardsPerColumn);
+        setSellerCardsPerColumnInput(String(result.sellerCardsPerColumn));
+        setBuyerCardsPerColumn(result.buyerCardsPerColumn);
+        setBuyerCardsPerColumnInput(String(result.buyerCardsPerColumn));
         setSiteContentLoaded(true);
         setHomepageHeadlines((current) => {
           const next = result.headlines as HomepageHeadline[];
@@ -1339,6 +1354,10 @@ export default function Marketplace() {
                 if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
                 setHomepageHeadlineFontSize(siteContent.headlineFontSize);
                 setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
+                setSellerCardsPerColumn(siteContent.sellerCardsPerColumn);
+                setSellerCardsPerColumnInput(String(siteContent.sellerCardsPerColumn));
+                setBuyerCardsPerColumn(siteContent.buyerCardsPerColumn);
+                setBuyerCardsPerColumnInput(String(siteContent.buyerCardsPerColumn));
                 setSiteContentLoaded(true);
                 setHomepageHeadlines(siteContent.headlines);
               }),
@@ -1579,8 +1598,57 @@ export default function Marketplace() {
   };
   const scrollRail = (rail: HTMLDivElement | null, direction: number) => rail?.scrollBy({ left: direction * 360, behavior: "smooth" });
   const visibleSellers = sellers.filter((item) => item.status === "approved" && `${item.mineral} ${item.color ?? ""} ${item.comment ?? ""} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
-  const sellerColumnGroups = Array.from({ length: Math.max(1, Math.ceil(visibleSellers.length / 4)) }, (_, index) => visibleSellers.slice(index * 4, index * 4 + 4));
+  useEffect(() => {
+    const rail = sellerRail.current;
+    if (!rail) return;
+
+    const updateEmptySlots = () => {
+      const cardWidth = rail.firstElementChild?.getBoundingClientRect().width ?? 0;
+      const gap = Number.parseFloat(window.getComputedStyle(rail).columnGap) || 0;
+      const visibleColumns = cardWidth > 0
+        ? Math.max(1, Math.ceil(rail.clientWidth / (cardWidth + gap)))
+        : 1;
+      const fullColumns = Math.max(visibleColumns, Math.ceil(visibleSellers.length / sellerCardsPerColumn), 1);
+      setSellerEmptySlotCount(fullColumns * sellerCardsPerColumn - visibleSellers.length);
+    };
+
+    updateEmptySlots();
+    const frame = window.requestAnimationFrame(updateEmptySlots);
+    const observer = new ResizeObserver(updateEmptySlots);
+    observer.observe(rail);
+    window.addEventListener("resize", updateEmptySlots);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", updateEmptySlots);
+    };
+  }, [marketHoursLoaded, marketIsOpen, query, sellerCardsPerColumn, visibleSellers.length]);
   const visibleBuyers = buyers.filter((item) => item.status === "approved" && `${item.mineral} ${item.location}`.toLowerCase().includes(query.toLowerCase()));
+  useEffect(() => {
+    const rail = buyerRail.current;
+    if (!rail) return;
+
+    const updateEmptySlots = () => {
+      const cardWidth = rail.firstElementChild?.getBoundingClientRect().width ?? 0;
+      const gap = Number.parseFloat(window.getComputedStyle(rail).columnGap) || 0;
+      const visibleColumns = cardWidth > 0
+        ? Math.max(1, Math.ceil(rail.clientWidth / (cardWidth + gap)))
+        : 1;
+      const fullColumns = Math.max(visibleColumns, Math.ceil(visibleBuyers.length / buyerCardsPerColumn), 1);
+      setBuyerEmptySlotCount(fullColumns * buyerCardsPerColumn - visibleBuyers.length);
+    };
+
+    updateEmptySlots();
+    const frame = window.requestAnimationFrame(updateEmptySlots);
+    const observer = new ResizeObserver(updateEmptySlots);
+    observer.observe(rail);
+    window.addEventListener("resize", updateEmptySlots);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", updateEmptySlots);
+    };
+  }, [buyerCardsPerColumn, marketHoursLoaded, marketIsOpen, query, visibleBuyers.length]);
   const refreshRemoteListings = async (includeOwnSubmissions = role === "user") => {
     let adminAccessToken: string | undefined;
     if (role === "admin") {
@@ -2042,6 +2110,10 @@ export default function Marketplace() {
     if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(content.homepageAnnouncement);
     setHomepageHeadlineFontSize(content.headlineFontSize);
     setHomepageHeadlineFontSizeInput(String(content.headlineFontSize));
+    setSellerCardsPerColumn(content.sellerCardsPerColumn);
+    setSellerCardsPerColumnInput(String(content.sellerCardsPerColumn));
+    setBuyerCardsPerColumn(content.buyerCardsPerColumn);
+    setBuyerCardsPerColumnInput(String(content.buyerCardsPerColumn));
     setSiteContentLoaded(true);
     setHomepageHeadlines(content.headlines);
   };
@@ -2071,6 +2143,44 @@ export default function Marketplace() {
         setNotice("Homepage headline font size saved.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not save the headline font size.");
+      }
+    });
+  };
+  const saveCardsPerColumn = async (kind: "seller" | "buyer", event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const seller = kind === "seller";
+    const input = seller ? sellerCardsPerColumnInput : buyerCardsPerColumnInput;
+    const count = Number(input);
+    if (!Number.isSafeInteger(count) || count < 1) {
+      setNotice("Enter a whole number of at least one card per column.");
+      return;
+    }
+
+    await withProgress(`${kind}-cards-per-column`, async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "PATCH",
+          headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
+          body: JSON.stringify({ [`${kind}CardsPerColumn`]: count }),
+        });
+        const result = await response.json();
+        const savedCount = result[`${kind}CardsPerColumn`];
+        if (!response.ok || !Number.isSafeInteger(savedCount) || savedCount < 1) {
+          throw new Error(result.error ?? `Could not save the ${kind} cards-per-column setting.`);
+        }
+        if (seller) {
+          setSellerCardsPerColumn(savedCount);
+          setSellerCardsPerColumnInput(String(savedCount));
+        } else {
+          setBuyerCardsPerColumn(savedCount);
+          setBuyerCardsPerColumnInput(String(savedCount));
+        }
+        setNotice(`${seller ? "Seller" : "Buyer"} cards per column saved.`);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : `Could not save the ${kind} cards-per-column setting.`);
       }
     });
   };
@@ -3495,6 +3605,24 @@ export default function Marketplace() {
             <button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("homepage-headline-font-size") || Number(homepageHeadlineFontSizeInput) === homepageHeadlineFontSize}>{busyActions.has("homepage-headline-font-size") ? "Saving…" : "Save font size"}</button>
             <span>Choose from 24–72 px. On narrow screens, the headline scales down to fit.</span>
           </form>
+          <div className="admin-card-columns-settings">
+            <div className="admin-queue-heading"><div><span>MARKETPLACE LAYOUT</span><h3>Cards per column</h3></div></div>
+            <p className="admin-translation-help">Set seller and buyer panels independently. Each column displays the selected number of cards before continuing into the next column. The minimum is one card.</p>
+            <div className="admin-card-columns-forms">
+              <form className="admin-card-columns-form" onSubmit={(event) => void saveCardsPerColumn("seller", event)}>
+                <label className="field-label" htmlFor="admin-seller-cards-per-column">Seller cards per column
+                  <input className="text-input" id="admin-seller-cards-per-column" type="number" min={1} step={1} required value={sellerCardsPerColumnInput} onChange={(event) => setSellerCardsPerColumnInput(event.target.value)} />
+                </label>
+                <button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("seller-cards-per-column") || Number(sellerCardsPerColumnInput) === sellerCardsPerColumn}>{busyActions.has("seller-cards-per-column") ? "Saving…" : "Save seller layout"}</button>
+              </form>
+              <form className="admin-card-columns-form" onSubmit={(event) => void saveCardsPerColumn("buyer", event)}>
+                <label className="field-label" htmlFor="admin-buyer-cards-per-column">Buyer cards per column
+                  <input className="text-input" id="admin-buyer-cards-per-column" type="number" min={1} step={1} required value={buyerCardsPerColumnInput} onChange={(event) => setBuyerCardsPerColumnInput(event.target.value)} />
+                </label>
+                <button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("buyer-cards-per-column") || Number(buyerCardsPerColumnInput) === buyerCardsPerColumn}>{busyActions.has("buyer-cards-per-column") ? "Saving…" : "Save buyer layout"}</button>
+              </form>
+            </div>
+          </div>
           <form className="admin-homepage-headline-form" onSubmit={(event) => void saveHomepageHeadline(event)}>
             <label className="field-label">Regular phrase<input className="text-input" value={homepageHeadlineForm.mainPhrase} maxLength={120} placeholder="Find your next" onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, mainPhrase: event.target.value }))} /></label>
             <label className="field-label">Highlighted phrase<input className="text-input" value={homepageHeadlineForm.accentPhrase} maxLength={120} placeholder="good stone." onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, accentPhrase: event.target.value }))} /></label>
@@ -3706,8 +3834,8 @@ export default function Marketplace() {
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>
-      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">LISTED MINERALS</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button></div></div>
-        {query && !visibleSellers.length ? <div className="empty-search">{`No minerals match “${query}”.`}</div> : <div className="seller-rail">{sellerColumnGroups.map((column, columnIndex) => <div className="seller-column" key={`seller-column-${columnIndex}`}>{column.map((listing) => {
+      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">LISTED MINERALS</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
+        {query && !visibleSellers.length ? <div className="empty-search">{`No minerals match “${query}”.`}</div> : <div className="seller-rail" ref={sellerRail} style={{ gridTemplateRows: `repeat(${sellerCardsPerColumn}, max-content)` }}>{visibleSellers.map((listing) => {
           const isReserved = Boolean(listing.reservation_status) || listing.marketplace_state === "reserved";
           const isCheckoutUnavailable = (listing.marketplace_state != null && listing.marketplace_state !== "available") || listing.is_active === false || listing.status !== "approved";
           const reservationLabel = listing.reservation_status === "availability_pending"
@@ -3716,11 +3844,12 @@ export default function Marketplace() {
           const isInCart = role === "user" && cartListingAccountId === userId && cartListingIds.has(listing.id);
           const hasImage = Boolean(listing.image) && !failedSellerImageIds.has(listing.id);
           return <article className="seller-card" key={listing.id}><div className="seller-photo" style={{ backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!hasImage && <Gem size={38} strokeWidth={1.2} />}{hasImage && <Image className="seller-photo-image" src={listing.image} alt="" fill sizes="(max-width: 650px) 78vw, 320px" unoptimized onError={() => setFailedSellerImageIds((current) => new Set(current).add(listing.id))} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}</div><div className="seller-card-info"><div className="seller-name-row"><div className="seller-name-color"><h3 data-no-translate>{listing.mineral}</h3>{listing.color && <span className="seller-color-tag" title={listing.color} data-no-translate>{listing.color}</span>}</div><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price-row"><div className="seller-price">{money(listing.price, listing.currency)}</div>{listing.comment && <span className="seller-comment" title={listing.comment} data-no-translate>{listing.comment}</span>}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer" onClick={(event) => openStoneCertificate(event, listing.id)}>See certificate</a>}</div><button className="button button-dark add-to-cart-button" type="button" disabled={isCheckoutUnavailable || isReserved || isInCart || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved || isCheckoutUnavailable ? "Temporarily unavailable" : isInCart ? "In your cart" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
-        })}{Array.from({ length: column.length ? (4 - column.length % 4) % 4 : 4 }, (_, index) => <article className="seller-card seller-empty-card" key={`empty-seller-slot-${columnIndex}-${index}`} aria-label="Empty mineral listing space"><div className="seller-photo seller-empty-photo"><Plus size={18} aria-hidden="true" /></div><div className="seller-card-info seller-empty-info" /></article>)}</div>)}</div>}
+        })}{Array.from({ length: sellerEmptySlotCount }, (_, index) => <article className="seller-card seller-empty-card" key={`empty-seller-slot-${index}`} aria-label="Empty mineral listing space"><div className="seller-photo seller-empty-photo"><Plus size={18} aria-hidden="true" /></div><div className="seller-card-info seller-empty-info" /></article>)}</div>}
+        <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
       <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{`No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div>{request.offer_enabled && <button className="private-offer-button" type="button" onClick={() => openPrivateOfferForm(request)}>Send private offer</button>}</div></article>)}{Array.from({ length: visibleBuyers.length ? (4 - visibleBuyers.length % 4) % 4 : 4 }, (_, index) => <article className="buyer-card buyer-empty-card" key={`empty-buyer-slot-${index}`} aria-label="Empty buyer request space"><Plus size={20} aria-hidden="true" /></article>)}</div>}
+        {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{`No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail} style={{ gridTemplateRows: `repeat(${buyerCardsPerColumn}, max-content)` }}>{visibleBuyers.map((request, index) => <article className="buyer-card" key={request.id} style={{ animationDelay: `${index * 70}ms` }}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div>{request.offer_enabled && <button className="private-offer-button" type="button" onClick={() => openPrivateOfferForm(request)}>Send private offer</button>}</div></article>)}{Array.from({ length: buyerEmptySlotCount }, (_, index) => <article className="buyer-card buyer-empty-card" key={`empty-buyer-slot-${index}`} aria-label="Empty buyer request space"><Plus size={20} aria-hidden="true" /></article>)}</div>}
         <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <>List a mineral <ArrowUpRight size={14} /></>}</button></div>
       </section>
         </> : <section className="market-closed-notice"><span>MARKET CLOSED</span><h2>{marketHoursError ? "Market status unavailable" : "The market is closed"}</h2><p>{marketHoursError

@@ -310,6 +310,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-homepage-font-size label { width: min(100%, 240px); }
 .admin-homepage-font-size .button { min-height: 40px; }
 .admin-homepage-font-size > span { align-self: center; color: #778075; font-size: 9px; line-height: 1.5; }
+.admin-card-columns-settings { margin: 0 0 24px; padding: 14px; border: 1px solid #e1e5dd; background: #fbfcf9; }
+.admin-card-columns-settings .admin-queue-heading { margin-bottom: 6px; }
+.admin-card-columns-settings .admin-queue-heading h3 { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: 20px; font-weight: 500; }
+.admin-card-columns-settings .admin-translation-help { margin-bottom: 12px; }
+.admin-card-columns-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.admin-card-columns-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; padding: 12px; border: 1px solid #e1e5dd; background: #fff; }
+.admin-card-columns-form .button { min-height: 40px; }
 .admin-account-controls { display: grid; gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid #e1e5dd; border-radius: 8px; background: #fbfcf9; }
 .admin-account-control-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .admin-account-control-row > div { display: grid; gap: 3px; }
@@ -502,10 +509,8 @@ h1, h2, h3, p { margin-top: 0; }
 .section-post { margin-right: 7px; }
 .round-control { width: 34px; height: 34px; border-radius: 50%; color: #687268; }
 .seller-rail, .buyer-rail { min-height: 104px; flex: 0 0 auto; gap: 14px; padding-bottom: 3px; }
-.seller-rail { display: flex; flex-wrap: wrap; align-content: start; overflow: visible; }
-.seller-column { display: flex; width: 240px; max-width: 100%; min-width: 0; flex-direction: column; gap: 14px; }
-.buyer-rail { display: grid; grid-template-rows: repeat(4, max-content); grid-auto-columns: 240px; grid-auto-flow: column; align-content: start; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
-.buyer-rail::-webkit-scrollbar { display: none; }
+.seller-rail, .buyer-rail { display: grid; grid-template-rows: repeat(4, max-content); grid-auto-columns: 240px; grid-auto-flow: column; align-content: start; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.seller-rail::-webkit-scrollbar, .buyer-rail::-webkit-scrollbar { display: none; }
 .buyer-card { height: 313px; min-height: 227px; }
 .seller-card { display: flex; width: 100%; min-width: 0; height: auto; flex-direction: column; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; }
 .seller-empty-card { border-style: dashed; border-color: #cdd7cb; background: #f7f9f5; }
@@ -995,6 +1000,8 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-homepage-headline-form { grid-template-columns: 1fr; }
   .admin-homepage-font-size { align-items: flex-start; flex-direction: column; }
   .admin-homepage-font-size label { width: 100%; }
+  .admin-card-columns-forms { grid-template-columns: 1fr; }
+  .admin-card-columns-form { grid-template-columns: 1fr; }
   .admin-subscription-plan-form { grid-template-columns: 1fr; }
   .admin-subscription-plan-actions { grid-column: auto; }
   .admin-translation-form-actions { justify-content: flex-start; }
@@ -1061,7 +1068,7 @@ h1, h2, h3, p { margin-top: 0; }
   .round-control { width: 29px; height: 29px; }
   .round-control svg { width: 14px; }
   .seller-rail, .buyer-rail { align-content: start; gap: 10px; }
-  .seller-column { width: clamp(168px, 58.5%, 240px); gap: 10px; }
+  .seller-rail, .buyer-rail { grid-auto-columns: clamp(168px, 58.5%, 240px); }
   .seller-photo { aspect-ratio: 1.6; }
   .buyer-section { margin: 9px -14px 0; padding: 20px 14px 18px; }
   .buyer-card { padding: 14px; }
