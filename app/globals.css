@@ -1056,14 +1056,17 @@ h1, h2, h3, p { margin-top: 0; }
   .seller-photo { aspect-ratio: 1.6; }
   .buyer-section { margin: 9px -14px 0; padding: 20px 14px 18px; }
   .buyer-card { padding: 14px; }
-  .site-footer { min-height: 67px; flex: 0 0 67px; flex-wrap: wrap; justify-content: flex-start; align-content: center; gap: 3px 8px; padding: 4px 0; font-size: 6px; white-space: nowrap; }
-  .site-footer-brand { flex: 1 1 100%; justify-content: space-between; gap: 4px; }
+  .site-footer { min-height: 67px; flex: 0 0 67px; flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: center; align-content: normal; gap: 3px; padding: 4px 0; font-size: 6px; white-space: normal; }
+  .site-footer-brand { flex: 0 0 auto; justify-content: space-between; gap: 4px; }
   .site-footer-brand > span:first-child { gap: 3px; font-size: 7px; }
   .site-footer-brand > span:first-child img { width: 16px; height: 12px; }
-  .site-footer-meta { flex: 1 1 auto; justify-content: space-between; gap: 4px; min-width: 0; }
-  .site-footer-region { gap: 4px; font-size: 6px; }
-  .site-footer-market-status { gap: 2px; margin-left: auto; }
-  .site-footer-market-status strong { font-size: 7px; line-height: 1; }
+  .site-footer-brand > span:nth-child(2) { font-size: 6px; }
+  .site-footer-meta { flex: 0 0 auto; justify-content: center; gap: 8px; min-width: 0; }
+  .site-footer-region { gap: 0; font-size: 6px; }
+  .site-footer-region > span + span, .site-footer-meta > span { margin-left: 6px; padding-left: 6px; border-left: 1px solid #dfe3db; }
+  .site-footer-market-status { flex: 0 0 auto; justify-content: center; gap: 4px; margin: 0; text-align: center; }
+  .site-footer-market-status > div { display: flex; align-items: baseline; gap: 4px; }
+  .site-footer-market-status strong { font-size: 6px; line-height: 1; }
   .site-footer-market-status small { margin-top: 0; font-size: 6px; line-height: 1; }
   .username-banner { margin: 10px 14px 0; padding: 10px; gap: 7px; }
   .username-copy { gap: 7px; }
