@@ -491,7 +491,7 @@ h1, h2, h3, p { margin-top: 0; }
 .market-status small { margin-top: 3px; color: #8e958c; font-size: 9px; }
 .market-status.is-closed strong { color: #925144; }
 .listing-section { min-height: 0; flex: 1 1 0; display: flex; flex-direction: column; padding: 22px 0 20px; border-top: 1px solid var(--line); }
-.seller-section { flex: 0 0 auto; padding-bottom: 32px; }
+.seller-section { flex: 0 0 auto; padding-bottom: 40px; }
 .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
 .section-title-wrap { display: flex; align-items: flex-start; gap: 15px; }
 .section-index { padding-top: 4px; color: var(--red); font-family: var(--font-display), Georgia, serif; font-size: 13px; }
@@ -504,7 +504,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-rail, .buyer-rail { min-height: 104px; flex: 0 0 auto; display: grid; grid-template-rows: repeat(4, max-content); grid-auto-columns: 240px; grid-auto-flow: column; align-content: start; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
 .seller-rail::-webkit-scrollbar, .buyer-rail::-webkit-scrollbar { display: none; }
 .buyer-card { height: 313px; min-height: 227px; }
-.seller-card { display: flex; width: 133.333333%; min-width: 0; height: auto; margin-bottom: -21%; flex-direction: column; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; transform: scale(.75); transform-origin: bottom left; }
+.seller-card { display: flex; width: 133.333333%; min-width: 0; height: auto; margin-bottom: -16%; flex-direction: column; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; transform: scale(.75); transform-origin: bottom left; }
 .seller-empty-card { border-style: dashed; border-color: #cdd7cb; background: #f7f9f5; }
 .seller-photo { position: relative; flex: 0 0 auto; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
 .seller-empty-photo { border-bottom: 1px dashed #cdd7cb; background: #f1f4ee; color: #869586; }
@@ -1237,7 +1237,7 @@ h1, h2, h3, p { margin-top: 0; }
   .market-intro { padding: 5px 0 8px; gap: 12px; }
   .market-intro-heading-item { font-size: min(var(--homepage-headline-font-size, 49px), clamp(28px, 5vh, 42px)); }
   .listing-section, .seller-section, .buyer-section { min-height: 0; }
-  .seller-section { flex: 0 0 auto; padding: 10px 0 32px; }
+  .seller-section { flex: 0 0 auto; padding: 10px 0 40px; }
   .buyer-section { flex: 0 0 auto; margin-top: 2px; padding-top: 10px; padding-bottom: 8px; }
   .section-head { margin-bottom: 5px; }
   .section-head h2 { font-size: clamp(18px, 2.7vh, 23px); }
@@ -1270,6 +1270,7 @@ h1, h2, h3, p { margin-top: 0; }
 }
 
 @media (min-width: 651px) and (min-height: 1001px) {
+  .seller-section { padding-bottom: 56px; }
   .seller-card { margin-bottom: -37%; }
 }
 
@@ -1301,7 +1302,7 @@ h1, h2, h3, p { margin-top: 0; }
   .market-intro-tools { gap: 5px; }
   .mobile-market-search { flex-basis: 140px; width: 140px; max-width: 100%; height: 30px; }
   .listing-section, .seller-section, .buyer-section { min-height: 0; display: flex; flex-direction: column; }
-  .seller-section { flex: 0 0 auto; padding: 6px 0 32px; }
+  .seller-section { flex: 0 0 auto; padding: 6px 0 40px; }
   .buyer-section { flex: 0 0 auto; margin: 4px -14px 0; padding: 7px 14px 5px; }
   .section-head { flex: 0 0 auto; align-items: center; flex-wrap: nowrap; gap: 5px; margin-bottom: 4px; }
   .section-head h2 { gap: 5px; font-size: 17px; }
@@ -1317,6 +1318,7 @@ h1, h2, h3, p { margin-top: 0; }
   .seller-section > .rail-hint { display: none; }
   .seller-card, .buyer-card { min-height: 0; }
   .seller-card { height: auto; align-self: start; }
+  .seller-card { margin-bottom: -18%; }
   .buyer-card { height: auto; align-self: start; }
   .buyer-rail > .buyer-card { min-height: 184px; }
   .seller-photo { height: auto; min-height: clamp(34px, 6vh, 52px); flex: 1 1 0; aspect-ratio: auto; }
