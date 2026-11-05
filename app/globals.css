@@ -1201,3 +1201,53 @@ h1, h2, h3, p { margin-top: 0; }
   .commerce-tab { font-size: 9px; }
   .dialog-panel .field-row { grid-template-columns: 1fr; }
 }
+
+@media (min-width: 651px) and (max-height: 1000px) {
+  .market-shell { height: 100vh; height: 100dvh; min-height: 0; }
+  .site-header { height: clamp(52px, 7.5vh, 64px); flex: 0 0 clamp(52px, 7.5vh, 64px); }
+  .market-content { min-height: 0; overflow: hidden; }
+  .market-announcement { margin-top: 6px; padding: 6px 10px; font-size: 10px; }
+  .market-intro { padding: 5px 0 8px; gap: 12px; }
+  .market-intro h1 { margin: 6px 0 2px; font-size: clamp(28px, 5vh, 42px); }
+  .listing-section, .seller-section, .buyer-section { min-height: 0; }
+  .seller-section { flex: 1 1 0; padding: 10px 0 8px; }
+  .buyer-section { flex: 1 1 0; margin-top: 4px; padding-top: 10px; padding-bottom: 8px; }
+  .section-head { margin-bottom: 8px; }
+  .section-head h2 { font-size: clamp(18px, 2.7vh, 23px); }
+  .seller-rail, .buyer-rail { min-height: 0; grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
+  .seller-card, .buyer-card { height: 100%; min-height: 0; }
+  .seller-photo { height: clamp(55px, 10vh, 100px); aspect-ratio: auto; }
+  .seller-card-info { flex: 1; min-height: 0; padding: 3px 8px 4px; }
+  .seller-name-row h3 { font-size: 12px; }
+  .weight-tag { padding: 2px 4px; font-size: 8px; }
+  .seller-price-row { margin-top: 2px; }
+  .seller-price { font-size: 11px; }
+  .seller-comment { font-size: 8px; }
+  .seller-meta { margin-top: 2px; padding-top: 2px; font-size: 8px; }
+  .seller-certificate-link { font-size: 8px; }
+  .add-to-cart-button { min-height: 24px; margin-top: 3px; font-size: 9px; }
+  .buyer-card { padding: 6px 12px; }
+  .buyer-card h3 { margin: 3px 0; font-size: clamp(16px, 2.3vh, 19px); }
+  .buyer-specs { gap: 4px; padding: 4px 0; }
+  .buyer-card-bottom { padding-top: 4px; }
+  .buyer-card-bottom div > strong { font-size: 12px; }
+  .buyer-rail-hint, .rail-hint { margin-top: 6px; }
+  .empty-search { min-height: 0; padding: 12px; }
+  .site-footer { min-height: 44px; flex: 0 0 44px; }
+}
+
+@media (min-width: 651px) and (max-height: 640px) {
+  .seller-card-info { padding: 1px 6px; }
+  .seller-name-row h3 { font-size: 10px; }
+  .weight-tag { padding: 1px 3px; font-size: 7px; }
+  .seller-price-row { margin-top: 1px; }
+  .seller-price { font-size: 9px; }
+  .seller-meta { margin-top: 1px; padding-top: 1px; font-size: 7px; }
+  .add-to-cart-button { min-height: 18px; margin-top: 0; font-size: 8px; }
+  .buyer-card { padding-top: 4px; padding-bottom: 4px; }
+  .buyer-card h3 { margin: 2px 0; font-size: 14px; }
+  .buyer-specs { gap: 2px; padding: 3px 0; }
+  .buyer-card-bottom { padding-top: 2px; }
+  .buyer-card-bottom div > strong { font-size: 11px; }
+  .buyer-card-bottom .private-offer-button { min-height: 26px; padding-right: 7px; padding-left: 7px; font-size: 8px; }
+}
