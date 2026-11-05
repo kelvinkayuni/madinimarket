@@ -1267,7 +1267,7 @@ h1, h2, h3, p { margin-top: 0; }
   .mobile-market-search { flex-basis: 120px; width: 120px; height: 30px; }
   .listing-section, .seller-section, .buyer-section { min-height: 0; display: flex; flex-direction: column; }
   .seller-section { flex: 1 1 0; padding: 6px 0 4px; }
-  .buyer-section { flex: 0 0 clamp(200px, 25vh, 215px); margin: 4px -14px 0; padding: 7px 14px 5px; }
+  .buyer-section { flex: 0 0 clamp(220px, 26vh, 230px); margin: 4px -14px 0; padding: 7px 14px 5px; }
   .section-head { flex: 0 0 auto; align-items: center; flex-wrap: nowrap; gap: 5px; margin-bottom: 5px; }
   .section-head h2 { gap: 5px; font-size: 17px; }
   .section-title-wrap { gap: 6px; }
@@ -1278,10 +1278,11 @@ h1, h2, h3, p { margin-top: 0; }
   .round-control { width: 23px; height: 23px; }
   .seller-rail, .buyer-rail, .empty-search { min-height: 0; flex: 1 1 0; }
   .seller-rail, .buyer-rail { grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
+  .buyer-rail { flex: 0 0 auto; grid-template-rows: max-content; overflow-y: visible; }
   .seller-section > .rail-hint { display: none; }
   .seller-card, .buyer-card { min-height: 0; }
   .seller-card { height: 100%; align-self: stretch; }
-  .buyer-card { height: 100%; }
+  .buyer-card { height: auto; align-self: start; }
   .seller-photo { height: auto; min-height: clamp(34px, 6vh, 52px); flex: 1 1 0; aspect-ratio: auto; }
   .seller-card-info { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; padding: 4px 7px 0; }
   .seller-name-row h3 { font-size: 13px; }
