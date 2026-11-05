@@ -491,8 +491,8 @@ h1, h2, h3, p { margin-top: 0; }
 .market-status small { margin-top: 3px; color: #8e958c; font-size: 9px; }
 .market-status.is-closed strong { color: #925144; }
 .listing-section { min-height: 0; flex: 1 1 0; display: flex; flex-direction: column; padding: 22px 0 20px; border-top: 1px solid var(--line); }
-.seller-section { flex: 0 0 auto; }
-.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 17px; }
+.seller-section { flex: 0 0 auto; padding-bottom: 32px; }
+.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
 .section-title-wrap { display: flex; align-items: flex-start; gap: 15px; }
 .section-index { padding-top: 4px; color: var(--red); font-family: var(--font-display), Georgia, serif; font-size: 13px; }
 .section-kicker { margin: 0 0 5px; }
@@ -501,12 +501,15 @@ h1, h2, h3, p { margin-top: 0; }
 .section-controls { display: flex; align-items: center; gap: 8px; }
 .section-post { margin-right: 7px; }
 .round-control { width: 34px; height: 34px; border-radius: 50%; color: #687268; }
-.seller-rail, .buyer-rail { min-height: 104px; flex: 1; display: grid; grid-auto-columns: minmax(215px, 320px); grid-auto-flow: column; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
-.seller-rail, .buyer-rail { grid-auto-columns: minmax(161px, 240px); }
+.seller-rail, .buyer-rail { min-height: 104px; flex: 0 0 auto; display: grid; grid-template-rows: repeat(4, max-content); grid-auto-columns: 240px; grid-auto-flow: column; align-content: start; gap: 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 3px; }
 .seller-rail::-webkit-scrollbar, .buyer-rail::-webkit-scrollbar { display: none; }
 .buyer-card { height: 313px; min-height: 227px; }
-.seller-card { display: flex; width: 133.333333%; min-width: 0; height: auto; flex-direction: column; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; transform: scale(.75); transform-origin: bottom left; }
+.seller-card { display: flex; width: 133.333333%; min-width: 0; height: auto; margin-bottom: -21%; flex-direction: column; scroll-snap-align: start; border: 1px solid #e5e8e1; background: #fff; transform: scale(.75); transform-origin: bottom left; }
+.seller-empty-card { border-style: dashed; border-color: #cdd7cb; background: #f7f9f5; }
 .seller-photo { position: relative; flex: 0 0 auto; aspect-ratio: 1.57; display: grid; place-items: center; overflow: hidden; background-position: center; background-size: cover; color: #ffffffa8; }
+.seller-empty-photo { border-bottom: 1px dashed #cdd7cb; background: #f1f4ee; color: #869586; }
+.seller-empty-photo::after { display: none; }
+.seller-empty-photo > svg { width: 18px; height: 18px; }
 .seller-photo::after { position: absolute; inset: 45% 0 0; content: ""; background: linear-gradient(transparent, #13231e55); pointer-events: none; }
 .seller-photo-image { z-index: 0; object-fit: cover; }
 .photo-tag { position: absolute; z-index: 1; top: 10px; left: 10px; display: flex; align-items: center; gap: 6px; padding: 6px 7px; background: #ffffffed; color: #415446; font-size: 8px; font-weight: 700; }
@@ -515,6 +518,7 @@ h1, h2, h3, p { margin-top: 0; }
 .photo-action { position: absolute; z-index: 1; right: 10px; bottom: 10px; width: 31px; height: 31px; border-color: #ffffff77; border-radius: 50%; background: #ffffffeb; color: #273a2e; transition: transform .2s; }
 .photo-action:hover { transform: rotate(45deg); }
 .seller-card-info { padding: 12px 13px 13px; }
+.seller-empty-info { min-height: 153px; display: grid; align-items: center; justify-content: center; }
 .seller-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .seller-name-color { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 6px; overflow: hidden; }
 .seller-name-row h3 { min-width: 0; margin: 0; overflow: hidden; font-family: var(--font-display), Georgia, serif; font-size: 17px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -826,6 +830,7 @@ h1, h2, h3, p { margin-top: 0; }
 .round-control-light { border-color: #547365; color: #e5eee4; }
 .round-control-light:hover { background: #2a5143; border-color: #84a38d; }
 .buyer-card { display: flex; min-width: 0; flex-direction: column; justify-content: space-between; padding: 16px 16px 13px; scroll-snap-align: start; border: 1px solid #456457; background: #1c4437; color: #f6f7f1; animation: rise-in .45s both; }
+.buyer-empty-card { align-items: center; justify-content: center; border-style: dashed; border-color: #668274; color: #a4b8aa; animation: none; }
 .buyer-card-top, .buyer-card-bottom { display: flex; align-items: center; justify-content: space-between; }
 .wanted-tag { display: flex; align-items: center; gap: 4px; color: var(--lime); font-size: 8px; font-weight: 700; }
 .buyer-location { max-width: 120px; overflow: hidden; color: #a9b9ae; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -1042,8 +1047,8 @@ h1, h2, h3, p { margin-top: 0; }
   .market-status { gap: 4px; margin-bottom: 2px; }
   .market-status strong { font-size: 9px; }
   .market-status small { font-size: 8px; white-space: normal; }
-  .listing-section { padding-top: 19px; }
-  .section-head { align-items: flex-start; flex-wrap: wrap; margin-bottom: 13px; }
+  .listing-section { padding-top: 15px; }
+  .section-head { align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
   .section-title-wrap { gap: 9px; }
   .section-kicker { font-size: 8px; }
   .section-head h2 { gap: 7px; font-size: 21px; }
@@ -1225,25 +1230,26 @@ h1, h2, h3, p { margin-top: 0; }
 }
 
 @media (min-width: 651px) and (max-height: 1000px) {
-  .market-shell { height: 100vh; height: 100dvh; min-height: 0; }
+  .market-shell { min-height: 100vh; min-height: 100dvh; overflow: visible; }
   .site-header { height: clamp(52px, 7.5vh, 64px); flex: 0 0 clamp(52px, 7.5vh, 64px); }
-  .market-content { min-height: 0; overflow: hidden; }
+  .market-content { min-height: max-content; flex: 1 0 auto; overflow: visible; }
   .market-announcement { margin-top: 6px; padding: 6px 10px; font-size: 10px; }
   .market-intro { padding: 5px 0 8px; gap: 12px; }
   .market-intro-heading-item { font-size: min(var(--homepage-headline-font-size, 49px), clamp(28px, 5vh, 42px)); }
   .listing-section, .seller-section, .buyer-section { min-height: 0; }
-  .seller-section { flex: 1 1 0; padding: 10px 0 8px; }
+  .seller-section { flex: 0 0 auto; padding: 10px 0 32px; }
   .buyer-section { flex: 0 0 auto; margin-top: 2px; padding-top: 10px; padding-bottom: 8px; }
-  .section-head { margin-bottom: 8px; }
+  .section-head { margin-bottom: 5px; }
   .section-head h2 { font-size: clamp(18px, 2.7vh, 23px); }
-  .seller-rail, .buyer-rail { min-height: 0; grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
-  .buyer-rail { flex: 0 0 auto; grid-template-rows: max-content; overflow-y: hidden; }
+  .seller-rail, .buyer-rail { min-height: 0; grid-template-rows: repeat(4, max-content); overflow-y: visible; }
+  .buyer-rail { flex: 0 0 auto; }
   .buyer-rail > .buyer-card { height: auto; min-height: 176px; align-self: start; animation: none; }
   .seller-section > .rail-hint { display: none; }
   .seller-card, .buyer-card { min-height: 0; }
-  .seller-card { height: calc(100% + 60px); align-self: end; }
+  .seller-card { height: auto; align-self: start; }
   .seller-photo { height: auto; min-height: clamp(55px, 8vh, 80px); flex: 1 1 0; aspect-ratio: auto; }
   .seller-card-info { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; padding: 3px 8px 0; }
+  .seller-empty-info { display: grid; min-height: 86px; }
   .seller-name-row h3 { font-size: 12px; }
   .weight-tag { padding: 2px 4px; font-size: 8px; }
   .seller-price-row { margin-top: 2px; }
@@ -1263,9 +1269,14 @@ h1, h2, h3, p { margin-top: 0; }
   .site-footer { min-height: 44px; flex: 0 0 44px; gap: 2px 6px; padding: 2px 0; }
 }
 
+@media (min-width: 651px) and (min-height: 1001px) {
+  .seller-card { margin-bottom: -37%; }
+}
+
 @media (min-width: 651px) and (max-height: 640px) {
   .seller-photo { min-height: 48px; }
   .seller-card-info { padding: 1px 6px; }
+  .seller-empty-info { min-height: 56px; }
   .seller-name-row h3 { font-size: 10px; }
   .weight-tag { padding: 1px 3px; font-size: 7px; }
   .seller-price-row { margin-top: 1px; }
@@ -1281,18 +1292,18 @@ h1, h2, h3, p { margin-top: 0; }
 }
 
 @media (max-width: 650px) and (max-height: 950px) {
-  .market-shell { height: 100vh; height: 100dvh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .market-shell { height: auto; min-height: 100vh; min-height: 100dvh; display: block; overflow: visible; }
   .site-header { flex: 0 0 auto; }
-  .market-content { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; overflow: hidden; padding: 0 14px; }
+  .market-content { min-height: max-content; flex: none; display: block; overflow: visible; padding: 0 14px; }
   .market-announcement { margin-top: 5px; padding: 5px 8px; font-size: 9px; }
   .market-intro { flex: 0 0 auto; padding: 4px 0 6px; }
   .market-intro-heading-item { font-size: min(var(--homepage-headline-font-size, 36px), clamp(16px, 6vw, 24px)); line-height: 1; }
   .market-intro-tools { gap: 5px; }
   .mobile-market-search { flex-basis: 140px; width: 140px; max-width: 100%; height: 30px; }
   .listing-section, .seller-section, .buyer-section { min-height: 0; display: flex; flex-direction: column; }
-  .seller-section { flex: 1 1 0; padding: 6px 0 4px; }
+  .seller-section { flex: 0 0 auto; padding: 6px 0 32px; }
   .buyer-section { flex: 0 0 auto; margin: 4px -14px 0; padding: 7px 14px 5px; }
-  .section-head { flex: 0 0 auto; align-items: center; flex-wrap: nowrap; gap: 5px; margin-bottom: 5px; }
+  .section-head { flex: 0 0 auto; align-items: center; flex-wrap: nowrap; gap: 5px; margin-bottom: 4px; }
   .section-head h2 { gap: 5px; font-size: 17px; }
   .section-title-wrap { gap: 6px; }
   .section-index { padding-top: 2px; font-size: 11px; }
@@ -1300,17 +1311,17 @@ h1, h2, h3, p { margin-top: 0; }
   .section-controls { width: auto; flex: 0 0 auto; gap: 3px; }
   .section-post { min-height: 25px; margin: 0; padding: 0 5px; font-size: 7px; }
   .round-control { width: 23px; height: 23px; }
-  .seller-rail, .buyer-rail, .empty-search { min-height: 0; flex: 1 1 0; }
-  .seller-rail, .buyer-rail { grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
-  .seller-rail, .buyer-rail { grid-auto-columns: minmax(168px, 58.5%); align-content: start; }
-  .buyer-rail { flex: 0 0 auto; grid-template-rows: max-content; overflow-y: visible; }
+  .seller-rail, .buyer-rail, .empty-search { min-height: 0; flex: 0 0 auto; }
+  .seller-rail, .buyer-rail { grid-template-rows: repeat(4, max-content); grid-auto-columns: clamp(168px, 58.5%, 240px); align-content: start; overflow-y: visible; }
+  .buyer-rail { flex: 0 0 auto; }
   .seller-section > .rail-hint { display: none; }
   .seller-card, .buyer-card { min-height: 0; }
-  .seller-card { height: calc(100% + 31px); align-self: end; }
+  .seller-card { height: auto; align-self: start; }
   .buyer-card { height: auto; align-self: start; }
   .buyer-rail > .buyer-card { min-height: 184px; }
   .seller-photo { height: auto; min-height: clamp(34px, 6vh, 52px); flex: 1 1 0; aspect-ratio: auto; }
   .seller-card-info { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; padding: 4px 7px 0; }
+  .seller-empty-info { min-height: 104px; }
   .seller-name-row h3 { font-size: 13px; }
   .seller-price-row { margin-top: 3px; }
   .seller-meta { margin-top: 4px; padding-top: 4px; }
@@ -1331,9 +1342,9 @@ h1, h2, h3, p { margin-top: 0; }
   .market-intro-heading-item { font-size: min(var(--homepage-headline-font-size, 36px), clamp(16px, 6vw, 23px)); }
   .market-intro { padding-bottom: 4px; }
   .seller-photo { min-height: 30px; }
+  .seller-empty-info { min-height: 87px; }
   .buyer-card { padding-top: 4px; padding-bottom: 4px; }
-  .buyer-rail > .buyer-card { min-height: 0; }
-  .seller-card { height: calc(100% + 6.667px); align-self: end; }
+  .buyer-rail > .buyer-card { min-height: 184px; }
   .buyer-card h3 { margin: 2px 0; font-size: 15px; }
   .buyer-specs { gap: 2px; padding: 3px 0; }
   .buyer-card-bottom { margin-top: 0; padding-top: 2px; }
