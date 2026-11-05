@@ -31,9 +31,14 @@ type CertificateSubmission = { id: string; kind: CertificateKind; status: Certif
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
 type Seller = { id: number; user_id?: string; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; color?: string; comment?: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; is_own?: boolean; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
-type AccountMarketListing = Pick<Seller, "id" | "mineral" | "color" | "comment" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image">;
+type AccountMarketListing = Pick<Seller, "id" | "mineral" | "color" | "comment" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image"> & {
+  can_manage: boolean;
+  manage_block_reason?: string | null;
+};
 type AccountWantedMineral = Pick<Buyer, "id" | "mineral" | "weight" | "unit" | "color" | "shape" | "quality" | "offer" | "currency" | "location"> & {
   marketplace_status?: "available" | "temporarily_unavailable";
+  can_manage: boolean;
+  manage_block_reason?: string | null;
 };
 type AccountWantedRequest = {
   id: number;
@@ -47,6 +52,8 @@ type AccountWantedRequest = {
   currency: Currency;
   location: string;
   marketplace_status?: AccountWantedMineral["marketplace_status"];
+  can_manage: boolean;
+  manage_block_reason?: string | null;
 };
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder_name: string | null; bank_info_added_at: string | null; bank_info_edit_unlocked: boolean; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
@@ -1454,6 +1461,7 @@ export default function Marketplace() {
       id: Number(item.id), mineral: item.mineral_name, weight: String(item.weight), unit: item.unit,
       color: item.color, shape: item.shape, quality: item.quality, offer: String(item.offer),
       currency: item.currency, location: item.location, marketplace_status: item.marketplace_status ?? "available",
+      can_manage: item.can_manage, manage_block_reason: item.manage_block_reason,
     })));
   };
   const openAccountMarket = async (next: "my-market-minerals" | "my-wanted-minerals") => {
@@ -1471,6 +1479,7 @@ export default function Marketplace() {
             smallest_stone_weight?: string | number | null; largest_stone_weight?: string | number | null; stone_weight_unit?: StoneWeightUnit | null; price: string | number;
             seller_price?: string | number | null; platform_fee_rate?: number | null; platform_fee_amount?: string | number | null;
             currency: Currency; country: string; region: string; district: string; signed_image_url: string;
+            can_manage: boolean; manage_block_reason?: string | null;
           }) => ({
             id: Number(item.id), mineral: item.mineral_name, color: item.color ?? "", comment: item.comment ?? "", listing_type: item.listing_type,
             weight: String(item.weight), unit: item.unit,
@@ -1483,6 +1492,7 @@ export default function Marketplace() {
             price: String(item.price), currency: item.currency,
             location: [item.district, item.region, item.country].filter(Boolean).join(", "),
             image: item.signed_image_url,
+            can_manage: item.can_manage, manage_block_reason: item.manage_block_reason,
           })));
           setOwnedWantedMinerals(result.marketBuyers ?? []);
         } else {
@@ -1491,12 +1501,12 @@ export default function Marketplace() {
             smallest_stone_weight: item.smallest_stone_weight, largest_stone_weight: item.largest_stone_weight,
             stone_weight_unit: item.stone_weight_unit, seller_price: item.seller_price,
             platform_fee_rate: item.platform_fee_rate, platform_fee_amount: item.platform_fee_amount, price: item.price,
-            currency: item.currency, location: item.location, image: item.image,
+            currency: item.currency, location: item.location, image: item.image, can_manage: true,
           })));
           setMyWantedMinerals(buyers.filter((item) => item.user_id === userId && item.status === "approved").map((item) => ({
             id: item.id, mineral: item.mineral, weight: item.weight, unit: item.unit, color: item.color,
             shape: item.shape, quality: item.quality, offer: item.offer, currency: item.currency, location: item.location,
-            marketplace_status: "available" as const,
+            marketplace_status: "available" as const, can_manage: true,
           })));
         }
         openDialog(next);
@@ -2533,31 +2543,122 @@ export default function Marketplace() {
       setBusyAccountId(null);
     }
   };
-  const deleteSubmission = async (kind: "seller" | "buyer", item: Seller | Buyer) => {
-    if (isSupabaseConfigured && role === "user") {
-      const response = await fetchWithWebsiteSession("/api/website-submissions", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, id: item.id }),
-      });
-      const result = await response.json();
-      if (!response.ok) { setNotice(result.error ?? "The submission could not be deleted."); return; }
-      void refreshRemoteListings().catch(() => setNotice("Deleted, but the list could not be refreshed."));
-    } else if (isSupabaseConfigured) {
-      const supabase = getSupabaseBrowserClient();
-      const table = kind === "seller" ? "listings" : "buy_requests";
-      const { error } = await supabase.from(table).delete().eq("id", item.id);
-      if (error) { setNotice(error.message); return; }
-      if (kind === "seller" && "image_path" in item && item.image_path) {
-        await supabase.storage.from("mineral-images").remove([item.image_path]);
+  const deleteSubmission = async (kind: "seller" | "buyer", item: { id: number; mineral: string }) => {
+    const description = kind === "seller" ? "mineral listing" : "buyer request";
+    const eligibility = kind === "seller"
+      ? "Only an available listing that is not in a cart or order can be deleted."
+      : "Only a request with no seller offer or purchase activity can be deleted.";
+    if (!window.confirm(`Permanently delete this ${description} for ${item.mineral}? ${eligibility} This cannot be undone.`)) return;
+
+    if (isSupabaseConfigured) {
+      if (role !== "user") {
+        setNotice("Sign in as the account that owns this post to delete it.");
+        return;
       }
-      void refreshRemoteListings().catch(() => setNotice("Deleted, but the list could not be refreshed."));
-    } else if (kind === "seller") {
+      try {
+        const response = await fetchWithWebsiteSession("/api/website-submissions", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind, id: item.id }),
+        });
+        const result = await response.json();
+        if (!response.ok) { setNotice(result.error ?? "The post could not be deleted."); return; }
+        if (kind === "seller") setMyMarketMinerals((current) => current.filter((listing) => listing.id !== item.id));
+        else setMyWantedMinerals((current) => current.filter((request) => request.id !== item.id));
+        let warning = typeof result.warning === "string" ? result.warning : "";
+        try {
+          await refreshRemoteListings();
+        } catch {
+          warning = [warning, "The post was deleted, but marketplace listings could not be refreshed."].filter(Boolean).join(" ");
+        }
+        setNotice(warning || "Post permanently deleted.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "The post could not be deleted.");
+      }
+      return;
+    }
+
+    if (kind === "seller") {
       setSellers((current) => current.filter((listing) => listing.id !== item.id));
+      setMyMarketMinerals((current) => current.filter((listing) => listing.id !== item.id));
     } else {
       setBuyers((current) => current.filter((request) => request.id !== item.id));
+      setMyWantedMinerals((current) => current.filter((request) => request.id !== item.id));
     }
-    setNotice("Submission deleted.");
+    setNotice("Post permanently deleted.");
+  };
+  const editMarketPostPrice = async (
+    kind: "seller" | "buyer",
+    item: AccountMarketListing | AccountWantedMineral,
+  ) => {
+    if (!item.can_manage) {
+      setNotice(item.manage_block_reason ?? "This post cannot be changed while it is involved in a purchase.");
+      return;
+    }
+    const isListing = !("offer" in item);
+    if ((kind === "seller") !== isListing) {
+      setNotice("The selected post type is invalid.");
+      return;
+    }
+    const currentPrice = "offer" in item ? item.offer : item.seller_price ?? item.price;
+    const amountName = kind === "seller" ? "seller price before the marketplace fee" : "buyer offer";
+    const enteredPrice = window.prompt(`Enter the new ${amountName} in ${item.currency}.`, String(currentPrice));
+    if (enteredPrice === null) return;
+    const price = Number(enteredPrice);
+    if (!Number.isFinite(price) || price <= 0) {
+      setNotice("Enter a price greater than zero.");
+      return;
+    }
+    if (!window.confirm(`Change the ${amountName} to ${money(String(price), item.currency)}? The post must still be idle when the change is submitted.`)) return;
+
+    await withProgress(`market-post-${kind}-${item.id}`, async () => {
+      try {
+        const response = await fetchWithWebsiteSession("/api/website-submissions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind, id: item.id, price }),
+        });
+        const result = await response.json();
+        if (!response.ok) { setNotice(result.error ?? "The price could not be updated."); return; }
+        const updatedPost: unknown = result.post;
+        if (typeof updatedPost !== "object" || updatedPost === null || Array.isArray(updatedPost)) {
+          setNotice("The price was updated, but the updated post could not be displayed.");
+          return;
+        }
+        const updated = updatedPost as Record<string, unknown>;
+        const isNumberOrString = (value: unknown) => typeof value === "number" || typeof value === "string";
+        if (kind === "seller") {
+          if (!isNumberOrString(updated.seller_price) || !isNumberOrString(updated.platform_fee_rate)
+            || !isNumberOrString(updated.platform_fee_amount) || !isNumberOrString(updated.price)) {
+            setNotice("The price was updated, but the updated post could not be displayed.");
+            return;
+          }
+          setMyMarketMinerals((current) => current.map((listing) => listing.id === item.id ? {
+            ...listing,
+            seller_price: String(updated.seller_price),
+            platform_fee_rate: Number(updated.platform_fee_rate),
+            platform_fee_amount: String(updated.platform_fee_amount),
+            price: String(updated.price),
+          } : listing));
+        } else {
+          if (!isNumberOrString(updated.offer)) {
+            setNotice("The price was updated, but the updated post could not be displayed.");
+            return;
+          }
+          setMyWantedMinerals((current) => current.map((request) => request.id === item.id
+            ? { ...request, offer: String(updated.offer) }
+            : request));
+        }
+        try {
+          await refreshRemoteListings();
+          setNotice("Price updated.");
+        } catch {
+          setNotice("Price updated, but marketplace listings could not be refreshed.");
+        }
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "The price could not be updated.");
+      }
+    });
   };
   const editSubmission = async (kind: "seller" | "buyer", item: Seller | Buyer) => {
     await withProgress(`submission-edit-${kind}-${item.id}`, async () => {
@@ -3766,6 +3867,11 @@ export default function Marketplace() {
                 {item.platform_fee_rate ? <p data-no-translate>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}
                 {item.listing_type === "batch" && <p data-no-translate>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}
                 <p data-no-translate>{item.location}</p>
+                {!item.can_manage && item.manage_block_reason && <p>{item.manage_block_reason}</p>}
+                <div className="submission-actions">
+                  <button className="button button-outline" type="button" disabled={!item.can_manage || busyActions.has(`market-post-seller-${item.id}`)} onClick={() => void editMarketPostPrice("seller", item)}>{busyActions.has(`market-post-seller-${item.id}`) ? "Updating…" : "Edit price"}</button>
+                  <button className="button button-danger" type="button" disabled={!item.can_manage || busyActions.has(`market-post-seller-${item.id}`)} onClick={() => void withProgress(`market-post-seller-${item.id}`, () => deleteSubmission("seller", item))}>{busyActions.has(`market-post-seller-${item.id}`) ? "Deleting…" : "Delete permanently"}</button>
+                </div>
               </div>
             </div>
           </details>)}
@@ -3779,7 +3885,13 @@ export default function Marketplace() {
         <div className="submission-list account-scroll-list user-account-records" ref={wantedListRef} onScroll={(event) => { accountListScroll.current.wanted = event.currentTarget.scrollTop; }}>
           {visibleWantedMinerals.map((item) => <details className="user-account-record" key={`wanted-mineral-${item.id}`}>
             <summary><span><strong data-no-translate>{item.mineral}</strong><small>{item.weight} {item.unit} · {money(item.offer, item.currency)}</small></span><span className={`submission-status ${item.marketplace_status === "temporarily_unavailable" ? "status-pending" : "status-approved"}`}>{item.marketplace_status === "temporarily_unavailable" ? "Temporarily unavailable" : "Looking to buy"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
-            <div className="user-account-record-details"><p data-no-translate>{item.color} · {item.shape} · {item.quality}</p><p data-no-translate>{item.location}</p></div>
+            <div className="user-account-record-details"><p data-no-translate>{item.color} · {item.shape} · {item.quality}</p><p data-no-translate>{item.location}</p>
+              {!item.can_manage && item.manage_block_reason && <p>{item.manage_block_reason}</p>}
+              <div className="submission-actions">
+                <button className="button button-outline" type="button" disabled={!item.can_manage || busyActions.has(`market-post-buyer-${item.id}`)} onClick={() => void editMarketPostPrice("buyer", item)}>{busyActions.has(`market-post-buyer-${item.id}`) ? "Updating…" : "Edit price"}</button>
+                <button className="button button-danger" type="button" disabled={!item.can_manage || busyActions.has(`market-post-buyer-${item.id}`)} onClick={() => void withProgress(`market-post-buyer-${item.id}`, () => deleteSubmission("buyer", item))}>{busyActions.has(`market-post-buyer-${item.id}`) ? "Deleting…" : "Delete permanently"}</button>
+              </div>
+            </div>
           </details>)}
           {!myWantedMinerals.length && <div className="empty-search">You have no approved buying requests.</div>}
           {myWantedMinerals.length > 0 && !visibleWantedMinerals.length && <div className="empty-search">No requests match your search.</div>}

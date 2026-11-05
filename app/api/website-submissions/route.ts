@@ -40,17 +40,38 @@ async function readOwnedRows(admin: ReturnType<typeof createSupabaseAdminClient>
 async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminClient>, table: "listings" | "buy_requests", accountId: string) {
   if (table === "listings") {
     const { data, error } = await admin.from("listings")
-      .select("id, mineral_name, color, comment, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, seller_price, platform_fee_rate, platform_fee_amount, price, currency, country, region, district, image_path")
+      .select("id, mineral_name, color, comment, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, seller_price, platform_fee_rate, platform_fee_amount, price, currency, country, region, district, image_path, marketplace_state")
       .eq("website_user_id", accountId)
       .eq("status", "approved")
       .eq("is_active", true)
       .order("created_at", { ascending: false });
     if (error) throw error;
+    const listings = data ?? [];
+    if (listings.length === 0) return [];
+    const listingIds = listings.map((listing) => listing.id);
+    const [cartResult, orderResult] = await Promise.all([
+      admin.from("marketplace_cart_items").select("listing_id").in("listing_id", listingIds),
+      admin.from("marketplace_order_items").select("listing_id").in("listing_id", listingIds),
+    ]);
+    if (cartResult.error) throw cartResult.error;
+    if (orderResult.error) throw orderResult.error;
+    const cartListingIds = new Set((cartResult.data ?? []).map((item) => item.listing_id));
+    const orderedListingIds = new Set((orderResult.data ?? []).map((item) => item.listing_id));
     return Promise.all((data ?? []).map(async (row) => {
-      if (!row.image_path) return { ...row, signed_image_url: "" };
+      const inCart = cartListingIds.has(row.id);
+      const hasOrder = orderedListingIds.has(row.id);
+      const canManage = row.marketplace_state === "available" && !inCart && !hasOrder;
+      const manageBlockReason = row.marketplace_state !== "available"
+        ? "This mineral is reserved or unavailable."
+        : inCart
+          ? "This mineral is in a buyer's cart."
+          : hasOrder
+            ? "This mineral is linked to an order."
+            : null;
+      if (!row.image_path) return { ...row, can_manage: canManage, manage_block_reason: manageBlockReason, signed_image_url: "" };
       const { data: signed, error: signedUrlError } = await admin.storage.from("mineral-images").createSignedUrl(row.image_path, 3600);
       if (signedUrlError) throw signedUrlError;
-      return { ...row, signed_image_url: signed.signedUrl };
+      return { ...row, can_manage: canManage, manage_block_reason: manageBlockReason, signed_image_url: signed.signedUrl };
     }));
   }
   const { data, error } = await admin.from("buy_requests")
@@ -66,6 +87,7 @@ async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminC
     .select("id, request_id")
     .in("request_id", requests.map((request) => request.id));
   if (threadError) throw threadError;
+  const requestIdsWithThreads = new Set((threads ?? []).map((thread) => thread.request_id));
   const threadIds = (threads ?? []).map((thread) => thread.id);
   const { data: offers, error: offerError } = threadIds.length
     ? await admin.from("marketplace_private_offers").select("id, thread_id").in("thread_id", threadIds)
@@ -92,19 +114,11 @@ async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminC
   return requests.filter((request) => !fulfilledRequestIds.has(request.id)).map((request) => ({
     ...request,
     marketplace_status: request.is_active ? "available" : "temporarily_unavailable",
+    can_manage: !requestIdsWithThreads.has(request.id),
+    manage_block_reason: requestIdsWithThreads.has(request.id)
+      ? "A seller has already started a private offer for this request."
+      : null,
   }));
-}
-
-async function websiteAccountHasMarketAccess(admin: ReturnType<typeof createSupabaseAdminClient>, accountId: string) {
-  const now = new Date().toISOString();
-  const [accountResult, subscriptionResult] = await Promise.all([
-    admin.from("website_accounts").select("is_active").eq("id", accountId).maybeSingle(),
-    admin.from("account_subscriptions").select("id").eq("website_user_id", accountId)
-      .eq("status", "active").lte("starts_at", now).gt("expires_at", now).limit(1).maybeSingle(),
-  ]);
-  if (accountResult.error) throw accountResult.error;
-  if (subscriptionResult.error) throw subscriptionResult.error;
-  return accountResult.data?.is_active === true && Boolean(subscriptionResult.data);
 }
 
 export async function GET(request: Request) {
@@ -112,17 +126,15 @@ export async function GET(request: Request) {
     const accountId = await getWebsiteAccountId(request);
     if (!accountId) return NextResponse.json({ error: "Sign in to view your submissions." }, { status: 401 });
     const admin = createSupabaseAdminClient();
-    const [sellers, buyers, hasMarketAccess] = await Promise.all([
+    const [sellers, buyers, marketSellers, marketBuyers] = await Promise.all([
       readOwnedRows(admin, "listings", accountId),
       readOwnedRows(admin, "buy_requests", accountId),
-      websiteAccountHasMarketAccess(admin, accountId),
-    ]);
-    const [marketSellers, marketBuyers] = hasMarketAccess ? await Promise.all([
       readOwnedMarketRows(admin, "listings", accountId),
       readOwnedMarketRows(admin, "buy_requests", accountId),
-    ]) : [[], []];
+    ]);
     return NextResponse.json({ sellers, buyers, marketSellers, marketBuyers }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
+  } catch (error) {
+    console.error("Could not load website account submissions.", error);
     return NextResponse.json({ error: "Could not load your submissions." }, { status: 503 });
   }
 }
@@ -337,7 +349,7 @@ export async function POST(request: Request) {
   }
 
   const result = editing
-    ? await admin.from(table).update(rowValues).eq("id", id).eq("website_user_id", accountId).select("id").maybeSingle()
+    ? await admin.from(table).update(rowValues).eq("id", id).eq("website_user_id", accountId).in("status", ["pending", "rejected"]).select("id").maybeSingle()
     : await admin.from(table).insert(rowValues).select("id").single();
   if (result.error || !result.data) {
     if (uploadedPath) await admin.storage.from("mineral-images").remove([uploadedPath]);
@@ -359,42 +371,105 @@ export async function POST(request: Request) {
   return NextResponse.json({ id: result.data.id }, { status: editing ? 200 : 201 });
 }
 
-export async function DELETE(request: Request) {
+async function readManagementRequest(request: Request) {
   let values: Record<string, unknown>;
   try {
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null) throw new Error("Invalid request");
     values = body as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ error: "Invalid submission details." }, { status: 400 });
+    return { response: NextResponse.json({ error: "Invalid submission details." }, { status: 400 }) };
   }
 
   const accountId = await getWebsiteAccountId(request);
-  const kind = values.kind === "seller" || values.kind === "buyer" ? values.kind : null;
+  const kind: "seller" | "buyer" | null = values.kind === "seller" || values.kind === "buyer" ? values.kind : null;
   const id = Number(values.id);
-  if (!accountId) return NextResponse.json({ error: "Sign in again before deleting." }, { status: 401 });
-  if (!kind || !Number.isSafeInteger(id) || id < 1) return NextResponse.json({ error: "Invalid submission details." }, { status: 400 });
+  if (!accountId) return { response: NextResponse.json({ error: "Sign in again before managing your post." }, { status: 401 }) };
+  if (!kind || !Number.isSafeInteger(id) || id < 1) {
+    return { response: NextResponse.json({ error: "Invalid submission details." }, { status: 400 }) };
+  }
+  return { accountId, kind, id, values };
+}
 
+async function manageMarketplacePost(
+  accountId: string,
+  kind: "seller" | "buyer",
+  id: number,
+  action: "delete" | "update_price",
+  price: number | null,
+) {
   const admin = createSupabaseAdminClient();
-  const table = kind === "seller" ? "listings" : "buy_requests";
-  let existing: { id: number; image_path: string | null; stone_certificate_path: string | null; status: string } | null;
-  if (kind === "seller") {
-    const { data, error } = await admin.from("listings").select("id, image_path, stone_certificate_path, status")
-      .eq("id", id).eq("website_user_id", accountId).maybeSingle();
-    if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
-    existing = data;
-  } else {
-    const { data, error } = await admin.from("buy_requests").select("id, status")
-      .eq("id", id).eq("website_user_id", accountId).maybeSingle();
-    if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
-    existing = data ? { id: data.id, image_path: null, stone_certificate_path: null, status: data.status } : null;
+  const { data, error } = await admin.rpc("manage_marketplace_user_post", {
+    p_website_user_id: accountId,
+    p_kind: kind,
+    p_post_id: id,
+    p_action: action,
+    p_price: price,
+  });
+  if (error) {
+    if (error.code === "P0002") return NextResponse.json({ error: error.message }, { status: 404 });
+    if (error.code === "22023") return NextResponse.json({ error: error.message }, { status: 409 });
+    console.error("Could not manage marketplace post.", error);
+    return NextResponse.json({ error: "The post could not be changed. Please try again." }, { status: 503 });
   }
-  if (!existing || !["pending", "rejected"].includes(existing.status)) {
-    return NextResponse.json({ error: "That submission can no longer be deleted." }, { status: 404 });
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    console.error("Marketplace post management returned an invalid response.", { kind, id, action });
+    return NextResponse.json({ error: "The post could not be changed. Please try again." }, { status: 503 });
   }
-  const { error } = await admin.from(table).delete().eq("id", id).eq("website_user_id", accountId);
-  if (error) return NextResponse.json({ error: "The submission could not be deleted." }, { status: 503 });
-  if (kind === "seller" && existing.image_path) await admin.storage.from("mineral-images").remove([existing.image_path]);
-  if (kind === "seller" && existing.stone_certificate_path) await admin.storage.from("stone-certificates").remove([existing.stone_certificate_path]);
-  return NextResponse.json({ deleted: true });
+  const result = data as Record<string, unknown>;
+  if (action === "delete") {
+    if (result.deleted !== true) {
+      console.error("Marketplace post deletion did not confirm deletion.", { kind, id });
+      return NextResponse.json({ error: "The post could not be deleted. Please try again." }, { status: 503 });
+    }
+    const cleanupFailures: string[] = [];
+    if (kind === "seller" && typeof result.image_path === "string" && result.image_path) {
+      try {
+        const { error: imageError } = await admin.storage.from("mineral-images").remove([result.image_path]);
+        if (imageError) throw imageError;
+      } catch (error) {
+        console.error("Could not remove deleted mineral image.", error);
+        cleanupFailures.push("mineral photo");
+      }
+    }
+    if (kind === "seller" && typeof result.stone_certificate_path === "string" && result.stone_certificate_path) {
+      try {
+        const { error: certificateError } = await admin.storage.from("stone-certificates").remove([result.stone_certificate_path]);
+        if (certificateError) throw certificateError;
+      } catch (error) {
+        console.error("Could not remove deleted mineral certificate.", error);
+        cleanupFailures.push("stone certificate");
+      }
+    }
+    return NextResponse.json({
+      deleted: true,
+      warning: cleanupFailures.length
+        ? `The post was deleted, but its ${cleanupFailures.join(" and ")} could not be removed from storage.`
+        : null,
+    });
+  }
+  const isNumericValue = (value: unknown) => typeof value === "number" || typeof value === "string";
+  const hasUpdatedPrice = kind === "seller"
+    ? isNumericValue(result.seller_price) && isNumericValue(result.platform_fee_rate)
+      && isNumericValue(result.platform_fee_amount) && isNumericValue(result.price)
+    : isNumericValue(result.offer);
+  if (result.deleted !== false || !hasUpdatedPrice) {
+    console.error("Marketplace post price update returned an invalid response.", { kind, id });
+    return NextResponse.json({ error: "The price could not be updated. Please try again." }, { status: 503 });
+  }
+  return NextResponse.json({ updated: true, post: result });
+}
+
+export async function PATCH(request: Request) {
+  const parsed = await readManagementRequest(request);
+  if ("response" in parsed) return parsed.response;
+  const price = positiveNumber(parsed.values, "price");
+  if (price === null) return NextResponse.json({ error: "Enter a price greater than zero." }, { status: 400 });
+  return manageMarketplacePost(parsed.accountId, parsed.kind, parsed.id, "update_price", price);
+}
+
+export async function DELETE(request: Request) {
+  const parsed = await readManagementRequest(request);
+  if ("response" in parsed) return parsed.response;
+  return manageMarketplacePost(parsed.accountId, parsed.kind, parsed.id, "delete", null);
 }
