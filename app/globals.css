@@ -484,7 +484,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-intro-heading.is-overflowing .market-intro-heading-track { animation: homepage-headline-marquee 18s linear infinite; }
 @keyframes homepage-headline-marquee { to { transform: translateX(var(--homepage-headline-cycle)); } }
 .market-intro-tools { order: 1; display: flex; align-items: flex-start; gap: 8px; width: auto; flex: 0 0 auto; }
-.mobile-market-search { display: flex; flex: 0 0 140px; width: 140px; min-width: 0; height: 40px; gap: 7px; padding: 0 9px; }
+.mobile-market-search { display: flex; flex: 0 0 105px; width: 105px; min-width: 0; height: 40px; gap: 7px; padding: 0 9px; }
 .mobile-market-search input { font-size: 9px; }
 .eyebrow { display: flex; align-items: center; gap: 9px; color: #667267; font-size: 9px; font-weight: 700; }
 .eyebrow-line { width: 20px; height: 1px; background: var(--red); }
@@ -1331,7 +1331,7 @@ h1, h2, h3, p { margin-top: 0; }
   .market-intro { flex: 0 0 auto; padding: 4px 0 6px; }
   .market-intro-heading-item { font-size: min(var(--homepage-headline-font-size, 36px), clamp(16px, 6vw, 24px)); line-height: 1; }
   .market-intro-tools { gap: 5px; }
-  .mobile-market-search { flex-basis: 140px; width: 140px; max-width: 100%; height: 30px; }
+  .mobile-market-search { flex-basis: 105px; width: 105px; max-width: 100%; height: 30px; }
   .listing-section, .seller-section, .buyer-section { min-height: 0; display: flex; flex-direction: column; }
   .seller-section { flex: 0 0 auto; padding: 6px 0 16px; }
   .buyer-section { flex: 0 0 auto; margin: 4px -14px 0; padding: 7px 14px 5px; }
