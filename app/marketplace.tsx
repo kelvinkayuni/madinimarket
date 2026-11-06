@@ -4049,7 +4049,7 @@ export default function Marketplace() {
           </div>
           <p className="form-footnote">{editingSeller ? `The original ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee stays on this listing. ` : `A ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee applies to new listings. `}Buyers see the total; your entered amount is the seller portion.</p>
           {sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}
-          <label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label>
+          <label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className={sellerImagePreviewUrl ? "file-drop file-drop-replace" : "file-drop"}>{sellerImagePreviewUrl ? <span>Replace photo</span> : <><Plus size={17} /><span>Choose PNG or JPG</span><small>Square crop looks best</small></>}</span></label>
           <input type="hidden" name="image_gallery_paths" value={JSON.stringify(sellerGalleryPaths)} />
           <div className="seller-gallery-upload">
             <label className="field-label">Additional mineral photos (optional)

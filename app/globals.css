@@ -972,6 +972,8 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-image-preview { position: relative; width: min(100%, 180px); aspect-ratio: 1; overflow: hidden; border: 1px solid #e1e7dd; background: #f0f3ed; }
 .seller-image-preview img { object-fit: cover; }
 .file-drop { min-height: 65px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px dashed #c5d0c3; background: #fbfcf9; color: #57705d; cursor: pointer; }
+.file-drop-replace { min-height: 0; width: fit-content; padding: 2px 0; border: 0; background: transparent; }
+.file-drop-replace span { color: #395c46; font-size: 9px; text-decoration: underline; }
 .file-drop span { color: #46594b; font-size: 10px; }
 .file-drop small { margin-left: auto; color: #939a92; font-size: 9px; font-weight: 400; }
 .file-input:focus-visible + .file-drop { outline: 2px solid #58805e; outline-offset: 3px; }
