@@ -25,6 +25,7 @@ create table if not exists public.website_account_drafts (
   kind text not null check (kind in ('seller', 'buyer')),
   payload jsonb not null default '{}'::jsonb,
   image_path text,
+  image_gallery_paths text[] not null default '{}',
   updated_at timestamptz not null default now(),
   primary key (website_user_id, kind)
 );
@@ -111,7 +112,8 @@ alter table public.listings
   add column if not exists stone_weight_unit text,
   add column if not exists seller_price numeric,
   add column if not exists platform_fee_rate numeric not null default 0,
-  add column if not exists platform_fee_amount numeric not null default 0;
+  add column if not exists platform_fee_amount numeric not null default 0,
+  add column if not exists image_gallery_paths text[] not null default '{}';
 update public.listings set seller_price = price where seller_price is null;
 alter table public.listings alter column seller_price set not null;
 alter table public.listings drop constraint if exists listings_listing_type_check;

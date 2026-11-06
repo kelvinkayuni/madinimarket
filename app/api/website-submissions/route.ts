@@ -31,16 +31,27 @@ async function readOwnedRows(admin: ReturnType<typeof createSupabaseAdminClient>
     .order("created_at", { ascending: false });
   if (error) throw error;
   return Promise.all((data ?? []).map(async (row) => {
-    if (!row.image_path) return row;
-    const { data: signed } = await admin.storage.from("mineral-images").createSignedUrl(row.image_path, 3600);
-    return { ...row, signed_image_url: signed?.signedUrl ?? "" };
+    const [signedImage, signedGallery] = await Promise.all([
+      row.image_path ? admin.storage.from("mineral-images").createSignedUrl(row.image_path, 3600) : Promise.resolve({ data: null, error: null }),
+      Array.isArray(row.image_gallery_paths)
+        ? Promise.all(row.image_gallery_paths.map((path: string) => admin.storage.from("mineral-images").createSignedUrl(path, 3600)))
+        : Promise.resolve([]),
+    ]);
+    if (signedImage.error) throw signedImage.error;
+    const galleryError = signedGallery.find((result) => result.error)?.error;
+    if (galleryError) throw galleryError;
+    return {
+      ...row,
+      signed_image_url: signedImage.data?.signedUrl ?? "",
+      signed_image_gallery_urls: signedGallery.map((result) => result.data?.signedUrl ?? ""),
+    };
   }));
 }
 
 async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminClient>, table: "listings" | "buy_requests", accountId: string) {
   if (table === "listings") {
     const { data, error } = await admin.from("listings")
-      .select("id, mineral_name, color, comment, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, seller_price, platform_fee_rate, platform_fee_amount, price, currency, country, region, district, image_path, marketplace_state")
+      .select("id, mineral_name, color, comment, listing_type, weight, unit, smallest_stone_weight, largest_stone_weight, stone_weight_unit, seller_price, platform_fee_rate, platform_fee_amount, price, currency, country, region, district, image_path, image_gallery_paths, marketplace_state")
       .eq("website_user_id", accountId)
       .eq("status", "approved")
       .eq("is_active", true)
@@ -68,10 +79,22 @@ async function readOwnedMarketRows(admin: ReturnType<typeof createSupabaseAdminC
           : hasOrder
             ? "This mineral is linked to an order."
             : null;
-      if (!row.image_path) return { ...row, can_manage: canManage, manage_block_reason: manageBlockReason, signed_image_url: "" };
-      const { data: signed, error: signedUrlError } = await admin.storage.from("mineral-images").createSignedUrl(row.image_path, 3600);
-      if (signedUrlError) throw signedUrlError;
-      return { ...row, can_manage: canManage, manage_block_reason: manageBlockReason, signed_image_url: signed.signedUrl };
+      const [signedImage, signedGallery] = await Promise.all([
+        row.image_path ? admin.storage.from("mineral-images").createSignedUrl(row.image_path, 3600) : Promise.resolve({ data: null, error: null }),
+        Array.isArray(row.image_gallery_paths)
+          ? Promise.all(row.image_gallery_paths.map((path: string) => admin.storage.from("mineral-images").createSignedUrl(path, 3600)))
+          : Promise.resolve([]),
+      ]);
+      if (signedImage.error) throw signedImage.error;
+      const galleryError = signedGallery.find((result) => result.error)?.error;
+      if (galleryError) throw galleryError;
+      return {
+        ...row,
+        can_manage: canManage,
+        manage_block_reason: manageBlockReason,
+        signed_image_url: signedImage.data?.signedUrl ?? "",
+        signed_image_gallery_urls: signedGallery.map((result) => result.data?.signedUrl ?? ""),
+      };
     }));
   }
   const { data, error } = await admin.from("buy_requests")
@@ -193,22 +216,22 @@ export async function POST(request: Request) {
   const id = Number(body.id);
   const editing = Number.isSafeInteger(id) && id > 0;
   const { data: draft, error: draftError } = await admin.from("website_account_drafts")
-    .select("image_path")
+    .select("image_path, image_gallery_paths")
     .eq("website_user_id", accountId)
     .eq("kind", kind)
     .maybeSingle();
   if (draftError) return NextResponse.json({ error: "Could not load your saved draft." }, { status: 503 });
-  let existing: { id: number; image_path: string | null; stone_certificate_path: string | null; platform_fee_rate: number | null } | null = null;
+  let existing: { id: number; image_path: string | null; image_gallery_paths: string[]; stone_certificate_path: string | null; platform_fee_rate: number | null } | null = null;
 
   if (editing) {
     if (kind === "seller") {
-      const { data, error } = await admin.from("listings").select("id, image_path, stone_certificate_path, platform_fee_rate, status")
+      const { data, error } = await admin.from("listings").select("id, image_path, image_gallery_paths, stone_certificate_path, platform_fee_rate, status")
         .eq("id", id).eq("website_user_id", accountId).maybeSingle();
       if (error) return NextResponse.json({ error: "Could not load that submission." }, { status: 503 });
       if (!data || !["pending", "rejected"].includes(data.status)) {
         return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
       }
-      existing = { id: data.id, image_path: data.image_path, stone_certificate_path: data.stone_certificate_path, platform_fee_rate: Number(data.platform_fee_rate) };
+      existing = { id: data.id, image_path: data.image_path, image_gallery_paths: Array.isArray(data.image_gallery_paths) ? data.image_gallery_paths : [], stone_certificate_path: data.stone_certificate_path, platform_fee_rate: Number(data.platform_fee_rate) };
     } else {
       const { data, error } = await admin.from("buy_requests").select("id, status")
         .eq("id", id).eq("website_user_id", accountId).maybeSingle();
@@ -216,7 +239,7 @@ export async function POST(request: Request) {
       if (!data || !["pending", "rejected"].includes(data.status)) {
         return NextResponse.json({ error: "That submission can no longer be edited." }, { status: 404 });
       }
-      existing = { id: data.id, image_path: null, stone_certificate_path: null, platform_fee_rate: null };
+      existing = { id: data.id, image_path: null, image_gallery_paths: [], stone_certificate_path: null, platform_fee_rate: null };
     }
   }
 
@@ -231,6 +254,7 @@ export async function POST(request: Request) {
   let rowValues: Record<string, unknown>;
   let imagePath = existing?.image_path ?? null;
   let uploadedPath: string | null = null;
+  const uploadedGalleryPaths: string[] = [];
   let stoneCertificatePath = existing?.stone_certificate_path ?? null;
   let uploadedStoneCertificatePath: string | null = null;
 
@@ -281,6 +305,29 @@ export async function POST(request: Request) {
     )) {
       return NextResponse.json({ error: "Check the batch weights. The smallest stone must not exceed the largest, and the largest must fit within the total batch weight." }, { status: 400 });
     }
+    const requestedGalleryPaths = values.image_gallery_paths;
+    const retainedGalleryPaths = Array.isArray(requestedGalleryPaths)
+      ? requestedGalleryPaths
+      : existing?.image_gallery_paths.length
+        ? existing.image_gallery_paths
+        : draft?.image_gallery_paths ?? [];
+    if (!Array.isArray(retainedGalleryPaths) || retainedGalleryPaths.length > 2 ||
+      !retainedGalleryPaths.every((path) => typeof path === "string" && path.startsWith(`${accountId}/`) && !path.includes("..")) ||
+      new Set(retainedGalleryPaths).size !== retainedGalleryPaths.length) {
+      return NextResponse.json({ error: "Choose up to two valid additional mineral photos." }, { status: 400 });
+    }
+    let galleryImageData: unknown = body.imageGalleryData ?? [];
+    if (typeof galleryImageData === "string") {
+      try {
+        galleryImageData = galleryImageData ? JSON.parse(galleryImageData) : [];
+      } catch {
+        return NextResponse.json({ error: "The additional photo data is invalid." }, { status: 400 });
+      }
+    }
+    if (!Array.isArray(galleryImageData) || galleryImageData.length + retainedGalleryPaths.length > 2 ||
+      !galleryImageData.every((image) => typeof image === "string")) {
+      return NextResponse.json({ error: "A listing can have no more than two additional photos." }, { status: 400 });
+    }
     if (stoneCertificate) {
       if (stoneCertificate.size > 10 * 1024 * 1024) return NextResponse.json({ error: "Choose a PDF or JPEG stone certificate no larger than 10 MB." }, { status: 400 });
       const certificateBytes = new Uint8Array(await stoneCertificate.arrayBuffer());
@@ -318,13 +365,39 @@ export async function POST(request: Request) {
       if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
       return NextResponse.json({ error: "Choose a mineral photo before submitting." }, { status: 400 });
     }
+    const galleryPaths = [...retainedGalleryPaths];
+    for (const rawImage of galleryImageData as string[]) {
+      const match = /^data:image\/jpeg;base64,([A-Za-z\d+/=]+)$/.exec(rawImage);
+      if (!match || match[1].length > 7_000_000) {
+        if (uploadedPath) await admin.storage.from("mineral-images").remove([uploadedPath]);
+        if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
+        return NextResponse.json({ error: "Choose PNG or JPG additional photos under 5 MB each." }, { status: 400 });
+      }
+      const image = Buffer.from(match[1], "base64");
+      if (image.length > 5 * 1024 * 1024) {
+        if (uploadedPath) await admin.storage.from("mineral-images").remove([uploadedPath]);
+        if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
+        return NextResponse.json({ error: "Choose PNG or JPG additional photos under 5 MB each." }, { status: 400 });
+      }
+      const galleryPath = `${accountId}/${randomUUID()}.jpg`;
+      const { error } = await admin.storage.from("mineral-images").upload(galleryPath, image, { contentType: "image/jpeg" });
+      if (error) {
+        if (uploadedGalleryPaths.length) await admin.storage.from("mineral-images").remove(uploadedGalleryPaths);
+        if (uploadedPath) await admin.storage.from("mineral-images").remove([uploadedPath]);
+        if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
+        return NextResponse.json({ error: "An additional photo could not be uploaded." }, { status: 503 });
+      }
+      uploadedGalleryPaths.push(galleryPath);
+      galleryPaths.push(galleryPath);
+    }
     rowValues = {
       ...common, mineral_name: mineralName, color, comment, listing_type: listingType, weight, unit,
       smallest_stone_weight: smallestStoneWeight, largest_stone_weight: largestStoneWeight,
       stone_weight_unit: stoneWeightUnit, seller_price: pricing.sellerPrice,
       platform_fee_rate: pricing.platformFeeRate, platform_fee_amount: pricing.platformFeeAmount,
       price: pricing.marketPrice, currency, seller_name: sellerName,
-      country, region, district, street, email, phone, image_path: imagePath, stone_certificate_path: stoneCertificatePath,
+      country, region, district, street, email, phone, image_path: imagePath, image_gallery_paths: galleryPaths,
+      stone_certificate_path: stoneCertificatePath,
     };
   } else {
     const mineralName = text(values, "mineral_name", 120);
@@ -353,17 +426,28 @@ export async function POST(request: Request) {
     : await admin.from(table).insert(rowValues).select("id").single();
   if (result.error || !result.data) {
     if (uploadedPath) await admin.storage.from("mineral-images").remove([uploadedPath]);
+    if (uploadedGalleryPaths.length) await admin.storage.from("mineral-images").remove(uploadedGalleryPaths);
     if (uploadedStoneCertificatePath) await admin.storage.from("stone-certificates").remove([uploadedStoneCertificatePath]);
     return NextResponse.json({ error: "The submission could not be saved." }, { status: 503 });
   }
   if (kind === "seller" && existing?.image_path && existing.image_path !== imagePath) {
     await admin.storage.from("mineral-images").remove([existing.image_path]);
   }
+  if (kind === "seller" && existing) {
+    const retained = new Set(rowValues.image_gallery_paths as string[]);
+    const removed = existing.image_gallery_paths.filter((path) => !retained.has(path));
+    if (removed.length) await admin.storage.from("mineral-images").remove(removed);
+  }
   if (kind === "seller" && existing?.stone_certificate_path && existing.stone_certificate_path !== stoneCertificatePath) {
     await admin.storage.from("stone-certificates").remove([existing.stone_certificate_path]);
   }
   if (kind === "seller" && draft?.image_path && draft.image_path !== imagePath) {
     await admin.storage.from("mineral-images").remove([draft.image_path]);
+  }
+  if (kind === "seller") {
+    const retained = new Set(rowValues.image_gallery_paths as string[]);
+    const unusedDraftPaths = (draft?.image_gallery_paths ?? []).filter((path: string) => path.startsWith(`${accountId}/drafts/seller/`) && !retained.has(path));
+    if (unusedDraftPaths.length) await admin.storage.from("mineral-images").remove(unusedDraftPaths);
   }
   await admin.from("website_account_drafts").delete()
     .eq("website_user_id", accountId)
@@ -399,6 +483,19 @@ async function manageMarketplacePost(
   price: number | null,
 ) {
   const admin = createSupabaseAdminClient();
+  let galleryPaths: string[] = [];
+  if (kind === "seller" && action === "delete") {
+    const { data: listing, error: listingError } = await admin.from("listings")
+      .select("image_gallery_paths")
+      .eq("id", id)
+      .eq("website_user_id", accountId)
+      .maybeSingle();
+    if (listingError) {
+      console.error("Could not load mineral gallery paths before post deletion.", listingError);
+      return NextResponse.json({ error: "The post could not be changed. Please try again." }, { status: 503 });
+    }
+    galleryPaths = Array.isArray(listing?.image_gallery_paths) ? listing.image_gallery_paths : [];
+  }
   const { data, error } = await admin.rpc("manage_marketplace_user_post", {
     p_website_user_id: accountId,
     p_kind: kind,
@@ -430,6 +527,15 @@ async function manageMarketplacePost(
       } catch (error) {
         console.error("Could not remove deleted mineral image.", error);
         cleanupFailures.push("mineral photo");
+      }
+    }
+    if (kind === "seller" && galleryPaths.length) {
+      try {
+        const { error: galleryError } = await admin.storage.from("mineral-images").remove(galleryPaths);
+        if (galleryError) throw galleryError;
+      } catch (error) {
+        console.error("Could not remove deleted mineral gallery images.", error);
+        cleanupFailures.push("additional mineral photos");
       }
     }
     if (kind === "seller" && typeof result.stone_certificate_path === "string" && result.stone_certificate_path) {

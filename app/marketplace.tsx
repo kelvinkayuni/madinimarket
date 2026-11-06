@@ -29,7 +29,7 @@ type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
-type Seller = { id: number; user_id?: string; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; color?: string; comment?: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
+type Seller = { id: number; user_id?: string; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; color?: string; comment?: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; image_gallery_paths?: string[]; image_gallery?: string[]; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; is_own?: boolean; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type AccountMarketListing = Pick<Seller, "id" | "mineral" | "color" | "comment" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image"> & {
   can_manage: boolean;
@@ -57,7 +57,7 @@ type AccountWantedRequest = {
 };
 type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder_name: string | null; bank_info_added_at: string | null; bank_info_edit_unlocked: boolean; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
-type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; updated_at: string };
+type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; image_gallery_paths?: string[]; image_gallery_urls?: string[]; updated_at: string };
 type SalesLedgerTotals = Record<Currency, { transactions: number; grossSales: number; sellerAmount: number; marketplaceFee: number }>;
 type SalesLedgerPeriod = { today: SalesLedgerTotals; thisWeek: SalesLedgerTotals; thisMonth: SalesLedgerTotals; thisYear: SalesLedgerTotals };
 type SalesLedgerTransaction = { itemId: string; orderId: string; controlNumber: string; verifiedAt: string; mineralName: string; status: string; currency: Currency; grossSales: number; sellerAmount: number; marketplaceFee: number; feeRate: number };
@@ -335,6 +335,12 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
     if (row.image_path) {
       image = await getSignedMineralImageUrl(supabase, row.image_path, row.signed_image_url);
     }
+    const imageGalleryPaths = Array.isArray(row.image_gallery_paths)
+      ? row.image_gallery_paths.filter((path: unknown): path is string => typeof path === "string")
+      : [];
+    const imageGallery = Array.isArray(row.signed_image_gallery_urls)
+      ? row.signed_image_gallery_urls.filter((url: unknown): url is string => typeof url === "string" && Boolean(url))
+      : (await Promise.all(imageGalleryPaths.map((path: string) => getSignedMineralImageUrl(supabase, path)))).filter(Boolean);
     return {
       id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
       color: typeof row.color === "string" ? row.color : "",
@@ -349,7 +355,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       stone_weight_unit: row.stone_weight_unit as StoneWeightUnit | undefined,
       seller: row.seller_name ?? "", country: row.country, region: row.region, district: row.district,
       location: [row.district, row.region, row.country].filter(Boolean).join(", "), email: row.email ?? "", phone: row.phone ?? "",
-      image, image_path: row.image_path, accent: "#43866b", status: row.status as SubmissionStatus,
+      image, image_path: row.image_path, image_gallery_paths: imageGalleryPaths, image_gallery: imageGallery, accent: "#43866b", status: row.status as SubmissionStatus,
       reservation_status: row.reservation_status ?? null,
       marketplace_state: row.marketplace_state,
       is_active: row.is_active,
@@ -646,6 +652,12 @@ export default function Marketplace() {
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
   const [sellerImagePreview, setSellerImagePreview] = useState<string | null>(null);
+  const [sellerGalleryPaths, setSellerGalleryPaths] = useState<string[]>([]);
+  const [sellerGalleryUrls, setSellerGalleryUrls] = useState<string[]>([]);
+  const [sellerGalleryPreviewUrls, setSellerGalleryPreviewUrls] = useState<string[]>([]);
+  const [sellerGallerySaving, setSellerGallerySaving] = useState(false);
+  const [galleryViewer, setGalleryViewer] = useState<{ images: string[]; mineral: string; index: number } | null>(null);
+  const galleryTouchStartX = useRef<number | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
 
@@ -984,6 +996,17 @@ export default function Marketplace() {
     if (!sellerImagePreview?.startsWith("blob:")) return;
     return () => URL.revokeObjectURL(sellerImagePreview);
   }, [sellerImagePreview]);
+  useEffect(() => () => sellerGalleryPreviewUrls.forEach((url) => URL.revokeObjectURL(url)), [sellerGalleryPreviewUrls]);
+  useEffect(() => {
+    if (!galleryViewer) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setGalleryViewer(null);
+      if (event.key === "ArrowLeft") setGalleryViewer((current) => current && ({ ...current, index: (current.index + current.images.length - 1) % current.images.length }));
+      if (event.key === "ArrowRight") setGalleryViewer((current) => current && ({ ...current, index: (current.index + 1) % current.images.length }));
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [galleryViewer]);
   useEffect(() => {
     const updateTime = () => setLastUpdated(new Date());
     updateTime();
@@ -1589,8 +1612,19 @@ export default function Marketplace() {
       await openAccountLicences();
       return;
     }
-    if (isSupabaseConfigured && role === "user") await refreshWebsiteDrafts().catch(() => {});
+    let drafts: { seller: WebsiteDraft | null; buyer: WebsiteDraft | null } = { seller: null, buyer: null };
+    if (isSupabaseConfigured && role === "user") {
+      try {
+        drafts = await refreshWebsiteDrafts();
+      } catch {
+        setNotice("Could not load your saved draft. Please try again.");
+        return;
+      }
+    }
     setSellerImagePreview(null);
+    setSellerGalleryPaths(type === "sell" ? drafts.seller?.image_gallery_paths ?? [] : []);
+    setSellerGalleryUrls(type === "sell" ? drafts.seller?.image_gallery_urls ?? [] : []);
+    setSellerGalleryPreviewUrls([]);
     setEditingSubmission(null);
     setSellerListingType("single");
     openDialog(type);
@@ -1708,11 +1742,12 @@ export default function Marketplace() {
   }, []);
   const refreshWebsiteDrafts = async () => {
     const response = await fetchWithWebsiteSession("/api/website-drafts", { cache: "no-store" });
-    if (!response.ok) return;
+    if (!response.ok) throw new Error("Could not load saved drafts.");
     const result = await response.json();
     const next = { seller: null, buyer: null } as { seller: WebsiteDraft | null; buyer: WebsiteDraft | null };
     for (const draft of result.drafts as WebsiteDraft[]) next[draft.kind] = draft;
     setWebsiteDrafts((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+    return next;
   };
   const persistWebsiteDraft = async (kind: "seller" | "buyer", formElement: HTMLFormElement, saveImage: boolean, keepalive = false) => {
     if (!isSupabaseConfigured || role !== "user" || !userId) return;
@@ -1722,6 +1757,7 @@ export default function Marketplace() {
     if (editingSubmission?.kind === kind) payload.submissionId = editingSubmission.item.id;
     const imageFile = form.get("image");
     let imageData: string | undefined;
+    let imageGalleryData: string[] = [];
     if (kind === "seller" && saveImage && imageFile instanceof File && imageFile.size) {
       try {
         imageData = await storeMineralPhoto(imageFile);
@@ -1730,22 +1766,64 @@ export default function Marketplace() {
         return;
       }
     }
+    if (kind === "seller" && saveImage) {
+      const selectedGalleryFiles = form.getAll("galleryImages").filter((file): file is File => file instanceof File && file.size > 0);
+      if (selectedGalleryFiles.length) setSellerGallerySaving(true);
+      try {
+        imageGalleryData = await Promise.all(selectedGalleryFiles.map(storeMineralPhoto));
+      } catch {
+        setSellerGallerySaving(false);
+        setNotice("An additional photo could not be processed. Please choose another PNG or JPG.");
+        return;
+      }
+    }
+    let imageGalleryPaths: string[] = [];
+    if (kind === "seller") {
+      const rawPaths = form.get("image_gallery_paths");
+      if (typeof rawPaths === "string") {
+        try {
+          const parsed: unknown = JSON.parse(rawPaths);
+          if (Array.isArray(parsed) && parsed.every((path) => typeof path === "string")) imageGalleryPaths = parsed;
+        } catch {
+          setNotice("The additional photo selection is invalid.");
+          return;
+        }
+      }
+    }
     try {
       const response = await fetchWithWebsiteSession("/api/website-drafts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, payload, imageData }),
+        body: JSON.stringify({ kind, payload, imageData, imageGalleryData, imageGalleryPaths }),
         keepalive,
       });
       const result = await response.json();
-      if (!response.ok) { setNotice(result.error ?? "Your draft could not be saved."); return; }
+      if (!response.ok) {
+        setSellerGallerySaving(false);
+        setNotice(result.error ?? "Your draft could not be saved.");
+        return;
+      }
       setWebsiteDrafts((current) => ({ ...current, [kind]: result.draft as WebsiteDraft }));
+      if (kind === "seller" && imageGalleryData.length) {
+        const draft = result.draft as WebsiteDraft;
+        setSellerGalleryPaths(draft.image_gallery_paths ?? []);
+        setSellerGalleryUrls(draft.image_gallery_urls ?? []);
+        setSellerGalleryPreviewUrls([]);
+        const galleryInput = formElement.elements.namedItem("galleryImages");
+        if (galleryInput instanceof HTMLInputElement) galleryInput.value = "";
+        const galleryPathsInput = formElement.elements.namedItem("image_gallery_paths");
+        if (galleryPathsInput instanceof HTMLInputElement) galleryPathsInput.value = JSON.stringify(draft.image_gallery_paths ?? []);
+        await persistWebsiteDraft("seller", formElement, false);
+      }
+      setSellerGallerySaving(false);
     } catch {
+      setSellerGallerySaving(false);
       setNotice("Your draft could not be synchronized. Keep this page open and try again.");
     }
   };
   const queueWebsiteDraftSave = (kind: "seller" | "buyer", formElement: HTMLFormElement, saveImage = false) => {
     if (!isSupabaseConfigured || role !== "user") return;
+    if (kind === "seller" && sellerGallerySaving && !saveImage) return;
     const previousTimer = draftSaveTimers.current[kind];
     if (previousTimer !== null) window.clearTimeout(previousTimer);
     if (saveImage) {
@@ -1768,10 +1846,20 @@ export default function Marketplace() {
       if (!form) return;
       const kind = form.elements.namedItem("seller") ? "seller" : form.elements.namedItem("buyer") ? "buyer" : null;
       if (!kind) return;
-      const saveImage = event.type === "change" && target instanceof HTMLInputElement && target.type === "file" && target.name === "image";
-      if (saveImage && target instanceof HTMLInputElement) {
+      const saveImage = event.type === "change" && target instanceof HTMLInputElement && target.type === "file" && (target.name === "image" || target.name === "galleryImages");
+      if (saveImage && target instanceof HTMLInputElement && target.name === "image") {
         const file = target.files?.[0];
         setSellerImagePreview(file ? URL.createObjectURL(file) : null);
+      }
+      if (saveImage && target instanceof HTMLInputElement && target.name === "galleryImages") {
+        const files = [...(target.files ?? [])];
+        if (files.length > Math.max(0, 2 - sellerGalleryPaths.length)) {
+          setNotice(`Choose no more than ${Math.max(0, 2 - sellerGalleryPaths.length)} additional photo${sellerGalleryPaths.length === 1 ? "" : "s"}.`);
+          target.value = "";
+          setSellerGalleryPreviewUrls([]);
+          return;
+        }
+        setSellerGalleryPreviewUrls(files.map((file) => URL.createObjectURL(file)));
       }
       queueWebsiteDraftSaveEvent(kind, form, saveImage);
     };
@@ -1789,7 +1877,7 @@ export default function Marketplace() {
       document.removeEventListener("change", saveFormChange);
       window.removeEventListener("pagehide", flushOpenDraft);
     };
-  }, [role, userId]);
+  }, [role, sellerGalleryPaths.length, userId]);
   useEffect(() => {
     if (dialog !== "sell" && dialog !== "buy") {
       draftRestoreDialog.current = null;
@@ -1797,8 +1885,8 @@ export default function Marketplace() {
     }
     if (draftRestoreDialog.current === dialog) return;
     draftRestoreDialog.current = dialog;
-    if (editingSubmission) return;
     const kind = dialog === "sell" ? "seller" : "buyer";
+    if (editingSubmission) return;
     const draft = websiteDrafts[kind];
     if (!draft) return;
     const form = document.querySelector<HTMLFormElement>(".dialog-panel form.form-scroll");
@@ -2822,6 +2910,9 @@ export default function Marketplace() {
         }
       }
       setSellerImagePreview(null);
+      setSellerGalleryPreviewUrls([]);
+      setSellerGalleryPaths(kind === "seller" ? (currentItem as Seller).image_gallery_paths ?? [] : []);
+      setSellerGalleryUrls(kind === "seller" ? (currentItem as Seller).image_gallery ?? [] : []);
       setEditingSubmission(kind === "seller" ? { kind, item: currentItem as Seller } : { kind, item: currentItem as Buyer });
       if (kind === "seller") setSellerListingType((currentItem as Seller).listing_type ?? "single");
       setDialog(kind === "seller" ? "sell" : "buy");
@@ -3076,6 +3167,18 @@ export default function Marketplace() {
     let image = existing?.image ?? "";
     let imagePath = existing?.image_path ?? null;
     let imageData = "";
+    const galleryFiles = form.getAll("galleryImages").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    if (sellerGalleryPaths.length + galleryFiles.length > 2) {
+      setNotice("A listing can have no more than two additional photos.");
+      return;
+    }
+    let galleryImageData: string[];
+    try {
+      galleryImageData = await Promise.all(galleryFiles.map(storeMineralPhoto));
+    } catch {
+      setNotice("An additional photo could not be processed. Please choose another PNG or JPG.");
+      return;
+    }
     if (file instanceof File && file.size) {
       try {
         image = await storeMineralPhoto(file);
@@ -3103,7 +3206,10 @@ export default function Marketplace() {
       currency, seller: String(form.get("seller")),
       location: [form.get("street"), form.get("district"), form.get("region"), form.get("country")].filter(Boolean).join(", "),
       country: String(form.get("country")), region: String(form.get("region")), district: String(form.get("district")), street: String(form.get("street")),
-      email: String(form.get("email")), phone: String(form.get("phone")), image, image_path: null, accent: "#448363",
+      email: String(form.get("email")), phone: String(form.get("phone")), image, image_path: null,
+      image_gallery_paths: sellerGalleryPaths,
+      image_gallery: [...sellerGalleryUrls, ...galleryImageData],
+      accent: "#448363",
       user_id: userId, status: "pending", review_message: null,
     };
     if (isSupabaseConfigured && role === "user") {
@@ -3113,6 +3219,7 @@ export default function Marketplace() {
       submission.set("kind", "seller");
       if (existing?.id) submission.set("id", String(existing.id));
       submission.set("imageData", imageData);
+      submission.set("imageGalleryData", JSON.stringify(galleryImageData));
       submission.set("values", JSON.stringify({
         mineral_name: listing.mineral, color: listing.color, comment: listing.comment,
         listing_type: listing.listing_type, weight: listing.weight, unit: listing.unit,
@@ -3120,6 +3227,7 @@ export default function Marketplace() {
         stone_weight_unit: listing.stone_weight_unit, price: listing.seller_price,
         currency: listing.currency, seller_name: listing.seller, country: listing.country, region: listing.region,
         district: listing.district, street: listing.street, email: listing.email, phone: listing.phone,
+        image_gallery_paths: sellerGalleryPaths,
       }));
       if (stoneCertificate instanceof File && stoneCertificate.size) submission.set("stoneCertificate", stoneCertificate);
       const response = await fetchWithWebsiteSession("/api/website-submissions", {
@@ -3134,6 +3242,7 @@ export default function Marketplace() {
     } else if (isSupabaseConfigured) {
       if (!userId) { setNotice("Sign in again before submitting this listing."); return; }
       const supabase = getSupabaseBrowserClient();
+      const uploadedGalleryPaths: string[] = [];
       if (file instanceof File && file.size) {
         const path = `${userId}/${crypto.randomUUID()}.jpg`;
         const imageBlob = await (await fetch(image)).blob();
@@ -3141,6 +3250,18 @@ export default function Marketplace() {
         if (uploadError) { setNotice(uploadError.message); return; }
         imagePath = path;
       }
+      for (const galleryImage of galleryImageData) {
+        const path = `${userId}/${crypto.randomUUID()}.jpg`;
+        const imageBlob = await (await fetch(galleryImage)).blob();
+        const { error: uploadError } = await supabase.storage.from("mineral-images").upload(path, imageBlob, { contentType: "image/jpeg" });
+        if (uploadError) {
+          if (uploadedGalleryPaths.length) await supabase.storage.from("mineral-images").remove(uploadedGalleryPaths);
+          setNotice(uploadError.message);
+          return;
+        }
+        uploadedGalleryPaths.push(path);
+      }
+      const imageGalleryPaths = [...sellerGalleryPaths, ...uploadedGalleryPaths];
       const values = {
         user_id: userId, mineral_name: listing.mineral, color: listing.color || null, comment: listing.comment || null,
         listing_type: listing.listing_type,
@@ -3151,16 +3272,24 @@ export default function Marketplace() {
         currency: listing.currency, seller_name: listing.seller,
         country: listing.country, region: listing.region, district: listing.district, street: listing.street,
         email: listing.email, phone: listing.phone, image_path: imagePath,
+        image_gallery_paths: imageGalleryPaths,
         status: "pending", review_message: null, reviewed_by: null, reviewed_at: null,
       };
       const result = existing
         ? await supabase.from("listings").update(values).eq("id", existing.id).select("id").maybeSingle()
         : await supabase.from("listings").insert(values);
       const error = result.error;
-      if (error) { setNotice(error.message); return; }
+      if (error) {
+        if (uploadedGalleryPaths.length) await supabase.storage.from("mineral-images").remove(uploadedGalleryPaths);
+        setNotice(error.message);
+        return;
+      }
       if (existing?.image_path && existing.image_path !== imagePath) {
         await supabase.storage.from("mineral-images").remove([existing.image_path]);
       }
+      const removedGalleryPaths = (existing?.image_gallery_paths ?? []).filter((path) => !imageGalleryPaths.includes(path));
+      if (removedGalleryPaths.length) await supabase.storage.from("mineral-images").remove(removedGalleryPaths);
+      listing.image_gallery_paths = imageGalleryPaths;
       void refreshRemoteListings().catch(() => setNotice("Submitted, but the listings could not be refreshed."));
       setNotice(existing ? "Listing updated and resubmitted for admin approval." : "Seller listing submitted for admin approval.");
     } else {
@@ -3170,6 +3299,9 @@ export default function Marketplace() {
     }
     formElement.reset();
     setSellerImagePreview(null);
+    setSellerGalleryPaths([]);
+    setSellerGalleryUrls([]);
+    setSellerGalleryPreviewUrls([]);
     setEditingSubmission(null);
     setDialog(null);
     });
@@ -3241,6 +3373,19 @@ export default function Marketplace() {
   const editingSeller = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
   const editingBuyer = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
   const sellerImagePreviewUrl = sellerImagePreview ?? editingSeller?.image ?? websiteDrafts.seller?.image_url ?? "";
+  const removeSellerGalleryImage = (index: number) => {
+    const remainingPaths = sellerGalleryPaths.filter((_, currentIndex) => currentIndex !== index);
+    setSellerGalleryPaths(remainingPaths);
+    setSellerGalleryUrls((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    window.requestAnimationFrame(() => {
+      const form = document.querySelector<HTMLFormElement>(".dialog-panel form.form-scroll");
+      if (form && form.elements.namedItem("seller")) void persistWebsiteDraft("seller", form, false);
+    });
+  };
+  const showSellerGallery = (seller: Seller) => {
+    const images = [seller.image, ...(seller.image_gallery ?? [])].filter(Boolean);
+    if (images.length > 1) setGalleryViewer({ images, mineral: seller.mineral, index: 0 });
+  };
 
   if (isAdminRole(role)) {
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
@@ -3843,7 +3988,7 @@ export default function Marketplace() {
             : "Reserved for a buyer";
           const isInCart = role === "user" && cartListingAccountId === userId && cartListingIds.has(listing.id);
           const hasImage = Boolean(listing.image) && !failedSellerImageIds.has(listing.id);
-          return <article className="seller-card" key={listing.id}><div className="seller-photo" style={{ backgroundColor: listing.accent }} role="img" aria-label={`${listing.mineral} for sale`}>{!hasImage && <Gem size={38} strokeWidth={1.2} />}{hasImage && <Image className="seller-photo-image" src={listing.image} alt="" fill sizes="(max-width: 650px) 78vw, 320px" unoptimized onError={() => setFailedSellerImageIds((current) => new Set(current).add(listing.id))} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}</div><div className="seller-card-info"><div className="seller-name-row"><div className="seller-name-color"><h3 data-no-translate>{listing.mineral}</h3>{listing.color && <span className="seller-color-tag" title={listing.color} data-no-translate>{listing.color}</span>}</div><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price-row"><div className="seller-price">{money(listing.price, listing.currency)}</div>{listing.comment && <span className="seller-comment" title={listing.comment} data-no-translate>{listing.comment}</span>}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer" onClick={(event) => openStoneCertificate(event, listing.id)}>See certificate</a>}</div><button className="button button-dark add-to-cart-button" type="button" disabled={isCheckoutUnavailable || isReserved || isInCart || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved || isCheckoutUnavailable ? "Temporarily unavailable" : isInCart ? "In your cart" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
+          return <article className="seller-card" key={listing.id}><div className="seller-photo" style={{ backgroundColor: listing.accent }} role="group" aria-label={`${listing.mineral} photos`}>{!hasImage && <Gem size={38} strokeWidth={1.2} />}{hasImage && <Image className="seller-photo-image" src={listing.image} alt="" fill sizes="(max-width: 650px) 78vw, 320px" unoptimized onError={() => setFailedSellerImageIds((current) => new Set(current).add(listing.id))} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}{Boolean(listing.image_gallery?.some(Boolean)) && <button className="seller-gallery-trigger" type="button" onClick={() => showSellerGallery(listing)}>View more images</button>}</div><div className="seller-card-info"><div className="seller-name-row"><div className="seller-name-color"><h3 data-no-translate>{listing.mineral}</h3>{listing.color && <span className="seller-color-tag" title={listing.color} data-no-translate>{listing.color}</span>}</div><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price-row"><div className="seller-price">{money(listing.price, listing.currency)}</div>{listing.comment && <span className="seller-comment" title={listing.comment} data-no-translate>{listing.comment}</span>}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer" onClick={(event) => openStoneCertificate(event, listing.id)}>See certificate</a>}</div><button className="button button-dark add-to-cart-button" type="button" disabled={isCheckoutUnavailable || isReserved || isInCart || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved || isCheckoutUnavailable ? "Temporarily unavailable" : isInCart ? "In your cart" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
         })}{Array.from({ length: sellerEmptySlotCount }, (_, index) => <article className="seller-card seller-empty-card" key={`empty-seller-slot-${index}`} aria-label="Empty mineral listing space"><div className="seller-photo seller-empty-photo"><Plus size={18} aria-hidden="true" /></div><div className="seller-card-info seller-empty-info" /></article>)}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
@@ -3896,6 +4041,15 @@ export default function Marketplace() {
           <p className="form-footnote">{editingSeller ? `The original ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee stays on this listing. ` : `A ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee applies to new listings. `}Buyers see the total; your entered amount is the seller portion.</p>
           {sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}
           <label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className="file-drop"><Plus size={17} /><span>{editingSeller?.image || editingSeller?.image_path ? "Choose a replacement PNG or JPG" : "Choose PNG or JPG"}</span><small>Square crop looks best</small></span></label>
+          <input type="hidden" name="image_gallery_paths" value={JSON.stringify(sellerGalleryPaths)} />
+          <div className="seller-gallery-upload">
+            <label className="field-label">Additional mineral photos (optional)
+              <input className="file-input" name="galleryImages" type="file" accept="image/png,image/jpeg" multiple disabled={sellerGallerySaving || sellerGalleryPaths.length >= 2} />
+              <span className="file-drop"><Plus size={17} /><span>{sellerGallerySaving ? "Saving additional photos…" : sellerGalleryPaths.length >= 2 ? "Two additional photos selected" : "Choose up to two more PNG or JPG photos"}</span><small>Optional · {sellerGalleryPaths.length}/2 saved</small></span>
+            </label>
+            {sellerGalleryUrls.length > 0 && <div className="seller-gallery-thumbnails">{sellerGalleryUrls.map((url, index) => <figure className="seller-gallery-thumbnail" key={`${sellerGalleryPaths[index] ?? url}-${index}`}><Image src={url} fill sizes="90px" unoptimized alt={`Additional mineral photo ${index + 1}`} /><button type="button" aria-label={`Remove saved additional photo ${index + 1}`} onClick={() => removeSellerGalleryImage(index)}><X size={14} /></button></figure>)}</div>}
+            {sellerGalleryPreviewUrls.length > 0 && <div className="seller-gallery-thumbnails">{sellerGalleryPreviewUrls.map((url, index) => <figure className="seller-gallery-thumbnail" key={`${url}-${index}`}><Image src={url} fill sizes="90px" unoptimized alt={`New additional mineral photo ${index + 1}`} /></figure>)}<button className="seller-gallery-clear" type="button" disabled={sellerGallerySaving} onClick={() => { const input = document.querySelector<HTMLInputElement>('.dialog-panel input[name="galleryImages"]'); if (input) input.value = ""; setSellerGalleryPreviewUrls([]); const form = input?.form; if (form) window.requestAnimationFrame(() => void persistWebsiteDraft("seller", form, false)); }}>Remove selected photos</button></div>}
+          </div>
           <StoneCertificateField />
           <Field label="Seller name" name="seller" defaultValue={editingSeller?.seller ?? ""} required />
           <div className="field-row">
@@ -3910,7 +4064,7 @@ export default function Marketplace() {
             <Field label="Email address" name="email" type="email" defaultValue={editingSeller?.email ?? ""} required />
             <Field label="Phone number" name="phone" type="tel" defaultValue={editingSeller?.phone ?? ""} required />
           </div>
-          <button className="button button-dark form-submit" type="submit" disabled={busyActions.has("seller-submit")}>{busyActions.has("seller-submit") ? (editingSeller ? "Resubmitting listing…" : "Submitting for approval…") : editingSeller ? "Resubmit for approval" : <>Submit for approval <ArrowUpRight size={16} /></>}</button>
+          <button className="button button-dark form-submit" type="submit" disabled={busyActions.has("seller-submit") || sellerGallerySaving}>{sellerGallerySaving ? "Saving additional photos…" : busyActions.has("seller-submit") ? (editingSeller ? "Resubmitting listing…" : "Submitting for approval…") : editingSeller ? "Resubmit for approval" : <>Submit for approval <ArrowUpRight size={16} /></>}</button>
           {editingSeller && <button className="button button-outline form-submit" type="button" disabled={busyActions.has("seller-submit")} onClick={() => { setEditingSubmission(null); setSellerImagePreview(null); setDialog("submissions"); }}>Cancel</button>}
         </form>
       </>}
@@ -4108,6 +4262,7 @@ export default function Marketplace() {
       })}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">{pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p>{item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p>{item.location} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}{pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}{!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
+    {galleryViewer && <div className="gallery-viewer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGalleryViewer(null); }}><section className="gallery-viewer" role="dialog" aria-modal="true" aria-label={`${galleryViewer.mineral} photo gallery`}><button className="gallery-viewer-close" type="button" aria-label="Close photo gallery" onClick={() => setGalleryViewer(null)}><X size={22} /></button><div className="gallery-viewer-title" data-no-translate>{galleryViewer.mineral}</div><div className="gallery-viewer-stage" onTouchStart={(event) => { galleryTouchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => { const startX = galleryTouchStartX.current; const endX = event.changedTouches[0]?.clientX; galleryTouchStartX.current = null; if (startX === null || endX === undefined || Math.abs(endX - startX) < 40) return; setGalleryViewer((current) => current && ({ ...current, index: (current.index + (endX < startX ? 1 : current.images.length - 1)) % current.images.length })); }}>{galleryViewer.images[galleryViewer.index] && <Image src={galleryViewer.images[galleryViewer.index]} fill sizes="(max-width: 700px) 94vw, 1100px" unoptimized alt={`${galleryViewer.mineral}, photo ${galleryViewer.index + 1} of ${galleryViewer.images.length}`} />}</div><div className="gallery-viewer-controls"><button type="button" aria-label="Previous photo" onClick={() => setGalleryViewer((current) => current && ({ ...current, index: (current.index + current.images.length - 1) % current.images.length }))}><ArrowLeft size={20} /></button><span>{galleryViewer.index + 1} of {galleryViewer.images.length}</span><button type="button" aria-label="Next photo" onClick={() => setGalleryViewer((current) => current && ({ ...current, index: (current.index + 1) % current.images.length }))}><ArrowRight size={20} /></button></div></section></div>}
   </main>;
 }
 

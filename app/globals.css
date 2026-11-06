@@ -525,6 +525,9 @@ h1, h2, h3, p { margin-top: 0; }
 .reservation-photo-tag { top: auto; right: 8px; bottom: 8px; left: 8px; display: block; line-height: 1.4; }
 .photo-action { position: absolute; z-index: 1; right: 10px; bottom: 10px; width: 31px; height: 31px; border-color: #ffffff77; border-radius: 50%; background: #ffffffeb; color: #273a2e; transition: transform .2s; }
 .photo-action:hover { transform: rotate(45deg); }
+.seller-gallery-trigger { position: absolute; z-index: 2; right: 8px; bottom: 8px; max-width: calc(100% - 16px); padding: 7px 9px; border: 1px solid #ffffff8a; background: #13231edb; color: #fff; font-size: 9px; font-weight: 650; }
+.seller-photo:has(.reservation-photo-tag) .seller-gallery-trigger { bottom: 43px; }
+.seller-gallery-trigger:hover { background: #13231ef5; }
 .seller-card-info { padding: 12px 13px 13px; }
 .seller-empty-info { min-height: 153px; display: grid; align-items: center; justify-content: center; }
 .seller-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -970,6 +973,21 @@ h1, h2, h3, p { margin-top: 0; }
 .file-drop span { color: #46594b; font-size: 10px; }
 .file-drop small { margin-left: auto; color: #939a92; font-size: 9px; font-weight: 400; }
 .file-input:focus-visible + .file-drop { outline: 2px solid #58805e; outline-offset: 3px; }
+.seller-gallery-upload { display: grid; gap: 9px; }
+.seller-gallery-thumbnails { display: flex; flex-wrap: wrap; gap: 8px; }
+.seller-gallery-thumbnail { position: relative; width: 70px; aspect-ratio: 1; margin: 0; overflow: hidden; border: 1px solid #dfe6dc; background: #f0f3ed; }
+.seller-gallery-thumbnail img { object-fit: cover; }
+.seller-gallery-thumbnail button { position: absolute; z-index: 1; top: 3px; right: 3px; width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; background: #17241edb; color: white; }
+.seller-gallery-clear { align-self: center; padding: 6px 8px; color: #59685c; font-size: 9px; text-decoration: underline; text-underline-offset: 2px; }
+.gallery-viewer-backdrop { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; padding: 20px; background: #08100de8; }
+.gallery-viewer { position: relative; width: min(100%, 1120px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; }
+.gallery-viewer-close { position: absolute; z-index: 2; top: 10px; right: 10px; width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid #ffffff72; border-radius: 50%; background: #111a16bd; color: #fff; }
+.gallery-viewer-title { padding-right: 55px; color: #fff; font-family: var(--font-display), Georgia, serif; font-size: 20px; }
+.gallery-viewer-stage { position: relative; width: 100%; height: min(76vh, 760px); min-height: 220px; overflow: hidden; background: #050806; touch-action: pan-y; }
+.gallery-viewer-stage img { object-fit: contain; }
+.gallery-viewer-controls { display: flex; align-items: center; justify-content: center; gap: 18px; color: #fff; font-size: 12px; }
+.gallery-viewer-controls button { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid #ffffff72; border-radius: 50%; color: #fff; }
+.gallery-viewer-controls button:hover, .gallery-viewer-close:hover { background: #ffffff27; }
 
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -991,6 +1009,10 @@ h1, h2, h3, p { margin-top: 0; }
   .market-content { padding-right: 24px; padding-left: 24px; }
   .buyer-section { margin-right: -24px; margin-left: -24px; padding-right: 24px; padding-left: 24px; }
   .username-banner { margin-right: 24px; margin-left: 24px; }
+}
+@media (max-width: 600px) {
+  .gallery-viewer-backdrop { padding: 12px; }
+  .gallery-viewer-stage { height: min(72vh, 620px); min-height: 180px; }
 }
 @media (max-width: 650px) {
   .admin-sales-period-grid { grid-template-columns: 1fr; }
