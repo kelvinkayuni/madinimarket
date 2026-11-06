@@ -526,9 +526,9 @@ h1, h2, h3, p { margin-top: 0; }
 .photo-action { position: absolute; z-index: 1; right: 10px; bottom: 10px; width: 31px; height: 31px; border-color: #ffffff77; border-radius: 50%; background: #ffffffeb; color: #273a2e; transition: transform .2s; }
 .photo-action:hover { transform: rotate(45deg); }
 .seller-card-info { padding: 12px 13px 13px; }
-.seller-gallery-trigger { position: absolute; z-index: 2; right: 8px; bottom: 8px; padding: 0; color: #fff; font-size: 9px; font-weight: 650; line-height: 1.2; text-shadow: 0 1px 3px #101b16, 0 0 5px #101b16; text-decoration: underline; text-underline-offset: 2px; }
+.seller-gallery-trigger { position: absolute; z-index: 2; right: 8px; bottom: 8px; padding: 0; color: #8fc5ff; font-size: 9px; font-weight: 750; line-height: 1.2; text-shadow: 0 1px 3px #101b16, 0 0 5px #101b16; text-decoration: underline; text-underline-offset: 2px; }
 .seller-photo:has(.reservation-photo-tag) .seller-gallery-trigger { bottom: 43px; }
-.seller-gallery-trigger:hover { color: #e7f2e8; }
+.seller-gallery-trigger:hover { color: #c1e0ff; }
 .seller-empty-info { min-height: 153px; display: grid; align-items: center; justify-content: center; }
 .seller-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .seller-name-color { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 6px; overflow: hidden; }
