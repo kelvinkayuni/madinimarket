@@ -557,28 +557,37 @@ export default function Marketplace() {
       return;
     }
 
+    let active = true;
     const measureOverflow = () => {
       const groupWidth = groupElement.scrollWidth;
       const containerWidth = windowElement.clientWidth;
       const shouldScroll = homepageHeadlines.length > 1 || groupWidth > containerWidth + 1;
-      setHomepageHeadlineOverflowing(shouldScroll);
-      setHomepageHeadlineRepeatCount(shouldScroll && groupWidth > 0
+      const repeatCount = shouldScroll && groupWidth > 0
         ? Math.max(2, Math.ceil(containerWidth / groupWidth) + 1)
-        : 2);
+        : 2;
+      setHomepageHeadlineOverflowing((current) => current === shouldScroll ? current : shouldScroll);
+      setHomepageHeadlineRepeatCount((current) => current === repeatCount ? current : repeatCount);
     };
     const resizeObserver = new ResizeObserver(measureOverflow);
     const mutationObserver = new MutationObserver(measureOverflow);
     resizeObserver.observe(windowElement);
     resizeObserver.observe(groupElement);
     mutationObserver.observe(groupElement, { childList: true, characterData: true, subtree: true });
+    window.addEventListener("resize", measureOverflow);
     measureOverflow();
+    void document.fonts.ready.then(() => {
+      if (active) measureOverflow();
+    });
 
     return () => {
+      active = false;
       resizeObserver.disconnect();
       mutationObserver.disconnect();
+      window.removeEventListener("resize", measureOverflow);
     };
   }, [
     homepageHeadlines,
+    homepageAnnouncement,
     homepageHeadlineFontSize,
     homepageHeadlineOverflowing,
   ]);
