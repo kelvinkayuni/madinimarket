@@ -1066,7 +1066,7 @@ h1, h2, h3, p { margin-top: 0; }
   .wordmark { gap: 5px; font-size: 16px; }
   .wordmark img { width: 22px; height: 22px; }
   .header-actions { order: 2; }
-  .market-intro-tools { order: 1; width: 140px; flex: 0 0 140px; justify-content: flex-end; }
+  .market-intro-tools { order: 1; width: 105px; flex: 0 0 105px; justify-content: flex-end; }
   .market-intro-tools { gap: 8px; }
   .header-search kbd { display: none; }
   .header-actions { gap: 6px; }
