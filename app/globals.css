@@ -279,15 +279,18 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-submission-toggle > strong { margin-left: auto; padding: 5px 8px; border-radius: 999px; background: #edf1e9; color: #395c46; font-size: 10px; font-weight: 650; white-space: nowrap; }
 .admin-submission-chevron { flex: 0 0 auto; color: #647462; transition: transform .18s ease; }
 .admin-submission-disclosure[open] .admin-submission-chevron { transform: rotate(180deg); }
-.admin-submission-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 280px); align-items: start; gap: 8px 16px; padding: 14px 15px 15px; border-top: 1px solid #e2e8df; }
+.admin-submission-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px); align-items: start; gap: 10px 16px; padding: 12px 15px 14px; border-top: 1px solid #e2e8df; }
+.admin-submission-no-photo, .admin-buyer-submission-details { grid-template-columns: minmax(0, 1fr); }
+.admin-review-copy { grid-column: 1; display: grid; align-content: start; gap: 7px; }
 .admin-submission-details > p { margin: 0; color: #697369; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
-.admin-submission-details .admin-review-photo-group { grid-column: 2; grid-row: 1 / span 4; display: grid; align-content: start; gap: 8px; width: 100%; }
+.admin-review-copy > p { margin: 0; color: #697369; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.admin-submission-details .admin-review-photo-group { grid-column: 2; grid-row: 1; display: grid; align-content: start; gap: 7px; width: 100%; }
 .admin-submission-details .admin-review-photo-group .admin-mineral-image { width: 100%; margin: 0; }
 .admin-review-gallery-button { justify-self: start; padding: 0; border: 0; background: none; color: #395c46; font: inherit; font-size: 10px; font-weight: 650; text-decoration: underline; cursor: pointer; }
 .admin-submission-details .certificate-file-link { margin-top: 5px; font-size: 9px; }
-.admin-submission-details .review-message { grid-column: 1 / -1; min-height: 72px; margin-top: 4px; padding: 9px 10px; font-size: 10px; }
-.admin-submission-details .submission-actions { grid-column: 1 / -1; margin-top: 2px; }
-.admin-submission-details .button { min-height: 40px; }
+.admin-submission-details .review-message { grid-column: 1 / -1; min-height: 58px; margin-top: 0; padding: 8px 10px; font-size: 10px; }
+.admin-submission-details .submission-actions { grid-column: 1 / -1; margin-top: 0; }
+.admin-submission-details .button { min-height: 36px; }
 .admin-review-item > p { margin: 10px 0 0; color: #697369; font-size: 10px; line-height: 1.5; }
 .admin-review-item .review-message { width: 100%; min-height: 62px; margin-top: 13px; padding: 9px 10px; resize: vertical; border: 1px solid #d8ded5; background: #fbfcf9; color: var(--ink); font: inherit; font-size: 10px; }
 .admin-review-item .submission-actions { display: flex; gap: 8px; margin-top: 10px; }
@@ -983,7 +986,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-gallery-thumbnail img { object-fit: cover; }
 .seller-gallery-thumbnail button { position: absolute; z-index: 1; top: 3px; right: 3px; width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; background: #17241edb; color: white; }
 .seller-gallery-clear { align-self: center; padding: 6px 8px; color: #59685c; font-size: 9px; text-decoration: underline; text-underline-offset: 2px; }
-.gallery-viewer-backdrop { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; padding: 20px; background: #08100de8; }
+.gallery-viewer-backdrop { position: fixed; z-index: 1100; inset: 0; display: grid; place-items: center; padding: 20px; background: #08100de8; }
 .gallery-viewer { position: relative; width: min(100%, 1120px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; }
 .gallery-viewer-close { position: absolute; z-index: 2; top: 10px; right: 10px; width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid #ffffff72; border-radius: 50%; background: #111a16bd; color: #fff; }
 .gallery-viewer-title { padding-right: 55px; color: #fff; font-family: var(--font-display), Georgia, serif; font-size: 20px; }
@@ -1046,8 +1049,9 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-submission-toggle { min-height: 72px; padding: 11px 12px; }
   .admin-submission-toggle h3 { font-size: 15px; }
   .admin-submission-toggle small { max-width: 62vw; }
-  .admin-submission-details { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px; }
+  .admin-submission-details { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px 12px 12px; }
   .admin-submission-details .admin-review-photo-group { grid-column: 1; grid-row: auto; width: min(100%, 160px); }
+  .admin-review-copy { grid-column: 1; }
   .admin-submission-details .review-message,
   .admin-submission-details .submission-actions { grid-column: 1; }
   .admin-account-row { grid-template-columns: 1fr; }

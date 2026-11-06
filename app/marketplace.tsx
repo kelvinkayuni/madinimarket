@@ -3,6 +3,7 @@
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { Session } from "@supabase/supabase-js";
 
 import AdminMarketplaceOrders from "./admin-marketplace-orders";
@@ -3392,6 +3393,29 @@ export default function Marketplace() {
     const images = [seller.image, ...(seller.image_gallery ?? [])].filter(Boolean);
     if (images.length > 1) setGalleryViewer({ images, mineral: seller.mineral, index: 0 });
   };
+  const galleryViewerOverlay = galleryViewer && typeof document !== "undefined"
+    ? createPortal(
+      <div className="gallery-viewer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGalleryViewer(null); }}>
+        <section className="gallery-viewer" role="dialog" aria-modal="true" aria-label={`${galleryViewer.mineral} photo gallery`}>
+          <button className="gallery-viewer-close" type="button" aria-label="Close photo gallery" onClick={() => setGalleryViewer(null)}><X size={22} /></button>
+          <div className="gallery-viewer-title" data-no-translate>{galleryViewer.mineral}</div>
+          <div className="gallery-viewer-stage" onTouchStart={(event) => { galleryTouchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => {
+            const startX = galleryTouchStartX.current;
+            const endX = event.changedTouches[0]?.clientX;
+            galleryTouchStartX.current = null;
+            if (startX === null || endX === undefined || Math.abs(endX - startX) < 40) return;
+            setGalleryViewer((current) => current && ({ ...current, index: (current.index + (endX < startX ? 1 : current.images.length - 1)) % current.images.length }));
+          }}>{galleryViewer.images[galleryViewer.index] && <Image src={galleryViewer.images[galleryViewer.index]} fill sizes="(max-width: 700px) 94vw, 1100px" unoptimized alt={`${galleryViewer.mineral}, photo ${galleryViewer.index + 1} of ${galleryViewer.images.length}`} />}</div>
+          <div className="gallery-viewer-controls">
+            <button type="button" aria-label="Previous photo" onClick={() => setGalleryViewer((current) => current && ({ ...current, index: (current.index + current.images.length - 1) % current.images.length }))}><ArrowLeft size={20} /></button>
+            <span>{galleryViewer.index + 1} of {galleryViewer.images.length}</span>
+            <button type="button" aria-label="Next photo" onClick={() => setGalleryViewer((current) => current && ({ ...current, index: (current.index + 1) % current.images.length }))}><ArrowRight size={20} /></button>
+          </div>
+        </section>
+      </div>,
+      document.body,
+    )
+    : null;
 
   if (isAdminRole(role)) {
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
@@ -3597,13 +3621,16 @@ export default function Marketplace() {
             <div className="admin-queue-heading"><div><span>SELLERS</span><h2 id="admin-sellers-heading">Mineral listings</h2></div><strong>{pendingSellers.length}</strong></div>
             {pendingSellers.length ? <div className="admin-queue-list">{pendingSellers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-seller-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3><small>{item.seller} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.price, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
-              <div className="admin-submission-details">
-                <p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {item.seller}</p>
-                {item.platform_fee_rate ? <p>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}
-                {item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}
-                <p>{item.location} · {item.phone} · {item.email}</p>
-                {item.image ? <div className="admin-review-photo-group"><div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div>{item.image_gallery?.some(Boolean) && <button className="admin-review-gallery-button" type="button" onClick={() => showSellerGallery(item)}>View all photos</button>}</div> : <p className="admin-image-missing">No mineral photo attached.</p>}
-                {item.stone_certificate_url && <p><a className="certificate-file-link" href={item.stone_certificate_url} target="_blank" rel="noreferrer">Review stone certificate</a></p>}
+              <div className={`admin-submission-details${item.image ? "" : " admin-submission-no-photo"}`}>
+                <div className="admin-review-copy">
+                  <p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {item.seller}</p>
+                  {item.platform_fee_rate ? <p>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}
+                  {item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}
+                  <p>{item.location} · {item.phone} · {item.email}</p>
+                  {!item.image && <p className="admin-image-missing">No mineral photo attached.</p>}
+                  {item.stone_certificate_url && <p><a className="certificate-file-link" href={item.stone_certificate_url} target="_blank" rel="noreferrer">Review stone certificate</a></p>}
+                </div>
+                {item.image && <div className="admin-review-photo-group"><div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div>{item.image_gallery?.some(Boolean) && <button className="admin-review-gallery-button" type="button" onClick={() => showSellerGallery(item)}>View all photos</button>}</div>}
                 <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
                 <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-approve`, () => reviewSubmission("seller", item.id, true))}>{busyActions.has(`review-seller-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-reject`, () => reviewSubmission("seller", item.id, false))}>{busyActions.has(`review-seller-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
               </div>
@@ -3613,7 +3640,7 @@ export default function Marketplace() {
             <div className="admin-queue-heading"><div><span>BUYERS</span><h2 id="admin-buyers-heading">Buying requests</h2></div><strong>{pendingBuyers.length}</strong></div>
             {pendingBuyers.length ? <div className="admin-queue-list">{pendingBuyers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-buyer-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3><small>{item.buyer} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.offer, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
-              <div className="admin-submission-details">
+              <div className="admin-submission-details admin-buyer-submission-details">
                 <p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{item.location} · {item.buyer} · {item.phone} · {item.email}</p>
                 <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} />
                 <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-approve`, () => reviewSubmission("buyer", item.id, true))}>{busyActions.has(`review-buyer-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-reject`, () => reviewSubmission("buyer", item.id, false))}>{busyActions.has(`review-buyer-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
@@ -3932,6 +3959,7 @@ export default function Marketplace() {
           </div>
         </section>}
       </div>
+      {galleryViewerOverlay}
       {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
       {dialog === "signout" && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => setDialog(null)}><X size={19} /></button><div className="dialog-brand"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /><span>MADINIMARKET</span></div><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></section></div>}
     </main>;
@@ -4271,7 +4299,7 @@ export default function Marketplace() {
         {pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}
         {!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
-    {galleryViewer && <div className="gallery-viewer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGalleryViewer(null); }}><section className="gallery-viewer" role="dialog" aria-modal="true" aria-label={`${galleryViewer.mineral} photo gallery`}><button className="gallery-viewer-close" type="button" aria-label="Close photo gallery" onClick={() => setGalleryViewer(null)}><X size={22} /></button><div className="gallery-viewer-title" data-no-translate>{galleryViewer.mineral}</div><div className="gallery-viewer-stage" onTouchStart={(event) => { galleryTouchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => { const startX = galleryTouchStartX.current; const endX = event.changedTouches[0]?.clientX; galleryTouchStartX.current = null; if (startX === null || endX === undefined || Math.abs(endX - startX) < 40) return; setGalleryViewer((current) => current && ({ ...current, index: (current.index + (endX < startX ? 1 : current.images.length - 1)) % current.images.length })); }}>{galleryViewer.images[galleryViewer.index] && <Image src={galleryViewer.images[galleryViewer.index]} fill sizes="(max-width: 700px) 94vw, 1100px" unoptimized alt={`${galleryViewer.mineral}, photo ${galleryViewer.index + 1} of ${galleryViewer.images.length}`} />}</div><div className="gallery-viewer-controls"><button type="button" aria-label="Previous photo" onClick={() => setGalleryViewer((current) => current && ({ ...current, index: (current.index + current.images.length - 1) % current.images.length }))}><ArrowLeft size={20} /></button><span>{galleryViewer.index + 1} of {galleryViewer.images.length}</span><button type="button" aria-label="Next photo" onClick={() => setGalleryViewer((current) => current && ({ ...current, index: (current.index + 1) % current.images.length }))}><ArrowRight size={20} /></button></div></section></div>}
+    {galleryViewerOverlay}
   </main>;
 }
 
