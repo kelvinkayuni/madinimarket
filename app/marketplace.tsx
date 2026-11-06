@@ -1856,10 +1856,6 @@ export default function Marketplace() {
       const kind = form.elements.namedItem("seller") ? "seller" : form.elements.namedItem("buyer") ? "buyer" : null;
       if (!kind) return;
       const saveImage = event.type === "change" && target instanceof HTMLInputElement && target.type === "file" && (target.name === "image" || target.name === "galleryImages");
-      if (saveImage && target instanceof HTMLInputElement && target.name === "image") {
-        const file = target.files?.[0];
-        setSellerImagePreview(file ? URL.createObjectURL(file) : null);
-      }
       if (saveImage && target instanceof HTMLInputElement && target.name === "galleryImages") {
         const files = [...(target.files ?? [])];
         if (files.length > Math.max(0, 2 - sellerGalleryPaths.length)) {
@@ -1911,8 +1907,6 @@ export default function Marketplace() {
     if (kind === "seller" && draft.image_path) {
       const imageInput = form.elements.namedItem("image");
       if (imageInput instanceof HTMLInputElement) imageInput.required = false;
-      const imageLabel = form.querySelector<HTMLElement>(".file-drop > span");
-      if (imageLabel) imageLabel.textContent = "Saved draft photo will be used";
     }
   }, [dialog, editingSubmission, websiteDrafts]);
       useEffect(() => {
@@ -3382,6 +3376,9 @@ export default function Marketplace() {
   const editingSeller = editingSubmission?.kind === "seller" ? editingSubmission.item : null;
   const editingBuyer = editingSubmission?.kind === "buyer" ? editingSubmission.item : null;
   const sellerImagePreviewUrl = sellerImagePreview ?? editingSeller?.image ?? websiteDrafts.seller?.image_url ?? "";
+  const sellerHasPrimaryPhoto = Boolean(
+    sellerImagePreviewUrl || editingSeller?.image_path || websiteDrafts.seller?.image_path,
+  );
   const removeSellerGalleryImage = (index: number) => {
     const remainingPaths = sellerGalleryPaths.filter((_, currentIndex) => currentIndex !== index);
     setSellerGalleryPaths(remainingPaths);
@@ -4049,7 +4046,7 @@ export default function Marketplace() {
           </div>
           <p className="form-footnote">{editingSeller ? `The original ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee stays on this listing. ` : `A ${sellerFeePercent.toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee applies to new listings. `}Buyers see the total; your entered amount is the seller portion.</p>
           {sellerImagePreviewUrl && <figure className="seller-image-preview"><Image src={sellerImagePreviewUrl} fill sizes="180px" unoptimized alt="Selected mineral" /></figure>}
-          <label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} /><span className={sellerImagePreviewUrl ? "file-drop file-drop-replace" : "file-drop"}>{sellerImagePreviewUrl ? <span>Replace photo</span> : <><Plus size={17} /><span>Choose PNG or JPG</span><small>Square crop looks best</small></>}</span></label>
+          <label className="field-label">Square mineral photo<input className="file-input" name="image" type="file" accept="image/png,image/jpeg" required={!editingSeller?.image && !editingSeller?.image_path} onChange={(event) => { const file = event.currentTarget.files?.[0]; setSellerImagePreview(file ? URL.createObjectURL(file) : null); }} /><span className={sellerHasPrimaryPhoto ? "file-drop file-drop-replace" : "file-drop"}>{sellerHasPrimaryPhoto ? <span>Replace photo</span> : <><Plus size={17} /><span>Choose PNG or JPG</span><small>Square crop looks best</small></>}</span></label>
           <input type="hidden" name="image_gallery_paths" value={JSON.stringify(sellerGalleryPaths)} />
           <div className="seller-gallery-upload">
             <label className="field-label">Additional mineral photos (optional)
