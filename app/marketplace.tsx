@@ -7,10 +7,12 @@ import { createPortal } from "react-dom";
 import type { Session } from "@supabase/supabase-js";
 
 import AdminMarketplaceOrders from "./admin-marketplace-orders";
+import AdminStaffManagement from "./admin-staff-management";
 import BankInformationPanel from "./bank-information-panel";
 import AdminPaymentInstructions from "./admin-payment-instructions";
 import AdminOrderTimeLimits from "./admin-order-time-limits";
 import SupportInbox from "./support-inbox";
+import StaffOrderQueue from "./staff-order-queue";
 import CommercePanel from "./commerce-panel";
 import PrivateOfferForm from "./private-offer-form";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -23,7 +25,7 @@ type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-time-limits" | "payment-instructions" | "support";
+type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-time-limits" | "payment-instructions" | "support" | "staff";
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
@@ -660,7 +662,7 @@ export default function Marketplace() {
     setCartListingIds(new Set(counts.cartListingIds));
     setCartListingAccountId(userId);
   }, [userId]);
-  const [role, setRole] = useState<"user" | "admin" | null>(null);
+  const [role, setRole] = useState<"user" | "admin" | "staff" | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
@@ -1325,24 +1327,32 @@ export default function Marketplace() {
       const hydrate = async (session: Session | null) => {
         try {
           let isAdmin = false;
+          let isStaff = false;
           let hasWebsiteAccount = false;
           if (session) {
             const { data: profile, error: profileError } = await supabase
               .from("profiles")
-              .select("id, username, role")
+              .select("id, username, display_name, role")
               .eq("id", session.user.id)
               .maybeSingle();
             if (profileError) throw profileError;
             isAdmin = profile?.role === "admin";
+            isStaff = profile?.role === "staff";
             if (isAdmin && active) {
               setUser(profile?.username ?? "");
-              setDisplayName(profile?.username ?? "");
+              setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
               setRole("admin");
             }
-            if (!isAdmin) await supabase.auth.signOut({ scope: "local" });
+            if (isStaff && active) {
+              setUser(profile?.username ?? "");
+              setDisplayName(profile?.display_name ?? profile?.username ?? "");
+              setUserId(session.user.id);
+              setRole("staff");
+            }
+            if (!isAdmin && !isStaff) await supabase.auth.signOut({ scope: "local" });
           }
-          if (!isAdmin) {
+          if (!isAdmin && !isStaff) {
             const response = await fetchWithWebsiteSession("/api/auth/website-session", { cache: "no-store" });
             const result = response.ok ? await response.json() : null;
             hasWebsiteAccount = Boolean(result?.account);
@@ -1364,18 +1374,22 @@ export default function Marketplace() {
               }
             }
           }
-          try {
-            const listings = await loadMarketplaceListings(hasWebsiteAccount, isAdmin ? session?.access_token : undefined);
-            if (active) {
-              setSellers(listings.sellers);
-              setBuyers(listings.buyers);
-              setLastUpdated(new Date());
-              setStorageReady(true);
-            }
-          } catch {
-            if (active) {
-              setNotice("Could not load marketplace data from Supabase.");
-              setStorageReady(true);
+          if (isStaff) {
+            if (active) setStorageReady(true);
+          } else {
+            try {
+              const listings = await loadMarketplaceListings(hasWebsiteAccount, isAdmin ? session?.access_token : undefined);
+              if (active) {
+                setSellers(listings.sellers);
+                setBuyers(listings.buyers);
+                setLastUpdated(new Date());
+                setStorageReady(true);
+              }
+            } catch {
+              if (active) {
+                setNotice("Could not load marketplace data from Supabase.");
+                setStorageReady(true);
+              }
             }
           }
           if (active && isAdmin && session) {
@@ -3021,7 +3035,7 @@ export default function Marketplace() {
       const form = new FormData(formElement);
       const username = String(form.get("username") ?? "").trim();
       const password = String(form.get("password") ?? "");
-      let signedInRole: "user" | "admin" = "user";
+      let signedInRole: "user" | "admin" | "staff" = "user";
       if (isSupabaseConfigured) {
         try {
           let websiteAccount: { id: string; username: string; displayName: string; accessToken: string } | null = null;
@@ -3067,22 +3081,22 @@ export default function Marketplace() {
           if (error || !data.session) throw error ?? new Error("Sign-in failed.");
           const { data: profile, error: profileError } = await supabase
             .from("profiles")
-            .select("id, username, role")
+            .select("id, username, display_name, role")
             .eq("id", data.session.user.id)
             .single();
           if (profileError) throw profileError;
           setUser(profile.username);
-          setDisplayName(profile.username);
+          setDisplayName(profile.display_name ?? profile.username);
           setUserId(profile.id);
-          if (profile.role !== "admin") throw new Error("Username or password is incorrect.");
-          signedInRole = "admin";
+          if (profile.role !== "admin" && profile.role !== "staff") throw new Error("Username or password is incorrect.");
+          signedInRole = profile.role;
           setRole(signedInRole);
-          await refreshRemoteListings();
+          if (signedInRole === "admin") await refreshRemoteListings();
         } catch (error) {
           setNotice(error instanceof Error ? error.message : "Sign-in failed.");
           return;
         }
-        setNotice(signedInRole === "admin" ? "Signed in to the admin account." : `Signed in as ${username}.`);
+        setNotice(signedInRole === "admin" ? "Signed in to the admin account." : signedInRole === "staff" ? "Signed in to the staff account." : `Signed in as ${username}.`);
       } else {
         setUser(username);
         setDisplayName(username);
@@ -3126,7 +3140,7 @@ export default function Marketplace() {
   };
   const signOut = async () => {
     if (isSupabaseConfigured) {
-      if (role === "admin") await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
+      if (role === "admin" || role === "staff") await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
     }
     clearWebsiteSessionToken();
     setUser("");
@@ -3422,6 +3436,10 @@ export default function Marketplace() {
     )
     : null;
 
+  if (role === "staff") {
+    return <StaffOrderQueue username={user} onNotice={setNotice} onSignOut={() => { void signOut(); }} />;
+  }
+
   if (isAdminRole(role)) {
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
     const formatLedgerMoney = (amount: number, currency: Currency) => money(
@@ -3462,6 +3480,7 @@ export default function Marketplace() {
               <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
               <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
               <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
+              <button className={activeAdminPanel === "staff" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff"); setAdminMenuOpen(false); }}>Staff Management</button>
               <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>
               <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
               <div className="admin-menu-currency">
@@ -3930,6 +3949,7 @@ export default function Marketplace() {
           </> : <p className="admin-empty">No accounts match the selected filters{accountSearch.trim() ? ` and “${accountSearch.trim()}”` : ""}.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
         {activeAdminPanel === "orders" && <AdminMarketplaceOrders onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} />}
+        {activeAdminPanel === "staff" && <AdminStaffManagement onNotice={setNotice} />}
         {activeAdminPanel === "order-time-limits" && <AdminOrderTimeLimits onNotice={setNotice} />}
         {activeAdminPanel === "payment-instructions" && <AdminPaymentInstructions onNotice={setNotice} />}
         {activeAdminPanel === "subscriptions" && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">
@@ -4078,7 +4098,7 @@ export default function Marketplace() {
     {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button><div className="dialog-brand"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /><span>MADINIMARKET</span></div>
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" disabled={busyActions.has("account-signout")} onClick={() => void withProgress("account-signout", signOut)}>{busyActions.has("account-signout") ? "Signing out…" : "Sign out"}</button></div></>}
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2>{accountCreationDisabled ? <p className="dialog-copy">Account creation is suspended for now. Please try again later.</p> : <><p className="dialog-copy">Create your account to buy, sell, or both. Your delivery address is shared with a seller only after payment is verified for an order.</p><form className="form-stack form-scroll" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><div className="field-row"><Field label="Country" name="deliveryCountry" required autoComplete="country-name" /><Field label="Region" name="deliveryRegion" required autoComplete="address-level1" /></div><div className="field-row"><Field label="District" name="deliveryDistrict" required autoComplete="address-level2" /><Field label="Street / delivery address" name="deliveryAddress" required autoComplete="street-address" /></div><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={accountCreationDisabled || busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>      Already registered? <strong>Sign in</strong></button></>}</>}
-      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" disabled={nonAdminSignInDisabled} onClick={() => setDialog("forgot-password")}>{nonAdminSignInDisabled ? "Password recovery is currently unavailable" : "Forgot your password?"}</button><button className="switch-dialog" type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation is currently suspended" : <>New to the market? <strong>Create account</strong></>}</button></>}
+      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username or staff work email.</p><form className="form-stack" onSubmit={signIn}><Field label="Username or work email" name="username" placeholder="MM-1254 or name@company.com" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" disabled={nonAdminSignInDisabled} onClick={() => setDialog("forgot-password")}>{nonAdminSignInDisabled ? "Password recovery is currently unavailable" : "Forgot your password?"}</button><button className="switch-dialog" type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation is currently suspended" : <>New to the market? <strong>Create account</strong></>}</button></>}
       {dialog === "forgot-password" && <><div className="dialog-kicker">ACCOUNT RECOVERY</div><h2 id="dialog-title">Reset your password.</h2>{nonAdminSignInDisabled ? <><p className="dialog-copy">Password recovery is currently unavailable while user sign-in is not enabled.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Return to <strong>Sign in</strong></button></> : <><p className="dialog-copy">Enter the email address registered to your account. If it matches an active account, we’ll email a secure, one-time reset link. We never email passwords.</p><form className="form-stack" onSubmit={requestPasswordReset}><Field label="Registered email address" name="email" type="email" required autoComplete="email" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("password-reset-request")}>{busyActions.has("password-reset-request") ? "Sending link…" : <>Email reset link <ArrowUpRight size={16} /></>}</button></form><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Remembered your password? <strong>Sign in</strong></button></>}</>}
       {dialog === "certificate-ready" && <><div className="dialog-kicker">SIGN-IN COMPLETE</div><h2 id="dialog-title">Your certificate is ready.</h2><p className="dialog-copy">The certificate will open in a new tab. Your marketplace dashboard will stay open here.</p><button className="button button-dark form-submit" type="button" onClick={() => { if (certificateReadyListingId !== null) { const certificateTab = window.open("about:blank", "_blank"); if (!certificateTab) setNotice("Allow pop-ups to open this certificate."); else void fetchWithWebsiteSession(`/api/listing-certificate?id=${certificateReadyListingId}`).then(async (response) => { if (!response.ok) throw new Error("Could not open this certificate."); const url = URL.createObjectURL(await response.blob()); certificateTab.location.href = url; window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }).catch((error: unknown) => { certificateTab.close(); setNotice(error instanceof Error ? error.message : "Could not open this certificate."); }); } setCertificateReadyListingId(null); setDialog(null); }}>Open certificate <ArrowUpRight size={16} /></button></>}
       {dialog === "sell" && <>
