@@ -44,6 +44,7 @@ export async function GET(request: Request) {
       admin.from("marketplace_private_offer_threads")
         .select("id, request_id, buyer_id, seller_id, state, attempt_count, closed_at, close_reason, buyer_deleted_at, seller_deleted_at, created_at, updated_at")
         .or(`buyer_id.eq.${accountId},seller_id.eq.${accountId}`)
+        .neq("state", "ordered")
         .order("updated_at", { ascending: false })
         .limit(100),
       admin.from("marketplace_settings").select("listing_fee_rate, usd_enabled").eq("id", true).single(),
