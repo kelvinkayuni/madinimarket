@@ -23,19 +23,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid sign-in details." }, { status: 400 });
   }
 
-  if (!username || username.length > 128 || password.length < 8 || password.length > 256) {
+  if (!username || username.length > 254 || password.length < 8 || password.length > 256) {
     return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
   }
 
   try {
     const admin = createSupabaseAdminClient();
-    const { data: profile, error: profileError } = await admin
-      .from("profiles")
-      .select("email, username, role")
-      .eq("username", username)
-      .maybeSingle();
+    const profileQuery = admin.from("profiles").select("id, email, username, role");
+    const { data: profile, error: profileError } = emailPattern.test(username)
+      ? await profileQuery.eq("email", username.toLowerCase()).maybeSingle()
+      : await profileQuery.eq("username", username).maybeSingle();
 
-    if (profileError || !profile?.email) {
+    if (profileError) {
+      console.error("Could not look up the sign-in account.", profileError);
+      return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 503 });
+    }
+    if (!profile?.email) {
       return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
     }
 
@@ -49,6 +52,27 @@ export async function POST(request: Request) {
 
     if (error || !data.session) {
       return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
+    }
+
+    if (profile.role === "staff") {
+      const { data: staff, error: staffError } = await admin.from("staff_members")
+        .select("status, job_role")
+        .eq("user_id", profile.id)
+        .maybeSingle();
+      if (staffError) throw staffError;
+      if (!staff || staff.status !== "active" || staff.job_role !== "order_operations") {
+        await authClient.auth.signOut({ scope: "local" });
+        return NextResponse.json({ error: "This staff account is inactive. Contact the owner administrator." }, { status: 403 });
+      }
+      return NextResponse.json(
+        {
+          username: profile.username,
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+          accountType: "staff",
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
 
     if (profile.role !== "admin") {
@@ -70,7 +94,10 @@ export async function POST(request: Request) {
       },
       { headers: { "Cache-Control": "no-store" } },
     );
-  } catch {
+  } catch (error) {
+    console.error("Could not sign in to the marketplace account.", error);
     return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 503 });
   }
 }
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
