@@ -9,6 +9,7 @@ type StaffRole = {
   id: number;
   name: string;
   permissions: StaffPermission[];
+  assigned_staff_count: number;
 };
 
 type StaffMember = {
@@ -19,20 +20,10 @@ type StaffMember = {
   username: string;
   roles: StaffRole[];
   status: "invited" | "active" | "suspended";
-  created_at: string;
 };
-type StaffAudit = {
-  id: number;
-  actor_username: string;
-  action: string;
-  entity_id: string | null;
-  created_at: string;
-};
-
 export default function AdminStaffManagement({ onNotice }: { onNotice: (message: string) => void }) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [roles, setRoles] = useState<StaffRole[]>([]);
-  const [audit, setAudit] = useState<StaffAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [editingRolesFor, setEditingRolesFor] = useState<number | null>(null);
@@ -51,7 +42,6 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     if (!response.ok) throw new Error(result.error ?? "Could not load staff.");
     setStaff(result.staff as StaffMember[]);
     setRoles(result.roles as StaffRole[]);
-    setAudit(result.audit as StaffAudit[]);
   }, []);
 
   useEffect(() => {
@@ -129,6 +119,30 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     }
   };
 
+  const deleteRole = async (role: StaffRole) => {
+    if (role.assigned_staff_count > 0) return;
+    if (!window.confirm("Delete unused role \"" + role.name + "\"? This cannot be undone.")) return;
+    setBusy("delete-role-" + role.id);
+    try {
+      const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error("Administrator session expired.");
+      const response = await fetch("/api/admin/staff", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId: role.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not delete the role.");
+      await load();
+      onNotice("Staff role " + role.name + " deleted.");
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not delete the role.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const saveRoles = async (member: StaffMember) => {
     setBusy(`roles-${member.id}`);
     try {
@@ -196,6 +210,18 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         </fieldset>
         <button className="button button-dark" type="submit" disabled={busy !== ""}>{busy === "role" ? "Creating role…" : "Create role"}</button>
     </form>
+    <section className="admin-staff-list">
+      <h2>Staff roles · {roles.length}</h2>
+      {roles.length ? <div className="commerce-list">{roles.map((role) => <article className="admin-staff-row" key={role.id}>
+        <div><strong>{role.name}</strong><span>{role.permissions.map((permission) => STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission).join(" · ")}</span></div>
+        <div className="admin-staff-row-actions">
+          <span>{role.assigned_staff_count ? `Assigned to ${role.assigned_staff_count} staff` : "Not assigned"}</span>
+          {role.assigned_staff_count === 0 && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => void deleteRole(role)}>
+            {busy === `delete-role-${role.id}` ? "Deleting…" : "Delete role"}
+          </button>}
+        </div>
+      </article>)}</div> : <p className="commerce-note">No staff roles have been created.</p>}
+    </section>
     <form className="admin-staff-invite" onSubmit={(event) => void invite(event)}>
         <h2>Invite staff</h2>
         <label className="field-label">Full name<input className="text-input" name="fullName" autoComplete="name" maxLength={120} required /></label>
@@ -243,13 +269,6 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
           </div>
         </article>)}
       </div> : <p className="commerce-note">No staff accounts yet.</p>}
-    </section>
-    <section className="admin-staff-list">
-      <h2>Recent staff activity</h2>
-      {audit.length ? <ol className="admin-staff-audit">{audit.map((entry) => <li key={entry.id}>
-        <strong>{entry.actor_username}</strong> {entry.action.replaceAll("_", " ")}{entry.entity_id ? ` · staff record ${entry.entity_id}` : ""}
-        <time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</time>
-      </li>)}</ol> : <p className="commerce-note">No staff activity has been recorded.</p>}
     </section>
   </section>;
 }

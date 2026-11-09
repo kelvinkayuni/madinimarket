@@ -32,24 +32,19 @@ export async function GET(request: Request) {
 
   const [
     { data: staff, error: staffError },
-    { data: audit, error: auditError },
     { data: roles, error: rolesError },
     { data: assignments, error: assignmentsError },
   ] = await Promise.all([
-    owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, job_role, status, created_at, updated_at").order("id"),
-    owner.admin.from("staff_audit_log").select("id, actor_user_id, staff_member_id, action, entity_type, entity_id, details, created_at").order("created_at", { ascending: false }).limit(50),
-    owner.admin.from("staff_roles").select("id, name, permissions, created_at").order("name"),
+    owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, job_role, status").order("id"),
+    owner.admin.from("staff_roles").select("id, name, permissions").order("name"),
     owner.admin.from("staff_member_roles").select("staff_member_id, role_id"),
   ]);
-  if (staffError || auditError || rolesError || assignmentsError) {
-    console.error("Could not load staff management data.", staffError ?? auditError ?? rolesError ?? assignmentsError);
+  if (staffError || rolesError || assignmentsError) {
+    console.error("Could not load staff management data.", staffError ?? rolesError ?? assignmentsError);
     return NextResponse.json({ error: "Could not load staff management data. Apply the staff management migration." }, { status: 503 });
   }
 
-  const profileIds = [...new Set([
-    ...(staff ?? []).map((member) => member.user_id),
-    ...(audit ?? []).map((entry) => entry.actor_user_id).filter((id): id is string => Boolean(id)),
-  ])];
+  const profileIds = [...new Set((staff ?? []).map((member) => member.user_id))];
   const { data: profiles, error: profileError } = profileIds.length
     ? await owner.admin.from("profiles").select("id, username, email").in("id", profileIds)
     : { data: [], error: null };
@@ -68,11 +63,10 @@ export async function GET(request: Request) {
         .map((assignment) => roles?.find((role) => role.id === assignment.role_id))
         .filter((role): role is NonNullable<typeof roles>[number] => Boolean(role)),
     })),
-    audit: (audit ?? []).map((entry) => ({
-      ...entry,
-      actor_username: entry.actor_user_id ? profileById.get(entry.actor_user_id)?.username ?? "Former account" : "Former account",
+    roles: (roles ?? []).map((role) => ({
+      ...role,
+      assigned_staff_count: (assignments ?? []).filter((assignment) => assignment.role_id === role.id).length,
     })),
-    roles: roles ?? [],
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -89,7 +83,7 @@ export async function POST(request: Request) {
     }
     const { data: role, error: roleError } = await owner.admin.from("staff_roles")
       .insert({ name, permissions, created_by: owner.userId })
-      .select("id, name, permissions, created_at")
+      .select("id, name, permissions")
       .single();
     if (roleError?.code === "23505") return NextResponse.json({ error: "A role with that name already exists." }, { status: 409 });
     if (roleError) {
@@ -153,7 +147,7 @@ export async function POST(request: Request) {
       job_role: "multiple",
       status: "invited",
       invited_by: owner.userId,
-    }).select("id, employee_code, user_id, full_name, job_role, status, created_at").single();
+    }).select("id, employee_code, user_id, full_name, job_role, status").single();
     if (memberError) throw memberError;
 
     const { error: assignmentError } = await owner.admin.from("staff_member_roles").insert(
@@ -188,6 +182,30 @@ export async function POST(request: Request) {
       error: "Could not create the staff account and invitation. Check Supabase Auth email delivery and the staff management migration, then retry.",
     }, { status: 503 });
   }
+}
+
+export async function DELETE(request: Request) {
+  const owner = await getOwner(request);
+  if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
+  const body = await readBody(request);
+  const roleId = typeof body?.roleId === "number" ? body.roleId : Number(body?.roleId);
+  if (!Number.isSafeInteger(roleId) || roleId < 1) {
+    return NextResponse.json({ error: "Choose a valid staff role." }, { status: 400 });
+  }
+
+  const { error: deleteError } = await owner.admin.rpc("delete_unassigned_staff_role", {
+    p_role_id: roleId,
+    p_actor_user_id: owner.userId,
+  });
+  if (deleteError?.code === "P0002") return NextResponse.json({ error: "Staff role not found." }, { status: 404 });
+  if (deleteError?.code === "23503") {
+    return NextResponse.json({ error: "This role is assigned to staff and cannot be deleted. Remove it from all staff first." }, { status: 409 });
+  }
+  if (deleteError) {
+    console.error("Could not delete the unassigned staff role.", deleteError);
+    return NextResponse.json({ error: "Could not delete the staff role." }, { status: 503 });
+  }
+  return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(request: Request) {
