@@ -21,18 +21,9 @@ type StaffMember = {
   status: "invited" | "active" | "suspended";
   created_at: string;
 };
-type StaffAudit = {
-  id: number;
-  actor_username: string;
-  action: string;
-  entity_id: string | null;
-  created_at: string;
-};
-
 export default function AdminStaffManagement({ onNotice }: { onNotice: (message: string) => void }) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [roles, setRoles] = useState<StaffRole[]>([]);
-  const [audit, setAudit] = useState<StaffAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [editingRolesFor, setEditingRolesFor] = useState<number | null>(null);
@@ -51,7 +42,6 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     if (!response.ok) throw new Error(result.error ?? "Could not load staff.");
     setStaff(result.staff as StaffMember[]);
     setRoles(result.roles as StaffRole[]);
-    setAudit(result.audit as StaffAudit[]);
   }, []);
 
   useEffect(() => {
@@ -263,19 +253,12 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
             <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => void changeStatus(member)}>
               {busy === `status-${member.id}` ? "Updating…" : member.status === "suspended" ? "Reactivate" : "Suspend access"}
             </button>
-            {member.status === "invited" && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => void deleteInvitation(member)}>
-              {busy === `delete-${member.id}` ? "Deleting…" : "Delete invitation"}
+            {member.status === "invited" && <button className="button button-danger" type="button" disabled={busy !== ""} onClick={() => void deleteInvitation(member)}>
+              {busy === `delete-${member.id}` ? "Deleting…" : "Delete account"}
             </button>}
           </div>
         </article>)}
       </div> : <p className="commerce-note">No staff accounts yet.</p>}
-    </section>
-    <section className="admin-staff-list">
-      <h2>Recent staff activity</h2>
-      {audit.length ? <ol className="admin-staff-audit">{audit.map((entry) => <li key={entry.id}>
-        <strong>{entry.actor_username}</strong> {entry.action.replaceAll("_", " ")}{entry.entity_id ? ` · staff record ${entry.entity_id}` : ""}
-        <time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</time>
-      </li>)}</ol> : <p className="commerce-note">No staff activity has been recorded.</p>}
     </section>
   </section>;
 }

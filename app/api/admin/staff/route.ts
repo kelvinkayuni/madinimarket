@@ -32,24 +32,19 @@ export async function GET(request: Request) {
 
   const [
     { data: staff, error: staffError },
-    { data: audit, error: auditError },
     { data: roles, error: rolesError },
     { data: assignments, error: assignmentsError },
   ] = await Promise.all([
     owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, job_role, status, created_at, updated_at").order("id"),
-    owner.admin.from("staff_audit_log").select("id, actor_user_id, staff_member_id, action, entity_type, entity_id, details, created_at").order("created_at", { ascending: false }).limit(50),
     owner.admin.from("staff_roles").select("id, name, permissions, created_at").order("name"),
     owner.admin.from("staff_member_roles").select("staff_member_id, role_id"),
   ]);
-  if (staffError || auditError || rolesError || assignmentsError) {
-    console.error("Could not load staff management data.", staffError ?? auditError ?? rolesError ?? assignmentsError);
+  if (staffError || rolesError || assignmentsError) {
+    console.error("Could not load staff management data.", staffError ?? rolesError ?? assignmentsError);
     return NextResponse.json({ error: "Could not load staff management data. Apply the staff management migration." }, { status: 503 });
   }
 
-  const profileIds = [...new Set([
-    ...(staff ?? []).map((member) => member.user_id),
-    ...(audit ?? []).map((entry) => entry.actor_user_id).filter((id): id is string => Boolean(id)),
-  ])];
+  const profileIds = [...new Set((staff ?? []).map((member) => member.user_id))];
   const { data: profiles, error: profileError } = profileIds.length
     ? await owner.admin.from("profiles").select("id, username, email").in("id", profileIds)
     : { data: [], error: null };
@@ -67,10 +62,6 @@ export async function GET(request: Request) {
         .filter((assignment) => assignment.staff_member_id === member.id)
         .map((assignment) => roles?.find((role) => role.id === assignment.role_id))
         .filter((role): role is NonNullable<typeof roles>[number] => Boolean(role)),
-    })),
-    audit: (audit ?? []).map((entry) => ({
-      ...entry,
-      actor_username: entry.actor_user_id ? profileById.get(entry.actor_user_id)?.username ?? "Former account" : "Former account",
     })),
     roles: roles ?? [],
   }, { headers: { "Cache-Control": "no-store" } });
