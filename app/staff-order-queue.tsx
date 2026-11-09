@@ -80,6 +80,11 @@ export default function StaffOrderQueue({ username, onSignOut, onNotice }: {
         body: JSON.stringify({ itemId }),
       });
       const result = await response.json();
+      if (response.status === 409) {
+        await load();
+        onNotice("This delivery task was already completed or changed by another staff member. The queue has been refreshed.");
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not confirm shipment delivery.");
       await load();
       onNotice(`Carrier delivery confirmed for ${Number(result.itemsUpdated) || itemCount} shipment ${Number(result.itemsUpdated) === 1 ? "item" : "items"}.`);
