@@ -32,19 +32,24 @@ export async function GET(request: Request) {
 
   const [
     { data: staff, error: staffError },
+    { data: audit, error: auditError },
     { data: roles, error: rolesError },
     { data: assignments, error: assignmentsError },
   ] = await Promise.all([
-    owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, job_role, status").order("id"),
-    owner.admin.from("staff_roles").select("id, name, permissions").order("name"),
+    owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, job_role, status, created_at, updated_at").order("id"),
+    owner.admin.from("staff_audit_log").select("id, actor_user_id, staff_member_id, action, entity_type, entity_id, details, created_at").order("created_at", { ascending: false }).limit(50),
+    owner.admin.from("staff_roles").select("id, name, permissions, created_at").order("name"),
     owner.admin.from("staff_member_roles").select("staff_member_id, role_id"),
   ]);
-  if (staffError || rolesError || assignmentsError) {
-    console.error("Could not load staff management data.", staffError ?? rolesError ?? assignmentsError);
+  if (staffError || auditError || rolesError || assignmentsError) {
+    console.error("Could not load staff management data.", staffError ?? auditError ?? rolesError ?? assignmentsError);
     return NextResponse.json({ error: "Could not load staff management data. Apply the staff management migration." }, { status: 503 });
   }
 
-  const profileIds = [...new Set((staff ?? []).map((member) => member.user_id))];
+  const profileIds = [...new Set([
+    ...(staff ?? []).map((member) => member.user_id),
+    ...(audit ?? []).map((entry) => entry.actor_user_id).filter((id): id is string => Boolean(id)),
+  ])];
   const { data: profiles, error: profileError } = profileIds.length
     ? await owner.admin.from("profiles").select("id, username, email").in("id", profileIds)
     : { data: [], error: null };
@@ -63,10 +68,11 @@ export async function GET(request: Request) {
         .map((assignment) => roles?.find((role) => role.id === assignment.role_id))
         .filter((role): role is NonNullable<typeof roles>[number] => Boolean(role)),
     })),
-    roles: (roles ?? []).map((role) => ({
-      ...role,
-      assigned_staff_count: (assignments ?? []).filter((assignment) => assignment.role_id === role.id).length,
+    audit: (audit ?? []).map((entry) => ({
+      ...entry,
+      actor_username: entry.actor_user_id ? profileById.get(entry.actor_user_id)?.username ?? "Former account" : "Former account",
     })),
+    roles: roles ?? [],
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -83,7 +89,7 @@ export async function POST(request: Request) {
     }
     const { data: role, error: roleError } = await owner.admin.from("staff_roles")
       .insert({ name, permissions, created_by: owner.userId })
-      .select("id, name, permissions")
+      .select("id, name, permissions, created_at")
       .single();
     if (roleError?.code === "23505") return NextResponse.json({ error: "A role with that name already exists." }, { status: 409 });
     if (roleError) {
@@ -147,7 +153,7 @@ export async function POST(request: Request) {
       job_role: "multiple",
       status: "invited",
       invited_by: owner.userId,
-    }).select("id, employee_code, user_id, full_name, job_role, status").single();
+    }).select("id, employee_code, user_id, full_name, job_role, status, created_at").single();
     if (memberError) throw memberError;
 
     const { error: assignmentError } = await owner.admin.from("staff_member_roles").insert(
@@ -182,30 +188,6 @@ export async function POST(request: Request) {
       error: "Could not create the staff account and invitation. Check Supabase Auth email delivery and the staff management migration, then retry.",
     }, { status: 503 });
   }
-}
-
-export async function DELETE(request: Request) {
-  const owner = await getOwner(request);
-  if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
-  const body = await readBody(request);
-  const roleId = typeof body?.roleId === "number" ? body.roleId : Number(body?.roleId);
-  if (!Number.isSafeInteger(roleId) || roleId < 1) {
-    return NextResponse.json({ error: "Choose a valid staff role." }, { status: 400 });
-  }
-
-  const { error: deleteError } = await owner.admin.rpc("delete_unassigned_staff_role", {
-    p_role_id: roleId,
-    p_actor_user_id: owner.userId,
-  });
-  if (deleteError?.code === "P0002") return NextResponse.json({ error: "Staff role not found." }, { status: 404 });
-  if (deleteError?.code === "23503") {
-    return NextResponse.json({ error: "This role is assigned to staff and cannot be deleted. Remove it from all staff first." }, { status: 409 });
-  }
-  if (deleteError) {
-    console.error("Could not delete the unassigned staff role.", deleteError);
-    return NextResponse.json({ error: "Could not delete the staff role." }, { status: 503 });
-  }
-  return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(request: Request) {
@@ -247,12 +229,13 @@ export async function PATCH(request: Request) {
   if (member.status === status) return NextResponse.json({ ok: true });
 
   const now = new Date().toISOString();
-  const { error: updateError } = await owner.admin.from("staff_members")
-    .update({ status, updated_at: now }).eq("id", memberId);
+  const { data: updatedMember, error: updateError } = await owner.admin.from("staff_members")
+    .update({ status, updated_at: now }).eq("id", memberId).eq("status", member.status).select("id").maybeSingle();
   if (updateError) {
     console.error("Could not update the staff status.", updateError);
     return NextResponse.json({ error: "Could not update staff access." }, { status: 503 });
   }
+  if (!updatedMember) return NextResponse.json({ error: "Staff status changed. Refresh and try again." }, { status: 409 });
   const { error: auditError } = await owner.admin.from("staff_audit_log").insert({
     actor_user_id: owner.userId,
     staff_member_id: memberId,
@@ -264,6 +247,68 @@ export async function PATCH(request: Request) {
   if (auditError) {
     console.error("Staff access changed, but the audit entry could not be recorded.", auditError);
     return NextResponse.json({ error: "Staff access changed, but its audit record could not be saved. Contact technical support." }, { status: 503 });
+  }
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(request: Request) {
+  const owner = await getOwner(request);
+  if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
+  const body = await readBody(request);
+  if (!body) return NextResponse.json({ error: "Invalid staff invitation deletion." }, { status: 400 });
+  const memberId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
+  if (!Number.isSafeInteger(memberId) || memberId < 1) {
+    return NextResponse.json({ error: "Choose a valid staff invitation." }, { status: 400 });
+  }
+
+  const { data: member, error: memberError } = await owner.admin.from("staff_members")
+    .select("id, user_id, full_name, status").eq("id", memberId).maybeSingle();
+  if (memberError) {
+    console.error("Could not look up the staff invitation.", memberError);
+    return NextResponse.json({ error: "Could not delete the staff invitation." }, { status: 503 });
+  }
+  if (!member) return NextResponse.json({ error: "Staff member not found." }, { status: 404 });
+  if (member.status !== "invited") {
+    return NextResponse.json({ error: "Only invitations that have not completed account setup can be deleted." }, { status: 409 });
+  }
+
+  const { data: lockedMember, error: lockError } = await owner.admin.from("staff_members")
+    .update({ status: "suspended", updated_at: new Date().toISOString() })
+    .eq("id", memberId).eq("status", "invited").select("id, user_id").maybeSingle();
+  if (lockError) {
+    console.error("Could not lock the pending staff invitation for deletion.", lockError);
+    return NextResponse.json({ error: "Could not delete the staff invitation." }, { status: 503 });
+  }
+  if (!lockedMember) {
+    return NextResponse.json({ error: "The invitation status changed. Refresh and try again." }, { status: 409 });
+  }
+
+  const { error: deleteError } = await owner.admin.auth.admin.deleteUser(lockedMember.user_id);
+  if (deleteError) {
+    console.error("Could not delete the pending staff account.", deleteError);
+    const { error: restoreError } = await owner.admin.from("staff_members")
+      .update({ status: "invited", updated_at: new Date().toISOString() })
+      .eq("id", memberId).eq("status", "suspended");
+    if (restoreError) {
+      console.error("Could not restore the pending staff invitation after deletion failed.", restoreError);
+      return NextResponse.json({ error: "The account could not be deleted and its invitation could not be restored. Contact technical support." }, { status: 503 });
+    }
+    return NextResponse.json({ error: "Could not delete the staff account. The pending invitation was restored." }, { status: 503 });
+  }
+
+  const { error: auditError } = await owner.admin.from("staff_audit_log").insert({
+    actor_user_id: owner.userId,
+    action: "staff_invitation_deleted",
+    entity_type: "staff_member",
+    entity_id: String(memberId),
+    details: { full_name: member.full_name },
+  });
+  if (auditError) {
+    console.error("Staff invitation was deleted, but its audit record could not be saved.", auditError);
+    return NextResponse.json({
+      ok: true,
+      warning: `The pending invitation for ${member.full_name} was deleted, but its audit record could not be saved.`,
+    });
   }
   return NextResponse.json({ ok: true });
 }
