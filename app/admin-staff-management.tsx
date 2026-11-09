@@ -253,9 +253,15 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
             <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => void changeStatus(member)}>
               {busy === `status-${member.id}` ? "Updating…" : member.status === "suspended" ? "Reactivate" : "Suspend access"}
             </button>
-            {member.status === "invited" && <button className="button button-danger" type="button" disabled={busy !== ""} onClick={() => void deleteInvitation(member)}>
+            <button
+              className="button button-danger"
+              type="button"
+              disabled={busy !== "" || member.status !== "invited"}
+              title={member.status === "invited" ? "Delete this invitation before account setup is completed." : "Only staff accounts that have not completed setup can be deleted."}
+              onClick={() => void deleteInvitation(member)}
+            >
               {busy === `delete-${member.id}` ? "Deleting…" : "Delete account"}
-            </button>}
+            </button>
           </div>
         </article>)}
       </div> : <p className="commerce-note">No staff accounts yet.</p>}
