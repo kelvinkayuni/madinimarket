@@ -35,6 +35,7 @@ type CartItem = { id: string; listing_id: number; listing: CartListing | null };
 type OrderItem = {
   id: string;
   listing_id: number | null;
+  private_offer_id?: string | null;
   mineral_name: string;
   weight: number;
   unit: string;
@@ -306,6 +307,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [declineReason, setDeclineReason] = useState("");
   const [declineExplanation, setDeclineExplanation] = useState("");
   const refreshSequence = useRef(0);
+  const knownSellerPrivateOfferOrderIds = useRef<Set<string> | null>(null);
 
   const refresh = useCallback(async () => {
     const requestSequence = ++refreshSequence.current;
@@ -318,6 +320,18 @@ export default function CommercePanel({ onNotice, onCounters }: {
     if (!response.ok) throw new Error(result.error ?? "Could not load your cart and orders.");
     if (!offersResponse.ok) throw new Error(offersResult.error ?? "Could not load private offers.");
     const commerce = { ...result, privateOffers: offersResult } as CommerceData;
+    const sellerPrivateOfferOrderIds = new Set(
+      commerce.sellerItems.flatMap((item) => item.private_offer_id ? [item.private_offer_id] : []),
+    );
+    if (knownSellerPrivateOfferOrderIds.current) {
+      const newPrivateOfferOrder = [...sellerPrivateOfferOrderIds].some(
+        (offerId) => !knownSellerPrivateOfferOrderIds.current?.has(offerId),
+      );
+      if (newPrivateOfferOrder) {
+        setActiveTab((current) => current === "offers" ? "selling" : current);
+      }
+    }
+    knownSellerPrivateOfferOrderIds.current = sellerPrivateOfferOrderIds;
     setData(commerce);
     setBuyerOlderOrders([]);
     setSellerOlderItems([]);
@@ -471,6 +485,8 @@ export default function CommercePanel({ onNotice, onCounters }: {
       if (!response.ok) throw new Error(result.error ?? "The private offer action could not be completed.");
       await refresh();
       if (values.action === "checkout_offer" && result.order?.control_number) {
+        setSelectedPrivateThreadId(null);
+        setActiveTab("buying");
         if (result.order.payment_status === "awaiting_payment" && result.order.payment_deadline) {
           const paymentDeadline = new Date(result.order.payment_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" });
           onNotice(`Private order ${result.order.control_number} confirmed. The seller has confirmed availability; submit payment by ${paymentDeadline} Tanzania time.`);
