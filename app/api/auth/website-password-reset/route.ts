@@ -23,6 +23,36 @@ export async function POST(request: Request) {
   const genericMessage = "If an active account uses that email, a password reset link will be sent.";
   try {
     const admin = createSupabaseAdminClient();
+    const { data: staffProfile, error: staffProfileError } = await admin.from("profiles")
+      .select("id, display_name, email")
+      .eq("email", email)
+      .eq("role", "staff")
+      .maybeSingle();
+    if (staffProfileError) throw staffProfileError;
+    if (staffProfile) {
+      const { data: staffMember, error: staffMemberError } = await admin.from("staff_members")
+        .select("status")
+        .eq("user_id", staffProfile.id)
+        .maybeSingle();
+      if (staffMemberError) throw staffMemberError;
+      if (staffMember?.status === "active") {
+        const { data: recovery, error: recoveryError } = await admin.auth.admin.generateLink({
+          type: "recovery",
+          email,
+          options: { redirectTo: new URL("/staff/activate", getPublicAppUrl()).toString() },
+        });
+        if (recoveryError) throw recoveryError;
+        const actionLink = recovery.properties?.action_link;
+        if (!actionLink) throw new Error("Supabase did not return a staff password recovery link.");
+        await sendGmailEmail({
+          to: email,
+          subject: "Reset your Madinimarket staff password",
+          text: `Hello ${staffProfile.display_name},\n\nUse this secure link to choose a new password for your staff account:\n\n${actionLink}\n\nIf you did not request this, you can ignore this email.`,
+        });
+      }
+      return NextResponse.json({ message: genericMessage }, { status: 202, headers: { "Cache-Control": "no-store" } });
+    }
+
     const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
       .select("non_admin_sign_in_disabled")
       .eq("id", true)
