@@ -625,6 +625,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-private-card-list { max-height: 360px; display: grid; align-content: start; gap: 7px; overflow-y: auto; padding: 8px; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .commerce-private-card { min-width: 0; min-height: 62px; display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 7px; border: 1px solid #dde4da; border-radius: 4px; background: #fff; color: #536353; text-align: left; cursor: pointer; font: inherit; }
 .commerce-private-card:hover { border-color: #789c68; box-shadow: 0 3px 12px rgba(48, 75, 57, .08); }
+.commerce-private-card:focus-visible { outline: 2px solid #527b46; outline-offset: 2px; }
 .commerce-private-card-image { width: 54px; height: 54px; border-radius: 3px; object-fit: cover; }
 .commerce-private-card-image-placeholder { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 3px; background: #edf1e9; color: #789c68; font-size: 18px; font-weight: 800; }
 .commerce-private-card-main, .commerce-private-card-side { display: grid; gap: 3px; min-width: 0; }
@@ -633,6 +634,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-private-card strong { overflow: hidden; color: #304b39; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .commerce-private-card-price { color: #244f3a; font-size: 11px; font-weight: 800; }
 .commerce-private-card-meta, .commerce-private-card-status { color: #69766a; font-size: 9px; }
+.commerce-private-card-action { width: fit-content; margin-top: 2px; color: #355f3c; font-size: 9px; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
 .commerce-private-dialog { width: min(760px, 100%); }
 .commerce-private-dialog .commerce-private-offer { max-height: 60vh; overflow-y: auto; }
 .commerce-item, .commerce-order-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 11px 0; border-bottom: 1px solid #edf0ea; }
