@@ -56,11 +56,11 @@ export async function POST(request: Request) {
 
     if (profile.role === "staff") {
       const { data: staff, error: staffError } = await admin.from("staff_members")
-        .select("status, job_role")
+        .select("status")
         .eq("user_id", profile.id)
         .maybeSingle();
       if (staffError) throw staffError;
-      if (!staff || staff.status !== "active" || staff.job_role !== "order_operations") {
+      if (!staff || staff.status !== "active") {
         await authClient.auth.signOut({ scope: "local" });
         return NextResponse.json({ error: "This staff account is inactive. Contact the owner administrator." }, { status: 403 });
       }

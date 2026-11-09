@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { getOrderOperationsStaff } from "@/lib/staff-auth";
+import { getStaffAccess } from "@/lib/staff-auth";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(request: Request) {
-  let staff: Awaited<ReturnType<typeof getOrderOperationsStaff>>;
+  let staff: Awaited<ReturnType<typeof getStaffAccess>>;
   try {
-    staff = await getOrderOperationsStaff(request);
+    staff = await getStaffAccess(request, "delivery_confirmation");
   } catch (error) {
     console.error("Could not verify order operations staff access.", error);
     return NextResponse.json({ error: "Could not verify staff access." }, { status: 503 });
@@ -64,9 +64,9 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  let staff: Awaited<ReturnType<typeof getOrderOperationsStaff>>;
+  let staff: Awaited<ReturnType<typeof getStaffAccess>>;
   try {
-    staff = await getOrderOperationsStaff(request);
+    staff = await getStaffAccess(request, "delivery_confirmation");
   } catch (error) {
     console.error("Could not verify order operations staff access.", error);
     return NextResponse.json({ error: "Could not verify staff access." }, { status: 503 });

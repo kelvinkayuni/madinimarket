@@ -20,12 +20,13 @@ import { clearWebsiteSessionToken, fetchWithWebsiteSession, getWebsiteSessionTok
 import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 import { calculateListingPrice } from "@/lib/listing-pricing";
 import { MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
+import type { StaffPermission } from "@/lib/staff-permissions";
 
 type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-time-limits" | "payment-instructions" | "support" | "staff";
+type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff";
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
@@ -164,7 +165,17 @@ const sellerPriceDetails = (listing: Pick<Seller, "seller_price" | "platform_fee
   const platformFee = listing.platform_fee_amount ?? String(Number(listing.price) - Number(sellerPrice));
   return `Seller receives ${money(sellerPrice, listing.currency)} · Madinimarket fee ${money(platformFee, listing.currency)}`;
 };
-const isAdminRole = (role: "user" | "admin" | null): boolean => role === "admin";
+const isAdminRole = (role: "user" | "admin" | "staff" | null): boolean => role === "admin";
+
+function defaultStaffPanel(permissions: StaffPermission[]): AdminPanel {
+  if (permissions.includes("marketplace_orders") || permissions.includes("accounting")) return "orders";
+  if (permissions.includes("market_moderation") || permissions.includes("review_submissions")) return "review";
+  if (permissions.includes("accounts")) return "accounts";
+  if (permissions.includes("customer_support")) return "support";
+  if (permissions.includes("translations")) return "translations";
+  if (permissions.includes("homepage_headlines")) return "homepage";
+  return "delivery";
+}
 const weightInGrams = (weight: number, unit: Unit | StoneWeightUnit) =>
   weight * ({ carats: 0.2, g: 1, kg: 1_000, tons: 1_000_000 }[unit]);
 const isValidBatchWeightRange = (
@@ -663,6 +674,7 @@ export default function Marketplace() {
     setCartListingAccountId(userId);
   }, [userId]);
   const [role, setRole] = useState<"user" | "admin" | "staff" | null>(null);
+  const [staffPermissions, setStaffPermissions] = useState<StaffPermission[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
@@ -849,7 +861,8 @@ export default function Marketplace() {
     };
   }, [accountOrderStatusChannel, role, userId]);
   useEffect(() => {
-    if (role !== "admin" || !userId || !isSupabaseConfigured) return;
+    if ((role !== "admin" && !(role === "staff" && (staffPermissions.includes("marketplace_orders") || staffPermissions.includes("accounting")))) ||
+      !userId || !isSupabaseConfigured) return;
     let active = true;
     let loading = false;
     let refreshTimer: number | undefined;
@@ -884,6 +897,10 @@ export default function Marketplace() {
       }, 200);
     };
     const supabase = getSupabaseBrowserClient();
+    void refreshMarketplaceOrdersNeedingAction();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshMarketplaceOrdersNeedingAction();
+    }, 30_000);
     const channel = supabase
       .channel("admin-marketplace-order-count", { config: { private: true } })
       .on("broadcast", { event: "marketplace_orders_changed" }, scheduleRefresh)
@@ -898,10 +915,11 @@ export default function Marketplace() {
     return () => {
       active = false;
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      window.clearInterval(interval);
       void supabase.removeChannel(channel);
       removeResumeListener();
     };
-  }, [role, userId]);
+  }, [role, staffPermissions, userId]);
 
   const addMineralToCart = async (listing: Seller) => {
     if (role !== "user") {
@@ -1070,6 +1088,8 @@ export default function Marketplace() {
         setDisplayName("");
         setUserId("");
         setRole(null);
+        setStaffPermissions([]);
+        setActiveAdminPanel(null);
         setCertificates({});
         setSellerOpenOrdersCount(0);
         setBuyerOpenOrdersCount(0);
@@ -1328,7 +1348,8 @@ export default function Marketplace() {
         try {
           let isAdmin = false;
           let isStaff = false;
-          let hasWebsiteAccount = false;
+        let assignedPermissions: StaffPermission[] = [];
+        let hasWebsiteAccount = false;
           if (session) {
             const { data: profile, error: profileError } = await supabase
               .from("profiles")
@@ -1349,6 +1370,15 @@ export default function Marketplace() {
               setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
               setRole("staff");
+              const response = await fetch("/api/staff/access", {
+                headers: { Authorization: `Bearer ${session.access_token}` },
+                cache: "no-store",
+              });
+              const access = await response.json();
+              if (!response.ok) throw new Error(access.error ?? "Could not load staff access.");
+              assignedPermissions = access.permissions as StaffPermission[];
+              setStaffPermissions(assignedPermissions);
+              setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
             }
             if (!isAdmin && !isStaff) await supabase.auth.signOut({ scope: "local" });
           }
@@ -1392,13 +1422,30 @@ export default function Marketplace() {
               }
             }
           }
-          if (active && isAdmin && session) {
-            const adminLoadLabels = ["accounts", "licences", "translations", "site settings", "subscriptions"];
-            void Promise.allSettled([
-              loadAdminAccounts(session.access_token).then(setWebsiteAccounts),
-              loadAdminCertificates(session.access_token).then(setAdminCertificates),
-              loadAdminTranslations(session.access_token).then(setTranslationPairs),
-              loadAdminSiteContent(session.access_token).then((siteContent) => {
+          if (active && (isAdmin || isStaff) && session) {
+            const can = (permission: StaffPermission) => isAdmin || assignedPermissions.includes(permission);
+            const adminLoads: { label: string; load: Promise<unknown> }[] = [];
+            if (can("market_moderation") || can("review_submissions")) {
+              adminLoads.push({
+                label: "review submissions",
+                load: loadMarketplaceListings(false, session.access_token).then((listings) => {
+                  setSellers(listings.sellers);
+                  setBuyers(listings.buyers);
+                  setLastUpdated(new Date());
+                }),
+              });
+            }
+            if (can("accounts")) {
+              adminLoads.push({ label: "accounts", load: loadAdminAccounts(session.access_token).then(setWebsiteAccounts) });
+              adminLoads.push({ label: "licences", load: loadAdminCertificates(session.access_token).then(setAdminCertificates) });
+            }
+            if (can("translations")) {
+              adminLoads.push({ label: "translations", load: loadAdminTranslations(session.access_token).then(setTranslationPairs) });
+            }
+            if (can("homepage_headlines")) {
+              adminLoads.push({
+                label: "homepage headlines",
+                load: loadAdminSiteContent(session.access_token).then((siteContent) => {
                 setSwahiliEnabled(siteContent.swahiliEnabled);
                 setAccountCreationDisabled(siteContent.accountCreationDisabled);
                 setNonAdminSignInDisabled(siteContent.nonAdminSignInDisabled);
@@ -1412,13 +1459,20 @@ export default function Marketplace() {
                 setBuyerCardsPerColumnInput(String(siteContent.buyerCardsPerColumn));
                 setSiteContentLoaded(true);
                 setHomepageHeadlines(siteContent.headlines);
-              }),
-              loadAdminSubscriptions(session.access_token).then((subscriptions) => {
+                }),
+              });
+            }
+            if (isAdmin) {
+              adminLoads.push({
+                label: "subscriptions",
+                load: loadAdminSubscriptions(session.access_token).then((subscriptions) => {
                 setSubscriptionPlans(subscriptions.plans);
                 setPendingSubscriptions(subscriptions.pendingSubscriptions);
-              }),
-            ]).then((results) => {
-              const failures = results.map((result, index) => result.status === "rejected" ? { label: adminLoadLabels[index], result } : null).filter((item): item is { label: string; result: PromiseRejectedResult } => item !== null);
+                }),
+              });
+            }
+            void Promise.allSettled(adminLoads.map((item) => item.load)).then((results) => {
+              const failures = results.map((result, index) => result.status === "rejected" ? { label: adminLoads[index].label, result } : null).filter((item): item is { label: string; result: PromiseRejectedResult } => item !== null);
               if (failures.length && active) {
                 const first = failures[0];
                 const detail = first.result.reason instanceof Error ? first.result.reason.message : "";
@@ -1714,7 +1768,7 @@ export default function Marketplace() {
   }, [buyerCardsPerColumn, marketHoursLoaded, marketIsOpen, query, visibleBuyers.length]);
   const refreshRemoteListings = async (includeOwnSubmissions = role === "user") => {
     let adminAccessToken: string | undefined;
-    if (role === "admin") {
+    if (role === "admin" || role === "staff") {
       const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
       adminAccessToken = session?.access_token;
     }
@@ -2019,15 +2073,33 @@ export default function Marketplace() {
     setRejectionMessages((current) => ({ ...current, [key]: message }));
   };
   const reviewSubmission = async (kind: "seller" | "buyer", id: number, approved: boolean) => {
-    if (role !== "admin" || !isSupabaseConfigured) return;
+    if ((role !== "admin" && role !== "staff") || !isSupabaseConfigured) return;
     const key = `${kind}-${id}`;
     const message = rejectionMessages[key]?.trim() ?? "";
     if (!approved && !message) { setNotice("Add a rejection message before rejecting this submission."); return; }
-    const supabase = getSupabaseBrowserClient();
-    const { error } = kind === "seller"
-      ? await supabase.rpc("review_listing", { p_id: id, p_approved: approved, p_message: message || null })
-      : await supabase.rpc("review_buy_request", { p_id: id, p_approved: approved, p_message: message || null });
-    if (error) { setNotice(error.message); return; }
+    if (role === "staff") {
+      try {
+        const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session) throw new Error("Staff session expired.");
+        const response = await fetch("/api/staff/reviews", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ kind, id, approved, message }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not save the review decision.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save the review decision.");
+        return;
+      }
+    } else {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = kind === "seller"
+        ? await supabase.rpc("review_listing", { p_id: id, p_approved: approved, p_message: message || null })
+        : await supabase.rpc("review_buy_request", { p_id: id, p_approved: approved, p_message: message || null });
+      if (error) { setNotice(error.message); return; }
+    }
     void refreshRemoteListings().catch(() => setNotice("Review saved, but the queue could not be refreshed."));
     updateReviewMessage(key, "");
     setNotice(approved ? "Submission approved and published." : "Submission rejected and returned to its owner.");
@@ -3436,11 +3508,18 @@ export default function Marketplace() {
     )
     : null;
 
-  if (role === "staff") {
-    return <StaffOrderQueue username={user} onNotice={setNotice} onSignOut={() => { void signOut(); }} />;
+  if (role === "staff" && staffPermissions.length === 0) {
+    return <main className="staff-activation-shell"><section className="dialog-card staff-activation-card">
+      <div className="dialog-kicker">MADINIMARKET STAFF</div><h1>No roles assigned</h1>
+      <p className="dialog-copy">Your account is active, but no work permissions are assigned yet. Contact the owner administrator.</p>
+      <button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button>
+    </section></main>;
   }
 
-  if (isAdminRole(role)) {
+  if (isAdminRole(role) || role === "staff") {
+    const staffCan = (permission: StaffPermission) => role === "admin" || staffPermissions.includes(permission);
+    const staffCanReview = staffCan("market_moderation") || staffCan("review_submissions");
+    const staffCanOrders = staffCan("marketplace_orders") || staffCan("accounting");
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
     const formatLedgerMoney = (amount: number, currency: Currency) => money(
       new Intl.NumberFormat("en-US", {
@@ -3461,7 +3540,7 @@ export default function Marketplace() {
         <button type="button" onClick={() => window.location.reload()}>Reload to update</button>
       </div>}
       <header className="admin-header">
-        <a className="admin-brand" href="#admin-home"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /> <span className="admin-brand-name">MADINIMARKET</span><span>ADMIN</span></a>
+        <a className="admin-brand" href="#admin-home"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /> <span className="admin-brand-name">MADINIMARKET</span><span>{role === "staff" ? "STAFF" : "ADMIN"}</span></a>
         <div className="admin-menu-wrap">
           <button className="admin-menu-trigger" type="button" aria-label={adminMenuOpen ? "Close admin menu" : "Open admin menu"} aria-expanded={adminMenuOpen} aria-controls="admin-panel-menu" onClick={() => setAdminMenuOpen((open) => !open)}>
             {adminMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -3470,33 +3549,34 @@ export default function Marketplace() {
             <button className="admin-menu-dismiss" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />
             <nav className="admin-menu-popover" id="admin-panel-menu" aria-label="Admin panels">
               <span className="admin-menu-heading">ADMIN PANELS</span>
-              <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>
-              <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>
-              <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>
-              <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>
-              <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>
-              <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>
-              <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
-              <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
-              <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
-              <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
-              <button className={activeAdminPanel === "staff" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff"); setAdminMenuOpen(false); }}>Staff Management</button>
-              <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>
-              <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
-              <div className="admin-menu-currency">
+              {(role === "admin" || staffCanReview) && <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>}
+              {role === "admin" && <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>}
+              {(role === "admin" || staffCan("accounts")) && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
+              {(role === "admin" || staffCan("customer_support")) && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
+              {(role === "admin" || staffCan("translations")) && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
+              {(role === "admin" || staffCan("homepage_headlines")) && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>}
+              {role === "admin" && <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>}
+              {role === "admin" && <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>}
+              {role === "admin" && <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>}
+              {(role === "admin" || staffCanOrders) && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
+              {(role === "admin" || staffCan("delivery_confirmation")) && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery confirmation</button>}
+              {role === "admin" && <button className={activeAdminPanel === "staff" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff"); setAdminMenuOpen(false); }}>Staff Management</button>}
+              {role === "admin" && <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>}
+              {role === "admin" && <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>}
+              {role === "admin" && <div className="admin-menu-currency">
                 <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                 <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
                   <span />
                 </button>
-              </div>
+              </div>}
             </nav>
           </>}
         </div>
         <div className="admin-header-actions"><span className="admin-account">{user}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
       <div className="admin-content" id="admin-home">
-        {activeAdminPanel === "support" && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin onNotice={setNotice} /></section>}
-        {activeAdminPanel === "listing-fee" && <section className="admin-listing-fee-panel" aria-labelledby="admin-listing-fee-heading">
+        {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin onNotice={setNotice} /></section>}
+        {activeAdminPanel === "listing-fee" && role === "admin" && <section className="admin-listing-fee-panel" aria-labelledby="admin-listing-fee-heading">
           <div className="admin-page-heading">
             <div><div className="dialog-kicker">MARKETPLACE SETTINGS</div><h1 id="admin-listing-fee-heading">New mineral listing fee</h1><p>Set the fee that will be applied to new mineral listings. Existing listings keep their saved fee and price.</p></div>
           </div>
@@ -3540,7 +3620,7 @@ export default function Marketplace() {
               : <small>Loading saved fee…</small>}
           </div>
         </section>}
-        {activeAdminPanel === "market-hours" && <section className="admin-listing-fee-panel admin-market-hours-panel" aria-labelledby="admin-market-hours-heading">
+        {activeAdminPanel === "market-hours" && role === "admin" && <section className="admin-listing-fee-panel admin-market-hours-panel" aria-labelledby="admin-market-hours-heading">
           <div className="admin-page-heading">
             <div><div className="dialog-kicker">MARKETPLACE SETTINGS</div><h1 id="admin-market-hours-heading">Market hours</h1><p>Set a recurring weekly schedule. Mineral listings and buyer requests are visible only while the market is open.</p></div>
           </div>
@@ -3631,9 +3711,9 @@ export default function Marketplace() {
             </> : <small>Loading saved schedule…</small>}
           </div>
         </section>}
-        {activeAdminPanel === "review" && <>
+        {activeAdminPanel === "review" && (role === "admin" || staffCanReview) && <>
         <section className="admin-overview">
-          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div><button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSiteContent(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button></div>
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div>{role === "admin" && <button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSiteContent(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button>}</div>
           <div className="admin-summary">
             <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
             <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
@@ -3673,7 +3753,7 @@ export default function Marketplace() {
           </section>
         </div>
         </>}
-        {activeAdminPanel === "ledger" && <section className="admin-ledger" aria-labelledby="admin-ledger-heading">
+        {activeAdminPanel === "ledger" && role === "admin" && <section className="admin-ledger" aria-labelledby="admin-ledger-heading">
           <div className="admin-queue-heading admin-ledger-heading">
             <div><span>MARKETPLACE SALES</span><h2 id="admin-ledger-heading">Seller price ledger</h2></div>
             <div className="admin-ledger-live"><span className="admin-ledger-live-dot" /> Live · refreshes every 60 seconds</div>
@@ -3783,12 +3863,12 @@ export default function Marketplace() {
               : !adminSalesLedgerError && <p className="admin-ledger-updated">Loading verified sales…</p>}
           </section>
         </section>}
-        {activeAdminPanel === "translations" && <section className="admin-translations" aria-labelledby="admin-translations-heading">
+        {activeAdminPanel === "translations" && (role === "admin" || staffCan("translations")) && <section className="admin-translations" aria-labelledby="admin-translations-heading">
           <div className="admin-queue-heading"><div><span>LANGUAGE SETTINGS</span><h2 id="admin-translations-heading">English–Swahili translations</h2></div><strong>{translationPairs.length}</strong></div>
-          <div className="admin-site-setting">
+          {role === "admin" && <div className="admin-site-setting">
             <div><strong>Allow visitors to switch to Swahili</strong><span>{siteContentLoaded ? swahiliEnabled ? "The language switch is visible in the visitor menu." : "The language switch is hidden; visitors use English." : "Loading language settings…"}</span></div>
             <button className={`admin-currency-switch${swahiliEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={swahiliEnabled} aria-label="Allow visitors to switch to Swahili" disabled={!siteContentLoaded || busyActions.has("swahili-setting")} onClick={() => void updateSwahiliAvailability(!swahiliEnabled)}><span /></button>
-          </div>
+          </div>}
           <p className="admin-translation-help">Add a complete English interface phrase and its Swahili equivalent. The phrase must exist in the public interface. A translation applies only when the entire text block or placeholder matches it, so it will not change the same word inside a longer phrase. Matching ignores letter case and extra spaces, and preserves capitalization. Submitted mineral names and descriptions stay unchanged.</p>
           <form className="admin-translation-form" onSubmit={(event) => void saveTranslation(event)}>
             <label className="field-label">Complete English interface phrase<input className="text-input" value={translationForm.english_phrase} maxLength={120} required onChange={(event) => setTranslationForm((current) => ({ ...current, english_phrase: event.target.value }))} /></label>
@@ -3797,7 +3877,7 @@ export default function Marketplace() {
           </form>
           {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <article className="admin-translation-row" key={pair.id}><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
         </section>}
-        {activeAdminPanel === "homepage" && <section className="admin-homepage-panel" aria-labelledby="admin-homepage-headlines-heading">
+        {activeAdminPanel === "homepage" && (role === "admin" || staffCan("homepage_headlines")) && <section className="admin-homepage-panel" aria-labelledby="admin-homepage-headlines-heading">
           <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
           <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases scroll continuously across the homepage; if all are deleted, the homepage shows no headline.</p>
           <form className="admin-homepage-font-size" onSubmit={(event) => void saveHomepageHeadlineFontSize(event)}>
@@ -3832,7 +3912,7 @@ export default function Marketplace() {
           </form>
           {homepageHeadlines.length ? <div className="admin-homepage-headline-list">{homepageHeadlines.map((headline) => <article className="admin-homepage-headline-row" key={headline.id}><div><span>{headline.main_phrase}</span>{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></div><button className="button button-danger" type="button" disabled={busyActions.has(`homepage-headline-delete-${headline.id}`)} onClick={() => void deleteHomepageHeadline(headline)}>{busyActions.has(`homepage-headline-delete-${headline.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No homepage phrases have been saved.</p>}
         </section>}
-        {activeAdminPanel === "accounts" && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
+        {activeAdminPanel === "accounts" && (role === "admin" || staffCan("accounts")) && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
           <div className="admin-account-controls">
             <div className="admin-account-control-row">
@@ -3948,11 +4028,12 @@ export default function Marketplace() {
             </div>
           </> : <p className="admin-empty">No accounts match the selected filters{accountSearch.trim() ? ` and “${accountSearch.trim()}”` : ""}.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
-        {activeAdminPanel === "orders" && <AdminMarketplaceOrders onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} />}
-        {activeAdminPanel === "staff" && <AdminStaffManagement onNotice={setNotice} />}
-        {activeAdminPanel === "order-time-limits" && <AdminOrderTimeLimits onNotice={setNotice} />}
-        {activeAdminPanel === "payment-instructions" && <AdminPaymentInstructions onNotice={setNotice} />}
-        {activeAdminPanel === "subscriptions" && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">
+        {activeAdminPanel === "orders" && staffCanOrders && <AdminMarketplaceOrders onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} staffPermissions={role === "staff" ? staffPermissions : undefined} />}
+        {activeAdminPanel === "delivery" && staffCan("delivery_confirmation") && <StaffOrderQueue username={user} onNotice={setNotice} onSignOut={() => { void signOut(); }} />}
+        {activeAdminPanel === "staff" && role === "admin" && <AdminStaffManagement onNotice={setNotice} />}
+        {activeAdminPanel === "order-time-limits" && role === "admin" && <AdminOrderTimeLimits onNotice={setNotice} />}
+        {activeAdminPanel === "payment-instructions" && role === "admin" && <AdminPaymentInstructions onNotice={setNotice} />}
+        {activeAdminPanel === "subscriptions" && role === "admin" && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">
           <div className="admin-queue-heading"><div><span>SELLER AND BUYER ACCESS</span><h2 id="admin-subscriptions-heading">Seller/buyer subscription</h2></div><button className="button button-outline" type="button" disabled={busyActions.has("subscription-refresh")} onClick={() => void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not refresh subscriptions."); } })}><RefreshCw size={14} /> Refresh</button></div>
           <p className="admin-subscription-help">Plans use 30-day months. Saving a duration that already exists updates its price; previous subscriptions keep their original price and duration.</p>
           <form className="admin-subscription-plan-form" onSubmit={(event) => void saveSubscriptionPlan(event)}>

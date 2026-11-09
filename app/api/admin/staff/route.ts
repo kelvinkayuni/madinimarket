@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { isStaffPermission } from "@/lib/staff-permissions";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type Body = Record<string, unknown>;
@@ -29,12 +30,19 @@ export async function GET(request: Request) {
   const owner = await getOwner(request);
   if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
 
-  const [{ data: staff, error: staffError }, { data: audit, error: auditError }] = await Promise.all([
+  const [
+    { data: staff, error: staffError },
+    { data: audit, error: auditError },
+    { data: roles, error: rolesError },
+    { data: assignments, error: assignmentsError },
+  ] = await Promise.all([
     owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, job_role, status, created_at, updated_at").order("id"),
     owner.admin.from("staff_audit_log").select("id, actor_user_id, staff_member_id, action, entity_type, entity_id, details, created_at").order("created_at", { ascending: false }).limit(50),
+    owner.admin.from("staff_roles").select("id, name, permissions, created_at").order("name"),
+    owner.admin.from("staff_member_roles").select("staff_member_id, role_id"),
   ]);
-  if (staffError || auditError) {
-    console.error("Could not load staff management data.", staffError ?? auditError);
+  if (staffError || auditError || rolesError || assignmentsError) {
+    console.error("Could not load staff management data.", staffError ?? auditError ?? rolesError ?? assignmentsError);
     return NextResponse.json({ error: "Could not load staff management data. Apply the staff management migration." }, { status: 503 });
   }
 
@@ -55,11 +63,16 @@ export async function GET(request: Request) {
       ...member,
       email: profileById.get(member.user_id)?.email ?? "",
       username: profileById.get(member.user_id)?.username ?? "",
+      roles: (assignments ?? [])
+        .filter((assignment) => assignment.staff_member_id === member.id)
+        .map((assignment) => roles?.find((role) => role.id === assignment.role_id))
+        .filter((role): role is NonNullable<typeof roles>[number] => Boolean(role)),
     })),
     audit: (audit ?? []).map((entry) => ({
       ...entry,
       actor_username: entry.actor_user_id ? profileById.get(entry.actor_user_id)?.username ?? "Former account" : "Former account",
     })),
+    roles: roles ?? [],
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -68,13 +81,44 @@ export async function POST(request: Request) {
   if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid staff invitation." }, { status: 400 });
+  if (body.action === "create_role") {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const permissions = Array.isArray(body.permissions) ? [...new Set(body.permissions)] : [];
+    if (name.length < 2 || name.length > 80 || !permissions.length || !permissions.every(isStaffPermission)) {
+      return NextResponse.json({ error: "Enter a role name and choose at least one valid permission." }, { status: 400 });
+    }
+    const { data: role, error: roleError } = await owner.admin.from("staff_roles")
+      .insert({ name, permissions, created_by: owner.userId })
+      .select("id, name, permissions, created_at")
+      .single();
+    if (roleError?.code === "23505") return NextResponse.json({ error: "A role with that name already exists." }, { status: 409 });
+    if (roleError) {
+      console.error("Could not create a staff role.", roleError);
+      return NextResponse.json({ error: "Could not create the staff role." }, { status: 503 });
+    }
+    const { error: auditError } = await owner.admin.from("staff_audit_log").insert({
+      actor_user_id: owner.userId,
+      action: "staff_role_created",
+      entity_type: "staff_role",
+      entity_id: String(role.id),
+      details: { name: role.name, permissions: role.permissions },
+    });
+    if (auditError) {
+      console.error("Staff role created, but its audit record could not be saved.", auditError);
+      return NextResponse.json({ error: "The role was created, but its audit record could not be saved." }, { status: 503 });
+    }
+    return NextResponse.json({ role }, { status: 201 });
+  }
   const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!fullName || fullName.length > 120 || !emailPattern.test(email) || email.length > 254) {
     return NextResponse.json({ error: "Enter a staff name and valid email address." }, { status: 400 });
   }
-  if (body.jobRole !== "order_operations") {
-    return NextResponse.json({ error: "Choose an available staff role." }, { status: 400 });
+  const roleIds = Array.isArray(body.roleIds)
+    ? [...new Set(body.roleIds.map((value) => Number(value)))]
+    : [];
+  if (!roleIds.length || roleIds.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+    return NextResponse.json({ error: "Assign at least one staff role." }, { status: 400 });
   }
 
   let invitedUserId: string | null = null;
@@ -85,6 +129,10 @@ export async function POST(request: Request) {
     if (existingProfile) {
       return NextResponse.json({ error: "An account already uses this email. Staff invitations must use a new, individual work email." }, { status: 409 });
     }
+    const { data: roles, error: rolesError } = await owner.admin.from("staff_roles")
+      .select("id, name").in("id", roleIds);
+    if (rolesError) throw rolesError;
+    if (roles?.length !== roleIds.length) return NextResponse.json({ error: "One or more selected roles are no longer available." }, { status: 400 });
 
     const redirectTo = new URL("/staff/activate", getPublicAppUrl()).toString();
     const { data: invitation, error: invitationError } = await owner.admin.auth.admin.inviteUserByEmail(email, {
@@ -102,11 +150,16 @@ export async function POST(request: Request) {
     const { data: member, error: memberError } = await owner.admin.from("staff_members").insert({
       user_id: invitation.user.id,
       full_name: fullName,
-      job_role: "order_operations",
+      job_role: "multiple",
       status: "invited",
       invited_by: owner.userId,
     }).select("id, employee_code, user_id, full_name, job_role, status, created_at").single();
     if (memberError) throw memberError;
+
+    const { error: assignmentError } = await owner.admin.from("staff_member_roles").insert(
+      roleIds.map((roleId) => ({ staff_member_id: member.id, role_id: roleId, assigned_by: owner.userId })),
+    );
+    if (assignmentError) throw assignmentError;
 
     const { error: auditError } = await owner.admin.from("staff_audit_log").insert({
       actor_user_id: owner.userId,
@@ -114,7 +167,7 @@ export async function POST(request: Request) {
       action: "staff_invited",
       entity_type: "staff_member",
       entity_id: member.id.toString(),
-      details: { job_role: "order_operations" },
+      details: { roles: roles?.map((role) => role.name) ?? [] },
     });
     if (auditError) throw auditError;
 
@@ -143,6 +196,24 @@ export async function PATCH(request: Request) {
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid staff update." }, { status: 400 });
   const memberId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
+  if (Array.isArray(body.roleIds)) {
+    const roleIds = [...new Set(body.roleIds.map((value) => Number(value)))];
+    if (!Number.isSafeInteger(memberId) || memberId < 1 || !roleIds.length || roleIds.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+      return NextResponse.json({ error: "Assign at least one valid staff role." }, { status: 400 });
+    }
+    const { error: assignmentError } = await owner.admin.rpc("replace_staff_role_assignments", {
+      p_staff_member_id: memberId,
+      p_role_ids: roleIds,
+      p_actor_user_id: owner.userId,
+    });
+    if (assignmentError?.code === "P0002") return NextResponse.json({ error: "Staff member not found." }, { status: 404 });
+    if (assignmentError?.code === "22023") return NextResponse.json({ error: assignmentError.message }, { status: 400 });
+    if (assignmentError) {
+      console.error("Could not replace the staff role assignments.", assignmentError);
+      return NextResponse.json({ error: "Could not update staff roles." }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true });
+  }
   const status = body.status;
   if (!Number.isSafeInteger(memberId) || memberId < 1 || !["active", "suspended"].includes(String(status))) {
     return NextResponse.json({ error: "Choose a staff member and valid status." }, { status: 400 });

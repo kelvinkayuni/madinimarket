@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/admin-auth";
 import { marketplacePayoutGroupKey } from "@/lib/marketplace-payouts";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getStaffAccess } from "@/lib/staff-auth";
 
 type Body = Record<string, unknown>;
 
@@ -32,8 +33,10 @@ async function readBody(request: Request): Promise<Body | null> {
 }
 
 export async function GET(request: Request) {
-  const admin = await getAdminClient(request);
+  const staffAccess = await getStaffAccess(request);
+  const admin = await getAdminClient(request, ["marketplace_orders", "accounting"]);
   if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
+  const canAccessAccounting = !staffAccess || staffAccess.permissions.includes("accounting");
   const searchParams = new URL(request.url).searchParams;
   if (searchParams.get("summary") === "1") {
     const { data, error } = await admin.rpc("admin_marketplace_order_queue", {
@@ -99,7 +102,7 @@ export async function GET(request: Request) {
     const signedOrders = await Promise.all(orderIds.map(async (id) => {
       const order = ordersById.get(id);
       if (!order) return null;
-      const paymentProof = order.payment_proof_path
+      const paymentProof = canAccessAccounting && order.payment_proof_path
         ? await admin.storage.from("marketplace-payment-proofs").createSignedUrl(order.payment_proof_path, 10 * 60)
         : null;
       if (paymentProof?.error) throw paymentProof.error;
@@ -108,17 +111,48 @@ export async function GET(request: Request) {
         seller_id: string | null;
         payout_receipt_path?: string | null;
       }) => {
-        const { payout_receipt_path: receiptPath, ...safeItem } = item;
+        const {
+          payout_receipt_path: receiptPath,
+          payout_bank_name: payoutBankName,
+          payout_bank_account_number: payoutBankAccountNumber,
+          payout_bank_account_holder_name: payoutBankAccountHolderName,
+          payout_bank_snapshot_at: payoutBankSnapshotAt,
+          refund_reference: refundReference,
+          ...safeItem
+        } = item;
         const payout_group_key = marketplacePayoutGroupKey(item.order_id, item.seller_id, receiptPath ?? null);
-        if (!receiptPath) return { ...safeItem, payout_group_key };
+        if (!canAccessAccounting) {
+          return {
+            ...safeItem,
+            payout_group_key,
+            payout_bank_name: null,
+            payout_bank_account_number: null,
+            payout_bank_account_holder_name: null,
+            payout_bank_snapshot_at: null,
+            payout_reference: null,
+            refund_reference: staffAccess ? null : refundReference,
+          };
+        }
+        if (!receiptPath) return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, refund_reference: staffAccess ? null : refundReference };
         const { data: receipt, error: receiptError } = await admin.storage.from(PAYOUT_RECEIPT_BUCKET)
           .createSignedUrl(receiptPath, 10 * 60);
         if (receiptError) throw receiptError;
-        return { ...safeItem, payout_group_key, payout_receipt_url: receipt.signedUrl };
+        return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_receipt_url: receipt.signedUrl, refund_reference: staffAccess ? null : refundReference };
       }));
+      const {
+        payment_proof_path: paymentProofPath,
+        payment_reference: paymentReference,
+        payment_note: paymentNote,
+        ...safeOrder
+      } = order;
       return {
-        ...order,
-        ...(paymentProof ? { payment_proof_url: paymentProof.data.signedUrl } : {}),
+        ...safeOrder,
+        ...(canAccessAccounting ? {
+          payment_proof_path: paymentProofPath,
+          payment_reference: paymentReference,
+          payment_note: paymentNote,
+          ...(paymentProof ? { payment_proof_url: paymentProof.data.signedUrl } : {}),
+        } : { payment_reference: null, payment_note: null, payment_proof_url: null }),
         items,
       };
     }));
@@ -131,7 +165,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await getAdminClient(request);
+  const staffAccess = await getStaffAccess(request);
+  const admin = await getAdminClient(request, "accounting");
   if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
 
   let form: FormData;
@@ -244,17 +279,39 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: "These seller payouts are no longer due." }, { status: 409 });
   }
+  if (staffAccess) {
+    const { error: auditError } = await admin.from("staff_audit_log").insert({
+      actor_user_id: staffAccess.userId,
+      staff_member_id: staffAccess.staffId,
+      action: "record_seller_payout",
+      entity_type: "marketplace_order_item",
+      entity_id: itemId,
+      details: { items_updated: updated.length },
+    });
+    if (auditError) {
+      console.error("Seller payout recorded, but the staff audit entry could not be saved.", auditError);
+      return NextResponse.json({ error: "The payout was recorded, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
+    }
+  }
   return NextResponse.json({ ok: true, itemCount: updated.length });
 }
 
 export async function PATCH(request: Request) {
-  const admin = await getAdminClient(request);
-  if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const action = text(body.action, 40);
   const orderId = text(body.orderId, 60);
   const itemId = text(body.itemId, 60);
+  const staffAccess = await getStaffAccess(request);
+  const permission = action === "verify_payment"
+    ? "accounting"
+    : action === "mark_delivered"
+      ? ["delivery_confirmation", "marketplace_orders"] as const
+      : action === "resolve_dispute"
+        ? "marketplace_orders"
+        : null;
+  const admin = permission ? await getAdminClient(request, permission) : await getAdminClient(request);
+  if (!admin) return NextResponse.json({ error: "Administrator or assigned staff access required." }, { status: 403 });
   if (action !== "verify_payment" && !/^[0-9a-f-]{36}$/i.test(itemId)) {
     return NextResponse.json({ error: "Choose a valid order item." }, { status: 400 });
   }
@@ -282,13 +339,29 @@ export async function PATCH(request: Request) {
         }
         throw verifyError;
       }
+      if (staffAccess) {
+        const { error: auditError } = await service.from("staff_audit_log").insert({
+          actor_user_id: staffAccess.userId,
+          staff_member_id: staffAccess.staffId,
+          action: "verify_order_payment",
+          entity_type: "marketplace_order",
+          entity_id: order.id,
+        });
+        if (auditError) {
+          console.error("Order payment verified, but the staff audit entry could not be saved.", auditError);
+          return NextResponse.json({ error: "Payment was verified, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
+        }
+      }
       return NextResponse.json({ ok: true });
     }
 
     if (action === "mark_delivered") {
-      const { data, error } = await service.rpc("confirm_marketplace_order_shipment_delivery", {
-        p_order_item_id: itemId,
-      });
+      const { data, error } = staffAccess
+        ? await service.rpc("staff_confirm_marketplace_order_delivery", {
+          p_staff_user_id: staffAccess.userId,
+          p_order_item_id: itemId,
+        })
+        : await service.rpc("confirm_marketplace_order_shipment_delivery", { p_order_item_id: itemId });
       if (error) {
         if (error.code === "P0002" || error.code === "22023") return NextResponse.json({ error: error.message }, { status: 409 });
         throw error;
@@ -300,6 +373,9 @@ export async function PATCH(request: Request) {
     if (action === "resolve_dispute") {
       const outcome = text(body.outcome, 20);
       if (!["seller", "buyer"].includes(outcome)) return NextResponse.json({ error: "Choose a dispute outcome." }, { status: 400 });
+      if (staffAccess && outcome === "buyer") {
+        return NextResponse.json({ error: "Refund-related dispute resolutions require the owner administrator." }, { status: 403 });
+      }
       const { data, error } = await service.from("marketplace_order_items").update({
         status: outcome === "seller" ? "payout_due" : "refund_due",
         dispute_resolution: outcome,
@@ -307,6 +383,20 @@ export async function PATCH(request: Request) {
       }).eq("id", itemId).eq("status", "disputed").select("id").maybeSingle();
       if (error) throw error;
       if (!data) return NextResponse.json({ error: "This item does not have an open dispute." }, { status: 409 });
+      if (staffAccess) {
+        const { error: auditError } = await service.from("staff_audit_log").insert({
+          actor_user_id: staffAccess.userId,
+          staff_member_id: staffAccess.staffId,
+          action: "resolve_marketplace_dispute",
+          entity_type: "marketplace_order_item",
+          entity_id: itemId,
+          details: { outcome },
+        });
+        if (auditError) {
+          console.error("Dispute resolved, but the staff audit entry could not be saved.", auditError);
+          return NextResponse.json({ error: "The dispute was resolved, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
+        }
+      }
       return NextResponse.json({ ok: true });
     }
 

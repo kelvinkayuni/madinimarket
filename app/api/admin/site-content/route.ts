@@ -32,7 +32,7 @@ function parseId(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const authorized = await getAdminClient(request);
+    const authorized = await getAdminClient(request, "homepage_headlines");
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
 
     const admin = createSupabaseAdminClient();
@@ -59,9 +59,13 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const authorized = await getAdminClient(request);
-    if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const values = await readBody(request);
+    const staffEditableKeys = new Set(["homepageAnnouncement", "headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn"]);
+    const hasOwnerOnlyChange = values !== null && Object.keys(values).some((key) => !staffEditableKeys.has(key));
+    const authorized = hasOwnerOnlyChange
+      ? await getAdminClient(request)
+      : await getAdminClient(request, "homepage_headlines");
+    if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     if (typeof values?.accountCreationDisabled === "boolean") {
       const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
         .update({ account_creation_disabled: values.accountCreationDisabled })
@@ -159,7 +163,7 @@ export async function PATCH(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const authorized = await getAdminClient(request);
+    const authorized = await getAdminClient(request, "homepage_headlines");
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const values = await readBody(request);
     if (!values) return NextResponse.json({ error: "Enter a valid homepage phrase." }, { status: 400 });
@@ -179,7 +183,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const authorized = await getAdminClient(request);
+    const authorized = await getAdminClient(request, "homepage_headlines");
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const values = await readBody(request);
     const id = parseId(values?.id);

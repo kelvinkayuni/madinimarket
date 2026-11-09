@@ -30,7 +30,7 @@ async function parseAccountId(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, "accounts");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const [accountsResult, listingsResult, requestsResult] = await Promise.all([
       admin.from("website_accounts").select("id, display_name, username, email, phone, is_active, created_at, bank_name, bank_account_number, bank_account_holder_name, bank_info_added_at, bank_info_edit_unlocked").order("created_at", { ascending: false }),
@@ -83,7 +83,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, "accounts");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -121,7 +121,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, "accounts");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const id = await parseAccountId(request);
     if (!id) return NextResponse.json({ error: "Invalid account details." }, { status: 400 });

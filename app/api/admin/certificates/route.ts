@@ -4,7 +4,7 @@ import { getAdminClient } from "@/lib/admin-auth";
 
 export async function GET(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, ["review_submissions", "accounts"]);
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const { data: rows, error } = await admin.from("website_account_certificates")
       .select("id, website_user_id, kind, status, file_name, file_path, created_at")
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, ["review_submissions", "accounts"]);
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!token) return NextResponse.json({ error: "Admin access required." }, { status: 403 });

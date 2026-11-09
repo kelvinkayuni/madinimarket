@@ -46,7 +46,7 @@ async function readValues(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, "translations");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const { data, error } = await admin.from("translation_pairs")
       .select("id, english_phrase, swahili_phrase")
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, "translations");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const values = await readValues(request);
     if (!values) return NextResponse.json({ error: "Invalid translation details." }, { status: 400 });
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, "translations");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const values = await readValues(request);
     if (!values) return NextResponse.json({ error: "Invalid translation details." }, { status: 400 });
@@ -104,7 +104,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, "translations");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const values = await readValues(request);
     if (!values) return NextResponse.json({ error: "Invalid translation details." }, { status: 400 });

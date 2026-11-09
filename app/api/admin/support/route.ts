@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/admin-auth";
 
 export async function GET(request: Request) {
-  const admin = await getAdminClient(request);
+  const admin = await getAdminClient(request, "customer_support");
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   const url = new URL(request.url);
   const threadId = url.searchParams.get("threadId")?.trim() ?? "";
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const admin = await getAdminClient(request);
+  const admin = await getAdminClient(request, "customer_support");
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   try {
     const values = await request.json() as Record<string, unknown>;
@@ -56,7 +56,7 @@ export async function DELETE(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const admin = await getAdminClient(request);
+  const admin = await getAdminClient(request, "customer_support");
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   try {
     const values = await request.json() as Record<string, unknown>;
