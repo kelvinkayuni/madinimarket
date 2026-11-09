@@ -19,6 +19,7 @@ type StaffMember = {
   username: string;
   roles: StaffRole[];
   status: "invited" | "active" | "suspended";
+  setupComplete: boolean;
   created_at: string;
 };
 export default function AdminStaffManagement({ onNotice }: { onNotice: (message: string) => void }) {
@@ -170,7 +171,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
   };
 
   const deleteInvitation = async (member: StaffMember) => {
-    if (!window.confirm(`Delete the pending invitation for ${member.full_name}? This permanently removes the staff account and invalidates the invitation link.`)) return;
+    if (!window.confirm(`Delete the pending staff account for ${member.full_name}? This permanently removes the account and invalidates the invitation link.`)) return;
     setBusy(`delete-${member.id}`);
     try {
       const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
@@ -184,7 +185,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not delete the staff invitation.");
       await load();
-      onNotice(result.warning ?? `Pending invitation for ${member.full_name} deleted.`);
+      onNotice(result.warning ?? `Pending staff account for ${member.full_name} deleted.`);
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not delete the staff invitation.");
     } finally {
@@ -228,7 +229,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
       <h2>Staff accounts · {staff.length}</h2>
       {loading ? <p className="commerce-note">Loading staff accounts…</p> : staff.length ? <div className="commerce-list">
         {staff.map((member) => <article className="admin-staff-row" key={member.id}>
-          <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small>{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"} · {member.status === "invited" ? "Invitation sent" : member.status}</small>
+          <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small>{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"} · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
             {editingRolesFor === member.id && <fieldset className="admin-staff-permissions">
               <legend>Assigned roles</legend>
               {roles.map((role) => <label key={role.id}>
@@ -256,8 +257,8 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
             <button
               className="button button-danger"
               type="button"
-              disabled={busy !== "" || member.status !== "invited"}
-              title={member.status === "invited" ? "Delete this invitation before account setup is completed." : "Only staff accounts that have not completed setup can be deleted."}
+              disabled={busy !== "" || member.setupComplete || member.status === "active"}
+              title={member.setupComplete || member.status === "active" ? "Only staff accounts that have not completed setup can be deleted." : "Delete this account and invalidate its invitation link."}
               onClick={() => void deleteInvitation(member)}
             >
               {busy === `delete-${member.id}` ? "Deleting…" : "Delete account"}

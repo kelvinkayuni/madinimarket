@@ -52,10 +52,23 @@ export async function GET(request: Request) {
     console.error("Could not load staff profile details.", profileError);
     return NextResponse.json({ error: "Could not load staff profile details." }, { status: 503 });
   }
+  const staffIds = (staff ?? []).map((member) => member.id);
+  const { data: acceptedInvitations, error: acceptedInvitationsError } = staffIds.length
+    ? await owner.admin.from("staff_audit_log")
+      .select("staff_member_id")
+      .eq("action", "staff_invitation_accepted")
+      .in("staff_member_id", staffIds)
+    : { data: [], error: null };
+  if (acceptedInvitationsError) {
+    console.error("Could not verify staff setup status.", acceptedInvitationsError);
+    return NextResponse.json({ error: "Could not verify staff setup status." }, { status: 503 });
+  }
+  const completedSetupIds = new Set((acceptedInvitations ?? []).map((entry) => entry.staff_member_id));
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
   return NextResponse.json({
     staff: (staff ?? []).map((member) => ({
       ...member,
+      setupComplete: completedSetupIds.has(member.id),
       email: profileById.get(member.user_id)?.email ?? "",
       username: profileById.get(member.user_id)?.username ?? "",
       roles: (assignments ?? [])
@@ -259,13 +272,27 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Could not delete the staff invitation." }, { status: 503 });
   }
   if (!member) return NextResponse.json({ error: "Staff member not found." }, { status: 404 });
-  if (member.status !== "invited") {
+  if (!["invited", "suspended"].includes(member.status)) {
     return NextResponse.json({ error: "Only invitations that have not completed account setup can be deleted." }, { status: 409 });
+  }
+
+  const { data: acceptedInvitation, error: setupError } = await owner.admin.from("staff_audit_log")
+    .select("id")
+    .eq("staff_member_id", memberId)
+    .eq("action", "staff_invitation_accepted")
+    .limit(1)
+    .maybeSingle();
+  if (setupError) {
+    console.error("Could not verify staff setup before deletion.", setupError);
+    return NextResponse.json({ error: "Could not verify whether staff setup was completed." }, { status: 503 });
+  }
+  if (acceptedInvitation) {
+    return NextResponse.json({ error: "This staff member has completed setup and cannot be deleted here." }, { status: 409 });
   }
 
   const { data: lockedMember, error: lockError } = await owner.admin.from("staff_members")
     .update({ status: "suspended", updated_at: new Date().toISOString() })
-    .eq("id", memberId).eq("status", "invited").select("id, user_id").maybeSingle();
+    .eq("id", memberId).eq("status", member.status).select("id, user_id").maybeSingle();
   if (lockError) {
     console.error("Could not lock the pending staff invitation for deletion.", lockError);
     return NextResponse.json({ error: "Could not delete the staff invitation." }, { status: 503 });
@@ -278,7 +305,7 @@ export async function DELETE(request: Request) {
   if (deleteError) {
     console.error("Could not delete the pending staff account.", deleteError);
     const { error: restoreError } = await owner.admin.from("staff_members")
-      .update({ status: "invited", updated_at: new Date().toISOString() })
+      .update({ status: member.status, updated_at: new Date().toISOString() })
       .eq("id", memberId).eq("status", "suspended");
     if (restoreError) {
       console.error("Could not restore the pending staff invitation after deletion failed.", restoreError);
