@@ -30,7 +30,7 @@ type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
-type Seller = { id: number; user_id?: string; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; color?: string; comment?: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; image_gallery_paths?: string[]; image_gallery?: string[]; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
+type Seller = { id: number; user_id?: string; is_own?: boolean; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; color?: string; comment?: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; image_gallery_paths?: string[]; image_gallery?: string[]; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; is_own?: boolean; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type AccountMarketListing = Pick<Seller, "id" | "mineral" | "color" | "comment" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image"> & {
   can_manage: boolean;
@@ -298,6 +298,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
 
   let sellerRows = sellerResult;
   let buyerRows = buyerResult;
+  const ownedSellerListingIds = new Set<number>();
   const ownedBuyerRequestIds = new Set<number>();
   if (adminAccessToken) {
     try {
@@ -321,6 +322,10 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
         const ownSubmissions = await response.json();
         sellerRows = [...sellerRows, ...(ownSubmissions.sellers ?? [])];
         buyerRows = [...buyerRows, ...(ownSubmissions.buyers ?? [])];
+        for (const listing of ownSubmissions.marketSellers ?? []) {
+          const id = Number(listing.id);
+          if (Number.isSafeInteger(id) && id > 0) ownedSellerListingIds.add(id);
+        }
         for (const request of ownSubmissions.marketBuyers ?? []) {
           const id = Number(request.id);
           if (Number.isSafeInteger(id) && id > 0) ownedBuyerRequestIds.add(id);
@@ -343,7 +348,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       ? row.signed_image_gallery_urls.filter((url: unknown): url is string => typeof url === "string" && Boolean(url))
       : (await Promise.all(imageGalleryPaths.map((path: string) => getSignedMineralImageUrl(supabase, path)))).filter(Boolean);
     return {
-      id: Number(row.id), user_id: row.website_user_id ?? row.user_id, mineral: row.mineral_name, weight: String(row.weight),
+      id: Number(row.id), user_id: row.website_user_id ?? row.user_id, is_own: ownedSellerListingIds.has(Number(row.id)), mineral: row.mineral_name, weight: String(row.weight),
       color: typeof row.color === "string" ? row.color : "",
       comment: typeof row.comment === "string" ? row.comment : "",
       listing_type: row.listing_type as ListingType | undefined,
@@ -4017,18 +4022,48 @@ export default function Marketplace() {
         {query && !visibleSellers.length ? <div className="empty-search">{`No minerals match “${query}”.`}</div> : <div className="seller-rail" ref={sellerRail} style={{ gridTemplateRows: `repeat(${sellerCardsPerColumn}, max-content)` }}>{visibleSellers.map((listing) => {
           const isReserved = Boolean(listing.reservation_status) || listing.marketplace_state === "reserved";
           const isCheckoutUnavailable = (listing.marketplace_state != null && listing.marketplace_state !== "available") || listing.is_active === false || listing.status !== "approved";
+          const isOwnListing = role === "user" && (listing.is_own || listing.user_id === userId);
           const reservationLabel = listing.reservation_status === "availability_pending"
             ? "Temporarily reserved — availability being confirmed"
             : "Reserved for a buyer";
           const isInCart = role === "user" && cartListingAccountId === userId && cartListingIds.has(listing.id);
           const hasImage = Boolean(listing.image) && !failedSellerImageIds.has(listing.id);
-          return <article className="seller-card" key={listing.id}><div className="seller-photo" style={{ backgroundColor: listing.accent }} role="group" aria-label={`${listing.mineral} photos`}>{!hasImage && <Gem size={38} strokeWidth={1.2} />}{hasImage && <Image className="seller-photo-image" src={listing.image} alt="" fill sizes="(max-width: 650px) 78vw, 320px" unoptimized onError={() => setFailedSellerImageIds((current) => new Set(current).add(listing.id))} />}{listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}{isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}{Boolean(listing.image_gallery?.some(Boolean)) && <button className="seller-gallery-trigger" type="button" onClick={() => showSellerGallery(listing)}>View more images</button>}</div><div className="seller-card-info"><div className="seller-name-row"><div className="seller-name-color"><h3 data-no-translate>{listing.mineral}</h3>{listing.color && <span className="seller-color-tag" title={listing.color} data-no-translate>{listing.color}</span>}</div><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div><div className="seller-price-row"><div className="seller-price">{money(listing.price, listing.currency)}</div>{listing.comment && <span className="seller-comment" title={listing.comment} data-no-translate>{listing.comment}</span>}</div><div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer" onClick={(event) => openStoneCertificate(event, listing.id)}>See certificate</a>}</div><button className="button button-dark add-to-cart-button" type="button" disabled={isCheckoutUnavailable || isReserved || isInCart || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved || isCheckoutUnavailable ? "Temporarily unavailable" : isInCart ? "In your cart" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button></div></article>;
+          return <article className="seller-card" key={listing.id}>
+            <div className="seller-photo" style={{ backgroundColor: listing.accent }} role="group" aria-label={`${listing.mineral} photos`}>
+              {!hasImage && <Gem size={38} strokeWidth={1.2} />}
+              {hasImage && <Image className="seller-photo-image" src={listing.image} alt="" fill sizes="(max-width: 650px) 78vw, 320px" unoptimized onError={() => setFailedSellerImageIds((current) => new Set(current).add(listing.id))} />}
+              {listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}
+              {isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}
+              {Boolean(listing.image_gallery?.some(Boolean)) && <button className="seller-gallery-trigger" type="button" onClick={() => showSellerGallery(listing)}>View more images</button>}
+            </div>
+            <div className="seller-card-info">
+              <div className="seller-name-row"><div className="seller-name-color"><h3 data-no-translate>{listing.mineral}</h3>{listing.color && <span className="seller-color-tag" title={listing.color} data-no-translate>{listing.color}</span>}</div><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div>
+              <div className="seller-price-row"><div className="seller-price">{money(listing.price, listing.currency)}</div>{listing.comment && <span className="seller-comment" title={listing.comment} data-no-translate>{listing.comment}</span>}</div>
+              <div className="seller-meta"><span data-no-translate>{listing.location}</span>{listing.stone_certificate_path && <a className="seller-certificate-link" href={`/api/listing-certificate?id=${listing.id}`} target="_blank" rel="noreferrer" onClick={(event) => openStoneCertificate(event, listing.id)}>See certificate</a>}</div>
+              {isOwnListing
+                ? <span className="button button-dark add-to-cart-button own-post-label">Listed by you</span>
+                : <button className="button button-dark add-to-cart-button" type="button" disabled={isCheckoutUnavailable || isReserved || isInCart || !listing.website_account_seller || busyActions.has(`cart-add-${listing.id}`)} onClick={() => void addMineralToCart(listing)}>{busyActions.has(`cart-add-${listing.id}`) ? "Adding…" : isReserved || isCheckoutUnavailable ? "Temporarily unavailable" : isInCart ? "In your cart" : listing.website_account_seller ? "Add to cart" : "Checkout unavailable"}</button>}
+            </div>
+          </article>;
         })}{Array.from({ length: sellerEmptySlotCount }, (_, index) => <article className="seller-card seller-empty-card" key={`empty-seller-slot-${index}`} aria-label="Empty mineral listing space"><div className="seller-photo seller-empty-photo"><Plus size={18} aria-hidden="true" /></div><div className="seller-card-info seller-empty-info" /></article>)}</div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
       <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{`No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail} style={{ gridTemplateRows: `repeat(${buyerCardsPerColumn}, max-content)` }}>{visibleBuyers.map((request) => <article className="buyer-card" key={request.id}><div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div><h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3><div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div><div className="buyer-card-bottom"><div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div>{request.offer_enabled && <button className="private-offer-button" type="button" onClick={() => openPrivateOfferForm(request)}>Send private offer</button>}</div></article>)}{Array.from({ length: buyerEmptySlotCount }, (_, index) => <article className="buyer-card buyer-empty-card" key={`empty-buyer-slot-${index}`} aria-label="Empty buyer request space"><Plus size={20} aria-hidden="true" /></article>)}</div>}
+        {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{`No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail} style={{ gridTemplateRows: `repeat(${buyerCardsPerColumn}, max-content)` }}>{visibleBuyers.map((request) => {
+          const isOwnRequest = role === "user" && (request.is_own || request.user_id === userId);
+          return <article className="buyer-card" key={request.id}>
+            <div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div>
+            <h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3>
+            <div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div>
+            <div className="buyer-card-bottom">
+              <div><span>OFFER</span><strong data-no-translate>{money(request.offer, request.currency)}</strong></div>
+              {isOwnRequest
+                ? <span className="private-offer-button own-post-label">Requested by you</span>
+                : request.offer_enabled && <button className="private-offer-button" type="button" onClick={() => openPrivateOfferForm(request)}>Send private offer</button>}
+            </div>
+          </article>;
+        })}{Array.from({ length: buyerEmptySlotCount }, (_, index) => <article className="buyer-card buyer-empty-card" key={`empty-buyer-slot-${index}`} aria-label="Empty buyer request space"><Plus size={20} aria-hidden="true" /></article>)}</div>}
         <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <>List a mineral <ArrowUpRight size={14} /></>}</button></div>
       </section>
         </> : <section className="market-closed-notice"><span>MARKET CLOSED</span><h2>{marketHoursError ? "Market status unavailable" : "The market is closed"}</h2><p>{marketHoursError

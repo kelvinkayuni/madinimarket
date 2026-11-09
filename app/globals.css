@@ -547,6 +547,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seller-certificate-link { flex-shrink: 0; color: #395c46; font-size: 9px; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 .add-to-cart-button { position: relative; top: -5px; width: 100%; min-height: 34px; margin-top: 10px; font-size: 10px; }
+.own-post-label { cursor: default; pointer-events: none; }
 .account-menu-count { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: #68766a; }
 .account-menu-count strong { min-width: 20px; height: 20px; display: inline-grid; place-items: center; border-radius: 50%; background: #e6eddf; color: #355443; font-size: 9px; }
 .account-menu-count small { font-size: 9px; }
@@ -864,6 +865,7 @@ h1, h2, h3, p { margin-top: 0; }
 .buyer-card-bottom button { width: 30px; height: 30px; border-color: #6a8375; border-radius: 50%; color: #eaf1e8; transition: transform .2s, background .2s; }
 .buyer-card-bottom button:hover { transform: rotate(45deg); background: #315c4b; }
 .buyer-card-bottom .private-offer-button { width: auto; height: auto; min-height: 30px; padding: 0 9px; border: 1px solid #6a8375; border-radius: 2px; color: #eaf1e8; font-size: 9px; }
+.buyer-card-bottom .own-post-label { width: auto; height: auto; min-height: 30px; padding: 0 9px; border: 1px solid #c3d6b8; border-radius: 2px; background: #e4eed0; color: #214c3a; font-size: 9px; font-weight: 700; }
 .buyer-card-bottom .private-offer-button:hover { transform: none; background: #315c4b; }
 .buyer-rail-hint { display: flex; align-items: center; gap: 9px; margin-top: 14px; color: #a2b5a8; font-size: 8px; font-weight: 700; }
 .buyer-rail-hint .rail-line { background: #628072; }
@@ -1328,7 +1330,7 @@ h1, h2, h3, p { margin-top: 0; }
   .buyer-specs { gap: 2px; padding: 3px 0; }
   .buyer-card-bottom { margin-top: 0; padding-top: 2px; }
   .buyer-card-bottom div > strong { font-size: 11px; }
-  .buyer-card-bottom .private-offer-button { min-height: 26px; padding-right: 7px; padding-left: 7px; font-size: 8px; }
+  .buyer-card-bottom .private-offer-button, .buyer-card-bottom .own-post-label { min-height: 26px; padding-right: 7px; padding-left: 7px; font-size: 8px; }
 }
 
 @media (max-width: 650px) and (max-height: 950px) {
@@ -1370,7 +1372,7 @@ h1, h2, h3, p { margin-top: 0; }
   .buyer-specs { gap: 3px; padding: 5px 0; }
   .buyer-card-bottom { margin-top: 0; padding-top: 4px; }
   .buyer-card-bottom div > strong { font-size: 12px; }
-  .buyer-card-bottom .private-offer-button { min-height: 27px; }
+  .buyer-card-bottom .private-offer-button, .buyer-card-bottom .own-post-label { min-height: 27px; }
   .buyer-rail-hint, .rail-hint { flex: 0 0 auto; margin-top: 4px; font-size: 7px; }
   .buyer-rail-hint button { font-size: 8px; }
   .empty-search { padding: 8px; font-size: 10px; }
@@ -1387,7 +1389,7 @@ h1, h2, h3, p { margin-top: 0; }
   .buyer-card h3 { margin: 2px 0; font-size: 15px; }
   .buyer-specs { gap: 2px; padding: 3px 0; }
   .buyer-card-bottom { margin-top: 0; padding-top: 2px; }
-  .buyer-card-bottom .private-offer-button { min-height: 24px; padding-right: 7px; padding-left: 7px; font-size: 8px; }
+  .buyer-card-bottom .private-offer-button, .buyer-card-bottom .own-post-label { min-height: 24px; padding-right: 7px; padding-left: 7px; font-size: 8px; }
 }
 
 @media (max-width: 360px) and (max-height: 700px) {
