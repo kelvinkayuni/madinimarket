@@ -66,3 +66,11 @@ create trigger broadcast_marketplace_order_status_change
   for each row
   when (old.status is distinct from new.status)
   execute function public.broadcast_marketplace_order_status_change();
+
+drop trigger if exists broadcast_marketplace_order_insert
+  on public.marketplace_order_items;
+
+create trigger broadcast_marketplace_order_insert
+  after insert on public.marketplace_order_items
+  for each row
+  execute function public.broadcast_marketplace_order_status_change();
