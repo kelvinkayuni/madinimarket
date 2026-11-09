@@ -4,6 +4,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import StaffTaskClaim from "./staff-task-claim";
 
 export type SupportThread = {
   id: string; ticket_number: string; category: string; subject: string; status: string;
@@ -15,7 +16,7 @@ export type SupportMessage = { id: string; sender_type: "user" | "admin"; messag
 
 const statusLabels: Record<string, string> = { open: "Open", admin_replied: "Admin replied", pending_user: "Waiting for user", resolved: "Resolved" };
 
-export default function SupportInbox({ admin = false, onNotice }: { admin?: boolean; onNotice: (message: string) => void }) {
+export default function SupportInbox({ admin = false, staffClaims = false, onNotice }: { admin?: boolean; staffClaims?: boolean; onNotice: (message: string) => void }) {
   const [adminAccessToken, setAdminAccessToken] = useState("");
   const [threads, setThreads] = useState<SupportThread[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -33,6 +34,7 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
   const [loading, setLoading] = useState(true);
   const [internalNote, setInternalNote] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [submittingReply, setSubmittingReply] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   const getFreshAdminHeaders = async (includeJson = false) => {
@@ -94,12 +96,20 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
     finally { setSubmittingRequest(false); }
   };
   const submitReply = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); if (!selectedId || !reply.trim()) return;
+    event.preventDefault(); if (!selectedId || !reply.trim() || submittingReply) return;
+    setSubmittingReply(true);
     try {
       if (admin) {
         const adminHeaders = await getFreshAdminHeaders(true);
         const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, reply, status: "admin_replied" }) });
-        const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
+        const result = await response.json();
+        if (response.status === 409) {
+          await loadDetail(selectedId);
+          await loadThreads();
+          onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed.");
+          return;
+        }
+        if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
       } else {
         const form = new FormData(); form.set("message", reply);
         const response = await fetchWithWebsiteSession(`/api/support/${selectedId}`, { method: "POST", body: form });
@@ -107,6 +117,7 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
       }
       setReply(""); await loadDetail(selectedId); await loadThreads(); onNotice("Reply sent.");
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not send reply."); }
+    finally { setSubmittingReply(false); }
   };
   const deleteConversation = async () => {
     if (!admin || !selectedId || thread?.status !== "resolved") return;
@@ -123,14 +134,18 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
     if (!admin || !selectedId) return;
     const adminHeaders = await getFreshAdminHeaders(true);
     const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, status }) });
-    const result = await response.json(); if (!response.ok) { onNotice(result.error ?? "Could not update status."); return; }
+    const result = await response.json();
+    if (response.status === 409) { await loadDetail(selectedId); await loadThreads(); onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed."); return; }
+    if (!response.ok) { onNotice(result.error ?? "Could not update status."); return; }
     await loadDetail(selectedId); await loadThreads(); onNotice("Support status updated.");
   };
   const saveNote = async () => {
     if (!admin || !selectedId) return;
     const adminHeaders = await getFreshAdminHeaders(true);
     const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, internalNote }) });
-    const result = await response.json(); if (!response.ok) { onNotice(result.error ?? "Could not save the internal note."); return; }
+    const result = await response.json();
+    if (response.status === 409) { await loadDetail(selectedId); await loadThreads(); onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed."); return; }
+    if (!response.ok) { onNotice(result.error ?? "Could not save the internal note."); return; }
     onNotice("Internal note saved.");
   };
 
@@ -190,8 +205,10 @@ export default function SupportInbox({ admin = false, onNotice }: { admin?: bool
       : selectedId && thread ? <>
         <div className="support-detail-heading"><div><button className="support-mobile-back" type="button" onClick={() => setMobileConversationOpen(false)}>← Back to requests</button><span>{thread.ticket_number} · {thread.category}</span><h2>{thread.subject}</h2>{admin && thread.website_accounts && <small>{thread.website_accounts.display_name} · {thread.website_accounts.username} · {thread.website_accounts.email}</small>}</div><span className={`support-status status-${thread.status}`}>{statusLabels[thread.status] ?? thread.status}</span></div>
         <div className="support-message-list">{messages.map((message) => <article className={`support-message ${message.sender_type}`} key={message.id}><span>{message.sender_type === "admin" ? "Administrator" : "You"}</span><p>{message.message}</p>{message.support_attachments?.map((attachment) => attachment.signed_url && <a key={attachment.id} href={attachment.signed_url} target="_blank" rel="noreferrer">{attachment.file_name}</a>)}<small>{new Date(message.created_at).toLocaleString()}</small></article>)}</div>
-        {admin && <div className="support-admin-tools"><label className="field-label">Status<select className="text-input" value={thread.status} onChange={(event) => void updateStatus(event.target.value)}><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label><label className="field-label">Internal admin note<textarea className="text-input" rows={3} maxLength={5000} value={internalNote} onChange={(event) => setInternalNote(event.target.value)} /></label><button className="button button-outline" type="button" onClick={() => void saveNote()}>Save note</button>{thread.status === "resolved" && <button className="button button-outline" type="button" onClick={() => void deleteConversation()}>Delete conversation</button>}</div>}
-        <form className="support-reply form-stack" onSubmit={submitReply}><label className="field-label">Reply<textarea className="text-input" rows={4} maxLength={5000} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a clear response…" required /></label>{thread.status === "resolved" && <p className="support-resolved-note">This conversation is resolved. You can reopen it by replying.</p>}<button className="button button-dark" type="submit" disabled={!reply.trim()}>Send reply</button></form>
+        <StaffTaskClaim type="support_thread" taskId={thread.id} enabled={admin && staffClaims} onNotice={onNotice}>{({ canAct }) => <>
+          {admin && <div className="support-admin-tools"><label className="field-label">Status<select className="text-input" value={thread.status} disabled={!canAct} onChange={(event) => void updateStatus(event.target.value)}><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label><label className="field-label">Internal admin note<textarea className="text-input" rows={3} maxLength={5000} value={internalNote} disabled={!canAct} onChange={(event) => setInternalNote(event.target.value)} /></label><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void saveNote()}>Save note</button>{thread.status === "resolved" && <button className="button button-outline" type="button" disabled={!canAct} onClick={() => void deleteConversation()}>Delete conversation</button>}</div>}
+          <form className="support-reply form-stack" onSubmit={submitReply}><label className="field-label">Reply<textarea className="text-input" rows={4} maxLength={5000} value={reply} disabled={!canAct || submittingReply} onChange={(event) => setReply(event.target.value)} placeholder="Write a clear response…" required /></label>{thread.status === "resolved" && <p className="support-resolved-note">This conversation is resolved. You can reopen it by replying.</p>}<button className="button button-dark" type="submit" disabled={!canAct || submittingReply || !reply.trim()}>{submittingReply ? "Sending…" : "Send reply"}</button></form>
+        </>}</StaffTaskClaim>
       </> : <p className="support-empty">Select a conversation or {admin ? "choose one from the inbox." : "create a new support request."}</p>}
     </section>
   </div>;

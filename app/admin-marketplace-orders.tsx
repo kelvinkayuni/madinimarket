@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import type { StaffPermission } from "@/lib/staff-permissions";
+import StaffTaskClaim from "./staff-task-claim";
+import type { StaffTaskType } from "@/lib/staff-task-claims";
 
 type Currency = "TZS" | "USD";
 type Item = {
@@ -120,6 +123,10 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
   const canAccount = !isStaff || staffPermissions.includes("accounting");
   const canProcessOrders = !isStaff || staffPermissions.includes("marketplace_orders");
   const canConfirmDelivery = !isStaff || canProcessOrders || staffPermissions.includes("delivery_confirmation");
+  const claimTask = (type: StaffTaskType, taskId: string, render: (canAct: boolean) => ReactNode) =>
+    isStaff
+      ? <StaffTaskClaim type={type} taskId={taskId} onNotice={onNotice}>{({ canAct }) => render(canAct)}</StaffTaskClaim>
+      : render(true);
 
   const load = useCallback(async (isCurrent: () => boolean = () => true) => {
     if (!isSupabaseConfigured) throw new Error("The admin service is not connected.");
@@ -176,6 +183,11 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         body: JSON.stringify(values),
       });
       const result = await response.json();
+      if (response.status === 409) {
+        await load();
+        onNotice(result.error ?? "This task was already completed or claimed by another staff member. The order queue has been refreshed.");
+        return false;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not update the order.");
       if (result.warning) onNotice(result.warning);
       await load();
@@ -212,6 +224,11 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         body: form,
       });
       const result = await response.json();
+      if (response.status === 409) {
+        await load();
+        onNotice(result.error ?? "This payout task was already completed or claimed by another staff member. The order queue has been refreshed.");
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not record the seller payout.");
       await load();
       setPayoutReferences((current) => ({ ...current, [payoutKey]: "" }));
@@ -286,7 +303,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         <p>Delivery: {order.delivery_address}, {order.delivery_district}, {order.delivery_region}, {order.delivery_country}</p>
         {canAccount && order.payment_reference && <p>Buyer payment reference: <strong>{order.payment_reference}</strong>{order.payment_note ? ` · ${order.payment_note}` : ""}</p>}
         {canAccount && order.payment_proof_url && <p><a className="certificate-file-link" href={order.payment_proof_url} target="_blank" rel="noreferrer">Open submitted payment proof</a></p>}
-        {canAccount && order.payment_status === "payment_submitted" && <button className="button button-dark" type="button" disabled={busy === `verify-${order.id}`} onClick={() => void act(`verify-${order.id}`, { action: "verify_payment", orderId: order.id })}>{busy === `verify-${order.id}` ? "Verifying payment & notifying sellers…" : "Verify payment & notify sellers"}</button>}
+        {canAccount && order.payment_status === "payment_submitted" && claimTask("marketplace_order", order.id, (canAct) => <button className="button button-dark" type="button" disabled={!canAct || busy === `verify-${order.id}`} onClick={() => void act(`verify-${order.id}`, { action: "verify_payment", orderId: order.id })}>{busy === `verify-${order.id}` ? "Verifying payment & notifying sellers…" : "Verify payment & notify sellers"}</button>)}
         {(() => {
           const shipmentGroups = new Map<string, Item[]>();
           for (const item of order.items) {
@@ -304,11 +321,11 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                 <span>Carrier: {firstItem.shipping_carrier} · Tracking: {firstItem.tracking_number}</span>
                 <small>Confirming delivery will update every item below that shares this shipment tracking.</small>
                 <ul>{items.map((shipmentItem) => <li key={shipmentItem.id}>{shipmentItem.mineral_name} · {shipmentItem.weight} {shipmentItem.unit}</li>)}</ul>
-                {canConfirmDelivery && <button className="button button-outline" type="button" disabled={busy === `delivered-${firstItem.id}`} onClick={() => {
+                {canConfirmDelivery && claimTask("marketplace_order_item", firstItem.id, (canAct) => <button className="button button-outline" type="button" disabled={!canAct || busy === `delivered-${firstItem.id}`} onClick={() => {
                   if (window.confirm(`Confirm that the carrier's tracking shows this shipment of ${items.length} ${items.length === 1 ? "item" : "items"} as delivered?`)) {
                     void act(`delivered-${firstItem.id}`, { action: "mark_delivered", itemId: firstItem.id });
                   }
-                }}>Confirm delivery for all {items.length} {items.length === 1 ? "item" : "items"}</button>}
+                }}>Confirm delivery for all {items.length} {items.length === 1 ? "item" : "items"}</button>)}
               </div>;
             })}
           </div>;
@@ -347,18 +364,18 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                     {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
                   </> : <span className="commerce-warning">No bank detail snapshot is available. Verify the seller’s bank details before transferring.</span>}
                 </div>
-                <form className="admin-reference-form" onSubmit={(event) => {
+                {claimTask("marketplace_order_item", firstItem.id, (canAct) => <form className="admin-reference-form" onSubmit={(event) => {
                   event.preventDefault();
                   void recordPayout(firstItem.id, payoutKey);
                 }}>
                   <label className="field-label">Seller payout transaction reference
-                    <input className="text-input" required minLength={3} maxLength={120} value={payoutReferences[payoutKey] ?? ""} onChange={(event) => setPayoutReferences((current) => ({ ...current, [payoutKey]: event.target.value }))} />
+                    <input className="text-input" required minLength={3} maxLength={120} value={payoutReferences[payoutKey] ?? ""} onChange={(event) => setPayoutReferences((current) => ({ ...current, [payoutKey]: event.target.value }))} disabled={!canAct} />
                   </label>
                   <label className="field-label">Payout receipt (PDF, JPEG, or PNG; up to 4 MB)
-                    <input className="text-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required onChange={(event) => setPayoutReceipts((current) => ({ ...current, [payoutKey]: event.target.files?.[0] }))} />
+                    <input className="text-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required onChange={(event) => setPayoutReceipts((current) => ({ ...current, [payoutKey]: event.target.files?.[0] }))} disabled={!canAct} />
                   </label>
-                  <button className="button button-dark" type="submit" disabled={busy === `payout-${firstItem.id}` || (payoutReferences[payoutKey]?.trim().length ?? 0) < 3 || !payoutReceipts[payoutKey]}>{busy === `payout-${firstItem.id}` ? "Recording…" : `Record payout for all ${items.length} ${items.length === 1 ? "item" : "items"}`}</button>
-                </form>
+                  <button className="button button-dark" type="submit" disabled={!canAct || busy === `payout-${firstItem.id}` || (payoutReferences[payoutKey]?.trim().length ?? 0) < 3 || !payoutReceipts[payoutKey]}>{busy === `payout-${firstItem.id}` ? "Recording…" : `Record payout for all ${items.length} ${items.length === 1 ? "item" : "items"}`}</button>
+                </form>)}
               </div>;
             })}
           </div>;
@@ -417,10 +434,10 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             {!isStaff && item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
           </div>
           {["paid", "shipped"].includes(item.status) && (!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) && <small className="commerce-warning">The seller must enter both carrier and tracking number before delivery can be confirmed.</small>}
-          {item.status === "disputed" && (canProcessOrders || !isStaff) && <div className="commerce-item-actions">
-            <button className="button button-dark" type="button" disabled={busy === `seller-resolution-${item.id}`} onClick={() => void act(`seller-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "seller" })}>Resolve for seller (payout due)</button>
+          {item.status === "disputed" && (canProcessOrders || !isStaff) && claimTask("marketplace_order_item", item.id, (canAct) => <div className="commerce-item-actions">
+            <button className="button button-dark" type="button" disabled={!canAct || busy === `seller-resolution-${item.id}`} onClick={() => void act(`seller-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "seller" })}>Resolve for seller (payout due)</button>
             {!isStaff && <button className="button button-outline" type="button" disabled={busy === `buyer-resolution-${item.id}`} onClick={() => void act(`buyer-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "buyer" })}>Resolve for buyer (refund due)</button>}
-          </div>}
+          </div>)}
           {item.status === "refund_due" && !isStaff && <form className="admin-reference-form" onSubmit={(event) => {
             event.preventDefault();
             const reference = refundReferences[item.id]?.trim() ?? "";

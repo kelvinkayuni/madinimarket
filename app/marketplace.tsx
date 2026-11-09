@@ -13,6 +13,7 @@ import AdminPaymentInstructions from "./admin-payment-instructions";
 import AdminOrderTimeLimits from "./admin-order-time-limits";
 import SupportInbox from "./support-inbox";
 import StaffOrderQueue from "./staff-order-queue";
+import StaffTaskClaim from "./staff-task-claim";
 import CommercePanel from "./commerce-panel";
 import PrivateOfferForm from "./private-offer-form";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -2088,6 +2089,11 @@ export default function Marketplace() {
           body: JSON.stringify({ kind, id, approved, message }),
         });
         const result = await response.json();
+        if (response.status === 409) {
+          await refreshRemoteListings();
+          setNotice(result.error ?? "This review was already completed or claimed by another staff member. The queue has been refreshed.");
+          return;
+        }
         if (!response.ok) throw new Error(result.error ?? "Could not save the review decision.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not save the review decision.");
@@ -2724,6 +2730,11 @@ export default function Marketplace() {
           body: JSON.stringify({ ...translationForm, ...(editingTranslationId ? { id: editingTranslationId } : {}) }),
         });
         const result = await response.json();
+        if (response.status === 409) {
+          await refreshAdminTranslations();
+          setNotice(result.error ?? "This translation is being handled by another staff member. The list has been refreshed.");
+          return;
+        }
         if (!response.ok) throw new Error(result.error ?? "Could not save the translation pair.");
         await refreshAdminTranslations();
         setTranslationForm({ english_phrase: "", swahili_phrase: "" });
@@ -2745,6 +2756,11 @@ export default function Marketplace() {
           body: JSON.stringify({ id: pair.id }),
         });
         const result = await response.json();
+        if (response.status === 409) {
+          await refreshAdminTranslations();
+          setNotice(result.error ?? "This translation is being handled by another staff member. The list has been refreshed.");
+          return;
+        }
         if (!response.ok) throw new Error(result.error ?? "Could not delete the translation pair.");
         setTranslationPairs((current) => current.filter((item) => item.id !== pair.id));
         if (editingTranslationId === pair.id) {
@@ -2790,6 +2806,11 @@ export default function Marketplace() {
         body: JSON.stringify({ id: certificate.id, approved, message }),
       });
       const result = await response.json();
+      if (response.status === 409) {
+        await refreshAdminCertificates();
+        setNotice(result.error ?? "This licence review was already completed or claimed by another staff member. The review queue has been refreshed.");
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not save the licence review.");
       setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: "" }));
       await refreshAdminCertificates();
@@ -2813,6 +2834,11 @@ export default function Marketplace() {
         body: JSON.stringify({ id: account.id, is_active: isActive }),
       });
       const result = await response.json();
+      if (response.status === 409) {
+        await refreshAdminAccounts();
+        setNotice(result.error ?? "This account was already claimed by another staff member. The account list has been refreshed.");
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not update account.");
       await refreshAdminAccounts();
       setNotice(`Account ${account.username} ${isActive ? "activated" : "deactivated"}.`);
@@ -2834,6 +2860,11 @@ export default function Marketplace() {
         body: JSON.stringify({ id: account.id, bank_info_edit_unlocked: unlocked }),
       });
       const result = await response.json();
+      if (response.status === 409) {
+        await refreshAdminAccounts();
+        setNotice(result.error ?? "This account was already claimed by another staff member. The account list has been refreshed.");
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not update bank information access.");
       await refreshAdminAccounts();
       setNotice(unlocked
@@ -2857,6 +2888,11 @@ export default function Marketplace() {
         body: JSON.stringify({ id: account.id }),
       });
       const result = await response.json();
+      if (response.status === 409) {
+        await refreshAdminAccounts();
+        setNotice(result.error ?? "This account was already claimed by another staff member. The account list has been refreshed.");
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not delete account.");
       setWebsiteAccounts((current) => current.filter((item) => item.id !== account.id));
       setNotice(`Account ${account.username} deleted.`);
@@ -3575,7 +3611,7 @@ export default function Marketplace() {
         <div className="admin-header-actions"><span className="admin-account">{user}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
       <div className="admin-content" id="admin-home">
-        {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin onNotice={setNotice} /></section>}
+        {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}
         {activeAdminPanel === "listing-fee" && role === "admin" && <section className="admin-listing-fee-panel" aria-labelledby="admin-listing-fee-heading">
           <div className="admin-page-heading">
             <div><div className="dialog-kicker">MARKETPLACE SETTINGS</div><h1 id="admin-listing-fee-heading">New mineral listing fee</h1><p>Set the fee that will be applied to new mineral listings. Existing listings keep their saved fee and price.</p></div>
@@ -3735,8 +3771,10 @@ export default function Marketplace() {
                   {item.stone_certificate_url && <p><a className="certificate-file-link" href={item.stone_certificate_url} target="_blank" rel="noreferrer">Review stone certificate</a></p>}
                 </div>
                 {item.image && <div className="admin-review-photo-group"><div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div>{item.image_gallery?.some(Boolean) && <button className="admin-review-gallery-button" type="button" onClick={() => showSellerGallery(item)}>View all photos</button>}</div>}
-                <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
-                <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-approve`, () => reviewSubmission("seller", item.id, true))}>{busyActions.has(`review-seller-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-reject`, () => reviewSubmission("seller", item.id, false))}>{busyActions.has(`review-seller-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
+                <StaffTaskClaim type="listing_review" taskId={String(item.id)} enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <>
+                  <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
+                  <div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct || busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-approve`, () => reviewSubmission("seller", item.id, true))}>{busyActions.has(`review-seller-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={!canAct || busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-reject`, () => reviewSubmission("seller", item.id, false))}>{busyActions.has(`review-seller-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
+                </>}</StaffTaskClaim>
               </div>
             </details>)}</div> : <p className="admin-empty">No seller listings are waiting for review.</p>}
           </section>
@@ -3746,8 +3784,10 @@ export default function Marketplace() {
               <summary className="admin-review-title admin-submission-toggle"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3><small>{item.buyer} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.offer, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
               <div className="admin-submission-details admin-buyer-submission-details">
                 <p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{item.location} · {item.buyer} · {item.phone} · {item.email}</p>
-                <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} />
-                <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-approve`, () => reviewSubmission("buyer", item.id, true))}>{busyActions.has(`review-buyer-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-reject`, () => reviewSubmission("buyer", item.id, false))}>{busyActions.has(`review-buyer-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
+                <StaffTaskClaim type="buyer_request_review" taskId={String(item.id)} enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <>
+                  <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} />
+                  <div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct || busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-approve`, () => reviewSubmission("buyer", item.id, true))}>{busyActions.has(`review-buyer-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={!canAct || busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-reject`, () => reviewSubmission("buyer", item.id, false))}>{busyActions.has(`review-buyer-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
+                </>}</StaffTaskClaim>
               </div>
             </details>)}</div> : <p className="admin-empty">No buyer requests are waiting for review.</p>}
           </section>
@@ -3875,16 +3915,17 @@ export default function Marketplace() {
             <label className="field-label">Swahili translation<input className="text-input" value={translationForm.swahili_phrase} maxLength={120} required onChange={(event) => setTranslationForm((current) => ({ ...current, swahili_phrase: event.target.value }))} /></label>
             <div className="admin-translation-form-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : editingTranslationId ? "Update pair" : "Add pair"}</button>{editingTranslationId && <button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>}</div>
           </form>
-          {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <article className="admin-translation-row" key={pair.id}><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
+          {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <StaffTaskClaim type="translation_pair" taskId={pair.id} enabled={role === "staff"} onNotice={setNotice} key={pair.id}>{({ canAct }) => <article className="admin-translation-row"><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" disabled={!canAct} onClick={() => { setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={!canAct || busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>}</StaffTaskClaim>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
         </section>}
         {activeAdminPanel === "homepage" && (role === "admin" || staffCan("homepage_headlines")) && <section className="admin-homepage-panel" aria-labelledby="admin-homepage-headlines-heading">
           <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
+          <StaffTaskClaim type="homepage_setting" taskId="homepage" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <div>
           <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases scroll continuously across the homepage; if all are deleted, the homepage shows no headline.</p>
           <form className="admin-homepage-font-size" onSubmit={(event) => void saveHomepageHeadlineFontSize(event)}>
             <label className="field-label" htmlFor="admin-homepage-headline-font-size">Headline font size (pixels)
               <input className="text-input" id="admin-homepage-headline-font-size" type="number" min={24} max={72} step={1} required value={homepageHeadlineFontSizeInput} onChange={(event) => setHomepageHeadlineFontSizeInput(event.target.value)} />
             </label>
-            <button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("homepage-headline-font-size") || Number(homepageHeadlineFontSizeInput) === homepageHeadlineFontSize}>{busyActions.has("homepage-headline-font-size") ? "Saving…" : "Save font size"}</button>
+            <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-headline-font-size") || Number(homepageHeadlineFontSizeInput) === homepageHeadlineFontSize}>{busyActions.has("homepage-headline-font-size") ? "Saving…" : "Save font size"}</button>
             <span>Choose from 24–72 px. On narrow screens, the headline scales down to fit.</span>
           </form>
           <div className="admin-card-columns-settings">
@@ -3895,22 +3936,23 @@ export default function Marketplace() {
                 <label className="field-label" htmlFor="admin-seller-cards-per-column">Seller cards per column
                   <input className="text-input" id="admin-seller-cards-per-column" type="number" min={1} step={1} required value={sellerCardsPerColumnInput} onChange={(event) => setSellerCardsPerColumnInput(event.target.value)} />
                 </label>
-                <button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("seller-cards-per-column") || Number(sellerCardsPerColumnInput) === sellerCardsPerColumn}>{busyActions.has("seller-cards-per-column") ? "Saving…" : "Save seller layout"}</button>
+                <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("seller-cards-per-column") || Number(sellerCardsPerColumnInput) === sellerCardsPerColumn}>{busyActions.has("seller-cards-per-column") ? "Saving…" : "Save seller layout"}</button>
               </form>
               <form className="admin-card-columns-form" onSubmit={(event) => void saveCardsPerColumn("buyer", event)}>
                 <label className="field-label" htmlFor="admin-buyer-cards-per-column">Buyer cards per column
                   <input className="text-input" id="admin-buyer-cards-per-column" type="number" min={1} step={1} required value={buyerCardsPerColumnInput} onChange={(event) => setBuyerCardsPerColumnInput(event.target.value)} />
                 </label>
-                <button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("buyer-cards-per-column") || Number(buyerCardsPerColumnInput) === buyerCardsPerColumn}>{busyActions.has("buyer-cards-per-column") ? "Saving…" : "Save buyer layout"}</button>
+                <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("buyer-cards-per-column") || Number(buyerCardsPerColumnInput) === buyerCardsPerColumn}>{busyActions.has("buyer-cards-per-column") ? "Saving…" : "Save buyer layout"}</button>
               </form>
             </div>
           </div>
           <form className="admin-homepage-headline-form" onSubmit={(event) => void saveHomepageHeadline(event)}>
             <label className="field-label">Regular phrase<input className="text-input" value={homepageHeadlineForm.mainPhrase} maxLength={120} placeholder="Find your next" onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, mainPhrase: event.target.value }))} /></label>
             <label className="field-label">Highlighted phrase<input className="text-input" value={homepageHeadlineForm.accentPhrase} maxLength={120} placeholder="good stone." onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, accentPhrase: event.target.value }))} /></label>
-            <button className="button button-dark" type="submit" disabled={busyActions.has("homepage-headline-save") || (!homepageHeadlineForm.mainPhrase.trim() && !homepageHeadlineForm.accentPhrase.trim())}>{busyActions.has("homepage-headline-save") ? "Saving…" : "Save phrase"}</button>
+            <button className="button button-dark" type="submit" disabled={!canAct || busyActions.has("homepage-headline-save") || (!homepageHeadlineForm.mainPhrase.trim() && !homepageHeadlineForm.accentPhrase.trim())}>{busyActions.has("homepage-headline-save") ? "Saving…" : "Save phrase"}</button>
           </form>
-          {homepageHeadlines.length ? <div className="admin-homepage-headline-list">{homepageHeadlines.map((headline) => <article className="admin-homepage-headline-row" key={headline.id}><div><span>{headline.main_phrase}</span>{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></div><button className="button button-danger" type="button" disabled={busyActions.has(`homepage-headline-delete-${headline.id}`)} onClick={() => void deleteHomepageHeadline(headline)}>{busyActions.has(`homepage-headline-delete-${headline.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No homepage phrases have been saved.</p>}
+          {homepageHeadlines.length ? <div className="admin-homepage-headline-list">{homepageHeadlines.map((headline) => <article className="admin-homepage-headline-row" key={headline.id}><div><span>{headline.main_phrase}</span>{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></div><button className="button button-danger" type="button" disabled={!canAct || busyActions.has(`homepage-headline-delete-${headline.id}`)} onClick={() => void deleteHomepageHeadline(headline)}>{busyActions.has(`homepage-headline-delete-${headline.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No homepage phrases have been saved.</p>}
+          </div>}</StaffTaskClaim>
         </section>}
         {activeAdminPanel === "accounts" && (role === "admin" || staffCan("accounts")) && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
@@ -3932,11 +3974,11 @@ export default function Marketplace() {
                 <div><strong>Homepage announcement</strong><span>{!siteContentLoaded ? "Loading announcement settings…" : homepageAnnouncement ? "Message is currently displayed" : "No message is displayed"}</span></div>
                 <ChevronDown className="admin-homepage-announcement-chevron" size={17} aria-hidden="true" />
               </summary>
-              <form className="admin-homepage-announcement-form" onSubmit={(event) => void saveHomepageAnnouncement(event)}>
+              <StaffTaskClaim type="homepage_setting" taskId="homepage" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <form className="admin-homepage-announcement-form" onSubmit={(event) => void saveHomepageAnnouncement(event)}>
                 <label className="field-label" htmlFor="admin-homepage-announcement">Message</label>
-                <textarea className="text-input" id="admin-homepage-announcement" rows={3} maxLength={500} value={homepageAnnouncementDraft} placeholder="The website is under development…" onChange={(event) => { homepageAnnouncementDirty.current = true; setHomepageAnnouncementDraft(event.target.value); }} />
-                <div className="admin-homepage-announcement-actions"><span>{homepageAnnouncement ? "Currently displayed on the homepage" : "No homepage announcement is displayed"}</span><button className="button button-outline" type="button" disabled={!homepageAnnouncementDraft && !homepageAnnouncement || busyActions.has("homepage-announcement-save")} onClick={() => void clearHomepageAnnouncement()}>Clear</button><button className="button button-dark" type="submit" disabled={!siteContentLoaded || busyActions.has("homepage-announcement-save") || homepageAnnouncementDraft.trim() === homepageAnnouncement}>Save message</button></div>
-              </form>
+                <textarea className="text-input" id="admin-homepage-announcement" rows={3} maxLength={500} value={homepageAnnouncementDraft} placeholder="The website is under development…" disabled={!canAct} onChange={(event) => { homepageAnnouncementDirty.current = true; setHomepageAnnouncementDraft(event.target.value); }} />
+                <div className="admin-homepage-announcement-actions"><span>{homepageAnnouncement ? "Currently displayed on the homepage" : "No homepage announcement is displayed"}</span><button className="button button-outline" type="button" disabled={!canAct || (!homepageAnnouncementDraft && !homepageAnnouncement) || busyActions.has("homepage-announcement-save")} onClick={() => void clearHomepageAnnouncement()}>Clear</button><button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-announcement-save") || homepageAnnouncementDraft.trim() === homepageAnnouncement}>Save message</button></div>
+              </form>}</StaffTaskClaim>
             </details>
           </div>
           <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search accounts by name, username, email, or ID" placeholder="Search name, username, email, or ID" value={accountSearch} onChange={(event) => { setAccountSearch(event.target.value); setAccountPage(1); if (accountListRef.current) accountListRef.current.scrollTop = 0; }} /></label>
@@ -3970,7 +4012,7 @@ export default function Marketplace() {
                 </span>
                 <ChevronDown className="admin-account-disclosure-chevron" size={16} aria-hidden="true" />
               </summary>
-              <article className="admin-account-row">
+              <StaffTaskClaim type="website_account" taskId={account.id} enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <article className="admin-account-row">
               <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username} · {account.email}</span><small>{account.phone || "No phone number"}</small></div>
               <div className="admin-account-counts">
                 <span><strong>{totalPosts}</strong> total posted</span>
@@ -3986,7 +4028,7 @@ export default function Marketplace() {
                   </> : <span>No bank information saved.</span>}
                   <div className="admin-account-control-row">
                     <div><strong>One-time bank edit</strong><span>{account.bank_info_edit_unlocked ? "Enabled; automatically locks after the user saves." : "Disabled; the six-month lock applies."}</span></div>
-                    <button className={`admin-currency-switch${account.bank_info_edit_unlocked ? " is-on" : ""}`} type="button" role="switch" aria-checked={account.bank_info_edit_unlocked} aria-label={`Allow one bank information update for ${account.username}`} disabled={busy || busyActions.has(`account-${account.id}-bank-edit`)} onClick={() => void withProgress(`account-${account.id}-bank-edit`, () => updateWebsiteAccountBankEditPermission(account, !account.bank_info_edit_unlocked))}><span /></button>
+                    <button className={`admin-currency-switch${account.bank_info_edit_unlocked ? " is-on" : ""}`} type="button" role="switch" aria-checked={account.bank_info_edit_unlocked} aria-label={`Allow one bank information update for ${account.username}`} disabled={!canAct || busy || busyActions.has(`account-${account.id}-bank-edit`)} onClick={() => void withProgress(`account-${account.id}-bank-edit`, () => updateWebsiteAccountBankEditPermission(account, !account.bank_info_edit_unlocked))}><span /></button>
                   </div>
                 </div>
                 {account.subscription && <span className="admin-account-subscription-details">
@@ -4006,20 +4048,20 @@ export default function Marketplace() {
                 <span className={`admin-account-status ${account.subscription ? "is-subscribed" : "is-not-subscribed"}`}>{account.subscription ? "Subscribed" : "Not subscribed"}</span>
               </div>
               <div className="admin-account-actions">
-                <button className="button button-outline" type="button" disabled={busy || account.is_active} onClick={() => void withProgress(`account-${account.id}-activate`, () => updateWebsiteAccount(account, true))}>{busyActions.has(`account-${account.id}-activate`) ? "Activating…" : "Activate"}</button>
-                <button className="button button-outline" type="button" disabled={busy || !account.is_active} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
-                <button className="button button-danger" type="button" disabled={busy} onClick={() => void withProgress(`account-${account.id}-delete`, () => deleteWebsiteAccount(account))}>{busyActions.has(`account-${account.id}-delete`) ? "Deleting…" : "Delete"}</button>
+                <button className="button button-outline" type="button" disabled={!canAct || busy || account.is_active} onClick={() => void withProgress(`account-${account.id}-activate`, () => updateWebsiteAccount(account, true))}>{busyActions.has(`account-${account.id}-activate`) ? "Activating…" : "Activate"}</button>
+                <button className="button button-outline" type="button" disabled={!canAct || busy || !account.is_active} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
+                <button className="button button-danger" type="button" disabled={!canAct || busy} onClick={() => void withProgress(`account-${account.id}-delete`, () => deleteWebsiteAccount(account))}>{busyActions.has(`account-${account.id}-delete`) ? "Deleting…" : "Delete"}</button>
               </div>
               {pendingAccountCertificates.length > 0 && <details className="admin-account-certificates" id={`account-certificates-${account.id}`}>
                 <summary className="admin-account-certificates-toggle"><span>Pending licences</span><strong>{pendingAccountCertificates.length}</strong><ChevronDown className="admin-submission-chevron" size={16} /></summary>
-                <div className="admin-account-certificate-list">{pendingAccountCertificates.map((certificate) => <article className="admin-account-certificate" key={certificate.id}>
+                <div className="admin-account-certificate-list">{pendingAccountCertificates.map((certificate) => <StaffTaskClaim type="certificate_review" taskId={certificate.id} enabled={role === "staff"} onNotice={setNotice} key={certificate.id}>{({ canAct }) => <article className="admin-account-certificate">
                   <div className="admin-review-title"><div><span>{certificate.kind === "dealer" ? "DEALER LICENCE" : "BROKER LICENCE"}</span><h3>{certificate.account?.display_name ?? account.display_name}</h3></div><span className="submission-status status-pending">Pending</span></div>
                   <a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">Review {certificate.file_name}</a>
-                  <textarea className="review-message" aria-label={`Rejection reason for ${certificate.file_name}`} placeholder="Reason for rejection (required to reject)" value={certificateRejectionMessages[certificate.id] ?? ""} onChange={(event) => setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: event.target.value }))} />
-                  <div className="submission-actions"><button className="button button-dark" type="button" disabled={busyCertificate === certificate.id} onClick={() => void withProgress(`certificate-${certificate.id}-verify`, () => reviewCertificate(certificate, true))}>{busyActions.has(`certificate-${certificate.id}-verify`) ? "Verifying…" : "Verify"}</button><button className="button button-outline" type="button" disabled={busyCertificate === certificate.id || !certificateRejectionMessages[certificate.id]?.trim()} onClick={() => void withProgress(`certificate-${certificate.id}-reject`, () => reviewCertificate(certificate, false))}>{busyActions.has(`certificate-${certificate.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
-                </article>)}</div>
+                  <textarea className="review-message" aria-label={`Rejection reason for ${certificate.file_name}`} placeholder="Reason for rejection (required to reject)" value={certificateRejectionMessages[certificate.id] ?? ""} disabled={!canAct} onChange={(event) => setCertificateRejectionMessages((current) => ({ ...current, [certificate.id]: event.target.value }))} />
+                  <div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct || busyCertificate === certificate.id} onClick={() => void withProgress(`certificate-${certificate.id}-verify`, () => reviewCertificate(certificate, true))}>{busyActions.has(`certificate-${certificate.id}-verify`) ? "Verifying…" : "Verify"}</button><button className="button button-outline" type="button" disabled={!canAct || busyCertificate === certificate.id || !certificateRejectionMessages[certificate.id]?.trim()} onClick={() => void withProgress(`certificate-${certificate.id}-reject`, () => reviewCertificate(certificate, false))}>{busyActions.has(`certificate-${certificate.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
+                </article>}</StaffTaskClaim>)}</div>
               </details>}
-              </article>
+              </article>}</StaffTaskClaim>
             </details>;
           })}</div></div>
             <div className="admin-account-pagination">
@@ -4431,8 +4473,8 @@ export default function Marketplace() {
         </details>;
       })}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">
-        {pendingSellers.map((item) => <article className="submission-item review-item" key={`review-seller-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p>{item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p>{item.location} · {item.phone} · {item.email}</p>{item.image_gallery?.some(Boolean) && <button className="admin-review-gallery-button" type="button" onClick={() => showSellerGallery(item)}>View all photos</button>}<textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>)}
-        {pendingBuyers.map((item) => <article className="submission-item review-item" key={`review-buyer-${item.id}`}><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>)}
+        {pendingSellers.map((item) => <StaffTaskClaim type="listing_review" taskId={String(item.id)} enabled={false} onNotice={setNotice} key={`review-seller-${item.id}`}>{({ canAct }) => <article className="submission-item review-item"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p>{item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p>{item.location} · {item.phone} · {item.email}</p>{item.image_gallery?.some(Boolean) && <button className="admin-review-gallery-button" type="button" onClick={() => showSellerGallery(item)}>View all photos</button>}<textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct} onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>}</StaffTaskClaim>)}
+        {pendingBuyers.map((item) => <StaffTaskClaim type="buyer_request_review" taskId={String(item.id)} enabled={false} onNotice={setNotice} key={`review-buyer-${item.id}`}>{({ canAct }) => <article className="submission-item review-item"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct} onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>}</StaffTaskClaim>)}
         {!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
     {galleryViewerOverlay}

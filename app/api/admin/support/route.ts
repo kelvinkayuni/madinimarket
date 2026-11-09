@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/admin-auth";
+import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 export async function GET(request: Request) {
   const admin = await getAdminClient(request, "customer_support");
@@ -29,6 +31,7 @@ export async function GET(request: Request) {
 export async function DELETE(request: Request) {
   const admin = await getAdminClient(request, "customer_support");
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  const staff = await getStaffAccess(request, "customer_support");
   try {
     const values = await request.json() as Record<string, unknown>;
     const threadId = typeof values.threadId === "string" ? values.threadId.trim() : "";
@@ -38,6 +41,9 @@ export async function DELETE(request: Request) {
     if (threadError) throw threadError;
     if (!thread) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
     if (thread.status !== "resolved") return NextResponse.json({ error: "Only resolved support conversations can be deleted." }, { status: 409 });
+    if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "support_thread", threadId)) {
+      return NextResponse.json({ error: "Claim this support conversation before handling it." }, { status: 409 });
+    }
 
     const { data: messages, error: messagesError } = await admin.from("support_messages").select("id,support_attachments(file_path)").eq("thread_id", threadId);
     if (messagesError) throw messagesError;
@@ -58,10 +64,14 @@ export async function DELETE(request: Request) {
 export async function PATCH(request: Request) {
   const admin = await getAdminClient(request, "customer_support");
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  const staff = await getStaffAccess(request, "customer_support");
   try {
     const values = await request.json() as Record<string, unknown>;
     const threadId = typeof values.threadId === "string" ? values.threadId : "";
     if (!threadId) return NextResponse.json({ error: "Select a support conversation." }, { status: 400 });
+    if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "support_thread", threadId)) {
+      return NextResponse.json({ error: "Claim this support conversation before handling it." }, { status: 409 });
+    }
     if (typeof values.internalNote === "string") {
       const { error } = await admin.from("support_threads").update({ internal_note: values.internalNote.slice(0, 5000), updated_at: new Date().toISOString() }).eq("id", threadId);
       if (error) throw error;

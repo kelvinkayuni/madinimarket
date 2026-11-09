@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
+import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 export async function GET(request: Request) {
   try {
@@ -48,6 +50,10 @@ export async function PATCH(request: Request) {
     }
     if (!approved && (!message || message.length > 1000)) {
       return NextResponse.json({ error: "Enter a rejection reason of 1 to 1000 characters." }, { status: 400 });
+    }
+    const staff = await getStaffAccess(request);
+    if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "certificate_review", id)) {
+      return NextResponse.json({ error: "Claim this licence review before handling it." }, { status: 409 });
     }
     const { data, error } = await admin.from("website_account_certificates").update({
       status: approved ? "approved" : "rejected",

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import StaffTaskClaim from "./staff-task-claim";
 
 type DeliveryItem = {
   id: string;
@@ -38,7 +39,7 @@ export default function StaffOrderQueue({ username, onSignOut, onNotice }: {
     if (sessionError) throw sessionError;
     if (!session) throw new Error("Staff session expired. Sign in again.");
     const response = await fetch(`/api/staff/marketplace-orders?page=${page}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers: { Authorization: ["Bearer", session.access_token].join(" ") },
       cache: "no-store",
     });
     const result = await response.json();
@@ -76,7 +77,7 @@ export default function StaffOrderQueue({ username, onSignOut, onNotice }: {
       if (!session) throw new Error("Staff session expired. Sign in again.");
       const response = await fetch("/api/staff/marketplace-orders", {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
         body: JSON.stringify({ itemId }),
       });
       const result = await response.json();
@@ -128,9 +129,11 @@ export default function StaffOrderQueue({ username, onSignOut, onNotice }: {
                 return <div className="commerce-delivery-details" key={key}>
                   <strong>{first.shipping_carrier} · Tracking {first.tracking_number}</strong>
                   <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</li>)}</ul>
-                  <button className="button button-dark" type="button" disabled={busy !== ""} onClick={() => void confirmDelivery(first.id, key, items.length)}>
-                    {busy === key ? "Confirming…" : `Confirm carrier delivery for ${items.length} ${items.length === 1 ? "item" : "items"}`}
-                  </button>
+                  <StaffTaskClaim type="marketplace_order_item" taskId={first.id} onNotice={onNotice}>
+                    {({ canAct }) => <button className="button button-dark" type="button" disabled={!canAct || busy !== ""} onClick={() => void confirmDelivery(first.id, key, items.length)}>
+                      {busy === key ? "Confirming…" : `Confirm carrier delivery for ${items.length} ${items.length === 1 ? "item" : "items"}`}
+                    </button>}
+                  </StaffTaskClaim>
                 </div>;
               })}
             </div>

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 function readObject(body: unknown): Record<string, unknown> | null {
   return typeof body === "object" && body !== null && !Array.isArray(body)
@@ -66,6 +68,10 @@ export async function PATCH(request: Request) {
       ? await getAdminClient(request)
       : await getAdminClient(request, "homepage_headlines");
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "homepage_headlines");
+    if (staff && !await ownsStaffTaskClaim(authorized, staff.staffId, "homepage_setting", "homepage")) {
+      return NextResponse.json({ error: "Claim homepage settings before editing them." }, { status: 409 });
+    }
     if (typeof values?.accountCreationDisabled === "boolean") {
       const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
         .update({ account_creation_disabled: values.accountCreationDisabled })
@@ -165,6 +171,10 @@ export async function POST(request: Request) {
   try {
     const authorized = await getAdminClient(request, "homepage_headlines");
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "homepage_headlines");
+    if (staff && !await ownsStaffTaskClaim(authorized, staff.staffId, "homepage_setting", "homepage")) {
+      return NextResponse.json({ error: "Claim homepage settings before editing them." }, { status: 409 });
+    }
     const values = await readBody(request);
     if (!values) return NextResponse.json({ error: "Enter a valid homepage phrase." }, { status: 400 });
     const headline = parseHeadline(values);
@@ -185,6 +195,10 @@ export async function DELETE(request: Request) {
   try {
     const authorized = await getAdminClient(request, "homepage_headlines");
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "homepage_headlines");
+    if (staff && !await ownsStaffTaskClaim(authorized, staff.staffId, "homepage_setting", "homepage")) {
+      return NextResponse.json({ error: "Claim homepage settings before editing them." }, { status: 409 });
+    }
     const values = await readBody(request);
     const id = parseId(values?.id);
     if (!id) return NextResponse.json({ error: "Choose a valid homepage phrase." }, { status: 400 });

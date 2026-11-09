@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getAdminClient } from "@/lib/admin-auth";
+import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 import { publicTranslationPhrases } from "@/lib/public-translation-catalog";
 import { normalizeTranslationPhrase } from "@/lib/translation-phrase-normalization";
 
@@ -83,11 +85,15 @@ export async function PATCH(request: Request) {
   try {
     const admin = await getAdminClient(request, "translations");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "translations");
     const values = await readValues(request);
     if (!values) return NextResponse.json({ error: "Invalid translation details." }, { status: 400 });
     const id = parseId(values.id);
     const pair = parsePair(values);
     if (!id || !pair) return NextResponse.json({ error: "Enter valid English and Swahili text up to 120 characters each." }, { status: 400 });
+    if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "translation_pair", id)) {
+      return NextResponse.json({ error: "Claim this translation before editing it." }, { status: 409 });
+    }
     if (!await phraseExistsOnSite(admin, pair.english_phrase)) {
       return NextResponse.json({ error: "That English phrase does not match a complete phrase in the public interface." }, { status: 400 });
     }
@@ -106,10 +112,14 @@ export async function DELETE(request: Request) {
   try {
     const admin = await getAdminClient(request, "translations");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "translations");
     const values = await readValues(request);
     if (!values) return NextResponse.json({ error: "Invalid translation details." }, { status: 400 });
     const id = parseId(values.id);
     if (!id) return NextResponse.json({ error: "Invalid translation details." }, { status: 400 });
+    if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "translation_pair", id)) {
+      return NextResponse.json({ error: "Claim this translation before deleting it." }, { status: 409 });
+    }
     const { data, error } = await admin.from("translation_pairs").delete().eq("id", id).select("id").maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Translation pair not found." }, { status: 404 });

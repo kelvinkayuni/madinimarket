@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 export async function POST(request: Request) {
   try {
@@ -23,6 +24,17 @@ export async function POST(request: Request) {
     }
     if (!approved && (!message || message.length > 1000)) {
       return NextResponse.json({ error: "Enter a rejection reason of 1 to 1000 characters." }, { status: 400 });
+    }
+    const taskType = kind === "seller" ? "listing_review" : "buyer_request_review";
+    let ownsClaim = false;
+    try {
+      ownsClaim = await ownsStaffTaskClaim(staff.admin, staff.staffId, taskType, String(id));
+    } catch (error) {
+      console.error("Could not verify the staff review claim.", error);
+      return NextResponse.json({ error: "Could not verify task ownership." }, { status: 503 });
+    }
+    if (!ownsClaim) {
+      return NextResponse.json({ error: "Claim this review before handling it. Another staff member may already be working on it." }, { status: 409 });
     }
     const { error } = await staff.admin.rpc(kind === "seller" ? "staff_review_listing" : "staff_review_buy_request", {
       p_staff_user_id: staff.userId,

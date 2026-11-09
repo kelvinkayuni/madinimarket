@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 
@@ -85,6 +87,7 @@ export async function PATCH(request: Request) {
   try {
     const admin = await getAdminClient(request, "accounts");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "accounts");
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
@@ -93,6 +96,9 @@ export async function PATCH(request: Request) {
     const id = typeof values.id === "string" ? values.id : "";
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
       return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
+    }
+    if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "website_account", id)) {
+      return NextResponse.json({ error: "Claim this account before handling it." }, { status: 409 });
     }
     const bankEditPermission = values.bank_info_edit_unlocked;
     if (typeof bankEditPermission === "boolean") {
@@ -123,8 +129,12 @@ export async function DELETE(request: Request) {
   try {
     const admin = await getAdminClient(request, "accounts");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "accounts");
     const id = await parseAccountId(request);
     if (!id) return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
+    if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "website_account", id)) {
+      return NextResponse.json({ error: "Claim this account before handling it." }, { status: 409 });
+    }
 
     const [accountResult, listingsResult, draftsResult] = await Promise.all([
       admin.from("website_accounts").select("id").eq("id", id).maybeSingle(),

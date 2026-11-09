@@ -6,6 +6,7 @@ import { getAdminClient } from "@/lib/admin-auth";
 import { marketplacePayoutGroupKey } from "@/lib/marketplace-payouts";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 type Body = Record<string, unknown>;
 
@@ -181,6 +182,16 @@ export async function POST(request: Request) {
   if (!/^[0-9a-f-]{36}$/i.test(itemId) || reference.length < 3 || !(file instanceof File)) {
     return NextResponse.json({ error: "Enter the payout reference and attach its receipt." }, { status: 400 });
   }
+  if (staffAccess) {
+    try {
+      if (!await ownsStaffTaskClaim(admin, staffAccess.staffId, "marketplace_order_item", itemId)) {
+        return NextResponse.json({ error: "Claim this payout before recording it. Another staff member may already be handling it." }, { status: 409 });
+      }
+    } catch (error) {
+      console.error("Could not verify the staff payout task claim.", error);
+      return NextResponse.json({ error: "Could not verify task ownership." }, { status: 503 });
+    }
+  }
   if (file.size < 1 || file.size > MAX_PAYOUT_RECEIPT_BYTES) {
     return NextResponse.json({ error: "The payout receipt must be a non-empty PDF, JPEG, or PNG up to 4 MB." }, { status: 400 });
   }
@@ -324,6 +335,9 @@ export async function PATCH(request: Request) {
 
     if (action === "verify_payment") {
       if (!/^[0-9a-f-]{36}$/i.test(orderId)) return NextResponse.json({ error: "Choose a valid order." }, { status: 400 });
+      if (staffAccess && !await ownsStaffTaskClaim(service, staffAccess.staffId, "marketplace_order", orderId)) {
+        return NextResponse.json({ error: "Claim this payment verification before handling it." }, { status: 409 });
+      }
       const { data: order, error: orderError } = await service.from("marketplace_orders")
         .select("id, payment_status")
         .eq("id", orderId).maybeSingle();
@@ -356,6 +370,9 @@ export async function PATCH(request: Request) {
     }
 
     if (action === "mark_delivered") {
+      if (staffAccess && !await ownsStaffTaskClaim(service, staffAccess.staffId, "marketplace_order_item", itemId)) {
+        return NextResponse.json({ error: "Claim this delivery task before handling it." }, { status: 409 });
+      }
       const { data, error } = staffAccess
         ? await service.rpc("staff_confirm_marketplace_order_delivery", {
           p_staff_user_id: staffAccess.userId,
@@ -371,6 +388,9 @@ export async function PATCH(request: Request) {
     }
 
     if (action === "resolve_dispute") {
+      if (staffAccess && !await ownsStaffTaskClaim(service, staffAccess.staffId, "marketplace_order_item", itemId)) {
+        return NextResponse.json({ error: "Claim this dispute before handling it." }, { status: 409 });
+      }
       const outcome = text(body.outcome, 20);
       if (!["seller", "buyer"].includes(outcome)) return NextResponse.json({ error: "Choose a dispute outcome." }, { status: 400 });
       if (staffAccess && outcome === "buyer") {
@@ -401,6 +421,9 @@ export async function PATCH(request: Request) {
     }
 
     if (action === "mark_refunded") {
+      if (staffAccess) {
+        return NextResponse.json({ error: "Refund transfers require the owner administrator." }, { status: 403 });
+      }
       const reference = text(body.reference, 120);
       if (reference.length < 3) return NextResponse.json({ error: "Enter the refund transaction reference." }, { status: 400 });
       const { data, error } = await service.from("marketplace_order_items").update({

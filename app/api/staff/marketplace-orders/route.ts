@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -85,6 +86,15 @@ export async function PATCH(request: Request) {
   const itemId = (body as Record<string, unknown>).itemId;
   if (typeof itemId !== "string" || !uuidPattern.test(itemId)) {
     return NextResponse.json({ error: "Choose a valid shipment." }, { status: 400 });
+  }
+
+  try {
+    if (!await ownsStaffTaskClaim(staff.admin, staff.staffId, "marketplace_order_item", itemId)) {
+      return NextResponse.json({ error: "Claim this shipment before confirming delivery. Another staff member may already be handling it." }, { status: 409 });
+    }
+  } catch (error) {
+    console.error("Could not verify the order operations staff task claim.", error);
+    return NextResponse.json({ error: "Could not verify task ownership." }, { status: 503 });
   }
 
   const { data, error } = await staff.admin.rpc("staff_confirm_marketplace_order_delivery", {
