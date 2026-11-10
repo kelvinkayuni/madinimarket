@@ -82,6 +82,10 @@ export async function GET(request: Request) {
   }
   const completedSetupIds = new Set((acceptedInvitations ?? []).map((entry) => entry.staff_member_id));
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+  const roleAssignmentCounts = new Map<number, number>();
+  for (const assignment of assignments ?? []) {
+    roleAssignmentCounts.set(assignment.role_id, (roleAssignmentCounts.get(assignment.role_id) ?? 0) + 1);
+  }
   return NextResponse.json({
     staff: (staff ?? []).map((member) => ({
       ...member,
@@ -93,7 +97,10 @@ export async function GET(request: Request) {
         .map((assignment) => roles?.find((role) => role.id === assignment.role_id))
         .filter((role): role is NonNullable<typeof roles>[number] => Boolean(role)),
     })),
-    roles: roles ?? [],
+    roles: (roles ?? []).map((role) => ({
+      ...role,
+      assignedStaffCount: roleAssignmentCounts.get(role.id) ?? 0,
+    })),
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -267,6 +274,30 @@ export async function PATCH(request: Request) {
   const { owner } = access;
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid staff update." }, { status: 400 });
+  if (body.action === "update_role") {
+    const roleId = typeof body.roleId === "number" ? body.roleId : Number(body.roleId);
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const permissions = Array.isArray(body.permissions) ? [...new Set(body.permissions)] : [];
+    if (!Number.isSafeInteger(roleId) || roleId < 1 || name.length < 2 || name.length > 80
+      || !permissions.length || !permissions.every(isStaffPermission)) {
+      return NextResponse.json({ error: "Enter a role name and choose at least one valid permission." }, { status: 400 });
+    }
+    const { error } = await owner.admin.rpc("update_unassigned_staff_role", {
+      p_role_id: roleId,
+      p_name: name,
+      p_permissions: permissions,
+      p_actor_user_id: owner.userId,
+    });
+    if (error?.code === "P0002") return NextResponse.json({ error: "Staff role not found." }, { status: 404 });
+    if (error?.code === "23503") return NextResponse.json({ error: "This role is assigned to staff and cannot be edited." }, { status: 409 });
+    if (error?.code === "23505") return NextResponse.json({ error: "A role with that name already exists." }, { status: 409 });
+    if (error?.code === "22023") return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+      console.error("Could not update the staff role.", error);
+      return NextResponse.json({ error: "Could not update the staff role." }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true });
+  }
   const memberId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
   if (Array.isArray(body.roleIds)) {
     const roleIds = [...new Set(body.roleIds.map((value) => Number(value)))];
@@ -328,7 +359,24 @@ export async function DELETE(request: Request) {
   if (!access.owner) return access.response;
   const { owner } = access;
   const body = await readBody(request);
-  if (!body) return NextResponse.json({ error: "Invalid staff account deletion." }, { status: 400 });
+  if (!body) return NextResponse.json({ error: "Invalid staff or role deletion." }, { status: 400 });
+  if (body.roleId !== undefined) {
+    const roleId = typeof body.roleId === "number" ? body.roleId : Number(body.roleId);
+    if (!Number.isSafeInteger(roleId) || roleId < 1) {
+      return NextResponse.json({ error: "Choose a valid staff role." }, { status: 400 });
+    }
+    const { error } = await owner.admin.rpc("delete_unassigned_staff_role", {
+      p_role_id: roleId,
+      p_actor_user_id: owner.userId,
+    });
+    if (error?.code === "P0002") return NextResponse.json({ error: "Staff role not found." }, { status: 404 });
+    if (error?.code === "23503") return NextResponse.json({ error: "This role is assigned to staff and cannot be deleted." }, { status: 409 });
+    if (error) {
+      console.error("Could not delete the staff role.", error);
+      return NextResponse.json({ error: "Could not delete the staff role." }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true });
+  }
   const memberId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
   if (!Number.isSafeInteger(memberId) || memberId < 1) {
     return NextResponse.json({ error: "Choose a valid staff account." }, { status: 400 });

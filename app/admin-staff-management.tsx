@@ -9,6 +9,7 @@ type StaffRole = {
   id: number;
   name: string;
   permissions: StaffPermission[];
+  assignedStaffCount: number;
 };
 
 type StaffMember = {
@@ -31,6 +32,9 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
   const [busy, setBusy] = useState("");
   const [editingRolesFor, setEditingRolesFor] = useState<number | null>(null);
   const [roleSelections, setRoleSelections] = useState<Record<number, number[]>>({});
+  const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
+  const [editedRoleName, setEditedRoleName] = useState("");
+  const [editedRolePermissions, setEditedRolePermissions] = useState<StaffPermission[]>([]);
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured) throw new Error("The staff service is not connected.");
@@ -119,6 +123,57 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
       onNotice(`Staff role “${result.role.name}” created.`);
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not create the role.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const saveRole = async (role: StaffRole) => {
+    setBusy(`role-save-${role.id}`);
+    try {
+      const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error("Administrator session expired.");
+      const response = await fetch("/api/admin/staff", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_role",
+          roleId: role.id,
+          name: editedRoleName,
+          permissions: editedRolePermissions,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not update the role.");
+      setEditingRoleId(null);
+      await load();
+      onNotice(`Staff role “${editedRoleName.trim()}” updated.`);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not update the role.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const deleteRole = async (role: StaffRole) => {
+    if (!window.confirm(`Delete the unassigned role “${role.name}”? This cannot be undone.`)) return;
+    setBusy(`role-delete-${role.id}`);
+    try {
+      const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error("Administrator session expired.");
+      const response = await fetch("/api/admin/staff", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId: role.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not delete the role.");
+      await load();
+      onNotice(`Staff role “${role.name}” deleted.`);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not delete the role.");
     } finally {
       setBusy("");
     }
@@ -223,6 +278,59 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         <button className="button button-dark" type="submit" disabled={busy !== ""}>{busy === "role" ? "Creating role…" : "Create role"}</button>
       </form>
     </details>
+    <section className="admin-staff-list" aria-labelledby="admin-staff-roles-heading">
+      <h2 id="admin-staff-roles-heading">Staff roles · {roles.length}</h2>
+      {roles.length ? <div className="commerce-list">
+        {roles.map((role) => {
+          const assigned = role.assignedStaffCount > 0;
+          const editing = editingRoleId === role.id;
+          return <article className="admin-staff-role-row" key={role.id}>
+            <div className="admin-staff-role-content">
+              {editing ? <>
+                <label className="field-label">Role name<input className="text-input" value={editedRoleName} maxLength={80} onChange={(event) => setEditedRoleName(event.target.value)} /></label>
+                <fieldset className="admin-staff-permissions">
+                  <legend>Role permissions</legend>
+                  {STAFF_PERMISSION_OPTIONS.map((permission) => <label key={permission.id}>
+                    <input type="checkbox" checked={editedRolePermissions.includes(permission.id)} onChange={(event) => {
+                      setEditedRolePermissions((current) => event.target.checked
+                        ? [...current, permission.id]
+                        : current.filter((value) => value !== permission.id));
+                    }} />
+                    <span>{permission.label}</span>
+                  </label>)}
+                </fieldset>
+              </> : <>
+                <strong>{role.name}</strong>
+                <small>{assigned ? `Assigned to ${role.assignedStaffCount} staff member${role.assignedStaffCount === 1 ? "" : "s"} · Editing and deletion are locked` : "Not assigned · can be edited or deleted"}</small>
+                <details className="admin-staff-role-permission-details">
+                  <summary>View permissions ({role.permissions.length})</summary>
+                  <ul>{role.permissions.map((permission) => (
+                    <li key={permission}>{STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission}</li>
+                  ))}</ul>
+                </details>
+              </>}
+            </div>
+            <div className="admin-staff-row-actions">
+              {editing ? <>
+                <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => setEditingRoleId(null)}>Cancel</button>
+                <button className="button button-dark" type="button" disabled={busy !== "" || editedRoleName.trim().length < 2 || editedRolePermissions.length === 0} onClick={() => void saveRole(role)}>
+                  {busy === `role-save-${role.id}` ? "Saving…" : "Save role"}
+                </button>
+              </> : <>
+                <button className="button button-outline" type="button" disabled={busy !== "" || assigned} title={assigned ? "Remove this role from all staff before editing it." : "Edit this role"} onClick={() => {
+                  setEditedRoleName(role.name);
+                  setEditedRolePermissions(role.permissions);
+                  setEditingRoleId(role.id);
+                }}>Edit role</button>
+                <button className="button button-danger" type="button" disabled={busy !== "" || assigned} title={assigned ? "Remove this role from all staff before deleting it." : "Delete this unassigned role"} onClick={() => void deleteRole(role)}>
+                  {busy === `role-delete-${role.id}` ? "Deleting…" : "Delete role"}
+                </button>
+              </>}
+            </div>
+          </article>;
+        })}
+      </div> : <p className="commerce-note">No staff roles have been created.</p>}
+    </section>
     <details className="admin-staff-disclosure">
       <summary><span><strong>Invite staff</strong><small>Add a staff member and assign their work roles</small></span><span className="admin-staff-disclosure-icon" aria-hidden="true">⌄</span></summary>
       <form className="admin-staff-invite" onSubmit={(event) => void invite(event)}>
@@ -241,10 +349,18 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         <label className="field-label">Work email<input className="text-input" name="email" type="email" autoComplete="email" maxLength={254} required /></label>
         <fieldset className="admin-staff-permissions">
           <legend>Assign one or more roles</legend>
-          {roles.map((role) => <label key={role.id}>
-            <input type="checkbox" name="roleIds" value={role.id} />
-            <span>{role.name}</span>
-          </label>)}
+          {roles.map((role) => <div className="admin-staff-role-option" key={role.id}>
+            <label>
+              <input type="checkbox" name="roleIds" value={role.id} />
+              <span>{role.name}</span>
+            </label>
+            <details className="admin-staff-role-permission-details">
+              <summary>View permissions ({role.permissions.length})</summary>
+              <ul>{role.permissions.map((permission) => (
+                <li key={permission}>{STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission}</li>
+              ))}</ul>
+            </details>
+          </div>)}
           {!roles.length && <span>Create a role before inviting staff.</span>}
         </fieldset>
         <p className="commerce-note">Supabase sends a one-time invitation link. The staff member sets their own password; no password is created or shared by the administrator.</p>
