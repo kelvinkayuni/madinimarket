@@ -20,19 +20,42 @@ export async function GET(request: Request) {
 
   const search = new URL(request.url).searchParams;
   const conversationId = search.get("conversationId")?.trim() ?? "";
+  const staffMemberId = Number(search.get("staffMemberId"));
   const unreadOnly = search.get("unreadOnly") === "1";
-  if (conversationId) {
-    const { data: conversation, error } = await admin.from("staff_admin_conversations")
-      .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at,admin_cleared_at")
-      .eq("id", conversationId)
-      .maybeSingle();
-    if (error) return NextResponse.json({ error: "Could not load this staff conversation." }, { status: 503 });
-    if (!conversation) return NextResponse.json({ error: "Staff conversation not found." }, { status: 404 });
+  if (conversationId || (Number.isSafeInteger(staffMemberId) && staffMemberId > 0)) {
+    let conversation = null;
+    if (conversationId) {
+      const { data, error } = await admin.from("staff_admin_conversations")
+        .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at,admin_cleared_at")
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: "Could not load this staff conversation." }, { status: 503 });
+      if (!data) return NextResponse.json({ error: "Staff conversation not found." }, { status: 404 });
+      conversation = data;
+    } else {
+      const { data, error } = await admin.from("staff_admin_conversations")
+        .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at,admin_cleared_at")
+        .eq("staff_member_id", staffMemberId)
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: "Could not load this staff conversation." }, { status: 503 });
+      conversation = data;
+    }
+
+    const resolvedStaffMemberId = conversation?.staff_member_id ?? staffMemberId;
     const { data: staffMember, error: staffError } = await admin.from("staff_members")
       .select("id,full_name,employee_code")
-      .eq("id", conversation.staff_member_id)
+      .eq("id", resolvedStaffMemberId)
+      .eq("status", "active")
       .maybeSingle();
     if (staffError) return NextResponse.json({ error: "Could not load this staff conversation." }, { status: 503 });
+    if (!staffMember) return NextResponse.json({ error: "Active staff account not found." }, { status: 404 });
+    if (!conversation) {
+      return NextResponse.json({
+        conversation: null,
+        staffMember: { staff_member_id: staffMember.id, full_name: staffMember.full_name, employee_code: staffMember.employee_code },
+        messages: [],
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
     const { data: messages, error: messagesError } = await admin.from("staff_admin_messages")
       .select("id,sender_type,message,created_at,seen_by_admin_at,seen_by_staff_at,reply_to_message_id,reply_to_sender_type,reply_to_message")
       .eq("conversation_id", conversationId)
@@ -73,23 +96,46 @@ export async function GET(request: Request) {
     .order("last_message_at", { ascending: false });
   if (error) return NextResponse.json({ error: "Could not load staff conversations." }, { status: 503 });
   const conversations = (rows ?? []) as ConversationRow[];
-  const staffIds = [...new Set(conversations.map((conversation) => conversation.staff_member_id))];
-  const { data: staffMembers, error: staffError } = staffIds.length
-    ? await admin.from("staff_members").select("id,full_name,employee_code").in("id", staffIds)
-    : { data: [], error: null };
+  const { data: staffMembers, error: staffError } = await admin.from("staff_members")
+    .select("id,full_name,employee_code")
+    .eq("status", "active")
+    .order("full_name", { ascending: true });
   if (staffError) return NextResponse.json({ error: "Could not load staff conversations." }, { status: 503 });
-  const staffById = new Map((staffMembers ?? []).map((member) => [member.id, member]));
   try {
     const unreadCounts = await Promise.all(conversations.map((conversation) =>
       getStaffChatUnreadCount(admin, conversation.id, "staff", conversation.last_read_by_admin)));
+    const unreadByStaffId = new Map(conversations.map((conversation, index) => [conversation.staff_member_id, unreadCounts[index]]));
     const result = conversations.map((conversation, index) => ({
       ...conversation,
-      full_name: staffById.get(conversation.staff_member_id)?.full_name ?? "Staff",
-      employee_code: staffById.get(conversation.staff_member_id)?.employee_code ?? "",
       unread_count: unreadCounts[index],
     }));
+    const conversationsByStaff = new Map(result.map((conversation) => [conversation.staff_member_id, conversation]));
+    const staffList = (staffMembers ?? []).map((member) => {
+      const conversation = conversationsByStaff.get(member.id);
+      return conversation ? {
+        ...conversation,
+        full_name: member.full_name,
+        employee_code: member.employee_code,
+      } : {
+        id: null,
+        staff_member_id: member.id,
+        full_name: member.full_name,
+        employee_code: member.employee_code,
+        unread_count: 0,
+        unread_by_admin: false,
+        unread_by_staff: false,
+        created_at: null,
+        updated_at: null,
+        last_message_at: null,
+      };
+    }).sort((a, b) => {
+      const aUnread = unreadByStaffId.get(a.staff_member_id) ?? 0;
+      const bUnread = unreadByStaffId.get(b.staff_member_id) ?? 0;
+      if (aUnread !== bUnread) return bUnread - aUnread;
+      return String(b.last_message_at ?? "").localeCompare(String(a.last_message_at ?? ""));
+    });
     return NextResponse.json({
-      conversations: result,
+      conversations: staffList,
       ...(unreadOnly ? { unreadCount: unreadCounts.reduce((total, count) => total + count, 0) } : {}),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {
@@ -103,19 +149,58 @@ export async function POST(request: Request) {
 
   try {
     const form = await request.formData();
-    const conversationId = String(form.get("conversationId") ?? "").trim();
+    let conversationId = String(form.get("conversationId") ?? "").trim();
+    const requestedStaffMemberId = Number(form.get("staffMemberId"));
     const message = String(form.get("message") ?? "").trim();
     const replyToMessageId = String(form.get("replyToMessageId") ?? "").trim();
     const files = form.getAll("attachments").filter((value): value is File => value instanceof File && value.size > 0);
-    if (!conversationId || (!message && !files.length) || message.length > 5000) {
+    if ((!conversationId && (!Number.isSafeInteger(requestedStaffMemberId) || requestedStaffMemberId < 1)) ||
+      (!message && !files.length) || message.length > 5000) {
       return NextResponse.json({ error: "Select a conversation and enter a message of up to 5,000 characters." }, { status: 400 });
     }
 
-    const { data: conversation, error: conversationError } = await admin.from("staff_admin_conversations")
-      .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at")
-      .eq("id", conversationId)
-      .maybeSingle();
-    if (conversationError) throw conversationError;
+    let conversation = null;
+    if (conversationId) {
+      const { data, error: conversationError } = await admin.from("staff_admin_conversations")
+        .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at")
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (conversationError) throw conversationError;
+      conversation = data;
+    } else {
+      const { data: staffMember, error: staffError } = await admin.from("staff_members")
+        .select("id")
+        .eq("id", requestedStaffMemberId)
+        .eq("status", "active")
+        .maybeSingle();
+      if (staffError) throw staffError;
+      if (!staffMember) return NextResponse.json({ error: "Active staff account not found." }, { status: 404 });
+
+      const { data: existing, error: existingError } = await admin.from("staff_admin_conversations")
+        .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at")
+        .eq("staff_member_id", staffMember.id)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existing) {
+        conversation = existing;
+      } else {
+        const { data: created, error: createError } = await admin.from("staff_admin_conversations")
+          .insert({ staff_member_id: staffMember.id })
+          .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at")
+          .single();
+        if (createError) {
+          const { data: concurrent, error: concurrentError } = await admin.from("staff_admin_conversations")
+            .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at")
+            .eq("staff_member_id", staffMember.id)
+            .maybeSingle();
+          if (concurrentError || !concurrent) throw createError;
+          conversation = concurrent;
+        } else {
+          conversation = created;
+        }
+      }
+      conversationId = conversation.id;
+    }
     if (!conversation) return NextResponse.json({ error: "Staff conversation not found." }, { status: 404 });
 
     let replySnapshot: { id: string; sender_type: "staff" | "admin"; message: string } | null = null;

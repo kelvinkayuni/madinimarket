@@ -9,21 +9,49 @@ export default function StaffActivationForm() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [checkingInvitation, setCheckingInvitation] = useState(isSupabaseConfigured);
   const [notice, setNotice] = useState(isSupabaseConfigured ? "" : "Staff sign-in is not configured.");
 
   useEffect(() => {
     let active = true;
     if (!isSupabaseConfigured) return () => { active = false; };
-    void getSupabaseBrowserClient().auth.getSession().then(({ data, error }) => {
-      if (!active) return;
-      if (error) setNotice("Could not verify the invitation link. Please request a new invitation.");
-      else if (!data.session) setNotice("This invitation link is invalid or expired. Please ask the administrator to send a new one.");
-      else setReady(true);
-    }).catch(() => {
-      if (active) setNotice("Could not verify the invitation link. Please request a new invitation.");
-    });
+    let redirecting = false;
+    const verifyInvitation = async () => {
+      try {
+        const { data, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (!active) return;
+        if (error) {
+          setNotice("Could not verify the invitation link. Please request a new invitation.");
+          return;
+        }
+        if (!data.session) {
+          setNotice("This invitation link is invalid or expired. Please ask the administrator to send a new one.");
+          return;
+        }
+        const response = await fetch("/api/staff/access", {
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+          cache: "no-store",
+        });
+        if (!active) return;
+        if (response.ok) {
+          redirecting = true;
+          router.replace("/");
+          return;
+        }
+        if (response.status === 403) {
+          setReady(true);
+          return;
+        }
+        setNotice("Could not verify the staff account status. Please try again or ask the administrator for help.");
+      } catch {
+        if (active) setNotice("Could not verify the invitation link. Please request a new invitation.");
+      } finally {
+        if (active && !redirecting) setCheckingInvitation(false);
+      }
+    };
+    void verifyInvitation();
     return () => { active = false; };
-  }, []);
+  }, [router]);
 
   const activate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -63,7 +91,11 @@ export default function StaffActivationForm() {
   };
 
   return <main className="staff-activation-shell">
-    <form className="dialog-card staff-activation-card" onSubmit={(event) => void activate(event)}>
+    {checkingInvitation ? <section className="dialog-card staff-activation-card" role="status" aria-live="polite">
+      <div className="dialog-kicker">MADINIMARKET STAFF</div>
+      <h1>Checking your invitation</h1>
+      <p className="dialog-copy">Please wait while we verify your staff account.</p>
+    </section> : <form className="dialog-card staff-activation-card" onSubmit={(event) => void activate(event)}>
       <div className="dialog-kicker">MADINIMARKET STAFF</div>
       <h1>Set your password</h1>
       <p className="dialog-copy">Create a private password for your individual staff account. Use at least 12 characters and don’t share it.</p>
@@ -71,6 +103,6 @@ export default function StaffActivationForm() {
       <label className="field-label">Confirm password<input className="text-input" name="confirmation" type="password" autoComplete="new-password" minLength={12} maxLength={256} required disabled={!ready || busy} /></label>
       {notice && <p className="commerce-note" role="status">{notice}</p>}
       <button className="button button-dark" type="submit" disabled={!ready || busy}>{busy ? "Saving…" : "Save password and continue"}</button>
-    </form>
+    </form>}
   </main>;
 }
