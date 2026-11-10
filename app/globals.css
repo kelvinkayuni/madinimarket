@@ -167,6 +167,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-staff-role-row .admin-staff-row-actions { align-items: center; }
 .admin-staff-row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .admin-staff-list { display: grid; gap: 12px; }
+.admin-staff-account-list { max-height: 450px; overflow-y: auto; padding-right: 6px; scrollbar-gutter: stable; }
 .admin-staff-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px; border: 1px solid #e2e8df; background: #fff; }
 .admin-staff-row > div { display: grid; gap: 4px; min-width: 0; }
 .admin-staff-assigned-roles { color: #304b39; font-weight: 700; }

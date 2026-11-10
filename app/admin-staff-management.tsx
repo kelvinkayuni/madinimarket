@@ -37,10 +37,16 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
   const [editedRolePermissions, setEditedRolePermissions] = useState<StaffPermission[]>([]);
   const roleListRef = useRef<HTMLDivElement>(null);
   const roleListScrollTop = useRef(0);
+  const staffListRef = useRef<HTMLDivElement>(null);
+  const staffListScrollTop = useRef(0);
 
   useLayoutEffect(() => {
     if (roleListRef.current) roleListRef.current.scrollTop = roleListScrollTop.current;
   }, [roles]);
+
+  useLayoutEffect(() => {
+    if (staffListRef.current) staffListRef.current.scrollTop = staffListScrollTop.current;
+  }, [staff]);
 
   const rolesWithPermission = (permission: StaffPermission) => roles
     .filter((role) => role.permissions.includes(permission))
@@ -399,7 +405,11 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     </details>
     <section className="admin-staff-list">
       <h2>Staff accounts ({staff.length})</h2>
-      {loading ? <p className="commerce-note">Loading staff accounts…</p> : staff.length ? <div className="commerce-list">
+      {loading ? <p className="commerce-note">Loading staff accounts…</p> : staff.length ? <div
+        className="commerce-list admin-staff-account-list"
+        ref={staffListRef}
+        onScroll={(event) => { staffListScrollTop.current = event.currentTarget.scrollTop; }}
+      >
         {staff.map((member) => <article className="admin-staff-row" key={member.id}>
           <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small><strong className="admin-staff-assigned-roles">{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"}</strong> · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
             {(member.sex || member.residence) && <small>{member.sex ? `Sex: ${member.sex.replaceAll("_", " ")}` : ""}{member.sex && member.residence ? " · " : ""}{member.residence ? `Residence / work area: ${member.residence}` : ""}</small>}
