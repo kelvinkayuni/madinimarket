@@ -303,7 +303,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
                 <strong>{role.name}</strong>
                 <small>{assigned ? `Assigned to ${role.assignedStaffCount} staff member${role.assignedStaffCount === 1 ? "" : "s"} · Editing and deletion are locked` : "Not assigned · can be edited or deleted"}</small>
                 <details className="admin-staff-role-permission-details">
-                  <summary>View permissions ({role.permissions.length})</summary>
+                  <summary>View job role ({role.permissions.length})</summary>
                   <ul>{role.permissions.map((permission) => (
                     <li key={permission}>{STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission}</li>
                   ))}</ul>
@@ -355,7 +355,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
               <span>{role.name}</span>
             </label>
             <details className="admin-staff-role-permission-details">
-              <summary>View permissions ({role.permissions.length})</summary>
+              <summary>View job role ({role.permissions.length})</summary>
               <ul>{role.permissions.map((permission) => (
                 <li key={permission}>{STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission}</li>
               ))}</ul>
