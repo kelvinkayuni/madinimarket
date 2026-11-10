@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { STAFF_PERMISSION_OPTIONS, type StaffPermission } from "@/lib/staff-permissions";
@@ -35,6 +35,12 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
   const [editedRoleName, setEditedRoleName] = useState("");
   const [editedRolePermissions, setEditedRolePermissions] = useState<StaffPermission[]>([]);
+  const roleListRef = useRef<HTMLDivElement>(null);
+  const roleListScrollTop = useRef(0);
+
+  useLayoutEffect(() => {
+    if (roleListRef.current) roleListRef.current.scrollTop = roleListScrollTop.current;
+  }, [roles]);
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured) throw new Error("The staff service is not connected.");
@@ -279,8 +285,12 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
       </form>
     </details>
     <section className="admin-staff-list" aria-labelledby="admin-staff-roles-heading">
-      <h2 id="admin-staff-roles-heading">Staff roles · {roles.length}</h2>
-      {roles.length ? <div className="commerce-list">
+      <h2 id="admin-staff-roles-heading">Staff roles ({roles.length})</h2>
+      {roles.length ? <div
+        className="commerce-list admin-staff-role-list"
+        ref={roleListRef}
+        onScroll={(event) => { roleListScrollTop.current = event.currentTarget.scrollTop; }}
+      >
         {roles.map((role) => {
           const assigned = role.assignedStaffCount > 0;
           const editing = editingRoleId === role.id;
@@ -301,7 +311,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
                 </fieldset>
               </> : <>
                 <strong>{role.name}</strong>
-                <small>{assigned ? `Assigned to ${role.assignedStaffCount} staff member${role.assignedStaffCount === 1 ? "" : "s"} · Editing and deletion are locked` : "Not assigned · can be edited or deleted"}</small>
+                <small>{assigned ? `Assigned to staff (${role.assignedStaffCount}) · Editing and deletion are locked` : "Not assigned · can be edited or deleted"}</small>
                 <details className="admin-staff-role-permission-details">
                   <summary>View job role ({role.permissions.length})</summary>
                   <ul>{role.permissions.map((permission) => (
