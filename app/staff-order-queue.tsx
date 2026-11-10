@@ -22,8 +22,9 @@ type DeliveryOrder = {
   items: DeliveryItem[];
 };
 
-export default function StaffOrderQueue({ username, onSignOut, onNotice }: {
-  username: string;
+export default function StaffOrderQueue({ fullName, roleNames, onSignOut, onNotice }: {
+  fullName: string;
+  roleNames: string[];
   onSignOut: () => void;
   onNotice: (message: string) => void;
 }) {
@@ -100,7 +101,7 @@ export default function StaffOrderQueue({ username, onSignOut, onNotice }: {
   return <main className="admin-shell">
     <header className="admin-header">
       <a className="admin-brand" href="#staff-home"><span className="admin-brand-name">MADINIMARKET</span><span>ORDER OPERATIONS</span></a>
-      <div className="admin-header-actions"><span className="admin-account">{username}</span><button className="text-button" type="button" onClick={onSignOut}>Sign out</button></div>
+      <div className="admin-header-actions"><span className="admin-account"><strong>{fullName}</strong>{roleNames.length > 0 && <small>{roleNames.join(" · ")}</small>}</span><button className="text-button" type="button" onClick={onSignOut}>Sign out</button></div>
     </header>
     <section className="admin-content admin-overview staff-order-queue" id="staff-home">
       <div className="admin-page-heading">

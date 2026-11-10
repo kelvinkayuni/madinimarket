@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { sendGmailEmail } from "@/lib/gmail";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { isStaffPermission } from "@/lib/staff-permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
@@ -157,20 +158,33 @@ export async function POST(request: Request) {
     if (rolesError) throw rolesError;
     if (roles?.length !== roleIds.length) return NextResponse.json({ error: "One or more selected roles are no longer available." }, { status: 400 });
 
+    const { data: reservedId, error: reserveError } = await owner.admin.rpc("reserve_staff_member_id");
+    if (reserveError) throw reserveError;
+    const staffId = Number(reservedId);
+    if (!Number.isSafeInteger(staffId) || staffId < 1) throw new Error("Could not reserve a valid staff ID.");
+    const employeeCode = `MMSA-${String(staffId).padStart(4, "0")}`;
+
     const redirectTo = new URL("/staff/activate", getPublicAppUrl()).toString();
-    const { data: invitation, error: invitationError } = await owner.admin.auth.admin.inviteUserByEmail(email, {
-      data: { display_name: fullName },
-      redirectTo,
+    const { data: invitation, error: invitationError } = await owner.admin.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        data: { display_name: fullName, username: employeeCode },
+        redirectTo,
+      },
     });
-    if (invitationError || !invitation.user) throw invitationError ?? new Error("Supabase did not return the invited user.");
+    if (invitationError || !invitation.user || !invitation.properties.action_link) {
+      throw invitationError ?? new Error("Supabase did not return a complete staff invitation.");
+    }
     invitedUserId = invitation.user.id;
 
     const { error: profileError } = await owner.admin.from("profiles")
-      .update({ display_name: fullName, role: "staff" })
+      .update({ display_name: fullName, username: employeeCode, role: "staff" })
       .eq("id", invitation.user.id);
     if (profileError) throw profileError;
 
     const { data: member, error: memberError } = await owner.admin.from("staff_members").insert({
+      id: staffId,
       user_id: invitation.user.id,
       full_name: fullName,
       sex,
@@ -199,6 +213,33 @@ export async function POST(request: Request) {
     const { data: profile, error: invitedProfileError } = await owner.admin.from("profiles")
       .select("username, email").eq("id", invitation.user.id).single();
     if (invitedProfileError) throw invitedProfileError;
+
+    try {
+      await sendGmailEmail({
+        to: email,
+        subject: "Your Madinimarket staff invitation",
+        text: [
+          `Hello ${fullName},`,
+          "",
+          "You have been invited to join the Madinimarket staff team.",
+          `Your staff username is: ${member.employee_code}`,
+          `Assigned role${roles.length === 1 ? "" : "s"}: ${roles.map((role) => role.name).join(", ")}`,
+          "",
+          "Use this username (not your email address) to sign in after setting your password:",
+          invitation.properties.action_link,
+          "",
+          "If you were not expecting this invitation, please contact the Madinimarket administrator.",
+        ].join("\n"),
+      });
+    } catch (emailError) {
+      const { error: auditCleanupError } = await owner.admin.from("staff_audit_log").delete()
+        .eq("staff_member_id", member.id)
+        .eq("actor_user_id", owner.userId)
+        .eq("action", "staff_invited");
+      if (auditCleanupError) console.error("Could not remove the failed staff invitation audit record.", auditCleanupError);
+      throw emailError;
+    }
+
     return NextResponse.json({
       ok: true,
       staff: { ...member, username: profile.username, email: profile.email },
@@ -210,7 +251,7 @@ export async function POST(request: Request) {
       if (cleanupError) console.error("Could not remove the incomplete staff invitation.", cleanupError);
     }
     return NextResponse.json({
-      error: "Could not create the staff account and invitation. Check Supabase Auth email delivery and the staff management migration, then retry.",
+      error: "Could not create the staff account and invitation. Check Gmail email settings and the staff login identity migration, then retry.",
     }, { status: 503 });
   }
 }

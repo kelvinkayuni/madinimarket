@@ -676,6 +676,7 @@ export default function Marketplace() {
   }, [userId]);
   const [role, setRole] = useState<"user" | "admin" | "staff" | null>(null);
   const [staffPermissions, setStaffPermissions] = useState<StaffPermission[]>([]);
+  const [staffRoleNames, setStaffRoleNames] = useState<string[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
@@ -1090,6 +1091,7 @@ export default function Marketplace() {
         setUserId("");
         setRole(null);
         setStaffPermissions([]);
+        setStaffRoleNames([]);
         setActiveAdminPanel(null);
         setCertificates({});
         setSellerOpenOrdersCount(0);
@@ -1361,6 +1363,8 @@ export default function Marketplace() {
             isAdmin = profile?.role === "admin";
             isStaff = profile?.role === "staff";
             if (isAdmin && active) {
+              setStaffPermissions([]);
+              setStaffRoleNames([]);
               setUser(profile?.username ?? "");
               setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
@@ -1379,6 +1383,8 @@ export default function Marketplace() {
               if (!response.ok) throw new Error(access.error ?? "Could not load staff access.");
               assignedPermissions = access.permissions as StaffPermission[];
               setStaffPermissions(assignedPermissions);
+              setStaffRoleNames(Array.isArray(access.roles) ? access.roles as string[] : []);
+              if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
               setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
             }
             if (!isAdmin && !isStaff) await supabase.auth.signOut({ scope: "local" });
@@ -1393,6 +1399,8 @@ export default function Marketplace() {
               setDisplayName(result?.account?.display_name ?? "");
               setUserId(result?.account?.id ?? "");
               setRole(result?.account ? "user" : null);
+              setStaffPermissions([]);
+              setStaffRoleNames([]);
               if (!result?.account) setCertificates({});
             }
             if (result?.account) {
@@ -3143,6 +3151,10 @@ export default function Marketplace() {
       const form = new FormData(formElement);
       const username = String(form.get("username") ?? "").trim();
       const password = String(form.get("password") ?? "");
+      if (username.includes("@")) {
+        setNotice("Sign in with your username. Email addresses cannot be used to sign in.");
+        return;
+      }
       let signedInRole: "user" | "admin" | "staff" = "user";
       if (isSupabaseConfigured) {
         try {
@@ -3161,6 +3173,8 @@ export default function Marketplace() {
             setDisplayName(websiteAccount.displayName);
             setUserId(websiteAccount.id);
             setRole("user");
+            setStaffPermissions([]);
+            setStaffRoleNames([]);
             await refreshCertificates().catch(() => {});
             await refreshRemoteListings(true);
             setNotice("Signed in successfully.");
@@ -3199,7 +3213,23 @@ export default function Marketplace() {
           if (profile.role !== "admin" && profile.role !== "staff") throw new Error("Username or password is incorrect.");
           signedInRole = profile.role;
           setRole(signedInRole);
-          if (signedInRole === "admin") await refreshRemoteListings();
+          if (signedInRole === "admin") {
+            setStaffPermissions([]);
+            setStaffRoleNames([]);
+            await refreshRemoteListings();
+          } else {
+            const accessResponse = await fetch("/api/staff/access", {
+              headers: { Authorization: `Bearer ${result.accessToken}` },
+              cache: "no-store",
+            });
+            const access = await accessResponse.json();
+            if (!accessResponse.ok) throw new Error(access.error ?? "Could not load staff access.");
+            const assignedPermissions = access.permissions as StaffPermission[];
+            setStaffPermissions(assignedPermissions);
+            setStaffRoleNames(Array.isArray(access.roles) ? access.roles as string[] : []);
+            if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
+            setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
+          }
         } catch (error) {
           setNotice(error instanceof Error ? error.message : "Sign-in failed.");
           return;
@@ -3210,6 +3240,8 @@ export default function Marketplace() {
         setDisplayName(username);
         setUserId(username);
         setRole("user");
+        setStaffPermissions([]);
+        setStaffRoleNames([]);
         setNotice(`Local demo session started as ${username}.`);
       }
       formElement.reset();
@@ -3255,6 +3287,8 @@ export default function Marketplace() {
     setDisplayName("");
     setUserId("");
     setRole(null);
+    setStaffPermissions([]);
+    setStaffRoleNames([]);
     setSellerOpenOrdersCount(0);
     setBuyerOpenOrdersCount(0);
     setPrivateOffersCount(0);
@@ -3608,7 +3642,7 @@ export default function Marketplace() {
             </nav>
           </>}
         </div>
-        <div className="admin-header-actions"><span className="admin-account">{user}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
+        <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong>{role === "staff" && staffRoleNames.length > 0 && <small>{staffRoleNames.join(" · ")}</small>}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
       <div className="admin-content" id="admin-home">
         {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}
@@ -4071,7 +4105,7 @@ export default function Marketplace() {
           </> : <p className="admin-empty">No accounts match the selected filters{accountSearch.trim() ? ` and “${accountSearch.trim()}”` : ""}.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
         {activeAdminPanel === "orders" && staffCanOrders && <AdminMarketplaceOrders onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} staffPermissions={role === "staff" ? staffPermissions : undefined} />}
-        {activeAdminPanel === "delivery" && role === "staff" && staffCan("delivery_confirmation") && <StaffOrderQueue username={user} onNotice={setNotice} onSignOut={() => { void signOut(); }} />}
+        {activeAdminPanel === "delivery" && role === "staff" && staffCan("delivery_confirmation") && <StaffOrderQueue fullName={displayName} roleNames={staffRoleNames} onNotice={setNotice} onSignOut={() => { void signOut(); }} />}
         {activeAdminPanel === "staff" && role === "admin" && <AdminStaffManagement onNotice={setNotice} />}
         {activeAdminPanel === "order-time-limits" && role === "admin" && <AdminOrderTimeLimits onNotice={setNotice} />}
         {activeAdminPanel === "payment-instructions" && role === "admin" && <AdminPaymentInstructions onNotice={setNotice} />}
@@ -4125,7 +4159,7 @@ export default function Marketplace() {
         {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions {accountSubmissionEntries.length > 0 && <span className="account-menu-count" aria-label={`${accountSubmissionEntries.length} pending or rejected submissions`}><strong>{accountSubmissionEntries.length}</strong></span>}<ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("support"); setMenuOpen(false); }}>Help / Contact admin <ArrowUpRight size={15} /></button>{role === "user" && <>        <button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders and Cart <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOpenOrdersCount}</strong> buying active</small><small><strong>{sellerOpenOrdersCount}</strong> selling active</small><small><strong>{cartListingAccountId === userId ? cartListingIds.size : 0}</strong> cart</small></span></button><button type="button" onClick={() => { setDialog("bank-information"); setMenuOpen(false); }}>Bank Information <ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} priority /><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
-      {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
+      {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span className="user-chip-identity" data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
     </header>
 
     <div className="market-content" id="top">
@@ -4221,7 +4255,7 @@ export default function Marketplace() {
     {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button><div className="dialog-brand"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /><span>MADINIMARKET</span></div>
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" disabled={busyActions.has("account-signout")} onClick={() => void withProgress("account-signout", signOut)}>{busyActions.has("account-signout") ? "Signing out…" : "Sign out"}</button></div></>}
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2>{accountCreationDisabled ? <p className="dialog-copy">Account creation is suspended for now. Please try again later.</p> : <><p className="dialog-copy">Create your account to buy, sell, or both. Your delivery address is shared with a seller only after payment is verified for an order.</p><form className="form-stack form-scroll" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><div className="field-row"><Field label="Country" name="deliveryCountry" required autoComplete="country-name" /><Field label="Region" name="deliveryRegion" required autoComplete="address-level1" /></div><div className="field-row"><Field label="District" name="deliveryDistrict" required autoComplete="address-level2" /><Field label="Street / delivery address" name="deliveryAddress" required autoComplete="street-address" /></div><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={accountCreationDisabled || busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>      Already registered? <strong>Sign in</strong></button></>}</>}
-      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username or staff work email.</p><form className="form-stack" onSubmit={signIn}><Field label="Username or work email" name="username" placeholder="MM-1254 or name@company.com" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" disabled={nonAdminSignInDisabled} onClick={() => setDialog("forgot-password")}>{nonAdminSignInDisabled ? "Password recovery is currently unavailable" : "Forgot your password?"}</button><button className="switch-dialog" type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation is currently suspended" : <>New to the market? <strong>Create account</strong></>}</button></>}
+      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username. Email addresses cannot be used to sign in.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254 or MMSA-0001" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" disabled={nonAdminSignInDisabled} onClick={() => setDialog("forgot-password")}>{nonAdminSignInDisabled ? "Password recovery is currently unavailable" : "Forgot your password?"}</button><button className="switch-dialog" type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation is currently suspended" : <>New to the market? <strong>Create account</strong></>}</button></>}
       {dialog === "forgot-password" && <><div className="dialog-kicker">ACCOUNT RECOVERY</div><h2 id="dialog-title">Reset your password.</h2>{nonAdminSignInDisabled ? <><p className="dialog-copy">Password recovery is currently unavailable while user sign-in is not enabled.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Return to <strong>Sign in</strong></button></> : <><p className="dialog-copy">Enter the email address registered to your account. If it matches an active account, we’ll email a secure, one-time reset link. We never email passwords.</p><form className="form-stack" onSubmit={requestPasswordReset}><Field label="Registered email address" name="email" type="email" required autoComplete="email" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("password-reset-request")}>{busyActions.has("password-reset-request") ? "Sending link…" : <>Email reset link <ArrowUpRight size={16} /></>}</button></form><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Remembered your password? <strong>Sign in</strong></button></>}</>}
       {dialog === "certificate-ready" && <><div className="dialog-kicker">SIGN-IN COMPLETE</div><h2 id="dialog-title">Your certificate is ready.</h2><p className="dialog-copy">The certificate will open in a new tab. Your marketplace dashboard will stay open here.</p><button className="button button-dark form-submit" type="button" onClick={() => { if (certificateReadyListingId !== null) { const certificateTab = window.open("about:blank", "_blank"); if (!certificateTab) setNotice("Allow pop-ups to open this certificate."); else void fetchWithWebsiteSession(`/api/listing-certificate?id=${certificateReadyListingId}`).then(async (response) => { if (!response.ok) throw new Error("Could not open this certificate."); const url = URL.createObjectURL(await response.blob()); certificateTab.location.href = url; window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }).catch((error: unknown) => { certificateTab.close(); setNotice(error instanceof Error ? error.message : "Could not open this certificate."); }); } setCertificateReadyListingId(null); setDialog(null); }}>Open certificate <ArrowUpRight size={16} /></button></>}
       {dialog === "sell" && <>

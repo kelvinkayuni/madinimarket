@@ -37,6 +37,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-brand span.admin-brand-name { margin-left: 0; padding: 0; background: transparent; color: inherit; font-size: 11px; }
 .admin-header-actions { display: flex; align-items: center; gap: 18px; }
 .admin-account { color: #717b70; font-size: 11px; }
+.admin-account strong, .admin-account small { display: block; }
+.admin-account strong { color: var(--ink); font-size: 11px; font-weight: 650; }
+.admin-account small { max-width: 260px; margin-top: 3px; color: #717b70; font-size: 9px; }
 .admin-menu-wrap { position: absolute; top: 50%; left: 50%; z-index: 1; transform: translate(-50%, -50%); }
 .admin-menu-trigger { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid #dfe3db; border-radius: 50%; background: #fff; color: var(--forest); cursor: pointer; }
 .admin-menu-trigger:hover { border-color: #aeb9aa; background: #f5f7f2; }
@@ -508,6 +511,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .menu-foot { display: flex; align-items: center; gap: 8px; padding-top: 14px; color: #808980; font-size: 10px; }
 .user-chip { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; font-size: 11px; }
 .user-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e4edda; color: var(--forest); font-size: 10px; font-weight: 700; }
+.user-chip-identity { display: grid; gap: 2px; }
+.user-chip-identity small { color: #718071; font-size: 9px; }
 .market-content { width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0 clamp(18px, 3vw, 48px); }
 .market-announcement { flex: 0 0 auto; margin-top: 12px; border: 1px solid #d9a1a1; border-radius: 5px; background: #fff6f4; padding: 9px 12px; color: #b42318; font-size: 12px; font-weight: 800; line-height: 1.4; text-align: center; animation: madini-homepage-notice 1.2s ease-in-out infinite alternate; }
 @keyframes madini-homepage-notice { from { color: #b42318; border-color: #d9a1a1; background: #fff6f4; } to { color: #ef2b1f; border-color: #ef8b82; background: #fffafa; } }

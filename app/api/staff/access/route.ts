@@ -7,6 +7,7 @@ export async function GET(request: Request) {
     const staff = await getStaffAccess(request);
     if (!staff) return NextResponse.json({ error: "Active staff access is required." }, { status: 403 });
     return NextResponse.json({
+      fullName: staff.fullName,
       permissions: staff.permissions,
       roles: staff.roles.map((role) => role.name),
     }, { headers: { "Cache-Control": "no-store" } });

@@ -23,16 +23,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid sign-in details." }, { status: 400 });
   }
 
-  if (!username || username.length > 254 || password.length < 8 || password.length > 256) {
+  if (!username || username.includes("@") || username.length > 32 || password.length < 8 || password.length > 256) {
     return NextResponse.json({ error: "Username or password is incorrect." }, { status: 401 });
   }
 
   try {
     const admin = createSupabaseAdminClient();
+    const normalizedUsername = username.toUpperCase();
+    const isStaffCode = /^MMSA-\d{4,}$/.test(normalizedUsername);
+    const { data: staffMember, error: staffLookupError } = isStaffCode
+      ? await admin.from("staff_members").select("user_id").eq("employee_code", normalizedUsername).maybeSingle()
+      : { data: null, error: null };
+    if (staffLookupError) {
+      console.error("Could not look up the staff sign-in account.", staffLookupError);
+      return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 503 });
+    }
     const profileQuery = admin.from("profiles").select("id, email, username, role");
-    const { data: profile, error: profileError } = emailPattern.test(username)
-      ? await profileQuery.eq("email", username.toLowerCase()).maybeSingle()
-      : await profileQuery.eq("username", username).maybeSingle();
+    const { data: profile, error: profileError } = staffMember
+      ? await profileQuery.eq("id", staffMember.user_id).maybeSingle()
+      : isStaffCode
+        ? { data: null, error: null }
+        : await profileQuery.eq("username", normalizedUsername).maybeSingle();
 
     if (profileError) {
       console.error("Could not look up the sign-in account.", profileError);
@@ -99,5 +110,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 503 });
   }
 }
-
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
