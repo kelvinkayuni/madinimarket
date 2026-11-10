@@ -398,10 +398,10 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
       </form>
     </details>
     <section className="admin-staff-list">
-      <h2>Staff accounts · {staff.length}</h2>
+      <h2>Staff accounts ({staff.length})</h2>
       {loading ? <p className="commerce-note">Loading staff accounts…</p> : staff.length ? <div className="commerce-list">
         {staff.map((member) => <article className="admin-staff-row" key={member.id}>
-          <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small>{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"} · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
+          <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small><strong className="admin-staff-assigned-roles">{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"}</strong> · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
             {(member.sex || member.residence) && <small>{member.sex ? `Sex: ${member.sex.replaceAll("_", " ")}` : ""}{member.sex && member.residence ? " · " : ""}{member.residence ? `Residence / work area: ${member.residence}` : ""}</small>}
             {editingRolesFor === member.id && <fieldset className="admin-staff-permissions">
               <legend>Assigned roles</legend>

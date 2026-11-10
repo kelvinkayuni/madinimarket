@@ -169,6 +169,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-staff-list { display: grid; gap: 12px; }
 .admin-staff-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px; border: 1px solid #e2e8df; background: #fff; }
 .admin-staff-row > div { display: grid; gap: 4px; min-width: 0; }
+.admin-staff-assigned-roles { color: #304b39; font-weight: 700; }
 .admin-staff-row strong { color: #304b39; font-size: 12px; }
 .admin-staff-row span, .admin-staff-row small { color: #69766a; font-size: 10px; overflow-wrap: anywhere; }
 .staff-activation-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--paper); }
