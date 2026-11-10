@@ -176,7 +176,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
   };
 
   const clearConversation = async () => {
-    if (!selectedId || !window.confirm("Clear all messages from your view? The other person will still see their conversation.")) return;
+    if (!selectedId || !window.confirm("Permanently delete this conversation, including all messages and attachments, for both you and the other person? This cannot be undone.")) return;
     try {
       const response = await fetch(admin ? "/api/admin/staff-chat" : "/api/staff/admin-chat", {
         method: "DELETE",
@@ -184,14 +184,16 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
         body: JSON.stringify({ conversationId: selectedId, clearConversation: true }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Could not clear this conversation.");
+      if (!response.ok) throw new Error(result.error ?? "Could not permanently delete this conversation.");
       setMessages([]);
       setSelectedMessageIds(new Set());
       setReplyTo(null);
+      setSelectedId(null);
+      setMobileConversationOpen(false);
       await loadConversations();
-      onNotice("Conversation cleared from your view.");
+      onNotice("Conversation permanently deleted for both sides.");
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not clear this conversation.");
+      onNotice(error instanceof Error ? error.message : "Could not permanently delete this conversation.");
     }
   };
 
@@ -242,7 +244,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             <h2>{admin ? selectedConversation?.full_name ?? "Select a staff conversation" : "Chat with admin"}</h2>
           </div>
           <div className="staff-chat-conversation-actions">
-            <button className="button button-outline" type="button" onClick={() => void clearConversation()} disabled={!selectedId}>Clear my view</button>
+            <button className="button button-outline staff-chat-delete-conversation" type="button" onClick={() => void clearConversation()} disabled={!selectedId}>Delete conversation for everyone</button>
             <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!selectedMessageIds.size}>Delete selected</button>
           </div>
         </div>

@@ -118,10 +118,26 @@ export async function removeStaffChatMessages(admin: AdminClient, messages: Mess
     .in("message_id", messageIds);
   if (error) throw error;
   const paths = (attachments ?? []).map((attachment) => attachment.file_path);
-  if (paths.length) {
-    const { error: storageError } = await admin.storage.from(bucket).remove(paths);
+  for (let index = 0; index < paths.length; index += 100) {
+    const { error: storageError } = await admin.storage.from(bucket).remove(paths.slice(index, index + 100));
     if (storageError) throw storageError;
   }
   const { error: deleteError } = await admin.from("staff_admin_messages").delete().in("id", messageIds);
   if (deleteError) throw deleteError;
+}
+
+export async function deleteStaffChatConversation(admin: AdminClient, conversationId: string) {
+  for (;;) {
+    const { data: messages, error } = await admin.from("staff_admin_messages")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    if (error) throw error;
+    if (!messages?.length) break;
+    await removeStaffChatMessages(admin, messages);
+  }
+
+  const { error } = await admin.from("staff_admin_conversations").delete().eq("id", conversationId);
+  if (error) throw error;
 }

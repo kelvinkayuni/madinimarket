@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStaffAccess } from "@/lib/staff-auth";
-import { getStaffChatUnreadCount, getStaffChatAttachments, removeStaffChatMessages, saveStaffChatAttachments } from "@/lib/staff-admin-chat";
+import { deleteStaffChatConversation, getStaffChatUnreadCount, getStaffChatAttachments, removeStaffChatMessages, saveStaffChatAttachments } from "@/lib/staff-admin-chat";
 
 export async function GET(request: Request) {
   const staff = await getStaffAccess(request);
@@ -157,25 +157,8 @@ export async function DELETE(request: Request) {
     if (!conversation) return NextResponse.json({ error: "There is no conversation to clear." }, { status: 404 });
 
     if (values.clearConversation === true) {
-      const now = new Date().toISOString();
-      const { data: unreadMessages, error: unreadError } = await staff.admin.from("staff_admin_messages")
-        .select("id")
-        .eq("conversation_id", conversation.id)
-        .eq("sender_type", "admin")
-        .is("seen_by_staff_at", null);
-      if (unreadError) throw unreadError;
-      const unreadIds = (unreadMessages ?? []).map((message) => message.id);
-      if (unreadIds.length) {
-        const { error: seenError } = await staff.admin.from("staff_admin_messages")
-          .update({ seen_by_staff_at: now })
-          .in("id", unreadIds);
-        if (seenError) throw seenError;
-      }
-      const { error: clearError } = await staff.admin.from("staff_admin_conversations")
-        .update({ staff_cleared_at: now, last_read_by_staff: now, unread_by_staff: false })
-        .eq("id", conversation.id);
-      if (clearError) throw clearError;
-      return NextResponse.json({ cleared: true });
+      await deleteStaffChatConversation(staff.admin, conversation.id);
+      return NextResponse.json({ deleted: true });
     }
 
     const messageIds = Array.isArray(values.messageIds)

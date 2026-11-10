@@ -1232,6 +1232,7 @@ h1, h2, h3, p { margin-top: 0; }
 .staff-admin-chat .support-reply .button { min-height: 42px; }
 .staff-chat-conversation-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .staff-chat-conversation-actions .button { min-height: 34px; padding: 6px 9px; font-size: 10px; }
+.staff-chat-conversation-actions .staff-chat-delete-conversation { border-color: #b94a42; color: #8d302a; }
 .staff-chat-message-select { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; color: var(--muted); font-size: 9px; }
 .staff-chat-attachment { display: block; margin: 6px 0; color: var(--forest); font-size: 11px; overflow-wrap: anywhere; }
 .staff-chat-attachment small { color: var(--muted); }
