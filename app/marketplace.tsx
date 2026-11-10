@@ -688,6 +688,8 @@ export default function Marketplace() {
   const [staffPermissions, setStaffPermissions] = useState<StaffPermission[]>([]);
   const [staffRoles, setStaffRoles] = useState<StaffRoleDetails[]>([]);
   const [staffAccessStatus, setStaffAccessStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+  const staffAccessCache = useRef<{ userId: string; permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null } | null>(null);
+  const staffAccessRequest = useRef<{ userId: string; promise: Promise<{ permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null }> } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
@@ -702,6 +704,48 @@ export default function Marketplace() {
   const galleryTouchStartX = useRef<number | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
+  const loadStaffAccess = async (userId: string, accessToken: string) => {
+    const cached = staffAccessCache.current;
+    if (cached?.userId === userId) {
+      setStaffAccessStatus("loaded");
+      return cached;
+    }
+    const pending = staffAccessRequest.current;
+    if (pending?.userId === userId) return pending.promise;
+
+    setStaffAccessStatus("loading");
+    const request = (async () => {
+      const response = await fetch("/api/staff/access", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const access = await response.json();
+      if (!response.ok) throw new Error(access.error ?? "Could not load staff access.");
+      const result = {
+        userId,
+        permissions: access.permissions as StaffPermission[],
+        roles: parseStaffRoleDetails(access.roleDetails),
+        fullName: typeof access.fullName === "string" && access.fullName ? access.fullName : null,
+      };
+      staffAccessCache.current = result;
+      setStaffPermissions(result.permissions);
+      setStaffRoles(result.roles);
+      if (result.fullName) setDisplayName(result.fullName);
+      setActiveAdminPanel((current) => current ?? defaultStaffPanel(result.permissions));
+      setStaffAccessStatus("loaded");
+      return result;
+    })();
+    const requestEntry = { userId, promise: request };
+    staffAccessRequest.current = requestEntry;
+    try {
+      return await request;
+    } catch (error) {
+      setStaffAccessStatus("error");
+      throw error;
+    } finally {
+      if (staffAccessRequest.current === requestEntry) staffAccessRequest.current = null;
+    }
+  };
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -1374,6 +1418,7 @@ export default function Marketplace() {
             isAdmin = profile?.role === "admin";
             isStaff = profile?.role === "staff";
             if (isAdmin && active) {
+              staffAccessCache.current = null;
               setStaffAccessStatus("idle");
               setStaffPermissions([]);
               setStaffRoles([]);
@@ -1386,24 +1431,14 @@ export default function Marketplace() {
               setUser(profile?.username ?? "");
               setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
-              setStaffAccessStatus("loading");
               setRole("staff");
-              const response = await fetch("/api/staff/access", {
-                headers: { Authorization: `Bearer ${session.access_token}` },
-                cache: "no-store",
-              });
-              const access = await response.json();
-              if (!response.ok) throw new Error(access.error ?? "Could not load staff access.");
-              assignedPermissions = access.permissions as StaffPermission[];
-              setStaffPermissions(assignedPermissions);
-              setStaffRoles(parseStaffRoleDetails(access.roleDetails));
-              if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
-              setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
-              setStaffAccessStatus("loaded");
+              const access = await loadStaffAccess(session.user.id, session.access_token);
+              assignedPermissions = access.permissions;
             }
             if (!isAdmin && !isStaff) await supabase.auth.signOut({ scope: "local" });
           }
           if (!isAdmin && !isStaff) {
+            staffAccessCache.current = null;
             const response = await fetchWithWebsiteSession("/api/auth/website-session", { cache: "no-store" });
             const result = response.ok ? await response.json() : null;
             hasWebsiteAccount = Boolean(result?.account);
@@ -3184,6 +3219,7 @@ export default function Marketplace() {
             if (websiteResponse.ok) websiteAccount = await websiteResponse.json();
           }
           if (websiteAccount) {
+            staffAccessCache.current = null;
             setWebsiteSessionToken(websiteAccount.accessToken);
             setUser(websiteAccount.username);
             setDisplayName(websiteAccount.displayName);
@@ -3244,9 +3280,12 @@ export default function Marketplace() {
             const access = await accessResponse.json();
             if (!accessResponse.ok) throw new Error(access.error ?? "Could not load staff access.");
             const assignedPermissions = access.permissions as StaffPermission[];
+            const assignedRoles = parseStaffRoleDetails(access.roleDetails);
+            const fullName = typeof access.fullName === "string" && access.fullName ? access.fullName : null;
+            staffAccessCache.current = { userId: profile.id, permissions: assignedPermissions, roles: assignedRoles, fullName };
             setStaffPermissions(assignedPermissions);
-            setStaffRoles(parseStaffRoleDetails(access.roleDetails));
-            if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
+            setStaffRoles(assignedRoles);
+            if (fullName) setDisplayName(fullName);
             setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
             setStaffAccessStatus("loaded");
           }
@@ -3309,6 +3348,7 @@ export default function Marketplace() {
     setDisplayName("");
     setUserId("");
     setRole(null);
+    staffAccessCache.current = null;
     setStaffAccessStatus("idle");
     setStaffPermissions([]);
     setStaffRoles([]);
