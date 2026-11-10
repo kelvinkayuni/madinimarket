@@ -3609,7 +3609,7 @@ export default function Marketplace() {
         <span>A new version of Madinimarket is available.</span>
         <button type="button" onClick={() => window.location.reload()}>Reload to update</button>
       </div>}
-      <header className="admin-header">
+      <header className={`admin-header${role === "staff" ? " admin-header-staff" : ""}`}>
         <a className="admin-brand" href="#admin-home"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /> <span className="admin-brand-name">MADINIMARKET</span><span className={role === "staff" ? "staff-role-badge" : undefined} title={role === "staff" ? staffRoleNames.join(" · ") : undefined} data-no-translate>{role === "staff" ? staffRoleNames.join(" · ") : "ADMIN"}</span></a>
         <div className="admin-menu-wrap">
           <button className="admin-menu-trigger" type="button" aria-label={adminMenuOpen ? "Close admin menu" : "Open admin menu"} aria-expanded={adminMenuOpen} aria-controls="admin-panel-menu" onClick={() => setAdminMenuOpen((open) => !open)}>
