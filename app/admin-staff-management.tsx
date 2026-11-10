@@ -17,6 +17,8 @@ type StaffMember = {
   full_name: string;
   email: string;
   username: string;
+  sex: "male" | "female" | "prefer_not_to_say" | null;
+  residence: string | null;
   roles: StaffRole[];
   status: "invited" | "active" | "suspended";
   setupComplete: boolean;
@@ -74,6 +76,8 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           fullName: values.get("fullName"),
+          sex: values.get("sex"),
+          residence: values.get("residence"),
           email: values.get("email"),
           roleIds: values.getAll("roleIds").map(Number),
         }),
@@ -198,8 +202,9 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
       <div><div className="dialog-kicker">ACCESS & ACCOUNTABILITY</div><h1>Staff Management</h1>
         <p>Create roles from specific work permissions, then assign one or more roles to each staff member. Refunds, account-security settings, and staff management stay owner-only.</p></div>
     </div>
-    <form className="admin-staff-invite" onSubmit={(event) => void createRole(event)}>
-        <h2>Create a staff role</h2>
+    <details className="admin-staff-disclosure">
+      <summary><span><strong>Create a staff role</strong><small>Define permissions for staff work</small></span><span className="admin-staff-disclosure-icon" aria-hidden="true">⌄</span></summary>
+      <form className="admin-staff-invite" onSubmit={(event) => void createRole(event)}>
         <label className="field-label">Role name<input className="text-input" name="roleName" maxLength={80} required /></label>
         <fieldset className="admin-staff-permissions">
           <legend>Permissions included in this role</legend>
@@ -209,10 +214,23 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
           </label>)}
         </fieldset>
         <button className="button button-dark" type="submit" disabled={busy !== ""}>{busy === "role" ? "Creating role…" : "Create role"}</button>
-    </form>
-    <form className="admin-staff-invite" onSubmit={(event) => void invite(event)}>
-        <h2>Invite staff</h2>
+      </form>
+    </details>
+    <details className="admin-staff-disclosure">
+      <summary><span><strong>Invite staff</strong><small>Add a staff member and assign their work roles</small></span><span className="admin-staff-disclosure-icon" aria-hidden="true">⌄</span></summary>
+      <form className="admin-staff-invite" onSubmit={(event) => void invite(event)}>
         <label className="field-label">Full name<input className="text-input" name="fullName" autoComplete="name" maxLength={120} required /></label>
+        <label className="field-label">Sex (optional)
+          <select className="text-input" name="sex" defaultValue="">
+            <option value="">Select sex</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="prefer_not_to_say">Prefer not to say</option>
+          </select>
+        </label>
+        <label className="field-label">Permanent residence / work area (optional)
+          <input className="text-input" name="residence" autoComplete="street-address" maxLength={200} placeholder="City, district, or region" />
+        </label>
         <label className="field-label">Work email<input className="text-input" name="email" type="email" autoComplete="email" maxLength={254} required /></label>
         <fieldset className="admin-staff-permissions">
           <legend>Assign one or more roles</legend>
@@ -224,12 +242,14 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         </fieldset>
         <p className="commerce-note">Supabase sends a one-time invitation link. The staff member sets their own password; no password is created or shared by the administrator.</p>
         <button className="button button-dark" type="submit" disabled={busy !== "" || !roles.length}>{busy === "invite" ? "Sending invitation…" : "Invite staff"}</button>
-    </form>
+      </form>
+    </details>
     <section className="admin-staff-list">
       <h2>Staff accounts · {staff.length}</h2>
       {loading ? <p className="commerce-note">Loading staff accounts…</p> : staff.length ? <div className="commerce-list">
         {staff.map((member) => <article className="admin-staff-row" key={member.id}>
           <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small>{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"} · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
+            {(member.sex || member.residence) && <small>{member.sex ? `Sex: ${member.sex.replaceAll("_", " ")}` : ""}{member.sex && member.residence ? " · " : ""}{member.residence ? `Residence / work area: ${member.residence}` : ""}</small>}
             {editingRolesFor === member.id && <fieldset className="admin-staff-permissions">
               <legend>Assigned roles</legend>
               {roles.map((role) => <label key={role.id}>

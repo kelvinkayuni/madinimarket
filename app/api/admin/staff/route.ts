@@ -1,20 +1,35 @@
 import { NextResponse } from "next/server";
 
-import { getAdminClient } from "@/lib/admin-auth";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { isStaffPermission } from "@/lib/staff-permissions";
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type Body = Record<string, unknown>;
 
-async function getOwner(request: Request) {
-  const admin = await getAdminClient(request);
-  if (!admin) return null;
+type OwnerAccess =
+  | { owner: { admin: ReturnType<typeof createSupabaseAdminClient>; userId: string }; response: null }
+  | { owner: null; response: NextResponse };
+
+async function getOwner(request: Request): Promise<OwnerAccess> {
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token) return null;
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return { admin, userId: user.id };
+  if (!token) {
+    return { owner: null, response: NextResponse.json({ error: "Sign in to the administrator account and try again." }, { status: 401 }) };
+  }
+  const admin = createSupabaseAdminClient();
+  const { data: { user }, error: authError } = await admin.auth.getUser(token);
+  if (authError || !user) {
+    return { owner: null, response: NextResponse.json({ error: "Your administrator session could not be verified. Sign out, sign in again, and retry." }, { status: 401 }) };
+  }
+  const { data: profile, error: profileError } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (profileError) {
+    console.error("Could not verify staff management administrator access.", profileError);
+    return { owner: null, response: NextResponse.json({ error: "Could not verify administrator access. Please retry." }, { status: 503 }) };
+  }
+  if (profile?.role !== "admin") {
+    return { owner: null, response: NextResponse.json({ error: "The signed-in account does not have the administrator role. Sign in with the owner administrator account." }, { status: 403 }) };
+  }
+  return { owner: { admin, userId: user.id }, response: null };
 }
 
 async function readBody(request: Request): Promise<Body | null> {
@@ -27,15 +42,16 @@ async function readBody(request: Request): Promise<Body | null> {
 }
 
 export async function GET(request: Request) {
-  const owner = await getOwner(request);
-  if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
+  const access = await getOwner(request);
+  if (!access.owner) return access.response;
+  const { owner } = access;
 
   const [
     { data: staff, error: staffError },
     { data: roles, error: rolesError },
     { data: assignments, error: assignmentsError },
   ] = await Promise.all([
-    owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, job_role, status, created_at, updated_at").order("id"),
+    owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, sex, residence, job_role, status, created_at, updated_at").order("id"),
     owner.admin.from("staff_roles").select("id, name, permissions, created_at").order("name"),
     owner.admin.from("staff_member_roles").select("staff_member_id, role_id"),
   ]);
@@ -81,8 +97,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const owner = await getOwner(request);
-  if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
+  const access = await getOwner(request);
+  if (!access.owner) return access.response;
+  const { owner } = access;
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid staff invitation." }, { status: 400 });
   if (body.action === "create_role") {
@@ -114,9 +131,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ role }, { status: 201 });
   }
   const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+  const sex = body.sex === "" || body.sex === undefined ? null : body.sex;
+  const residence = typeof body.residence === "string" ? body.residence.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-  if (!fullName || fullName.length > 120 || !emailPattern.test(email) || email.length > 254) {
-    return NextResponse.json({ error: "Enter a staff name and valid email address." }, { status: 400 });
+  if (!fullName || fullName.length > 120 || (sex !== null && !["male", "female", "prefer_not_to_say"].includes(String(sex))) || residence.length > 200 || !emailPattern.test(email) || email.length > 254) {
+    return NextResponse.json({ error: "Enter a valid staff name, optional sex and residence, and a valid email address." }, { status: 400 });
   }
   const roleIds = Array.isArray(body.roleIds)
     ? [...new Set(body.roleIds.map((value) => Number(value)))]
@@ -154,6 +173,8 @@ export async function POST(request: Request) {
     const { data: member, error: memberError } = await owner.admin.from("staff_members").insert({
       user_id: invitation.user.id,
       full_name: fullName,
+      sex,
+      residence: residence || null,
       job_role: "multiple",
       status: "invited",
       invited_by: owner.userId,
@@ -195,8 +216,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const owner = await getOwner(request);
-  if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
+  const access = await getOwner(request);
+  if (!access.owner) return access.response;
+  const { owner } = access;
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid staff update." }, { status: 400 });
   const memberId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
@@ -256,8 +278,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const owner = await getOwner(request);
-  if (!owner) return NextResponse.json({ error: "Owner administrator access required." }, { status: 401 });
+  const access = await getOwner(request);
+  if (!access.owner) return access.response;
+  const { owner } = access;
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid staff invitation deletion." }, { status: 400 });
   const memberId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
