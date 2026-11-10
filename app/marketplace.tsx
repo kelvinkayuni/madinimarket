@@ -689,6 +689,7 @@ export default function Marketplace() {
   const [staffPermissions, setStaffPermissions] = useState<StaffPermission[]>([]);
   const [staffRoles, setStaffRoles] = useState<StaffRoleDetails[]>([]);
   const [staffAccessStatus, setStaffAccessStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+  const [staffChatUnreadCount, setStaffChatUnreadCount] = useState(0);
   const staffAccessCache = useRef<{ userId: string; permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null } | null>(null);
   const staffAccessRequest = useRef<{ userId: string; promise: Promise<{ permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null }> } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -747,6 +748,36 @@ export default function Marketplace() {
       if (staffAccessRequest.current === requestEntry) staffAccessRequest.current = null;
     }
   };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || (role !== "admin" && role !== "staff")) {
+      return;
+    }
+    let active = true;
+    const loadUnreadCount = async () => {
+      try {
+        const { data } = await getSupabaseBrowserClient().auth.getSession();
+        if (!data.session?.access_token) return;
+        const response = await fetch(role === "admin"
+          ? "/api/admin/staff-chat?unreadOnly=1"
+          : "/api/staff/admin-chat?unreadOnly=1", {
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+          cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load unread staff messages.");
+        if (active) setStaffChatUnreadCount(result.unreadCount ?? 0);
+      } catch (error) {
+        if (active) setNotice(error instanceof Error ? error.message : "Could not load unread staff messages.");
+      }
+    };
+    void loadUnreadCount();
+    const interval = window.setInterval(() => void loadUnreadCount(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [role]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -3349,6 +3380,7 @@ export default function Marketplace() {
     setDisplayName("");
     setUserId("");
     setRole(null);
+    setStaffChatUnreadCount(0);
     staffAccessCache.current = null;
     setStaffAccessStatus("idle");
     setStaffPermissions([]);
@@ -3658,11 +3690,17 @@ export default function Marketplace() {
   }
 
   if (role === "staff" && staffAccessStatus === "loaded" && staffPermissions.length === 0) {
-    return <main className="staff-activation-shell"><section className="dialog-card staff-activation-card">
-      <div className="dialog-kicker">MADINIMARKET STAFF</div><h1>No roles assigned</h1>
-      <p className="dialog-copy">Your account is active, but no work permissions are assigned yet. Contact the owner administrator.</p>
-      <button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button>
-    </section></main>;
+    return <main className="staff-activation-shell staff-no-role-shell">
+      <section className="dialog-card staff-activation-card">
+        <div className="dialog-kicker">MADINIMARKET STAFF</div><h1>No roles assigned</h1>
+        <p className="dialog-copy">Your account is active, but no work permissions are assigned yet. Contact the owner administrator.</p>
+        <button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button>
+      </section>
+      <section className="staff-no-role-chat" aria-labelledby="staff-no-role-chat-heading">
+        <div className="admin-page-heading"><div><div className="dialog-kicker">STAFF COMMUNICATION</div><h2 id="staff-no-role-chat-heading">Chat with admin</h2><p>Message the administrator if you need help with your account or assigned roles.</p></div></div>
+        <StaffAdminChat admin={false} onNotice={setNotice} onUnreadCount={setStaffChatUnreadCount} />
+      </section>
+    </main>;
   }
 
   if (isAdminRole(role) || role === "staff") {
@@ -3698,6 +3736,7 @@ export default function Marketplace() {
             <button className="admin-menu-dismiss" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />
             <nav className="admin-menu-popover" id="admin-panel-menu" aria-label="Admin panels">
               <span className="admin-menu-heading">{role === "staff" ? "STAFF MENU" : "ADMIN PANELS"}</span>
+              {role === "staff" && <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Chat with admin{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread admin messages`}>{staffChatUnreadCount}</span>}</button>}
               {role === "staff" && <details className="admin-menu-role-details">
                 <summary>My assigned roles ({staffRoles.length})</summary>
                 <div className="admin-menu-role-list">
@@ -3713,8 +3752,7 @@ export default function Marketplace() {
               {role === "admin" && <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>}
               {(role === "admin" || staffCan("accounts")) && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
               {(role === "admin" || staffCan("customer_support")) && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
-              {role === "admin" && <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Staff messages</button>}
-              {role === "staff" && <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Chat with admin</button>}
+              {role === "admin" && <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Staff messages{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread staff messages`}>{staffChatUnreadCount}</span>}</button>}
               {(role === "admin" || staffCan("translations")) && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
               {(role === "admin" || staffCan("homepage_headlines")) && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>}
               {role === "admin" && <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>}
@@ -3738,7 +3776,7 @@ export default function Marketplace() {
       </header>
       <div className="admin-content" id="admin-home">
         {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}
-        {activeAdminPanel === "staff-chat" && (role === "admin" || role === "staff") && <section className="admin-support-panel" aria-labelledby="staff-chat-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">STAFF COMMUNICATION</div><h1 id="staff-chat-heading">{role === "admin" ? "Staff messages" : "Chat with admin"}</h1><p>{role === "admin" ? "Private direct conversations with staff accounts." : "Send a private message directly to the administrator."}</p></div></div><StaffAdminChat admin={role === "admin"} onNotice={setNotice} /></section>}
+        {activeAdminPanel === "staff-chat" && (role === "admin" || role === "staff") && <section className="admin-support-panel" aria-labelledby="staff-chat-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">STAFF COMMUNICATION</div><h1 id="staff-chat-heading">{role === "admin" ? "Staff messages" : "Chat with admin"}{staffChatUnreadCount > 0 && <span className="staff-chat-heading-count">{staffChatUnreadCount} unread</span>}</h1><p>{role === "admin" ? "Private direct conversations with staff accounts." : "Send a private message directly to the administrator."}</p></div></div><StaffAdminChat admin={role === "admin"} onNotice={setNotice} onUnreadCount={setStaffChatUnreadCount} /></section>}
         {activeAdminPanel === "listing-fee" && role === "admin" && <section className="admin-listing-fee-panel" aria-labelledby="admin-listing-fee-heading">
           <div className="admin-page-heading">
             <div><div className="dialog-kicker">MARKETPLACE SETTINGS</div><h1 id="admin-listing-fee-heading">New mineral listing fee</h1><p>Set the fee that will be applied to new mineral listings. Existing listings keep their saved fee and price.</p></div>
