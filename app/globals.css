@@ -1095,6 +1095,37 @@ h1, h2, h3, p { margin-top: 0; }
   .listing-section { min-height: auto; display: block; flex: none; }
   .seller-rail, .buyer-rail, .empty-search { min-height: auto; flex: initial; }
   .admin-header { min-height: 60px; padding-right: 14px; padding-left: 14px; }
+  .admin-header.admin-header-staff {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "identity actions" "menu menu";
+    gap: 6px 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .admin-header-staff .admin-brand {
+    grid-area: identity;
+    min-width: 0;
+  }
+  .admin-header-staff .admin-brand img,
+  .admin-header-staff .admin-brand-name { display: none; }
+  .admin-header-staff .admin-brand span.staff-role-badge {
+    max-width: 45vw;
+    margin: 0;
+  }
+  .admin-header-staff .admin-menu-wrap {
+    position: relative;
+    top: auto;
+    left: auto;
+    grid-area: menu;
+    justify-self: start;
+    transform: none;
+  }
+  .admin-header-staff .admin-header-actions {
+    grid-area: actions;
+    min-width: 0;
+  }
+  .admin-header-staff .admin-account { max-width: 32vw; }
   .admin-content { padding: 26px 14px 42px; }
   .admin-page-heading { align-items: flex-start; flex-direction: column; }
   .admin-page-heading h1 { font-size: 29px; }
@@ -1323,37 +1354,9 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-account { max-width: 82px; }
   .admin-header-actions .text-button { font-size: 10px; }
   .admin-menu-trigger { width: 38px; height: 38px; }
-  .admin-header.admin-header-staff {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "identity actions" "menu menu";
-    gap: 6px 10px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-  .admin-header-staff .admin-brand {
-    grid-area: identity;
-    min-width: 0;
-  }
-  .admin-header-staff .admin-brand img,
-  .admin-header-staff .admin-brand-name { display: none; }
   .admin-header-staff .admin-brand span.staff-role-badge {
-    max-width: 42vw;
-    margin: 0;
+    max-width: 45vw;
   }
-  .admin-header-staff .admin-menu-wrap {
-    position: relative;
-    top: auto;
-    left: auto;
-    grid-area: menu;
-    justify-self: center;
-    transform: none;
-  }
-  .admin-header-staff .admin-header-actions {
-    grid-area: actions;
-    min-width: 0;
-  }
-  .admin-header-staff .admin-account { max-width: 30vw; }
   .commerce-tabs { gap: 4px; padding: 4px; }
   .commerce-tab { font-size: 9px; }
   .dialog-panel .field-row { grid-template-columns: 1fr; }
