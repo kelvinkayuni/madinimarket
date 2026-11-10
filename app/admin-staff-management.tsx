@@ -42,6 +42,10 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     if (roleListRef.current) roleListRef.current.scrollTop = roleListScrollTop.current;
   }, [roles]);
 
+  const rolesWithPermission = (permission: StaffPermission) => roles
+    .filter((role) => role.permissions.includes(permission))
+    .map((role) => role.name);
+
   const load = useCallback(async () => {
     if (!isSupabaseConfigured) throw new Error("The staff service is not connected.");
     const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
@@ -276,10 +280,18 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         <label className="field-label">Role name<input className="text-input" name="roleName" maxLength={80} required /></label>
         <fieldset className="admin-staff-permissions">
           <legend>Permissions included in this role</legend>
-          {STAFF_PERMISSION_OPTIONS.map((permission) => <label key={permission.id}>
-            <input type="checkbox" name="permissions" value={permission.id} />
-            <span>{permission.label}</span>
-          </label>)}
+          {STAFF_PERMISSION_OPTIONS.map((permission) => {
+            const includedIn = rolesWithPermission(permission.id);
+            return <label key={permission.id}>
+              <input type="checkbox" name="permissions" value={permission.id} />
+              <span>
+                <span>{permission.label}</span>
+                <small className="admin-staff-permission-status">
+                  {includedIn.length ? `Included in: ${includedIn.join(", ")}` : "Not included in any job role"}
+                </small>
+              </span>
+            </label>;
+          })}
         </fieldset>
         <button className="button button-dark" type="submit" disabled={busy !== ""}>{busy === "role" ? "Creating role…" : "Create role"}</button>
       </form>
@@ -300,14 +312,22 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
                 <label className="field-label">Role name<input className="text-input" value={editedRoleName} maxLength={80} onChange={(event) => setEditedRoleName(event.target.value)} /></label>
                 <fieldset className="admin-staff-permissions">
                   <legend>Role permissions</legend>
-                  {STAFF_PERMISSION_OPTIONS.map((permission) => <label key={permission.id}>
-                    <input type="checkbox" checked={editedRolePermissions.includes(permission.id)} onChange={(event) => {
-                      setEditedRolePermissions((current) => event.target.checked
-                        ? [...current, permission.id]
-                        : current.filter((value) => value !== permission.id));
-                    }} />
-                    <span>{permission.label}</span>
-                  </label>)}
+                  {STAFF_PERMISSION_OPTIONS.map((permission) => {
+                    const includedIn = rolesWithPermission(permission.id);
+                    return <label key={permission.id}>
+                      <input type="checkbox" checked={editedRolePermissions.includes(permission.id)} onChange={(event) => {
+                        setEditedRolePermissions((current) => event.target.checked
+                          ? [...current, permission.id]
+                          : current.filter((value) => value !== permission.id));
+                      }} />
+                      <span>
+                        <span>{permission.label}</span>
+                        <small className="admin-staff-permission-status">
+                          {includedIn.length ? `Included in: ${includedIn.join(", ")}` : "Not included in any job role"}
+                        </small>
+                      </span>
+                    </label>;
+                  })}
                 </fieldset>
               </> : <>
                 <strong>{role.name}</strong>
