@@ -126,6 +126,28 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     }
   };
 
+  const resendInvitation = async (member: StaffMember) => {
+    setBusy(`resend-${member.id}`);
+    try {
+      const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error("Administrator session expired.");
+      const response = await fetch("/api/admin/staff", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resend_invitation", staffId: member.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not resend the setup link.");
+      await load();
+      onNotice(`A fresh setup link was sent to ${result.email}.`);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not resend the setup link.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const createRole = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -442,6 +464,9 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
             </fieldset>}
           </div>
           <div className="admin-staff-row-actions">
+            {member.status === "invited" && !member.setupComplete && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => void resendInvitation(member)}>
+              {busy === `resend-${member.id}` ? "Sending link…" : "Resend setup link"}
+            </button>}
             <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => {
               setEditingRolesFor(editingRolesFor === member.id ? null : member.id);
               setRoleSelections((current) => ({ ...current, [member.id]: member.roles.map((role) => role.id) }));

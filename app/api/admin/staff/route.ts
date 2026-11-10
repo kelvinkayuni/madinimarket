@@ -110,6 +110,81 @@ export async function POST(request: Request) {
   const { owner } = access;
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid staff invitation." }, { status: 400 });
+  if (body.action === "resend_invitation") {
+    const staffId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
+    if (!Number.isSafeInteger(staffId) || staffId < 1) {
+      return NextResponse.json({ error: "Choose a valid staff account." }, { status: 400 });
+    }
+
+    try {
+      const { data: member, error: memberError } = await owner.admin.from("staff_members")
+        .select("id, user_id, employee_code, full_name, status")
+        .eq("id", staffId)
+        .maybeSingle();
+      if (memberError) throw memberError;
+      if (!member) return NextResponse.json({ error: "Staff member not found." }, { status: 404 });
+      if (member.status !== "invited") {
+        return NextResponse.json({ error: "Setup links can only be resent to staff who have not activated their account." }, { status: 409 });
+      }
+
+      const [
+        { data: profile, error: profileError },
+        { data: assignments, error: assignmentsError },
+      ] = await Promise.all([
+        owner.admin.from("profiles").select("email, username, role").eq("id", member.user_id).maybeSingle(),
+        owner.admin.from("staff_member_roles").select("role:staff_roles(name)").eq("staff_member_id", member.id),
+      ]);
+      if (profileError) throw profileError;
+      if (assignmentsError) throw assignmentsError;
+      if (!profile?.email || profile.role !== "staff" || profile.username !== member.employee_code) {
+        throw new Error("The staff account identity is incomplete or inconsistent.");
+      }
+
+      const redirectTo = new URL("/staff/activate", getPublicAppUrl()).toString();
+      const { data: recovery, error: recoveryError } = await owner.admin.auth.admin.generateLink({
+        type: "recovery",
+        email: profile.email,
+        options: { redirectTo },
+      });
+      if (recoveryError) throw recoveryError;
+      const actionLink = recovery.properties?.action_link;
+      if (!actionLink) throw new Error("Supabase did not return a staff setup link.");
+      const roleNames = (assignments ?? []).flatMap((assignment) => assignment.role ?? []).map((role) => role.name);
+
+      await sendGmailEmail({
+        to: profile.email,
+        subject: "Complete your Madinimarket staff setup",
+        text: [
+          `Hello ${member.full_name},`,
+          "",
+          "Your staff account setup is not complete. Use the secure link below to set your password and activate your account:",
+          actionLink,
+          "",
+          `Your staff username is: ${member.employee_code}`,
+          `Assigned role${roleNames.length === 1 ? "" : "s"}: ${roleNames.join(", ") || "Contact the administrator"}`,
+          "",
+          "If you were not expecting this email, please contact the Madinimarket administrator.",
+        ].join("\n"),
+      });
+
+      const { error: auditError } = await owner.admin.from("staff_audit_log").insert({
+        actor_user_id: owner.userId,
+        staff_member_id: member.id,
+        action: "staff_invitation_resent",
+        entity_type: "staff_member",
+        entity_id: String(member.id),
+        details: { email: profile.email },
+      });
+      if (auditError) {
+        console.error("Staff setup link was sent, but its audit record could not be saved.", auditError);
+        return NextResponse.json({ error: "The setup link was sent, but the audit record could not be saved." }, { status: 503 });
+      }
+      return NextResponse.json({ ok: true, email: profile.email });
+    } catch (error) {
+      console.error("Could not resend the staff setup link.", error);
+      return NextResponse.json({ error: "Could not resend the staff setup link. Check the staff account and email service, then retry." }, { status: 503 });
+    }
+  }
   if (body.action === "create_role") {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const permissions = Array.isArray(body.permissions) ? [...new Set(body.permissions)] : [];
