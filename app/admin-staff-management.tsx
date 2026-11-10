@@ -69,6 +69,12 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
 
   useEffect(() => {
     let active = true;
+    const refreshVisibleStaff = () => {
+      if (document.visibilityState !== "visible") return;
+      void load().catch((error: unknown) => {
+        if (active) onNotice(error instanceof Error ? error.message : "Could not refresh staff accounts.");
+      });
+    };
     const initialLoad = window.setTimeout(() => {
       void load().catch((error: unknown) => {
         if (active) onNotice(error instanceof Error ? error.message : "Could not load staff.");
@@ -76,9 +82,15 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         if (active) setLoading(false);
       });
     }, 0);
+    const refreshInterval = window.setInterval(refreshVisibleStaff, 30_000);
+    window.addEventListener("focus", refreshVisibleStaff);
+    document.addEventListener("visibilitychange", refreshVisibleStaff);
     return () => {
       active = false;
       window.clearTimeout(initialLoad);
+      window.clearInterval(refreshInterval);
+      window.removeEventListener("focus", refreshVisibleStaff);
+      document.removeEventListener("visibilitychange", refreshVisibleStaff);
     };
   }, [load, onNotice]);
 

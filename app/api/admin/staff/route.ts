@@ -89,7 +89,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     staff: (staff ?? []).map((member) => ({
       ...member,
-      setupComplete: completedSetupIds.has(member.id),
+      setupComplete: completedSetupIds.has(member.id) || member.status === "active",
       email: profileById.get(member.user_id)?.email ?? "",
       username: profileById.get(member.user_id)?.username ?? "",
       roles: (assignments ?? [])
