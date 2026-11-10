@@ -14,6 +14,7 @@ import AdminOrderTimeLimits from "./admin-order-time-limits";
 import SupportInbox from "./support-inbox";
 import StaffOrderQueue from "./staff-order-queue";
 import StaffTaskClaim from "./staff-task-claim";
+import StaffAdminChat from "./staff-admin-chat";
 import CommercePanel from "./commerce-panel";
 import PrivateOfferForm from "./private-offer-form";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -27,7 +28,7 @@ type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff";
+type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff" | "staff-chat";
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
@@ -688,6 +689,8 @@ export default function Marketplace() {
   const [staffPermissions, setStaffPermissions] = useState<StaffPermission[]>([]);
   const [staffRoles, setStaffRoles] = useState<StaffRoleDetails[]>([]);
   const [staffAccessStatus, setStaffAccessStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+  const staffAccessCache = useRef<{ userId: string; permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null } | null>(null);
+  const staffAccessRequest = useRef<{ userId: string; promise: Promise<{ permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null }> } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
@@ -702,6 +705,48 @@ export default function Marketplace() {
   const galleryTouchStartX = useRef<number | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
+  const loadStaffAccess = async (userId: string, accessToken: string) => {
+    const cached = staffAccessCache.current;
+    if (cached?.userId === userId) {
+      setStaffAccessStatus("loaded");
+      return cached;
+    }
+    const pending = staffAccessRequest.current;
+    if (pending?.userId === userId) return pending.promise;
+
+    setStaffAccessStatus("loading");
+    const request = (async () => {
+      const response = await fetch("/api/staff/access", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const access = await response.json();
+      if (!response.ok) throw new Error(access.error ?? "Could not load staff access.");
+      const result = {
+        userId,
+        permissions: access.permissions as StaffPermission[],
+        roles: parseStaffRoleDetails(access.roleDetails),
+        fullName: typeof access.fullName === "string" && access.fullName ? access.fullName : null,
+      };
+      staffAccessCache.current = result;
+      setStaffPermissions(result.permissions);
+      setStaffRoles(result.roles);
+      if (result.fullName) setDisplayName(result.fullName);
+      setActiveAdminPanel((current) => current ?? defaultStaffPanel(result.permissions));
+      setStaffAccessStatus("loaded");
+      return result;
+    })();
+    const requestEntry = { userId, promise: request };
+    staffAccessRequest.current = requestEntry;
+    try {
+      return await request;
+    } catch (error) {
+      setStaffAccessStatus("error");
+      throw error;
+    } finally {
+      if (staffAccessRequest.current === requestEntry) staffAccessRequest.current = null;
+    }
+  };
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -1374,6 +1419,7 @@ export default function Marketplace() {
             isAdmin = profile?.role === "admin";
             isStaff = profile?.role === "staff";
             if (isAdmin && active) {
+              staffAccessCache.current = null;
               setStaffAccessStatus("idle");
               setStaffPermissions([]);
               setStaffRoles([]);
@@ -1386,24 +1432,14 @@ export default function Marketplace() {
               setUser(profile?.username ?? "");
               setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
-              setStaffAccessStatus("loading");
               setRole("staff");
-              const response = await fetch("/api/staff/access", {
-                headers: { Authorization: `Bearer ${session.access_token}` },
-                cache: "no-store",
-              });
-              const access = await response.json();
-              if (!response.ok) throw new Error(access.error ?? "Could not load staff access.");
-              assignedPermissions = access.permissions as StaffPermission[];
-              setStaffPermissions(assignedPermissions);
-              setStaffRoles(parseStaffRoleDetails(access.roleDetails));
-              if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
-              setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
-              setStaffAccessStatus("loaded");
+              const access = await loadStaffAccess(session.user.id, session.access_token);
+              assignedPermissions = access.permissions;
             }
             if (!isAdmin && !isStaff) await supabase.auth.signOut({ scope: "local" });
           }
           if (!isAdmin && !isStaff) {
+            staffAccessCache.current = null;
             const response = await fetchWithWebsiteSession("/api/auth/website-session", { cache: "no-store" });
             const result = response.ok ? await response.json() : null;
             hasWebsiteAccount = Boolean(result?.account);
@@ -3184,6 +3220,7 @@ export default function Marketplace() {
             if (websiteResponse.ok) websiteAccount = await websiteResponse.json();
           }
           if (websiteAccount) {
+            staffAccessCache.current = null;
             setWebsiteSessionToken(websiteAccount.accessToken);
             setUser(websiteAccount.username);
             setDisplayName(websiteAccount.displayName);
@@ -3244,9 +3281,12 @@ export default function Marketplace() {
             const access = await accessResponse.json();
             if (!accessResponse.ok) throw new Error(access.error ?? "Could not load staff access.");
             const assignedPermissions = access.permissions as StaffPermission[];
+            const assignedRoles = parseStaffRoleDetails(access.roleDetails);
+            const fullName = typeof access.fullName === "string" && access.fullName ? access.fullName : null;
+            staffAccessCache.current = { userId: profile.id, permissions: assignedPermissions, roles: assignedRoles, fullName };
             setStaffPermissions(assignedPermissions);
-            setStaffRoles(parseStaffRoleDetails(access.roleDetails));
-            if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
+            setStaffRoles(assignedRoles);
+            if (fullName) setDisplayName(fullName);
             setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
             setStaffAccessStatus("loaded");
           }
@@ -3309,6 +3349,7 @@ export default function Marketplace() {
     setDisplayName("");
     setUserId("");
     setRole(null);
+    staffAccessCache.current = null;
     setStaffAccessStatus("idle");
     setStaffPermissions([]);
     setStaffRoles([]);
@@ -3672,6 +3713,8 @@ export default function Marketplace() {
               {role === "admin" && <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>}
               {(role === "admin" || staffCan("accounts")) && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
               {(role === "admin" || staffCan("customer_support")) && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
+              {role === "admin" && <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Staff messages</button>}
+              {role === "staff" && <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Chat with admin</button>}
               {(role === "admin" || staffCan("translations")) && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
               {(role === "admin" || staffCan("homepage_headlines")) && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>}
               {role === "admin" && <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>}
@@ -3695,6 +3738,7 @@ export default function Marketplace() {
       </header>
       <div className="admin-content" id="admin-home">
         {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}
+        {activeAdminPanel === "staff-chat" && (role === "admin" || role === "staff") && <section className="admin-support-panel" aria-labelledby="staff-chat-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">STAFF COMMUNICATION</div><h1 id="staff-chat-heading">{role === "admin" ? "Staff messages" : "Chat with admin"}</h1><p>{role === "admin" ? "Private direct conversations with staff accounts." : "Send a private message directly to the administrator."}</p></div></div><StaffAdminChat admin={role === "admin"} onNotice={setNotice} /></section>}
         {activeAdminPanel === "listing-fee" && role === "admin" && <section className="admin-listing-fee-panel" aria-labelledby="admin-listing-fee-heading">
           <div className="admin-page-heading">
             <div><div className="dialog-kicker">MARKETPLACE SETTINGS</div><h1 id="admin-listing-fee-heading">New mineral listing fee</h1><p>Set the fee that will be applied to new mineral listings. Existing listings keep their saved fee and price.</p></div>
@@ -4304,7 +4348,7 @@ export default function Marketplace() {
     {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button><div className="dialog-brand"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /><span>MADINIMARKET</span></div>
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" disabled={busyActions.has("account-signout")} onClick={() => void withProgress("account-signout", signOut)}>{busyActions.has("account-signout") ? "Signing out…" : "Sign out"}</button></div></>}
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2>{accountCreationDisabled ? <p className="dialog-copy">Account creation is suspended for now. Please try again later.</p> : <><p className="dialog-copy">Create your account to buy, sell, or both. Your delivery address is shared with a seller only after payment is verified for an order.</p><form className="form-stack form-scroll" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><div className="field-row"><Field label="Country" name="deliveryCountry" required autoComplete="country-name" /><Field label="Region" name="deliveryRegion" required autoComplete="address-level1" /></div><div className="field-row"><Field label="District" name="deliveryDistrict" required autoComplete="address-level2" /><Field label="Street / delivery address" name="deliveryAddress" required autoComplete="street-address" /></div><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={accountCreationDisabled || busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>      Already registered? <strong>Sign in</strong></button></>}</>}
-      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username. Email addresses cannot be used to sign in.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" placeholder="MM-1254 or MMSA-4827" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("forgot-password")}>Forgot your password?</button><button className="switch-dialog" type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation is currently suspended" : <>New to the market? <strong>Create account</strong></>}</button></>}
+      {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username. Email addresses cannot be used to sign in.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("forgot-password")}>Forgot your password?</button><button className="switch-dialog" type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation is currently suspended" : <>New to the market? <strong>Create account</strong></>}</button></>}
       {dialog === "forgot-password" && <><div className="dialog-kicker">ACCOUNT RECOVERY</div><h2 id="dialog-title">Reset your password.</h2><p className="dialog-copy">{nonAdminSignInDisabled ? "User sign-in is suspended. Password recovery is available only for active staff accounts." : "Enter your username and registered email. If both match the same active account, we’ll email a secure reset link. We never email passwords."}</p><form className="form-stack" onSubmit={requestPasswordReset}><Field label="Username" name="username" placeholder="MM-1254 or MMSA-4827" required autoComplete="username" /><Field label="Registered email address" name="email" type="email" required autoComplete="email" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("password-reset-request")}>{busyActions.has("password-reset-request") ? "Sending link…" : <>Email reset link <ArrowUpRight size={16} /></>}</button></form><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Remembered your password? <strong>Sign in</strong></button></>}
       {dialog === "certificate-ready" && <><div className="dialog-kicker">SIGN-IN COMPLETE</div><h2 id="dialog-title">Your certificate is ready.</h2><p className="dialog-copy">The certificate will open in a new tab. Your marketplace dashboard will stay open here.</p><button className="button button-dark form-submit" type="button" onClick={() => { if (certificateReadyListingId !== null) { const certificateTab = window.open("about:blank", "_blank"); if (!certificateTab) setNotice("Allow pop-ups to open this certificate."); else void fetchWithWebsiteSession(`/api/listing-certificate?id=${certificateReadyListingId}`).then(async (response) => { if (!response.ok) throw new Error("Could not open this certificate."); const url = URL.createObjectURL(await response.blob()); certificateTab.location.href = url; window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }).catch((error: unknown) => { certificateTab.close(); setNotice(error instanceof Error ? error.message : "Could not open this certificate."); }); } setCertificateReadyListingId(null); setDialog(null); }}>Open certificate <ArrowUpRight size={16} /></button></>}
       {dialog === "sell" && <>
