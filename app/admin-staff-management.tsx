@@ -174,8 +174,15 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     }
   };
 
-  const deleteInvitation = async (member: StaffMember) => {
-    if (!window.confirm(`Delete the pending staff account for ${member.full_name}? This permanently removes the account and invalidates the invitation link.`)) return;
+  const deleteStaffAccount = async (member: StaffMember) => {
+    const warning = [
+      `Permanently delete ${member.full_name} (${member.employee_code})?`,
+      "",
+      "Their sign-in account and role assignments will be removed. Completed work and audit history will be kept under their name and employee code. Unfinished work and work records will not be deleted; another staff member with the relevant role can continue them.",
+      "",
+      "Make sure another staff member is assigned the roles needed to continue this work.",
+    ].join("\n");
+    if (!window.confirm(warning)) return;
     setBusy(`delete-${member.id}`);
     try {
       const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
@@ -187,11 +194,11 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         body: JSON.stringify({ staffId: member.id }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Could not delete the staff invitation.");
+      if (!response.ok) throw new Error(result.error ?? "Could not delete the staff account.");
       await load();
-      onNotice(result.warning ?? `Pending staff account for ${member.full_name} deleted.`);
+      onNotice(result.message ?? `Staff account for ${member.full_name} deleted. Work and history were preserved.`);
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not delete the staff invitation.");
+      onNotice(error instanceof Error ? error.message : "Could not delete the staff account.");
     } finally {
       setBusy("");
     }
@@ -277,9 +284,9 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
             <button
               className="button button-danger"
               type="button"
-              disabled={busy !== "" || member.setupComplete || member.status === "active"}
-              title={member.setupComplete || member.status === "active" ? "Only staff accounts that have not completed setup can be deleted." : "Delete this account and invalidate its invitation link."}
-              onClick={() => void deleteInvitation(member)}
+              disabled={busy !== ""}
+              title="Delete this staff account while preserving completed history and unfinished work."
+              onClick={() => void deleteStaffAccount(member)}
             >
               {busy === `delete-${member.id}` ? "Deleting…" : "Delete account"}
             </button>

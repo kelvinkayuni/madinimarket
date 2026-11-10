@@ -323,74 +323,98 @@ export async function DELETE(request: Request) {
   if (!access.owner) return access.response;
   const { owner } = access;
   const body = await readBody(request);
-  if (!body) return NextResponse.json({ error: "Invalid staff invitation deletion." }, { status: 400 });
+  if (!body) return NextResponse.json({ error: "Invalid staff account deletion." }, { status: 400 });
   const memberId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
   if (!Number.isSafeInteger(memberId) || memberId < 1) {
-    return NextResponse.json({ error: "Choose a valid staff invitation." }, { status: 400 });
+    return NextResponse.json({ error: "Choose a valid staff account." }, { status: 400 });
   }
 
   const { data: member, error: memberError } = await owner.admin.from("staff_members")
-    .select("id, user_id, full_name, status").eq("id", memberId).maybeSingle();
+    .select("id, employee_code, user_id, full_name, status").eq("id", memberId).maybeSingle();
   if (memberError) {
-    console.error("Could not look up the staff invitation.", memberError);
-    return NextResponse.json({ error: "Could not delete the staff invitation." }, { status: 503 });
+    console.error("Could not look up the staff account for deletion.", memberError);
+    return NextResponse.json({ error: "Could not delete the staff account." }, { status: 503 });
   }
   if (!member) return NextResponse.json({ error: "Staff member not found." }, { status: 404 });
-  if (!["invited", "suspended"].includes(member.status)) {
-    return NextResponse.json({ error: "Only invitations that have not completed account setup can be deleted." }, { status: 409 });
-  }
-
-  const { data: acceptedInvitation, error: setupError } = await owner.admin.from("staff_audit_log")
-    .select("id")
-    .eq("staff_member_id", memberId)
-    .eq("action", "staff_invitation_accepted")
-    .limit(1)
-    .maybeSingle();
-  if (setupError) {
-    console.error("Could not verify staff setup before deletion.", setupError);
-    return NextResponse.json({ error: "Could not verify whether staff setup was completed." }, { status: 503 });
-  }
-  if (acceptedInvitation) {
-    return NextResponse.json({ error: "This staff member has completed setup and cannot be deleted here." }, { status: 409 });
-  }
 
   const { data: lockedMember, error: lockError } = await owner.admin.from("staff_members")
     .update({ status: "suspended", updated_at: new Date().toISOString() })
     .eq("id", memberId).eq("status", member.status).select("id, user_id").maybeSingle();
   if (lockError) {
-    console.error("Could not lock the pending staff invitation for deletion.", lockError);
-    return NextResponse.json({ error: "Could not delete the staff invitation." }, { status: 503 });
+    console.error("Could not disable staff access before deletion.", lockError);
+    return NextResponse.json({ error: "Could not disable staff access for deletion." }, { status: 503 });
   }
   if (!lockedMember) {
-    return NextResponse.json({ error: "The invitation status changed. Refresh and try again." }, { status: 409 });
+    return NextResponse.json({ error: "Staff access changed. Refresh and try again." }, { status: 409 });
+  }
+
+  const restoreStatus = async () => {
+    const { error } = await owner.admin.from("staff_members")
+      .update({ status: member.status, updated_at: new Date().toISOString() })
+      .eq("id", memberId).eq("status", "suspended");
+    if (error) console.error("Could not restore staff access after deletion failed.", error);
+    return error;
+  };
+  const { data: assignments, error: assignmentsError } = await owner.admin.from("staff_member_roles")
+    .select("role:staff_roles(name)")
+    .eq("staff_member_id", memberId);
+  if (assignmentsError) {
+    console.error("Could not load staff roles before deletion.", assignmentsError);
+    const restoreError = await restoreStatus();
+    return NextResponse.json({
+      error: restoreError
+        ? "Could not load staff roles or restore access after deletion was interrupted. Contact technical support."
+        : "Could not load staff roles before deletion. Staff access was restored.",
+    }, { status: 503 });
+  }
+  const roleNames = (assignments ?? []).flatMap((assignment) => assignment.role ?? []).map((role) => role.name);
+  const { data: deletionAudit, error: auditError } = await owner.admin.from("staff_audit_log").insert({
+    actor_user_id: owner.userId,
+    staff_member_id: memberId,
+    action: "staff_account_deleted",
+    entity_type: "staff_member",
+    entity_id: String(memberId),
+    details: {
+      full_name: member.full_name,
+      employee_code: member.employee_code,
+      previous_status: member.status,
+      roles: roleNames,
+    },
+  }).select("id").single();
+  if (auditError) {
+    console.error("Could not record staff account deletion before removing access.", auditError);
+    const restoreError = await restoreStatus();
+    return NextResponse.json({
+      error: restoreError
+        ? "Could not record the deletion or restore staff access. Contact technical support."
+        : "Could not record the deletion. Staff access was restored.",
+    }, { status: 503 });
   }
 
   const { error: deleteError } = await owner.admin.auth.admin.deleteUser(lockedMember.user_id);
   if (deleteError) {
-    console.error("Could not delete the pending staff account.", deleteError);
-    const { error: restoreError } = await owner.admin.from("staff_members")
-      .update({ status: member.status, updated_at: new Date().toISOString() })
-      .eq("id", memberId).eq("status", "suspended");
+    console.error("Could not delete the staff account.", deleteError);
+    const { error: auditUpdateError } = await owner.admin.from("staff_audit_log")
+      .update({
+        action: "staff_account_deletion_failed",
+        details: {
+          full_name: member.full_name,
+          employee_code: member.employee_code,
+          previous_status: member.status,
+          roles: roleNames,
+          failure_reason: "auth_user_deletion_failed",
+        },
+      })
+      .eq("id", deletionAudit.id);
+    if (auditUpdateError) console.error("Could not record the failed staff account deletion.", auditUpdateError);
+    const restoreError = await restoreStatus();
     if (restoreError) {
-      console.error("Could not restore the pending staff invitation after deletion failed.", restoreError);
-      return NextResponse.json({ error: "The account could not be deleted and its invitation could not be restored. Contact technical support." }, { status: 503 });
+      return NextResponse.json({ error: "The account could not be deleted and staff access could not be restored. Contact technical support." }, { status: 503 });
     }
-    return NextResponse.json({ error: "Could not delete the staff account. The pending invitation was restored." }, { status: 503 });
+    if (auditUpdateError) {
+      return NextResponse.json({ error: "Could not delete the staff account. Access was restored, but the failed deletion could not be recorded." }, { status: 503 });
+    }
+    return NextResponse.json({ error: "Could not delete the staff account. Staff access was restored." }, { status: 503 });
   }
-
-  const { error: auditError } = await owner.admin.from("staff_audit_log").insert({
-    actor_user_id: owner.userId,
-    action: "staff_invitation_deleted",
-    entity_type: "staff_member",
-    entity_id: String(memberId),
-    details: { full_name: member.full_name },
-  });
-  if (auditError) {
-    console.error("Staff invitation was deleted, but its audit record could not be saved.", auditError);
-    return NextResponse.json({
-      ok: true,
-      warning: `The pending invitation for ${member.full_name} was deleted, but its audit record could not be saved.`,
-    });
-  }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, message: `${member.full_name}'s account was deleted. Completed history and unfinished work were preserved.` });
 }
