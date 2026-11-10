@@ -10,6 +10,7 @@ export async function GET(request: Request) {
       fullName: staff.fullName,
       permissions: staff.permissions,
       roles: staff.roles.map((role) => role.name),
+      roleDetails: staff.roles.map((role) => ({ name: role.name, permissions: role.permissions })),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Could not load staff permissions.", error);

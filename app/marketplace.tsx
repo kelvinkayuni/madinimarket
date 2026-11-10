@@ -21,7 +21,7 @@ import { clearWebsiteSessionToken, fetchWithWebsiteSession, getWebsiteSessionTok
 import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 import { calculateListingPrice } from "@/lib/listing-pricing";
 import { MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
-import type { StaffPermission } from "@/lib/staff-permissions";
+import { isStaffPermission, STAFF_PERMISSION_OPTIONS, type StaffPermission } from "@/lib/staff-permissions";
 
 type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
@@ -32,6 +32,16 @@ type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
 type CertificateStatus = "pending" | "approved" | "rejected";
+type StaffRoleDetails = { name: string; permissions: StaffPermission[] };
+function parseStaffRoleDetails(value: unknown): StaffRoleDetails[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry): StaffRoleDetails[] => {
+    if (typeof entry !== "object" || entry === null || !("name" in entry) || !("permissions" in entry)
+      || typeof entry.name !== "string" || !Array.isArray(entry.permissions)
+      || !entry.permissions.every(isStaffPermission)) return [];
+    return [{ name: entry.name, permissions: entry.permissions }];
+  });
+}
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
 type Seller = { id: number; user_id?: string; is_own?: boolean; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; color?: string; comment?: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; image_gallery_paths?: string[]; image_gallery?: string[]; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
@@ -676,7 +686,7 @@ export default function Marketplace() {
   }, [userId]);
   const [role, setRole] = useState<"user" | "admin" | "staff" | null>(null);
   const [staffPermissions, setStaffPermissions] = useState<StaffPermission[]>([]);
-  const [staffRoleNames, setStaffRoleNames] = useState<string[]>([]);
+  const [staffRoles, setStaffRoles] = useState<StaffRoleDetails[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
@@ -1091,7 +1101,7 @@ export default function Marketplace() {
         setUserId("");
         setRole(null);
         setStaffPermissions([]);
-        setStaffRoleNames([]);
+        setStaffRoles([]);
         setActiveAdminPanel(null);
         setCertificates({});
         setSellerOpenOrdersCount(0);
@@ -1364,7 +1374,7 @@ export default function Marketplace() {
             isStaff = profile?.role === "staff";
             if (isAdmin && active) {
               setStaffPermissions([]);
-              setStaffRoleNames([]);
+              setStaffRoles([]);
               setUser(profile?.username ?? "");
               setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
@@ -1383,7 +1393,7 @@ export default function Marketplace() {
               if (!response.ok) throw new Error(access.error ?? "Could not load staff access.");
               assignedPermissions = access.permissions as StaffPermission[];
               setStaffPermissions(assignedPermissions);
-              setStaffRoleNames(Array.isArray(access.roles) ? access.roles as string[] : []);
+              setStaffRoles(parseStaffRoleDetails(access.roleDetails));
               if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
               setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
             }
@@ -1400,7 +1410,7 @@ export default function Marketplace() {
               setUserId(result?.account?.id ?? "");
               setRole(result?.account ? "user" : null);
               setStaffPermissions([]);
-              setStaffRoleNames([]);
+              setStaffRoles([]);
               if (!result?.account) setCertificates({});
             }
             if (result?.account) {
@@ -3174,7 +3184,7 @@ export default function Marketplace() {
             setUserId(websiteAccount.id);
             setRole("user");
             setStaffPermissions([]);
-            setStaffRoleNames([]);
+            setStaffRoles([]);
             await refreshCertificates().catch(() => {});
             await refreshRemoteListings(true);
             setNotice("Signed in successfully.");
@@ -3215,7 +3225,7 @@ export default function Marketplace() {
           setRole(signedInRole);
           if (signedInRole === "admin") {
             setStaffPermissions([]);
-            setStaffRoleNames([]);
+            setStaffRoles([]);
             await refreshRemoteListings();
           } else {
             const accessResponse = await fetch("/api/staff/access", {
@@ -3226,7 +3236,7 @@ export default function Marketplace() {
             if (!accessResponse.ok) throw new Error(access.error ?? "Could not load staff access.");
             const assignedPermissions = access.permissions as StaffPermission[];
             setStaffPermissions(assignedPermissions);
-            setStaffRoleNames(Array.isArray(access.roles) ? access.roles as string[] : []);
+            setStaffRoles(parseStaffRoleDetails(access.roleDetails));
             if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
             setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
           }
@@ -3241,7 +3251,7 @@ export default function Marketplace() {
         setUserId(username);
         setRole("user");
         setStaffPermissions([]);
-        setStaffRoleNames([]);
+        setStaffRoles([]);
         setNotice(`Local demo session started as ${username}.`);
       }
       formElement.reset();
@@ -3288,7 +3298,7 @@ export default function Marketplace() {
     setUserId("");
     setRole(null);
     setStaffPermissions([]);
-    setStaffRoleNames([]);
+    setStaffRoles([]);
     setSellerOpenOrdersCount(0);
     setBuyerOpenOrdersCount(0);
     setPrivateOffersCount(0);
@@ -3610,7 +3620,7 @@ export default function Marketplace() {
         <button type="button" onClick={() => window.location.reload()}>Reload to update</button>
       </div>}
       <header className={`admin-header${role === "staff" ? " admin-header-staff" : ""}`}>
-        <a className="admin-brand" href="#admin-home"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /> <span className="admin-brand-name">MADINIMARKET</span><span className={role === "staff" ? "staff-role-badge" : undefined} title={role === "staff" ? staffRoleNames.join(" · ") : undefined} data-no-translate>{role === "staff" ? staffRoleNames.join(" · ") : "ADMIN"}</span></a>
+        <a className="admin-brand" href="#admin-home"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /> <span className="admin-brand-name">MADINIMARKET</span><span className={role === "staff" ? "staff-role-badge" : undefined} title={role === "staff" ? staffRoles.map((staffRole) => staffRole.name).join(" · ") : undefined} data-no-translate>{role === "staff" ? staffRoles.map((staffRole) => staffRole.name).join(" · ") : "ADMIN"}</span></a>
         <div className="admin-menu-wrap">
           <button className="admin-menu-trigger" type="button" aria-label={adminMenuOpen ? "Close admin menu" : "Open admin menu"} aria-expanded={adminMenuOpen} aria-controls="admin-panel-menu" onClick={() => setAdminMenuOpen((open) => !open)}>
             {adminMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -3618,7 +3628,18 @@ export default function Marketplace() {
           {adminMenuOpen && <>
             <button className="admin-menu-dismiss" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />
             <nav className="admin-menu-popover" id="admin-panel-menu" aria-label="Admin panels">
-              <span className="admin-menu-heading">ADMIN PANELS</span>
+              <span className="admin-menu-heading">{role === "staff" ? "STAFF MENU" : "ADMIN PANELS"}</span>
+              {role === "staff" && <details className="admin-menu-role-details">
+                <summary>My assigned roles ({staffRoles.length})</summary>
+                <div className="admin-menu-role-list">
+                  {staffRoles.map((staffRole) => <section key={staffRole.name}>
+                    <strong>{staffRole.name}</strong>
+                    <ul>{staffRole.permissions.map((permission) => (
+                      <li key={permission}>{STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission}</li>
+                    ))}</ul>
+                  </section>)}
+                </div>
+              </details>}
               {(role === "admin" || staffCanReview) && <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>}
               {role === "admin" && <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>}
               {(role === "admin" || staffCan("accounts")) && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
@@ -3642,7 +3663,7 @@ export default function Marketplace() {
             </nav>
           </>}
         </div>
-        <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong></span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
+        <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong>{role === "staff" && staffRoles.length > 0 && <small className="staff-mobile-role">{staffRoles.map((staffRole) => staffRole.name).join(" · ")}</small>}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
       <div className="admin-content" id="admin-home">
         {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}

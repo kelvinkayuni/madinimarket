@@ -41,6 +41,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-account strong, .admin-account small { display: block; }
 .admin-account strong { color: var(--ink); font-size: 11px; font-weight: 650; }
 .admin-account small { max-width: 260px; margin-top: 3px; color: #717b70; font-size: 9px; }
+.admin-account .staff-mobile-role { display: none; }
 .admin-menu-wrap { position: absolute; top: 50%; left: 50%; z-index: 1; transform: translate(-50%, -50%); }
 .admin-menu-trigger { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid #dfe3db; border-radius: 50%; background: #fff; color: var(--forest); cursor: pointer; }
 .admin-menu-trigger:hover { border-color: #aeb9aa; background: #f5f7f2; }
@@ -50,6 +51,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-menu-popover > button { width: 100%; min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; border: 0; background: transparent; color: #35443a; font-size: 12px; text-align: left; cursor: pointer; }
 .admin-menu-popover > button:hover, .admin-menu-popover > button.is-active { background: #f1f4ed; color: var(--forest); }
 .admin-menu-popover > button > span { min-width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid #d9e0d5; border-radius: 50%; color: #526451; font-size: 9px; }
+.admin-menu-role-details { border-bottom: 1px solid #e8ebe5; }
+.admin-menu-role-details summary { min-height: 42px; display: flex; align-items: center; padding: 0 10px; color: #35443a; font-size: 12px; font-weight: 650; cursor: pointer; list-style: none; }
+.admin-menu-role-details summary::-webkit-details-marker { display: none; }
+.admin-menu-role-details summary::after { content: "+"; margin-left: auto; color: #748174; font-size: 16px; }
+.admin-menu-role-details[open] summary::after { content: "−"; }
+.admin-menu-role-list { display: grid; gap: 10px; padding: 0 12px 12px; }
+.admin-menu-role-list section { display: grid; gap: 5px; }
+.admin-menu-role-list strong { color: #304b39; font-size: 11px; }
+.admin-menu-role-list ul { display: grid; gap: 4px; margin: 0; padding-left: 17px; color: #69766a; font-size: 10px; line-height: 1.4; }
 .admin-menu-currency { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 13px 10px 6px; border-top: 1px solid #e8ebe5; }
 .admin-menu-currency > div { display: grid; gap: 4px; }
 .admin-menu-currency > div strong { color: #354b39; font-size: 11px; }
@@ -1095,37 +1105,15 @@ h1, h2, h3, p { margin-top: 0; }
   .listing-section { min-height: auto; display: block; flex: none; }
   .seller-rail, .buyer-rail, .empty-search { min-height: auto; flex: initial; }
   .admin-header { min-height: 60px; padding-right: 14px; padding-left: 14px; }
-  .admin-header.admin-header-staff {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "identity actions" "menu menu";
-    gap: 6px 10px;
-    padding-top: 8px;
-    padding-bottom: 8px;
+  .admin-header-staff .admin-brand span.staff-role-badge { display: none; }
+  .admin-header-staff .admin-account .staff-mobile-role { display: block; }
+  .admin-header-staff .staff-mobile-role {
+    display: block;
+    max-width: 26vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .admin-header-staff .admin-brand {
-    grid-area: identity;
-    min-width: 0;
-  }
-  .admin-header-staff .admin-brand img,
-  .admin-header-staff .admin-brand-name { display: none; }
-  .admin-header-staff .admin-brand span.staff-role-badge {
-    max-width: 45vw;
-    margin: 0;
-  }
-  .admin-header-staff .admin-menu-wrap {
-    position: relative;
-    top: auto;
-    left: auto;
-    grid-area: menu;
-    justify-self: start;
-    transform: none;
-  }
-  .admin-header-staff .admin-header-actions {
-    grid-area: actions;
-    min-width: 0;
-  }
-  .admin-header-staff .admin-account { max-width: 32vw; }
   .admin-content { padding: 26px 14px 42px; }
   .admin-page-heading { align-items: flex-start; flex-direction: column; }
   .admin-page-heading h1 { font-size: 29px; }
@@ -1354,9 +1342,7 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-account { max-width: 82px; }
   .admin-header-actions .text-button { font-size: 10px; }
   .admin-menu-trigger { width: 38px; height: 38px; }
-  .admin-header-staff .admin-brand span.staff-role-badge {
-    max-width: 45vw;
-  }
+  .admin-header-staff .admin-account { max-width: 25vw; }
   .commerce-tabs { gap: 4px; padding: 4px; }
   .commerce-tab { font-size: 9px; }
   .dialog-panel .field-row { grid-template-columns: 1fr; }
