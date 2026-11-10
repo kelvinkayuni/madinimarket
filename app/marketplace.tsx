@@ -687,6 +687,7 @@ export default function Marketplace() {
   const [role, setRole] = useState<"user" | "admin" | "staff" | null>(null);
   const [staffPermissions, setStaffPermissions] = useState<StaffPermission[]>([]);
   const [staffRoles, setStaffRoles] = useState<StaffRoleDetails[]>([]);
+  const [staffAccessStatus, setStaffAccessStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
@@ -1358,11 +1359,11 @@ export default function Marketplace() {
       let active = true;
       const supabase = getSupabaseBrowserClient();
       const hydrate = async (session: Session | null) => {
+        let isStaff = false;
         try {
           let isAdmin = false;
-          let isStaff = false;
-        let assignedPermissions: StaffPermission[] = [];
-        let hasWebsiteAccount = false;
+          let assignedPermissions: StaffPermission[] = [];
+          let hasWebsiteAccount = false;
           if (session) {
             const { data: profile, error: profileError } = await supabase
               .from("profiles")
@@ -1373,6 +1374,7 @@ export default function Marketplace() {
             isAdmin = profile?.role === "admin";
             isStaff = profile?.role === "staff";
             if (isAdmin && active) {
+              setStaffAccessStatus("idle");
               setStaffPermissions([]);
               setStaffRoles([]);
               setUser(profile?.username ?? "");
@@ -1384,6 +1386,7 @@ export default function Marketplace() {
               setUser(profile?.username ?? "");
               setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
+              setStaffAccessStatus("loading");
               setRole("staff");
               const response = await fetch("/api/staff/access", {
                 headers: { Authorization: `Bearer ${session.access_token}` },
@@ -1396,6 +1399,7 @@ export default function Marketplace() {
               setStaffRoles(parseStaffRoleDetails(access.roleDetails));
               if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
               setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
+              setStaffAccessStatus("loaded");
             }
             if (!isAdmin && !isStaff) await supabase.auth.signOut({ scope: "local" });
           }
@@ -1409,6 +1413,7 @@ export default function Marketplace() {
               setDisplayName(result?.account?.display_name ?? "");
               setUserId(result?.account?.id ?? "");
               setRole(result?.account ? "user" : null);
+              setStaffAccessStatus("idle");
               setStaffPermissions([]);
               setStaffRoles([]);
               if (!result?.account) setCertificates({});
@@ -1501,6 +1506,7 @@ export default function Marketplace() {
           }
         } catch {
           if (active) {
+            if (isStaff) setStaffAccessStatus("error");
             setNotice("Could not load marketplace data from Supabase.");
             setStorageReady(true);
           }
@@ -3183,6 +3189,7 @@ export default function Marketplace() {
             setDisplayName(websiteAccount.displayName);
             setUserId(websiteAccount.id);
             setRole("user");
+            setStaffAccessStatus("idle");
             setStaffPermissions([]);
             setStaffRoles([]);
             await refreshCertificates().catch(() => {});
@@ -3224,10 +3231,12 @@ export default function Marketplace() {
           signedInRole = profile.role;
           setRole(signedInRole);
           if (signedInRole === "admin") {
+            setStaffAccessStatus("idle");
             setStaffPermissions([]);
             setStaffRoles([]);
             await refreshRemoteListings();
           } else {
+            setStaffAccessStatus("loading");
             const accessResponse = await fetch("/api/staff/access", {
               headers: { Authorization: `Bearer ${result.accessToken}` },
               cache: "no-store",
@@ -3239,8 +3248,10 @@ export default function Marketplace() {
             setStaffRoles(parseStaffRoleDetails(access.roleDetails));
             if (typeof access.fullName === "string" && access.fullName) setDisplayName(access.fullName);
             setActiveAdminPanel((current) => current ?? defaultStaffPanel(assignedPermissions));
+            setStaffAccessStatus("loaded");
           }
         } catch (error) {
+          if (signedInRole === "staff") setStaffAccessStatus("error");
           setNotice(error instanceof Error ? error.message : "Sign-in failed.");
           return;
         }
@@ -3250,6 +3261,7 @@ export default function Marketplace() {
         setDisplayName(username);
         setUserId(username);
         setRole("user");
+        setStaffAccessStatus("idle");
         setStaffPermissions([]);
         setStaffRoles([]);
         setNotice(`Local demo session started as ${username}.`);
@@ -3297,6 +3309,7 @@ export default function Marketplace() {
     setDisplayName("");
     setUserId("");
     setRole(null);
+    setStaffAccessStatus("idle");
     setStaffPermissions([]);
     setStaffRoles([]);
     setSellerOpenOrdersCount(0);
@@ -3588,7 +3601,22 @@ export default function Marketplace() {
     )
     : null;
 
-  if (role === "staff" && staffPermissions.length === 0) {
+  if (role === "staff" && staffAccessStatus === "loading") {
+    return <main className="staff-activation-shell"><section className="dialog-card staff-activation-card" role="status" aria-live="polite">
+      <div className="dialog-kicker">MADINIMARKET STAFF</div><h1>Loading your staff access</h1>
+      <p className="dialog-copy">Please wait while we load your assigned roles and workspace.</p>
+    </section></main>;
+  }
+
+  if (role === "staff" && staffAccessStatus === "error") {
+    return <main className="staff-activation-shell"><section className="dialog-card staff-activation-card">
+      <div className="dialog-kicker">MADINIMARKET STAFF</div><h1>Could not load staff access</h1>
+      <p className="dialog-copy">Your assigned roles could not be verified right now. Please try signing in again or contact the owner administrator if this continues.</p>
+      <button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button>
+    </section></main>;
+  }
+
+  if (role === "staff" && staffAccessStatus === "loaded" && staffPermissions.length === 0) {
     return <main className="staff-activation-shell"><section className="dialog-card staff-activation-card">
       <div className="dialog-kicker">MADINIMARKET STAFF</div><h1>No roles assigned</h1>
       <p className="dialog-copy">Your account is active, but no work permissions are assigned yet. Contact the owner administrator.</p>
