@@ -170,7 +170,7 @@ const isAdminRole = (role: "user" | "admin" | "staff" | null): boolean => role =
 
 function defaultStaffPanel(permissions: StaffPermission[]): AdminPanel {
   if (permissions.includes("marketplace_orders") || permissions.includes("accounting")) return "orders";
-  if (permissions.includes("market_moderation") || permissions.includes("review_submissions")) return "review";
+  if (permissions.includes("market_moderation")) return "review";
   if (permissions.includes("accounts")) return "accounts";
   if (permissions.includes("customer_support")) return "support";
   if (permissions.includes("translations")) return "translations";
@@ -1434,7 +1434,7 @@ export default function Marketplace() {
           if (active && (isAdmin || isStaff) && session) {
             const can = (permission: StaffPermission) => isAdmin || assignedPermissions.includes(permission);
             const adminLoads: { label: string; load: Promise<unknown> }[] = [];
-            if (can("market_moderation") || can("review_submissions")) {
+            if (can("market_moderation")) {
               adminLoads.push({
                 label: "review submissions",
                 load: loadMarketplaceListings(false, session.access_token).then((listings) => {
@@ -3588,7 +3588,7 @@ export default function Marketplace() {
 
   if (isAdminRole(role) || role === "staff") {
     const staffCan = (permission: StaffPermission) => role === "admin" || staffPermissions.includes(permission);
-    const staffCanReview = staffCan("market_moderation") || staffCan("review_submissions");
+    const staffCanReview = staffCan("market_moderation");
     const staffCanOrders = staffCan("marketplace_orders") || staffCan("accounting");
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
     const formatLedgerMoney = (amount: number, currency: Currency) => money(

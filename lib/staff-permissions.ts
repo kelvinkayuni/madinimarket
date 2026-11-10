@@ -4,7 +4,6 @@ export const STAFF_PERMISSION_OPTIONS = [
   { id: "accounting", label: "Accounting — payment verification and payouts; no refunds" },
   { id: "customer_support", label: "Customer support" },
   { id: "market_moderation", label: "Market moderation" },
-  { id: "review_submissions", label: "Review seller certifications" },
   { id: "accounts", label: "Accounts" },
   { id: "translations", label: "English–Swahili translations" },
   { id: "homepage_headlines", label: "Homepage headlines" },

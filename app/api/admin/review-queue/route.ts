@@ -4,7 +4,7 @@ import { getAdminClient } from "@/lib/admin-auth";
 
 export async function GET(request: Request) {
   try {
-    const admin = await getAdminClient(request, ["market_moderation", "review_submissions"]);
+    const admin = await getAdminClient(request, "market_moderation");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
 
     const [sellersResult, buyersResult] = await Promise.all([

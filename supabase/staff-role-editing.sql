@@ -21,7 +21,6 @@ begin
       'accounting',
       'customer_support',
       'market_moderation',
-      'review_submissions',
       'accounts',
       'translations',
       'homepage_headlines'

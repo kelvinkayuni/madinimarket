@@ -12,7 +12,6 @@ create table if not exists public.staff_roles (
       'accounting',
       'customer_support',
       'market_moderation',
-      'review_submissions',
       'accounts',
       'translations',
       'homepage_headlines'
@@ -144,8 +143,7 @@ begin
   select id into selected_staff_id
   from public.staff_members
   where user_id = p_staff_user_id and status = 'active';
-  if not found or not public.staff_has_permission(p_staff_user_id, 'market_moderation')
-    and not public.staff_has_permission(p_staff_user_id, 'review_submissions') then
+  if not found or not public.staff_has_permission(p_staff_user_id, 'market_moderation') then
     raise exception 'Active market moderation access is required.' using errcode = '42501';
   end if;
   if not p_approved and nullif(trim(p_message), '') is null then
@@ -181,8 +179,7 @@ begin
   select id into selected_staff_id
   from public.staff_members
   where user_id = p_staff_user_id and status = 'active';
-  if not found or not public.staff_has_permission(p_staff_user_id, 'market_moderation')
-    and not public.staff_has_permission(p_staff_user_id, 'review_submissions') then
+  if not found or not public.staff_has_permission(p_staff_user_id, 'market_moderation') then
     raise exception 'Active market moderation access is required.' using errcode = '42501';
   end if;
   if not p_approved and nullif(trim(p_message), '') is null then

@@ -6,7 +6,7 @@ import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 export async function POST(request: Request) {
   try {
     const staff = await getStaffAccess(request);
-    if (!staff || !staff.permissions.includes("market_moderation") && !staff.permissions.includes("review_submissions")) {
+    if (!staff || !staff.permissions.includes("market_moderation")) {
       return NextResponse.json({ error: "Assigned review access is required." }, { status: 403 });
     }
 

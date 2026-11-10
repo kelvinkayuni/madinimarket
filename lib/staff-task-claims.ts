@@ -4,9 +4,9 @@ import { getStaffAccess } from "@/lib/staff-auth";
 import type { StaffPermission } from "@/lib/staff-permissions";
 
 export const STAFF_TASK_PERMISSIONS: Record<string, readonly StaffPermission[]> = {
-  listing_review: ["market_moderation", "review_submissions"],
-  buyer_request_review: ["market_moderation", "review_submissions"],
-  certificate_review: ["review_submissions", "accounts"],
+  listing_review: ["market_moderation"],
+  buyer_request_review: ["market_moderation"],
+  certificate_review: ["accounts"],
   marketplace_order: ["accounting"],
   marketplace_order_item: ["delivery_confirmation", "marketplace_orders", "accounting"],
   support_thread: ["customer_support"],
