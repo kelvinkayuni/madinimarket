@@ -4105,7 +4105,7 @@ export default function Marketplace() {
           </> : <p className="admin-empty">No accounts match the selected filters{accountSearch.trim() ? ` and “${accountSearch.trim()}”` : ""}.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
         {activeAdminPanel === "orders" && staffCanOrders && <AdminMarketplaceOrders onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} staffPermissions={role === "staff" ? staffPermissions : undefined} />}
-        {activeAdminPanel === "delivery" && role === "staff" && staffCan("delivery_confirmation") && <StaffOrderQueue fullName={displayName} roleNames={staffRoleNames} onNotice={setNotice} onSignOut={() => { void signOut(); }} />}
+        {activeAdminPanel === "delivery" && role === "staff" && staffCan("delivery_confirmation") && <StaffOrderQueue onNotice={setNotice} />}
         {activeAdminPanel === "staff" && role === "admin" && <AdminStaffManagement onNotice={setNotice} />}
         {activeAdminPanel === "order-time-limits" && role === "admin" && <AdminOrderTimeLimits onNotice={setNotice} />}
         {activeAdminPanel === "payment-instructions" && role === "admin" && <AdminPaymentInstructions onNotice={setNotice} />}

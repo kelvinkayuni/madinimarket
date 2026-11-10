@@ -22,10 +22,7 @@ type DeliveryOrder = {
   items: DeliveryItem[];
 };
 
-export default function StaffOrderQueue({ fullName, roleNames, onSignOut, onNotice }: {
-  fullName: string;
-  roleNames: string[];
-  onSignOut: () => void;
+export default function StaffOrderQueue({ onNotice }: {
   onNotice: (message: string) => void;
 }) {
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
@@ -98,12 +95,7 @@ export default function StaffOrderQueue({ fullName, roleNames, onSignOut, onNoti
   };
 
   const pages = Math.max(1, Math.ceil(totalCount / 25));
-  return <main className="admin-shell">
-    <header className="admin-header">
-      <a className="admin-brand" href="#staff-home"><span className="admin-brand-name">MADINIMARKET</span><span>ORDER OPERATIONS</span></a>
-      <div className="admin-header-actions"><span className="admin-account"><strong>{fullName}</strong>{roleNames.length > 0 && <small>{roleNames.join(" · ")}</small>}</span><button className="text-button" type="button" onClick={onSignOut}>Sign out</button></div>
-    </header>
-    <section className="admin-content admin-overview staff-order-queue" id="staff-home">
+  return <section className="admin-overview staff-order-queue" id="staff-home">
       <div className="admin-page-heading">
         <div><div className="dialog-kicker">ORDER OPERATIONS</div><h1>Delivery confirmation tasks</h1><p>Confirm carrier delivery only after checking the shipment tracking status. Payment, payout, refund, and dispute decisions remain with the owner administrator.</p></div>
         <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => {
@@ -146,6 +138,5 @@ export default function StaffOrderQueue({ fullName, roleNames, onSignOut, onNoti
         <div><button className="button button-outline" type="button" disabled={page <= 1 || busy !== ""} onClick={() => { setLoading(true); setPage((current) => current - 1); }}>Previous</button>
           <button className="button button-outline" type="button" disabled={page >= pages || busy !== ""} onClick={() => { setLoading(true); setPage((current) => current + 1); }}>Next</button></div>
       </div>}
-    </section>
-  </main>;
+  </section>;
 }
