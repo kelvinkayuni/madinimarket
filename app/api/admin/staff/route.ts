@@ -162,7 +162,11 @@ export async function POST(request: Request) {
     if (reserveError) throw reserveError;
     const staffId = Number(reservedId);
     if (!Number.isSafeInteger(staffId) || staffId < 1) throw new Error("Could not reserve a valid staff ID.");
-    const employeeCode = `MMSA-${String(staffId).padStart(4, "0")}`;
+    const { data: employeeCode, error: employeeCodeError } = await owner.admin.rpc("reserve_staff_employee_code");
+    if (employeeCodeError) throw employeeCodeError;
+    if (typeof employeeCode !== "string" || !/^MMSA-\d{4}$/.test(employeeCode)) {
+      throw new Error("Could not reserve a valid staff username.");
+    }
 
     const redirectTo = new URL("/staff/activate", getPublicAppUrl()).toString();
     const { data: invitation, error: invitationError } = await owner.admin.auth.admin.generateLink({
@@ -185,6 +189,7 @@ export async function POST(request: Request) {
 
     const { data: member, error: memberError } = await owner.admin.from("staff_members").insert({
       id: staffId,
+      employee_code: employeeCode,
       user_id: invitation.user.id,
       full_name: fullName,
       sex,
