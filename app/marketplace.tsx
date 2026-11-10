@@ -3610,7 +3610,7 @@ export default function Marketplace() {
         <button type="button" onClick={() => window.location.reload()}>Reload to update</button>
       </div>}
       <header className="admin-header">
-        <a className="admin-brand" href="#admin-home"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /> <span className="admin-brand-name">MADINIMARKET</span><span>{role === "staff" ? "STAFF" : "ADMIN"}</span></a>
+        <a className="admin-brand" href="#admin-home"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /> <span className="admin-brand-name">MADINIMARKET</span><span className={role === "staff" ? "staff-role-badge" : undefined} title={role === "staff" ? staffRoleNames.join(" · ") : undefined} data-no-translate>{role === "staff" ? staffRoleNames.join(" · ") : "ADMIN"}</span></a>
         <div className="admin-menu-wrap">
           <button className="admin-menu-trigger" type="button" aria-label={adminMenuOpen ? "Close admin menu" : "Open admin menu"} aria-expanded={adminMenuOpen} aria-controls="admin-panel-menu" onClick={() => setAdminMenuOpen((open) => !open)}>
             {adminMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -3642,7 +3642,7 @@ export default function Marketplace() {
             </nav>
           </>}
         </div>
-        <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong>{role === "staff" && staffRoleNames.length > 0 && <small>{staffRoleNames.join(" · ")}</small>}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
+        <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong></span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
       <div className="admin-content" id="admin-home">
         {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}
