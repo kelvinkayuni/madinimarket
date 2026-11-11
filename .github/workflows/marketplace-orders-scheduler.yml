@@ -1,0 +1,21 @@
+name: Marketplace order scheduler
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  process-marketplace-orders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call marketplace order processor
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request GET \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            https://www.madinimarket.co.tz/api/cron/marketplace-orders
