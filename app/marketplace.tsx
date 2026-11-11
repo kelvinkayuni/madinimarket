@@ -3759,34 +3759,42 @@ export default function Marketplace() {
             <button className="admin-menu-dismiss" type="button" aria-label="Close admin menu" onClick={() => setAdminMenuOpen(false)} />
             <nav className="admin-menu-popover" id="admin-panel-menu" aria-label="Admin panels">
               <span className="admin-menu-heading">{role === "staff" ? "STAFF MENU" : "ADMIN PANELS"}</span>
-              {role === "staff" && <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Chat with admin{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread admin messages`}>{staffChatUnreadCount}</span>}</button>}
-              {role === "staff" && <details className="admin-menu-role-details">
-                <summary>My assigned roles ({staffRoles.length})</summary>
-                <div className="admin-menu-role-list">
-                  {staffRoles.map((staffRole) => <section key={staffRole.name}>
-                    <strong>{staffRole.name}</strong>
-                    <ul>{staffRole.permissions.map((permission) => (
-                      <li key={permission}>{STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission}</li>
-                    ))}</ul>
-                  </section>)}
-                </div>
-              </details>}
-              {(role === "admin" || staffCanReview) && <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>}
-              {role === "admin" && <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>}
-              {(role === "admin" || staffCan("accounts")) && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
-              {(role === "admin" || staffCan("customer_support")) && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
-              {role === "admin" && <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Staff messages{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread staff messages`}>{staffChatUnreadCount}</span>}</button>}
-              {(role === "admin" || staffCan("translations")) && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
-              {(role === "admin" || staffCan("homepage_headlines")) && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>}
-              {role === "admin" && <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>}
-              {role === "admin" && <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>}
-              {role === "admin" && <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>}
-              {(role === "admin" || staffCanOrders) && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
-              {role === "staff" && staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery confirmation</button>}
-              {role === "admin" && <button className={activeAdminPanel === "staff" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff"); setAdminMenuOpen(false); }}>Staff Management</button>}
-              {role === "admin" && <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>}
-              {role === "admin" && <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>}
-              {role === "admin" && <div className="admin-menu-currency">
+              {role === "admin" ? <>
+                <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>
+                <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
+                <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>
+                <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>
+                <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
+                <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
+                <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
+                <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>
+                <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>
+                <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
+                <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>
+                <button className={activeAdminPanel === "staff" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff"); setAdminMenuOpen(false); }}>Staff Management</button>
+                <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Staff messages{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread staff messages`}>{staffChatUnreadCount}</span>}</button>
+                <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>
+              </> : <>
+                <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Chat with admin{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread admin messages`}>{staffChatUnreadCount}</span>}</button>
+                <details className="admin-menu-role-details">
+                  <summary>My assigned roles ({staffRoles.length})</summary>
+                  <div className="admin-menu-role-list">
+                    {staffRoles.map((staffRole) => <section key={staffRole.name}>
+                      <strong>{staffRole.name}</strong>
+                      <ul>{staffRole.permissions.map((permission) => (
+                        <li key={permission}>{STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission}</li>
+                      ))}</ul>
+                    </section>)}
+                  </div>
+                </details>
+                {staffCanReview && <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>}
+                {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
+                {staffCan("customer_support") && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
+                {staffCan("translations") && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
+                {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>}
+                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
+                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery confirmation</button>}
+              </>}              {role === "admin" && <div className="admin-menu-currency">
                 <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                 <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
                   <span />
