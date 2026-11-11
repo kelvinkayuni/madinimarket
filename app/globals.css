@@ -1310,14 +1310,21 @@ h1, h2, h3, p { margin-top: 0; }
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr);
   }
+  .staff-admin-chat.support-inbox {
+    height: min(760px, calc(100dvh - 250px));
+    min-height: min(380px, calc(100dvh - 250px));
+    max-height: calc(100dvh - 250px);
+  }
   .support-filter-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .support-filter-toolbar .field-label:nth-child(2),
   .support-date-range { grid-column: 1 / -1; }
   .support-thread-list { max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .staff-chat-intro { display: none; }
   .support-conversation { min-height: 0; overflow-y: auto; }
+  .staff-admin-chat .support-conversation { min-height: 0; overflow: hidden; }
   .support-message { width: 92%; }
   .support-message-list { flex: 0 0 min(34vh, 240px); min-height: 140px; }
+  .staff-admin-chat .support-message-list { flex: 1 1 0; min-height: 0; }
   .support-admin-tools { grid-template-columns: 1fr; align-items: stretch; }
   .support-inbox:not(.is-conversation-open) .support-conversation { display: none; }
   .support-inbox.is-conversation-open { grid-template-rows: minmax(0, 1fr); }
@@ -1337,9 +1344,33 @@ h1, h2, h3, p { margin-top: 0; }
     cursor: pointer;
   }
   .support-detail-heading { padding: 10px 12px; }
+  .staff-admin-chat .support-detail-heading {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  .staff-admin-chat .support-detail-heading > div:first-child { min-width: 0; }
+  .staff-admin-chat .staff-chat-conversation-actions {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .staff-admin-chat .staff-chat-conversation-actions .button {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    padding: 6px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-align: center;
+  }
   .support-message-list { padding: 12px; }
   .support-reply { padding: 10px 12px; }
-  .staff-admin-chat .support-reply { grid-template-columns: 1fr; }
+  .staff-admin-chat .support-reply { grid-template-columns: 1fr; flex: 0 0 auto; min-height: 0; }
   .staff-chat-conversation-actions { flex-direction: column; }
 }
 @media (max-width: 650px) {
