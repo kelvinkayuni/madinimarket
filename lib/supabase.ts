@@ -4,6 +4,9 @@ import { getSupabaseTabStorageKey } from "@/lib/client-website-session";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabasePublicKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+export const SUPABASE_PASSWORD_RECOVERY_KEY = "madinimarket-password-recovery";
+export const SUPABASE_PASSWORD_RECOVERY_LIFETIME = 30 * 60 * 1000;
+
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && supabasePublicKey,
 );
