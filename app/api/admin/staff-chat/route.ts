@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     }
     let unreadCount: number;
     try {
-      unreadCount = await getStaffChatUnreadCount(admin, conversation.id, "staff", conversation.last_read_by_admin);
+      unreadCount = await getStaffChatUnreadCount(admin, conversation.id, "staff");
     } catch {
       return NextResponse.json({ error: "Could not load unread message counts." }, { status: 503 });
     }
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
   if (staffError) return NextResponse.json({ error: "Could not load staff conversations." }, { status: 503 });
   try {
     const unreadCounts = await Promise.all(conversations.map((conversation) =>
-      getStaffChatUnreadCount(admin, conversation.id, "staff", conversation.last_read_by_admin)));
+      getStaffChatUnreadCount(admin, conversation.id, "staff")));
     const unreadByStaffId = new Map(conversations.map((conversation, index) => [conversation.staff_member_id, unreadCounts[index]]));
     const result = conversations.map((conversation, index) => ({
       ...conversation,
@@ -162,6 +162,13 @@ export async function PATCH(request: Request) {
     if (messageError) throw messageError;
     if (!readThroughMessage) return NextResponse.json({ error: "The loaded message is not part of this conversation." }, { status: 400 });
 
+    const previousLastReadAt = Date.parse(conversation.last_read_by_admin ?? "");
+    const readThroughAt = Date.parse(readThroughMessage.created_at);
+    if (!Number.isFinite(readThroughAt)) throw new Error("The selected message has an invalid timestamp.");
+    const lastReadAt = new Date(Math.max(
+      Number.isFinite(previousLastReadAt) ? previousLastReadAt : 0,
+      readThroughAt,
+    )).toISOString();
     const now = new Date().toISOString();
     const { error: seenError } = await admin.from("staff_admin_messages")
       .update({ seen_by_admin_at: now })
@@ -171,11 +178,7 @@ export async function PATCH(request: Request) {
       .is("seen_by_admin_at", null);
     if (seenError) throw seenError;
 
-    const lastReadAt = new Date(Math.max(
-      Date.parse(conversation.last_read_by_admin),
-      Date.parse(readThroughMessage.created_at),
-    )).toISOString();
-    const unreadCount = await getStaffChatUnreadCount(admin, conversation.id, "staff", lastReadAt);
+    const unreadCount = await getStaffChatUnreadCount(admin, conversation.id, "staff");
     const { error: updateError } = await admin.from("staff_admin_conversations")
       .update({ unread_by_admin: unreadCount > 0, last_read_by_admin: lastReadAt })
       .eq("id", conversation.id);

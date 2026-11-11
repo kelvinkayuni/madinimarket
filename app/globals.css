@@ -1300,6 +1300,9 @@ h1, h2, h3, p { margin-top: 0; }
 .dialog-panel:has(.support-inbox) { width: min(980px, calc(100vw - 28px)); max-height: calc(100vh - 28px); }
 .support-mobile-back { display: none; }
 @media (max-width: 720px) {
+  .admin-content:has(> .admin-support-panel) { padding: 12px 12px 16px; }
+  .admin-support-panel { min-height: 0; }
+  .admin-support-panel .admin-page-heading { margin-bottom: 10px; }
   .support-inbox {
     height: min(760px, calc(100vh - 220px));
     height: min(760px, calc(100dvh - 220px));
@@ -1311,9 +1314,9 @@ h1, h2, h3, p { margin-top: 0; }
     grid-template-rows: minmax(0, 1fr);
   }
   .staff-admin-chat.support-inbox {
-    height: min(760px, calc(100dvh - 250px));
-    min-height: min(380px, calc(100dvh - 250px));
-    max-height: calc(100dvh - 250px);
+    height: min(840px, calc(100dvh - 190px));
+    min-height: min(380px, calc(100dvh - 190px));
+    max-height: calc(100dvh - 190px);
   }
   .support-filter-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .support-filter-toolbar .field-label:nth-child(2),

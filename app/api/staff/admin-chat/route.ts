@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
   if (unreadOnly) {
     try {
-      const unreadCount = await getStaffChatUnreadCount(staff.admin, conversation.id, "admin", conversation.last_read_by_staff);
+      const unreadCount = await getStaffChatUnreadCount(staff.admin, conversation.id, "admin");
       return NextResponse.json({ unreadCount }, { headers: { "Cache-Control": "no-store" } });
     } catch {
       return NextResponse.json({ error: "Could not load your unread message count." }, { status: 503 });
