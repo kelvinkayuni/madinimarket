@@ -1450,7 +1450,7 @@ export default function Marketplace() {
 
     let savedPanel: string | null = null;
     try {
-      savedPanel = window.sessionStorage.getItem(key);
+      savedPanel = window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key);
     } catch (error) {
       console.error("Could not restore the last admin panel.", error);
     }
@@ -1467,7 +1467,7 @@ export default function Marketplace() {
     const key = `madinimarket:admin-panel:v1:${role}:${userId}`;
     if (restoredAdminPanelForRef.current !== key) return;
     try {
-      window.sessionStorage.setItem(key, activeAdminPanel);
+      window.localStorage.setItem(key, activeAdminPanel);
     } catch (error) {
       console.error("Could not save the selected admin panel.", error);
     }
@@ -1481,27 +1481,51 @@ export default function Marketplace() {
     const key = `madinimarket:admin-scroll:v1:${role}:${userId}`;
     const previousRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
+    let restoreFrame = 0;
+    let restoreFrameAfterLayout = 0;
+    let userInteracted = false;
+    let restoreScroll: (() => void) | null = null;
     try {
-      const savedScroll = Number(window.sessionStorage.getItem(key));
+      const savedScroll = Number(window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key));
       if (Number.isFinite(savedScroll) && savedScroll >= 0) {
-        window.requestAnimationFrame(() => window.scrollTo(0, savedScroll));
+        restoreScroll = () => {
+          window.cancelAnimationFrame(restoreFrame);
+          window.cancelAnimationFrame(restoreFrameAfterLayout);
+          restoreFrame = window.requestAnimationFrame(() => {
+            restoreFrameAfterLayout = window.requestAnimationFrame(() => {
+              if (!userInteracted) window.scrollTo(0, savedScroll);
+            });
+          });
+        };
+        restoreScroll();
+        window.addEventListener("pageshow", restoreScroll);
       }
     } catch (error) {
       console.error("Could not restore the admin page position.", error);
     }
+    const noteInteraction = () => { userInteracted = true; };
     const saveScroll = () => {
       try {
-        window.sessionStorage.setItem(key, String(window.scrollY));
+        window.localStorage.setItem(key, String(window.scrollY));
       } catch (error) {
         console.error("Could not save the admin page position.", error);
       }
     };
     window.addEventListener("scroll", saveScroll, { passive: true });
     window.addEventListener("pagehide", saveScroll);
+    window.addEventListener("pointerdown", noteInteraction, { once: true, passive: true });
+    window.addEventListener("touchstart", noteInteraction, { once: true, passive: true });
+    window.addEventListener("wheel", noteInteraction, { once: true, passive: true });
     return () => {
+      window.cancelAnimationFrame(restoreFrame);
+      window.cancelAnimationFrame(restoreFrameAfterLayout);
       saveScroll();
       window.removeEventListener("scroll", saveScroll);
       window.removeEventListener("pagehide", saveScroll);
+      if (restoreScroll) window.removeEventListener("pageshow", restoreScroll);
+      window.removeEventListener("pointerdown", noteInteraction);
+      window.removeEventListener("touchstart", noteInteraction);
+      window.removeEventListener("wheel", noteInteraction);
       window.history.scrollRestoration = previousRestoration;
     };
   }, [activeAdminPanel, role, userId]);

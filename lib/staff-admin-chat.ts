@@ -26,13 +26,13 @@ export async function getStaffChatUnreadCount(
   admin: AdminClient,
   conversationId: string,
   senderType: ChatSender,
-  lastReadAt: string,
 ) {
+  const seenAtColumn = senderType === "staff" ? "seen_by_admin_at" : "seen_by_staff_at";
   const { count, error } = await admin.from("staff_admin_messages")
     .select("id", { count: "exact", head: true })
     .eq("conversation_id", conversationId)
     .eq("sender_type", senderType)
-    .gt("created_at", lastReadAt);
+    .is(seenAtColumn, null);
   if (error) throw error;
   return count ?? 0;
 }
