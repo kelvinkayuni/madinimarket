@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     let conversation = null;
     if (conversationId) {
       const { data, error } = await admin.from("staff_admin_conversations")
-        .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at,admin_cleared_at")
+        .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at,last_read_by_admin,admin_cleared_at")
         .eq("id", conversationId)
         .maybeSingle();
       if (error) return NextResponse.json({ error: "Could not load this staff conversation." }, { status: 503 });
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       conversation = data;
     } else {
       const { data, error } = await admin.from("staff_admin_conversations")
-        .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at,admin_cleared_at")
+        .select("id,staff_member_id,unread_by_admin,unread_by_staff,created_at,updated_at,last_message_at,last_read_by_admin,admin_cleared_at")
         .eq("staff_member_id", staffMemberId)
         .maybeSingle();
       if (error) return NextResponse.json({ error: "Could not load this staff conversation." }, { status: 503 });
@@ -56,9 +56,15 @@ export async function GET(request: Request) {
         messages: [],
       }, { headers: { "Cache-Control": "no-store" } });
     }
+    let unreadCount: number;
+    try {
+      unreadCount = await getStaffChatUnreadCount(admin, conversation.id, "staff", conversation.last_read_by_admin);
+    } catch {
+      return NextResponse.json({ error: "Could not load unread message counts." }, { status: 503 });
+    }
     const { data: messages, error: messagesError } = await admin.from("staff_admin_messages")
       .select("id,sender_type,message,created_at,seen_by_admin_at,seen_by_staff_at,reply_to_message_id,reply_to_sender_type,reply_to_message")
-      .eq("conversation_id", conversationId)
+      .eq("conversation_id", conversation.id)
       .gt("created_at", conversation.admin_cleared_at ?? "1970-01-01T00:00:00.000Z")
       .order("created_at", { ascending: true });
     if (messagesError) return NextResponse.json({ error: "Could not load this staff conversation." }, { status: 503 });
@@ -68,24 +74,10 @@ export async function GET(request: Request) {
     } catch {
       return NextResponse.json({ error: "Could not load chat attachments." }, { status: 503 });
     }
-    const now = new Date().toISOString();
-    const unseenStaffMessages = (messages ?? []).filter((message) => message.sender_type === "staff" && !message.seen_by_admin_at).map((message) => message.id);
-    if (unseenStaffMessages.length) {
-      const { error: seenError } = await admin.from("staff_admin_messages")
-        .update({ seen_by_admin_at: now })
-        .in("id", unseenStaffMessages);
-      if (seenError) return NextResponse.json({ error: "Could not update message read receipts." }, { status: 503 });
-    }
-    const { error: updateError } = await admin.from("staff_admin_conversations")
-      .update({ unread_by_admin: false, last_read_by_admin: now })
-      .eq("id", conversationId);
-    if (updateError) return NextResponse.json({ error: "Could not update this conversation status." }, { status: 503 });
-
     return NextResponse.json({
-      conversation: { ...conversation, unread_by_admin: false, unread_count: 0, full_name: staffMember?.full_name ?? "Staff", employee_code: staffMember?.employee_code ?? "" },
+      conversation: { ...conversation, unread_count: unreadCount, full_name: staffMember.full_name, employee_code: staffMember.employee_code },
       messages: (messages ?? []).map((message) => ({
         ...message,
-        seen_by_admin_at: message.sender_type === "staff" ? message.seen_by_admin_at ?? now : message.seen_by_admin_at,
         attachments: attachments.get(message.id) ?? [],
       })),
     }, { headers: { "Cache-Control": "no-store" } });
@@ -140,6 +132,61 @@ export async function GET(request: Request) {
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not load unread message counts." }, { status: 503 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const admin = await getAdminClient(request);
+  if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+
+  try {
+    const values = await request.json() as Record<string, unknown>;
+    const conversationId = typeof values.conversationId === "string" ? values.conversationId.trim() : "";
+    const readThroughMessageId = typeof values.readThroughMessageId === "string" ? values.readThroughMessageId.trim() : "";
+    if (!conversationId || !readThroughMessageId) {
+      return NextResponse.json({ error: "Select a conversation and its latest loaded message." }, { status: 400 });
+    }
+
+    const { data: conversation, error: conversationError } = await admin.from("staff_admin_conversations")
+      .select("id,last_read_by_admin")
+      .eq("id", conversationId)
+      .maybeSingle();
+    if (conversationError) throw conversationError;
+    if (!conversation) return NextResponse.json({ error: "Staff conversation not found." }, { status: 404 });
+
+    const { data: readThroughMessage, error: messageError } = await admin.from("staff_admin_messages")
+      .select("id,created_at")
+      .eq("id", readThroughMessageId)
+      .eq("conversation_id", conversation.id)
+      .maybeSingle();
+    if (messageError) throw messageError;
+    if (!readThroughMessage) return NextResponse.json({ error: "The loaded message is not part of this conversation." }, { status: 400 });
+
+    const now = new Date().toISOString();
+    const { error: seenError } = await admin.from("staff_admin_messages")
+      .update({ seen_by_admin_at: now })
+      .eq("conversation_id", conversation.id)
+      .eq("sender_type", "staff")
+      .lte("created_at", readThroughMessage.created_at)
+      .is("seen_by_admin_at", null);
+    if (seenError) throw seenError;
+
+    const lastReadAt = new Date(Math.max(
+      Date.parse(conversation.last_read_by_admin),
+      Date.parse(readThroughMessage.created_at),
+    )).toISOString();
+    const unreadCount = await getStaffChatUnreadCount(admin, conversation.id, "staff", lastReadAt);
+    const { error: updateError } = await admin.from("staff_admin_conversations")
+      .update({ unread_by_admin: unreadCount > 0, last_read_by_admin: lastReadAt })
+      .eq("id", conversation.id);
+    if (updateError) throw updateError;
+
+    return NextResponse.json({
+      conversation: { id: conversation.id, unread_by_admin: unreadCount > 0, unread_count: unreadCount, last_read_by_admin: lastReadAt },
+      seenAt: now,
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return NextResponse.json({ error: "Could not mark this staff conversation as read." }, { status: 503 });
   }
 }
 

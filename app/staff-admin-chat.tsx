@@ -42,6 +42,10 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
   const [conversationLoading, setConversationLoading] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const conversationsRef = useRef<StaffConversation[]>([]);
+  const selectedStaffMemberIdRef = useRef<number | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  const conversationsRequestIdRef = useRef(0);
+  const messagesRequestIdRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
@@ -56,6 +60,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
   }, []);
 
   const loadConversations = useCallback(async () => {
+    const requestId = ++conversationsRequestIdRef.current;
     try {
       const response = await fetch(admin ? "/api/admin/staff-chat" : "/api/staff/admin-chat", {
         headers: await getHeaders(),
@@ -63,59 +68,103 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load staff chat.");
+      if (requestId !== conversationsRequestIdRef.current) return;
       if (admin) {
         const nextConversations = result.conversations as StaffConversation[];
         conversationsRef.current = nextConversations;
         setConversations(nextConversations);
         onUnreadCount(nextConversations.reduce((total, item) => total + (item.unread_count ?? 0), 0));
-        const selected = nextConversations.find((item) => item.staff_member_id === selectedStaffMemberId)
+        const selected = nextConversations.find((item) => item.staff_member_id === selectedStaffMemberIdRef.current)
           ?? nextConversations[0]
           ?? null;
-        setSelectedStaffMemberId(selected?.staff_member_id ?? null);
-        setSelectedId(selected?.id ?? null);
+        if (selected?.staff_member_id !== selectedStaffMemberIdRef.current) {
+          selectedStaffMemberIdRef.current = selected?.staff_member_id ?? null;
+          setSelectedStaffMemberId(selectedStaffMemberIdRef.current);
+        }
+        if (selected?.id !== selectedIdRef.current) {
+          selectedIdRef.current = selected?.id ?? null;
+          setSelectedId(selectedIdRef.current);
+        }
       } else {
         const nextConversations = result.conversation ? [result.conversation] : [];
         conversationsRef.current = nextConversations;
         setConversations(nextConversations);
+        selectedIdRef.current = result.conversation?.id ?? null;
         setSelectedId(result.conversation?.id ?? null);
         setMessages(result.messages ?? []);
         onUnreadCount(result.unreadCount ?? 0);
         setConversationLoading(false);
       }
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not load staff chat.");
+      if (requestId === conversationsRequestIdRef.current) {
+        onNotice(error instanceof Error ? error.message : "Could not load staff chat.");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === conversationsRequestIdRef.current) setLoading(false);
     }
-  }, [admin, getHeaders, onNotice, onUnreadCount, selectedStaffMemberId]);
+  }, [admin, getHeaders, onNotice, onUnreadCount]);
 
-  const loadMessages = useCallback(async (conversationId: string | null, staffMemberId?: number) => {
+  const loadMessages = useCallback(async (conversationId: string | null, staffMemberId?: number, signal?: AbortSignal) => {
+    const requestId = ++messagesRequestIdRef.current;
+    const isCurrentRequest = () => requestId === messagesRequestIdRef.current &&
+      !signal?.aborted &&
+      (!admin || selectedStaffMemberIdRef.current === staffMemberId);
     try {
       const url = admin
         ? conversationId
           ? `/api/admin/staff-chat?conversationId=${encodeURIComponent(conversationId)}`
           : `/api/admin/staff-chat?staffMemberId=${staffMemberId}`
         : "/api/staff/admin-chat";
-      const response = await fetch(url, { headers: await getHeaders(), cache: "no-store" });
+      const headers = await getHeaders();
+      if (!isCurrentRequest()) return;
+      const response = await fetch(url, { headers, cache: "no-store", signal });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load this chat.");
-      setMessages(result.messages ?? []);
-      setSelectedMessageIds((current) => new Set([...current].filter((id) => result.messages.some((item: StaffChatMessage) => item.id === id))));
-      if (result.conversation) {
-        const nextConversations = conversationsRef.current.map((item) => item.id === result.conversation.id
-          ? { ...item, ...result.conversation }
+      if (!isCurrentRequest()) return;
+      const nextMessages = (result.messages ?? []) as StaffChatMessage[];
+      setMessages(nextMessages);
+      setSelectedMessageIds((current) => new Set([...current].filter((id) => nextMessages.some((item) => item.id === id))));
+
+      if (admin && result.conversation && result.conversation.id !== conversationId) {
+        selectedIdRef.current = result.conversation.id;
+        setSelectedId(result.conversation.id);
+      }
+
+      let updatedConversation = result.conversation as StaffConversation | undefined;
+      const readThroughMessage = nextMessages[nextMessages.length - 1];
+      if (admin && result.conversation && readThroughMessage &&
+        (result.conversation.unread_count > 0 || nextMessages.some((item) => item.sender_type === "staff" && !item.seen_by_admin_at))) {
+        const readHeaders = await getHeaders(true);
+        if (!isCurrentRequest()) return;
+        const readResponse = await fetch("/api/admin/staff-chat", {
+          method: "PATCH",
+          headers: readHeaders,
+          body: JSON.stringify({ conversationId: result.conversation.id, readThroughMessageId: readThroughMessage.id }),
+          signal,
+        });
+        const readResult = await readResponse.json();
+        if (!readResponse.ok) throw new Error(readResult.error ?? "Could not mark this staff conversation as read.");
+        if (!isCurrentRequest()) return;
+        updatedConversation = { ...result.conversation, ...readResult.conversation };
+        setMessages((current) => current.map((item) => ({
+          ...item,
+          seen_by_admin_at: item.sender_type === "staff" ? item.seen_by_admin_at ?? readResult.seenAt : item.seen_by_admin_at,
+        })));
+      }
+
+      if (updatedConversation) {
+        const nextConversations = conversationsRef.current.map((item) => item.id === updatedConversation?.id
+          ? { ...item, ...updatedConversation }
           : item);
         conversationsRef.current = nextConversations;
         setConversations(nextConversations);
         if (admin) onUnreadCount(nextConversations.reduce((total, item) => total + item.unread_count, 0));
-      } else if (admin && result.staffMember) {
-        setMessages([]);
       }
       if (!admin) onUnreadCount(result.unreadCount ?? 0);
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not load this chat.");
+      if (isCurrentRequest()) onNotice(error instanceof Error ? error.message : "Could not load this chat.");
     } finally {
-      setConversationLoading(false);
+      if (isCurrentRequest()) setConversationLoading(false);
     }
   }, [admin, getHeaders, onNotice, onUnreadCount]);
 
@@ -125,7 +174,10 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void loadConversations();
     }, 20_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      conversationsRequestIdRef.current += 1;
+    };
   }, [admin, loadConversations]);
 
   useEffect(() => {
@@ -133,12 +185,19 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       if (admin && !selectedStaffMemberId) setMessages([]);
       return;
     }
+    const controller = new AbortController();
+    setMessages([]);
+    setSelectedMessageIds(new Set());
+    setReplyTo(null);
     setConversationLoading(true);
-    if (document.visibilityState === "visible") void loadMessages(selectedId, selectedStaffMemberId);
+    if (document.visibilityState === "visible") void loadMessages(selectedId, selectedStaffMemberId, controller.signal);
     const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadMessages(selectedId, selectedStaffMemberId);
+      if (document.visibilityState === "visible") void loadMessages(selectedId, selectedStaffMemberId, controller.signal);
     }, 10_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      controller.abort();
+    };
   }, [admin, loadMessages, selectedId, selectedStaffMemberId]);
 
   useEffect(() => {
@@ -196,6 +255,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       setMessages([]);
       setSelectedMessageIds(new Set());
       setReplyTo(null);
+      selectedIdRef.current = null;
       setSelectedId(null);
       setMobileConversationOpen(false);
       await loadConversations();
@@ -231,9 +291,19 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       <div className="support-list-heading"><strong>Staff conversations</strong></div>
       <div className="support-thread-scroll">
         {loading ? <p className="admin-empty">Loading staff conversations…</p> : conversations.length ? conversations.map((item) =>
-          <button type="button" key={item.staff_member_id} className={`support-thread${selectedStaffMemberId === item.staff_member_id ? " is-selected" : ""}`} onClick={() => { setSelectedStaffMemberId(item.staff_member_id); setSelectedId(item.id); setReplyTo(null); setMobileConversationOpen(true); }}>
+          <button type="button" key={item.staff_member_id} className={`support-thread${selectedStaffMemberId === item.staff_member_id ? " is-selected" : ""}`} onClick={() => {
+            selectedStaffMemberIdRef.current = item.staff_member_id;
+            selectedIdRef.current = item.id;
+            setSelectedStaffMemberId(item.staff_member_id);
+            setSelectedId(item.id);
+            setMessages([]);
+            setSelectedMessageIds(new Set());
+            setConversationLoading(true);
+            setReplyTo(null);
+            setMobileConversationOpen(true);
+          }}>
             <span><strong>{item.employee_code}</strong><small>{item.full_name}</small></span>
-            <b>{item.unread_count > 0 ? "New message" : item.id ? "Direct chat" : "Start a chat"}</b>
+            <b>{item.unread_count > 0 ? `New from ${item.full_name}` : item.id ? "Direct chat" : "Start a chat"}</b>
             {item.last_message_at && <em>{new Date(item.last_message_at).toLocaleString()}</em>}
             {item.unread_count > 0 && <i>{item.unread_count} unread</i>}
           </button>,
