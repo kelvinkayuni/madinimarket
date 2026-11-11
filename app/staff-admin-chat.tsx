@@ -41,6 +41,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
   const [sending, setSending] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const shouldScrollToBottomRef = useRef(true);
   const conversationsRef = useRef<StaffConversation[]>([]);
   const selectedStaffMemberIdRef = useRef<number | null>(null);
   const selectedIdRef = useRef<string | null>(null);
@@ -122,6 +123,9 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       if (!response.ok) throw new Error(result.error ?? "Could not load this chat.");
       if (!isCurrentRequest()) return;
       const nextMessages = (result.messages ?? []) as StaffChatMessage[];
+      const messageList = messageListRef.current;
+      shouldScrollToBottomRef.current = !messageList ||
+        messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight < 80;
       setMessages(nextMessages);
       setSelectedMessageIds((current) => new Set([...current].filter((id) => nextMessages.some((item) => item.id === id))));
 
@@ -202,7 +206,10 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
 
   useEffect(() => {
     const element = messageListRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (element && shouldScrollToBottomRef.current) {
+      element.scrollTop = element.scrollHeight;
+      shouldScrollToBottomRef.current = false;
+    }
   }, [messages]);
 
   const sendReply = async (event: FormEvent<HTMLFormElement>) => {
@@ -296,6 +303,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             selectedIdRef.current = item.id;
             setSelectedStaffMemberId(item.staff_member_id);
             setSelectedId(item.id);
+            shouldScrollToBottomRef.current = true;
             setMessages([]);
             setSelectedMessageIds(new Set());
             setConversationLoading(true);
