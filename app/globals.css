@@ -53,6 +53,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-menu-popover > button { width: 100%; min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; border: 0; background: transparent; color: #35443a; font-size: 12px; text-align: left; cursor: pointer; }
 .admin-menu-popover > button:hover, .admin-menu-popover > button.is-active { background: #f1f4ed; color: var(--forest); }
 .admin-menu-popover > button > span { min-width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid #d9e0d5; border-radius: 50%; color: #526451; font-size: 9px; }
+.admin-menu-popover > button > span:not(.staff-chat-unread-badge) { border-color: #547365; border-radius: 50%; background: var(--forest); color: #d4e0d3; }
 .admin-menu-role-details { border-bottom: 1px solid #e8ebe5; }
 .admin-menu-role-details summary { min-height: 42px; display: flex; align-items: center; padding: 0 10px; color: #35443a; font-size: 12px; font-weight: 650; cursor: pointer; list-style: none; }
 .admin-menu-role-details summary::-webkit-details-marker { display: none; }
