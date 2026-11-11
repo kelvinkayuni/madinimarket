@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { sendGmailEmail } from "@/lib/gmail";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { escapeUsernameLikePattern } from "@/lib/username-lookup";
 
 export async function POST(request: Request) {
   let username = "";
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null) throw new Error("Invalid request");
     const values = body as Record<string, unknown>;
-    username = typeof values.username === "string" ? values.username.trim().toUpperCase() : "";
+    username = typeof values.username === "string" ? values.username.trim() : "";
     email = typeof values.email === "string" ? values.email.trim().toLowerCase() : "";
   } catch {
     return NextResponse.json({ error: "Enter your username and registered email address." }, { status: 400 });
@@ -25,18 +26,19 @@ export async function POST(request: Request) {
   const genericMessage = "If the username and email match an active account, a password reset link will be sent.";
   try {
     const admin = createSupabaseAdminClient();
+    const normalizedUsername = username.toUpperCase();
     const { data: settings, error: settingsError } = await admin.from("marketplace_settings")
       .select("non_admin_sign_in_disabled")
       .eq("id", true)
       .maybeSingle();
     if (settingsError) throw settingsError;
     const signInSuspended = settings?.non_admin_sign_in_disabled === true;
-    const isStaffUsername = /^MMSA-\d{4,}$/.test(username);
+    const isStaffUsername = /^MMSA-\d{4,}$/.test(normalizedUsername);
 
     if (isStaffUsername) {
       const { data: staffProfile, error: staffProfileError } = await admin.from("profiles")
         .select("id, display_name, email")
-        .eq("username", username)
+        .ilike("username", escapeUsernameLikePattern(username))
         .eq("email", email)
         .eq("role", "staff")
         .maybeSingle();
@@ -72,7 +74,7 @@ export async function POST(request: Request) {
 
     const { data: adminProfile, error: adminProfileError } = await admin.from("profiles")
       .select("display_name, email")
-      .eq("username", username)
+      .ilike("username", escapeUsernameLikePattern(username))
       .eq("email", email)
       .eq("role", "admin")
       .maybeSingle();
@@ -94,12 +96,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: genericMessage }, { status: 202, headers: { "Cache-Control": "no-store" } });
     }
 
-    if (signInSuspended || !/^MM-\d{4}$/.test(username)) {
+    if (signInSuspended || !/^MM-\d{4}$/.test(normalizedUsername)) {
       return NextResponse.json({ message: genericMessage }, { status: 202, headers: { "Cache-Control": "no-store" } });
     }
     const { data: account, error: accountError } = await admin.from("website_accounts")
       .select("id, display_name, email")
-      .eq("username", username)
+      .eq("username", normalizedUsername)
       .eq("email", email)
       .eq("is_active", true)
       .maybeSingle();

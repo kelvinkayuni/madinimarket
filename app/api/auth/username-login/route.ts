@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { escapeUsernameLikePattern } from "@/lib/username-lookup";
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       ? await profileQuery.eq("id", staffMember.user_id).maybeSingle()
       : isStaffCode
         ? { data: null, error: null }
-        : await profileQuery.eq("username", normalizedUsername).maybeSingle();
+        : await profileQuery.ilike("username", escapeUsernameLikePattern(username)).maybeSingle();
 
     if (profileError) {
       console.error("Could not look up the sign-in account.", profileError);
