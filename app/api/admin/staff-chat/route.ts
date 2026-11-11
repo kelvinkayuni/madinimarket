@@ -275,13 +275,15 @@ export async function POST(request: Request) {
         reply_to_sender_type: replySnapshot?.sender_type ?? null,
         reply_to_message: replySnapshot?.message ?? null,
       })
-      .select("id")
+      .select("id,sender_type,message,created_at,seen_by_admin_at,seen_by_staff_at,reply_to_message_id,reply_to_sender_type,reply_to_message")
       .single();
     if (messageError) throw messageError;
+    let attachments: Awaited<ReturnType<typeof getStaffChatAttachments>> | null = null;
     try {
       await saveStaffChatAttachments(admin, files, conversationId, savedMessage.id, conversation.staff_member_id);
+      if (files.length) attachments = await getStaffChatAttachments(admin, [savedMessage]);
     } catch (error) {
-      await admin.from("staff_admin_messages").delete().eq("id", savedMessage.id);
+      await removeStaffChatMessages(admin, [savedMessage]);
       throw error;
     }
     const now = new Date().toISOString();
@@ -290,7 +292,11 @@ export async function POST(request: Request) {
       .eq("id", conversationId);
     if (updateError) throw updateError;
 
-    return NextResponse.json({ sent: true, conversation: { ...conversation, unread_by_admin: false, unread_by_staff: true, updated_at: now, last_message_at: now } });
+    return NextResponse.json({
+      sent: true,
+      conversation: { ...conversation, unread_by_admin: false, unread_by_staff: true, updated_at: now, last_message_at: now },
+      message: { ...savedMessage, attachments: attachments?.get(savedMessage.id) ?? [] },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not send your message.";
     const isInputError = message.startsWith("Attach no more than") || message.startsWith("Attachments must total") || message.startsWith("Files must be");

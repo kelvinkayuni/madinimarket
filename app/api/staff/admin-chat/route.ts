@@ -118,13 +118,15 @@ export async function POST(request: Request) {
         reply_to_sender_type: replySnapshot?.sender_type ?? null,
         reply_to_message: replySnapshot?.message ?? null,
       })
-      .select("id")
+      .select("id,sender_type,message,created_at,seen_by_admin_at,seen_by_staff_at,reply_to_message_id,reply_to_sender_type,reply_to_message")
       .single();
     if (messageError) throw messageError;
+    let attachments: Awaited<ReturnType<typeof getStaffChatAttachments>> | null = null;
     try {
       await saveStaffChatAttachments(staff.admin, files, conversation.id, savedMessage.id, staff.staffId);
+      if (files.length) attachments = await getStaffChatAttachments(staff.admin, [savedMessage]);
     } catch (error) {
-      await staff.admin.from("staff_admin_messages").delete().eq("id", savedMessage.id);
+      await removeStaffChatMessages(staff.admin, [savedMessage]);
       throw error;
     }
     const { error: updateError } = await staff.admin.from("staff_admin_conversations")
@@ -135,6 +137,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       sent: true,
       conversation: { ...conversation, unread_by_admin: true, unread_by_staff: false, updated_at: now, last_message_at: now, full_name: staff.fullName },
+      message: { ...savedMessage, attachments: attachments?.get(savedMessage.id) ?? [] },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not send your message.";

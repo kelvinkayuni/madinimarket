@@ -61,6 +61,20 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       ...(data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {}),
     };
   }, []);
+  const updateConversation = (staffMemberId: number, updates: Partial<StaffConversation>) => {
+    const nextConversations = conversationsRef.current.map((item) => item.staff_member_id === staffMemberId
+      ? { ...item, ...updates }
+      : item);
+    if (admin) {
+      nextConversations.sort((a, b) => {
+        if (a.unread_count !== b.unread_count) return b.unread_count - a.unread_count;
+        return String(b.last_message_at ?? "").localeCompare(String(a.last_message_at ?? ""));
+      });
+    }
+    conversationsRef.current = nextConversations;
+    setConversations(nextConversations);
+    if (admin) onUnreadCount(nextConversations.reduce((total, item) => total + item.unread_count, 0));
+  };
 
   const loadConversations = useCallback(async () => {
     const requestId = ++conversationsRequestIdRef.current;
@@ -218,20 +232,25 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
     event.preventDefault();
     const message = reply.trim();
     if ((!message && !files.length) || sending || (admin && !selectedStaffMemberId)) return;
+    const targetStaffMemberId = selectedStaffMemberId;
     setSending(true);
     try {
       const form = new FormData();
       form.set("message", message);
       if (replyTo) form.set("replyToMessageId", replyTo.id);
       if (admin && selectedId) form.set("conversationId", selectedId);
-      if (admin && selectedStaffMemberId) form.set("staffMemberId", String(selectedStaffMemberId));
+      if (admin && targetStaffMemberId) form.set("staffMemberId", String(targetStaffMemberId));
       for (const file of files) form.append("attachments", file);
       const response = await fetch(admin ? "/api/admin/staff-chat" : "/api/staff/admin-chat", {
         method: "POST",
         headers: await getHeaders(),
         body: form,
       });
-      let result: { error?: string; conversation?: { id: string } };
+      let result: {
+        error?: string;
+        conversation?: Partial<StaffConversation> & { id: string };
+        message?: StaffChatMessage;
+      };
       try {
         result = await response.json();
       } catch {
@@ -241,18 +260,51 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
         throw new Error("The server returned an invalid response. Please try sending smaller files.");
       }
       if (!response.ok) throw new Error(result.error ?? "Could not send your message.");
+      if (!result.conversation?.id || !result.message) {
+        throw new Error("The message was sent, but its conversation could not be refreshed.");
+      }
+      const postedConversation = result.conversation;
+      const postedMessage = result.message;
+      conversationsRequestIdRef.current += 1;
       setReply("");
       setReplyTo(null);
       setFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      await loadConversations();
-      if (result.conversation?.id) {
-        setSelectedId(result.conversation.id);
+      const staffMemberId = postedConversation.staff_member_id ?? targetStaffMemberId;
+      if (staffMemberId) {
+        updateConversation(staffMemberId, postedConversation);
+      }
+      const stillViewingConversation = !admin || selectedStaffMemberIdRef.current === targetStaffMemberId;
+      if (stillViewingConversation) {
+        selectedIdRef.current = postedConversation.id;
+        setSelectedId(postedConversation.id);
+        messagesRequestIdRef.current += 1;
         shouldScrollToBottomRef.current = true;
-        await loadMessages(result.conversation.id, selectedStaffMemberId ?? undefined);
-      } else if (selectedStaffMemberId) {
-        shouldScrollToBottomRef.current = true;
-        await loadMessages(selectedId, selectedStaffMemberId);
+        setMessages((current) => current.some((item) => item.id === postedMessage.id)
+          ? current
+          : [...current, postedMessage]);
+      }
+      if (admin && staffMemberId && stillViewingConversation &&
+        ((selectedConversation?.unread_count ?? 0) > 0 ||
+          messages.some((item) => item.sender_type === "staff" && !item.seen_by_admin_at))) {
+        try {
+          const readResponse = await fetch("/api/admin/staff-chat", {
+            method: "PATCH",
+            headers: await getHeaders(true),
+            body: JSON.stringify({ conversationId: postedConversation.id, readThroughMessageId: postedMessage.id }),
+          });
+          const readResult = await readResponse.json();
+          if (!readResponse.ok) throw new Error(readResult.error ?? "Could not update message read status.");
+          setMessages((current) => current.map((item) => ({
+            ...item,
+            seen_by_admin_at: item.sender_type === "staff" ? item.seen_by_admin_at ?? readResult.seenAt : item.seen_by_admin_at,
+          })));
+          updateConversation(staffMemberId, readResult.conversation);
+        } catch (error) {
+          onNotice(error instanceof Error
+            ? `Message sent, but the read status could not be updated: ${error.message}`
+            : "Message sent, but the read status could not be updated.");
+        }
       }
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not send your message.");
@@ -271,13 +323,26 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not permanently delete this conversation.");
+      conversationsRequestIdRef.current += 1;
+      messagesRequestIdRef.current += 1;
       setMessages([]);
       setSelectedMessageIds(new Set());
       setReplyTo(null);
       selectedIdRef.current = null;
       setSelectedId(null);
       setMobileConversationOpen(false);
-      await loadConversations();
+      if (selectedStaffMemberId !== null) {
+        updateConversation(selectedStaffMemberId, {
+          id: null,
+          updated_at: null,
+          last_message_at: null,
+          unread_count: 0,
+          unread_by_admin: false,
+          unread_by_staff: false,
+        });
+      } else if (!admin) {
+        onUnreadCount(0);
+      }
       onNotice("Conversation permanently deleted for both sides.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not permanently delete this conversation.");
@@ -294,9 +359,19 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not delete the selected messages.");
+      conversationsRequestIdRef.current += 1;
+      messagesRequestIdRef.current += 1;
       setSelectedMessageIds(new Set());
-      await loadMessages(selectedId, selectedStaffMemberId ?? undefined);
-      await loadConversations();
+      const deletedIds = new Set(messageIds);
+      const remainingMessages = messages.filter((item) => !deletedIds.has(item.id));
+      setMessages(remainingMessages);
+      if (admin && selectedStaffMemberId !== null) {
+        const latestMessageAt = remainingMessages[remainingMessages.length - 1]?.created_at ?? null;
+        updateConversation(selectedStaffMemberId, {
+          last_message_at: latestMessageAt,
+          updated_at: latestMessageAt,
+        });
+      }
       onNotice("Selected messages deleted.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not delete the selected messages.");
