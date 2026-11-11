@@ -393,7 +393,6 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             }
             setFiles(selectedFiles);
           }} /></label>
-          <small>Up to 5 files per message; images, PDF, TXT, DOCX, or XLSX, 4 MB total.</small>
           <button className="button button-dark" type="submit" disabled={sending || (!reply.trim() && !files.length) || (admin && !selectedStaffMemberId)}>{sending ? "Sending…" : "Send message"}</button>
         </form>
       </> : <p className="support-empty">{loading ? "Loading staff conversations…" : "Select a staff conversation."}</p>}
