@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not send your message.";
-    const isInputError = message.startsWith("Attach no more than") || message.startsWith("Files must be");
+    const isInputError = message.startsWith("Attach no more than") || message.startsWith("Attachments must total") || message.startsWith("Files must be");
     return NextResponse.json({ error: message }, { status: isInputError ? 400 : 503 });
   }
 }
