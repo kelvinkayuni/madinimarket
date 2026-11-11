@@ -343,7 +343,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             {admin && selectedConversation && !selectedId && <small>Start a new direct conversation with this staff member.</small>}
           </div>
           <div className="staff-chat-conversation-actions">
-            <button className="button button-outline staff-chat-delete-conversation" type="button" onClick={() => void clearConversation()} disabled={!selectedId}>Delete conversation for everyone</button>
+            <button className="button button-outline staff-chat-delete-conversation" type="button" aria-label="Delete conversation for everyone" title="Delete conversation for everyone" onClick={() => void clearConversation()} disabled={!selectedId}>Delete chat</button>
             <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!selectedMessageIds.size}>Delete selected</button>
           </div>
         </div>
