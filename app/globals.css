@@ -55,7 +55,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-menu-role-details summary { min-height: 42px; display: flex; align-items: center; padding: 0 10px; color: #35443a; font-size: 12px; font-weight: 650; cursor: pointer; list-style: none; }
 .admin-menu-role-details summary::-webkit-details-marker { display: none; }
 .admin-menu-role-details summary::after { content: "+"; margin-left: auto; color: #748174; font-size: 16px; }
-.admin-menu-role-details[open] summary::after { content: "−"; }
+.admin-menu-role-details[open] summary::after { content: "?"; }
 .admin-menu-role-list { display: grid; gap: 10px; padding: 0 12px 12px; }
 .admin-menu-role-list section { display: grid; gap: 5px; }
 .admin-menu-role-list strong { color: #304b39; font-size: 11px; }
@@ -104,7 +104,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .commerce-payment-method > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; color: #354b39; font-weight: 650; cursor: pointer; list-style: none; }
 .commerce-payment-method > summary::-webkit-details-marker { display: none; }
 .commerce-payment-method > summary::after { content: "+"; color: #667064; font-size: 16px; line-height: 1; }
-.commerce-payment-method[open] > summary::after { content: "−"; }
+.commerce-payment-method[open] > summary::after { content: "?"; }
 .commerce-payment-method > span { display: block; padding: 0 10px 10px; overflow-wrap: anywhere; }
 .commerce-payment-general-instructions { padding-top: 6px; }
 .commerce-payment-general-instructions > strong { color: #354b39; }
@@ -303,7 +303,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-sales-transaction-summary { display: grid; grid-template-columns: minmax(105px, 1fr) minmax(120px, 1.4fr) minmax(175px, 1.5fr) minmax(90px, 1fr) minmax(100px, 1fr) 18px; align-items: center; gap: 12px; min-height: 54px; padding: 10px 12px; cursor: pointer; list-style: none; }
 .admin-sales-transaction-summary::-webkit-details-marker { display: none; }
 .admin-sales-transaction-summary::after { content: "+"; color: #647363; font-size: 17px; }
-.admin-sales-transaction[open] > .admin-sales-transaction-summary::after { content: "−"; }
+.admin-sales-transaction[open] > .admin-sales-transaction-summary::after { content: "?"; }
 .admin-sales-transaction-summary > strong:first-child { color: #304b39; font-size: 10px; }
 .admin-sales-transaction-summary > strong:nth-last-child(2) { color: #314d3a; font-size: 10px; text-align: right; }
 .admin-sales-transaction-summary > span:not(.admin-ledger-status) { overflow: hidden; color: #68766a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -813,7 +813,7 @@ h1, h2, h3, p { margin-top: 0; }
 .admin-commerce-summary { display: grid; grid-template-columns: minmax(105px, 1fr) minmax(150px, 2fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(125px, 1fr) 20px; align-items: center; gap: 12px; min-height: 58px; padding: 12px 14px; cursor: pointer; list-style: none; }
 .admin-commerce-summary::-webkit-details-marker { display: none; }
 .admin-commerce-summary::after { content: "+"; justify-self: end; color: #647363; font-size: 18px; }
-.admin-commerce-order[open] > .admin-commerce-summary::after { content: "−"; }
+.admin-commerce-order[open] > .admin-commerce-summary::after { content: "?"; }
 .admin-commerce-summary > strong { color: #304b39; font-size: 11px; }
 .admin-commerce-summary > span { overflow: hidden; color: #667366; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .admin-order-status { justify-self: start; padding: 4px 7px; border-radius: 999px; background: #edf1e9; color: #556657 !important; text-transform: capitalize; }
@@ -1107,6 +1107,7 @@ h1, h2, h3, p { margin-top: 0; }
   .listing-section { min-height: auto; display: block; flex: none; }
   .seller-rail, .buyer-rail, .empty-search { min-height: auto; flex: initial; }
   .admin-header { min-height: 60px; padding-right: 14px; padding-left: 14px; }
+  .admin-header:not(.admin-header-staff) .admin-brand > span:not(.admin-brand-name) { display: none; }
   .admin-header-staff .admin-brand span.staff-role-badge { display: none; }
   .admin-header-staff .admin-account .staff-mobile-role { display: block; }
   .admin-header-staff .staff-mobile-role {
