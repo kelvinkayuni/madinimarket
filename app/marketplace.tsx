@@ -188,6 +188,24 @@ function defaultStaffPanel(permissions: StaffPermission[]): AdminPanel {
   if (permissions.includes("homepage_headlines")) return "homepage";
   return "delivery";
 }
+const adminPanels: AdminPanel[] = [
+  "review", "ledger", "translations", "homepage", "accounts", "subscriptions", "listing-fee",
+  "market-hours", "orders", "delivery", "order-time-limits", "payment-instructions", "support", "staff", "staff-chat",
+];
+function isAdminPanel(value: string | null): value is AdminPanel {
+  return value !== null && adminPanels.some((panel) => panel === value);
+}
+function canStaffOpenPanel(panel: AdminPanel, permissions: StaffPermission[]) {
+  if (panel === "staff-chat") return true;
+  if (panel === "review") return permissions.includes("market_moderation");
+  if (panel === "accounts") return permissions.includes("accounts");
+  if (panel === "support") return permissions.includes("customer_support");
+  if (panel === "translations") return permissions.includes("translations");
+  if (panel === "homepage") return permissions.includes("homepage_headlines");
+  if (panel === "orders") return permissions.includes("marketplace_orders") || permissions.includes("accounting");
+  if (panel === "delivery") return permissions.includes("delivery_confirmation");
+  return false;
+}
 const weightInGrams = (weight: number, unit: Unit | StoneWeightUnit) =>
   weight * ({ carats: 0.2, g: 1, kg: 1_000, tons: 1_000_000 }[unit]);
 const isValidBatchWeightRange = (
@@ -664,6 +682,7 @@ export default function Marketplace() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [activeAdminPanel, setActiveAdminPanel] = useState<AdminPanel | null>(null);
+  const restoredAdminPanelForRef = useRef<string | null>(null);
   const [user, setUser] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [userId, setUserId] = useState("");
@@ -733,7 +752,6 @@ export default function Marketplace() {
       setStaffPermissions(result.permissions);
       setStaffRoles(result.roles);
       if (result.fullName) setDisplayName(result.fullName);
-      setActiveAdminPanel((current) => current ?? defaultStaffPanel(result.permissions));
       setStaffAccessStatus("loaded");
       return result;
     })();
@@ -1421,6 +1439,73 @@ export default function Marketplace() {
       setNotice("This browser could not save your language preference.");
     }
   };
+  useLayoutEffect(() => {
+    if (role !== "admin" && role !== "staff") {
+      restoredAdminPanelForRef.current = null;
+      return;
+    }
+    if (!userId || (role === "staff" && staffAccessStatus !== "loaded")) return;
+    const key = `madinimarket:admin-panel:v1:${role}:${userId}`;
+    if (restoredAdminPanelForRef.current === key) return;
+
+    let savedPanel: string | null = null;
+    try {
+      savedPanel = window.sessionStorage.getItem(key);
+    } catch (error) {
+      console.error("Could not restore the last admin panel.", error);
+    }
+    const restoredPanel = isAdminPanel(savedPanel) &&
+      (role === "admin" || canStaffOpenPanel(savedPanel, staffPermissions))
+      ? savedPanel
+      : role === "staff" ? defaultStaffPanel(staffPermissions) : "accounts";
+    restoredAdminPanelForRef.current = key;
+    setActiveAdminPanel(restoredPanel);
+  }, [role, staffAccessStatus, staffPermissions, userId]);
+
+  useEffect(() => {
+    if ((role !== "admin" && role !== "staff") || !userId || !activeAdminPanel) return;
+    const key = `madinimarket:admin-panel:v1:${role}:${userId}`;
+    if (restoredAdminPanelForRef.current !== key) return;
+    try {
+      window.sessionStorage.setItem(key, activeAdminPanel);
+    } catch (error) {
+      console.error("Could not save the selected admin panel.", error);
+    }
+  }, [activeAdminPanel, role, userId]);
+
+  useLayoutEffect(() => {
+    if ((role !== "admin" && role !== "staff") || !userId || !activeAdminPanel ||
+      restoredAdminPanelForRef.current !== `madinimarket:admin-panel:v1:${role}:${userId}` ||
+      !window.matchMedia("(max-width: 720px)").matches) return;
+
+    const key = `madinimarket:admin-scroll:v1:${role}:${userId}`;
+    const previousRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    try {
+      const savedScroll = Number(window.sessionStorage.getItem(key));
+      if (Number.isFinite(savedScroll) && savedScroll >= 0) {
+        window.requestAnimationFrame(() => window.scrollTo(0, savedScroll));
+      }
+    } catch (error) {
+      console.error("Could not restore the admin page position.", error);
+    }
+    const saveScroll = () => {
+      try {
+        window.sessionStorage.setItem(key, String(window.scrollY));
+      } catch (error) {
+        console.error("Could not save the admin page position.", error);
+      }
+    };
+    window.addEventListener("scroll", saveScroll, { passive: true });
+    window.addEventListener("pagehide", saveScroll);
+    return () => {
+      saveScroll();
+      window.removeEventListener("scroll", saveScroll);
+      window.removeEventListener("pagehide", saveScroll);
+      window.history.scrollRestoration = previousRestoration;
+    };
+  }, [activeAdminPanel, role, userId]);
+
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(".market-shell");
     if (!root) return;
