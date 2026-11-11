@@ -17,7 +17,7 @@ import StaffTaskClaim from "./staff-task-claim";
 import StaffAdminChat from "./staff-admin-chat";
 import CommercePanel from "./commerce-panel";
 import PrivateOfferForm from "./private-offer-form";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { getSupabaseBrowserClient, isSupabaseConfigured, SUPABASE_PASSWORD_RECOVERY_KEY, SUPABASE_PASSWORD_RECOVERY_LIFETIME } from "@/lib/supabase";
 import { clearWebsiteSessionToken, fetchWithWebsiteSession, getWebsiteSessionToken, setWebsiteSessionToken } from "@/lib/client-website-session";
 import { applyVisibleTranslations, type Language, type TranslationPair } from "@/lib/translations";
 import { calculateListingPrice } from "@/lib/listing-pricing";
@@ -1579,9 +1579,32 @@ export default function Marketplace() {
           }
         }
       };
-      void supabase.auth.getSession().then(({ data }) => hydrate(data.session));
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const hasPendingPasswordRecovery = () => {
+        const createdAt = Number(window.sessionStorage.getItem(SUPABASE_PASSWORD_RECOVERY_KEY));
+        if (createdAt > 0 && createdAt <= Date.now() &&
+          Date.now() - createdAt < SUPABASE_PASSWORD_RECOVERY_LIFETIME) return true;
+        window.sessionStorage.removeItem(SUPABASE_PASSWORD_RECOVERY_KEY);
+        return false;
+      };
+      const recoveryInUrl = new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery" ||
+        new URLSearchParams(window.location.search).get("type") === "recovery";
+      if (recoveryInUrl) window.sessionStorage.setItem(SUPABASE_PASSWORD_RECOVERY_KEY, String(Date.now()));
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "PASSWORD_RECOVERY" && session) {
+          window.sessionStorage.setItem(SUPABASE_PASSWORD_RECOVERY_KEY, String(Date.now()));
+          if (window.location.pathname !== "/reset-password") {
+            window.location.replace("/reset-password");
+            return;
+          }
+        }
         window.setTimeout(() => void hydrate(session), 0);
+      });
+      void supabase.auth.getSession().then(({ data }) => {
+        if (hasPendingPasswordRecovery()) {
+          if (window.location.pathname !== "/reset-password") window.location.replace("/reset-password");
+          return;
+        }
+        void hydrate(data.session);
       });
       const interval = window.setInterval(() => {
         if (document.visibilityState !== "visible") return;
@@ -4387,7 +4410,7 @@ export default function Marketplace() {
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" disabled={busyActions.has("account-signout")} onClick={() => void withProgress("account-signout", signOut)}>{busyActions.has("account-signout") ? "Signing out…" : "Sign out"}</button></div></>}
       {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2>{accountCreationDisabled ? <p className="dialog-copy">Account creation is suspended for now. Please try again later.</p> : <><p className="dialog-copy">Create your account to buy, sell, or both. Your delivery address is shared with a seller only after payment is verified for an order.</p><form className="form-stack form-scroll" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><div className="field-row"><Field label="Country" name="deliveryCountry" required autoComplete="country-name" /><Field label="Region" name="deliveryRegion" required autoComplete="address-level1" /></div><div className="field-row"><Field label="District" name="deliveryDistrict" required autoComplete="address-level2" /><Field label="Street / delivery address" name="deliveryAddress" required autoComplete="street-address" /></div><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={accountCreationDisabled || busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>      Already registered? <strong>Sign in</strong></button></>}</>}
       {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username. Email addresses cannot be used to sign in.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("forgot-password")}>Forgot your password?</button><button className="switch-dialog" type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation is currently suspended" : <>New to the market? <strong>Create account</strong></>}</button></>}
-      {dialog === "forgot-password" && <><div className="dialog-kicker">ACCOUNT RECOVERY</div><h2 id="dialog-title">Reset your password.</h2><p className="dialog-copy">{nonAdminSignInDisabled ? "User sign-in is suspended. Password recovery is available only for active staff accounts." : "Enter your username and registered email. If both match the same active account, we’ll email a secure reset link. We never email passwords."}</p><form className="form-stack" onSubmit={requestPasswordReset}><Field label="Username" name="username" placeholder="MM-1254 or MMSA-4827" required autoComplete="username" /><Field label="Registered email address" name="email" type="email" required autoComplete="email" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("password-reset-request")}>{busyActions.has("password-reset-request") ? "Sending link…" : <>Email reset link <ArrowUpRight size={16} /></>}</button></form><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Remembered your password? <strong>Sign in</strong></button></>}
+      {dialog === "forgot-password" && <><div className="dialog-kicker">ACCOUNT RECOVERY</div><h2 id="dialog-title">Reset your password.</h2><p className="dialog-copy">Enter your username and registered email. If both match an eligible account, we’ll email a secure reset link. We never email passwords.</p><form className="form-stack" onSubmit={requestPasswordReset}><Field label="Username" name="username" placeholder="Admin username, MM-1254, or MMSA-4827" required autoComplete="username" /><Field label="Registered email address" name="email" type="email" required autoComplete="email" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("password-reset-request")}>{busyActions.has("password-reset-request") ? "Sending link…" : <>Email reset link <ArrowUpRight size={16} /></>}</button></form><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Remembered your password? <strong>Sign in</strong></button></>}
       {dialog === "certificate-ready" && <><div className="dialog-kicker">SIGN-IN COMPLETE</div><h2 id="dialog-title">Your certificate is ready.</h2><p className="dialog-copy">The certificate will open in a new tab. Your marketplace dashboard will stay open here.</p><button className="button button-dark form-submit" type="button" onClick={() => { if (certificateReadyListingId !== null) { const certificateTab = window.open("about:blank", "_blank"); if (!certificateTab) setNotice("Allow pop-ups to open this certificate."); else void fetchWithWebsiteSession(`/api/listing-certificate?id=${certificateReadyListingId}`).then(async (response) => { if (!response.ok) throw new Error("Could not open this certificate."); const url = URL.createObjectURL(await response.blob()); certificateTab.location.href = url; window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }).catch((error: unknown) => { certificateTab.close(); setNotice(error instanceof Error ? error.message : "Could not open this certificate."); }); } setCertificateReadyListingId(null); setDialog(null); }}>Open certificate <ArrowUpRight size={16} /></button></>}
       {dialog === "sell" && <>
         <div className="dialog-kicker">SELL A MINERAL</div>
