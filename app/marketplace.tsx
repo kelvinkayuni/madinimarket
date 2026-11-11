@@ -3795,7 +3795,7 @@ export default function Marketplace() {
             </nav>
           </>}
         </div>
-        <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong>{role === "staff" && staffRoles.length > 0 && <small className="staff-mobile-role">{staffRoles.map((staffRole) => staffRole.name).join(" · ")}</small>}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
+        <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong>{role === "admin" && <small className="admin-mobile-role">ADMIN</small>}{role === "staff" && staffRoles.length > 0 && <small className="staff-mobile-role">{staffRoles.map((staffRole) => staffRole.name).join(" · ")}</small>}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
       <div className="admin-content" id="admin-home">
         {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}

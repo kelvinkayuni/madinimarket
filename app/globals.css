@@ -41,6 +41,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-account strong, .admin-account small { display: block; }
 .admin-account strong { color: var(--ink); font-size: 11px; font-weight: 650; }
 .admin-account small { max-width: 260px; margin-top: 3px; color: #717b70; font-size: 9px; }
+.admin-account .admin-mobile-role { display: none; }
+
 .admin-account .staff-mobile-role { display: none; }
 .admin-menu-wrap { position: absolute; top: 50%; left: 50%; z-index: 1; transform: translate(-50%, -50%); }
 .admin-menu-trigger { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid #dfe3db; border-radius: 50%; background: #fff; color: var(--forest); cursor: pointer; }
@@ -1107,6 +1109,7 @@ h1, h2, h3, p { margin-top: 0; }
   .listing-section { min-height: auto; display: block; flex: none; }
   .seller-rail, .buyer-rail, .empty-search { min-height: auto; flex: initial; }
   .admin-header { min-height: 60px; padding-right: 14px; padding-left: 14px; }
+  .admin-account .admin-mobile-role { display: block; max-width: 26vw; }
   .admin-header:not(.admin-header-staff) .admin-brand > span:not(.admin-brand-name) { display: none; }
   .admin-header-staff .admin-brand span.staff-role-badge { display: none; }
   .admin-header-staff .admin-account .staff-mobile-role { display: block; }
