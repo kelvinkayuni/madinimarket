@@ -1227,7 +1227,6 @@ h1, h2, h3, p { margin-top: 0; }
 
 .admin-support-panel { min-height: calc(100vh - 68px); }
 .support-inbox { height: min(680px, calc(100vh - 160px)); min-height: 520px; max-height: calc(100vh - 160px); display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); overflow: hidden; border: 1px solid var(--line); background: #fff; }
-.staff-admin-chat.support-inbox { height: min(680px, max(240px, calc(100dvh - 270px))); min-height: min(520px, max(240px, calc(100dvh - 270px))); max-height: max(240px, calc(100dvh - 230px)); }
 .support-thread-list { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: #fafbf8; }
 .staff-chat-intro > p { margin: 18px 14px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .staff-chat-unread-badge { min-width: 20px; margin-left: auto; padding: 3px 6px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-weight: 800; text-align: center; }
@@ -1278,16 +1277,6 @@ h1, h2, h3, p { margin-top: 0; }
 .support-thread em { font-size: 10px; color: var(--muted); font-style: normal; }
 .support-thread i { position: absolute; right: 10px; bottom: 9px; padding: 3px 6px; border-radius: 999px; background: var(--red); color: #fff; font-size: 8px; font-style: normal; }
 .support-conversation { min-width: 0; min-height: 520px; display: flex; flex-direction: column; overflow: hidden; }
-.staff-admin-chat .support-conversation { min-height: 0; flex: 1 1 0; }
-.staff-admin-chat .support-detail-heading { min-height: 0; flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 420px); }
-.staff-admin-chat .support-detail-heading > div:first-child { min-width: 0; }
-.staff-admin-chat .support-detail-heading h2 { overflow-wrap: anywhere; }
-.staff-admin-chat .staff-chat-conversation-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: start; }
-.staff-admin-chat .staff-chat-conversation-actions .button { width: 100%; min-width: 0; min-height: 38px; line-height: 1.3; white-space: normal; }
-.staff-admin-chat .support-message-list { flex: 1 1 0; min-height: 0; overscroll-behavior: contain; }
-.staff-admin-chat .support-message { overflow-wrap: anywhere; }
-.staff-admin-chat .support-reply { flex: 0 0 auto; min-height: 0; }
-.staff-admin-chat .support-reply textarea { max-height: 120px; }
 .support-empty { margin: auto; color: var(--muted); }
 .support-form { padding: 24px; overflow-y: auto; }
 .support-detail-heading { min-height: 82px; padding: 14px 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); }
@@ -1321,17 +1310,14 @@ h1, h2, h3, p { margin-top: 0; }
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr);
   }
-  .staff-admin-chat.support-inbox { height: min(760px, max(260px, calc(100dvh - 300px))); min-height: min(380px, max(260px, calc(100dvh - 300px))); max-height: max(260px, calc(100dvh - 260px)); }
   .support-filter-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .support-filter-toolbar .field-label:nth-child(2),
   .support-date-range { grid-column: 1 / -1; }
   .support-thread-list { max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .staff-chat-intro { display: none; }
   .support-conversation { min-height: 0; overflow-y: auto; }
-  .staff-admin-chat .support-conversation { overflow: hidden; }
   .support-message { width: 92%; }
   .support-message-list { flex: 0 0 min(34vh, 240px); min-height: 140px; }
-  .staff-admin-chat .support-message-list { flex: 1 1 0; min-height: 0; }
   .support-admin-tools { grid-template-columns: 1fr; align-items: stretch; }
   .support-inbox:not(.is-conversation-open) .support-conversation { display: none; }
   .support-inbox.is-conversation-open { grid-template-rows: minmax(0, 1fr); }
@@ -1351,13 +1337,10 @@ h1, h2, h3, p { margin-top: 0; }
     cursor: pointer;
   }
   .support-detail-heading { padding: 10px 12px; }
-  .staff-admin-chat .support-detail-heading { grid-template-columns: minmax(0, 1fr); }
   .support-message-list { padding: 12px; }
   .support-reply { padding: 10px 12px; }
   .staff-admin-chat .support-reply { grid-template-columns: 1fr; }
-}
-@media (max-width: 420px) {
-  .staff-admin-chat .staff-chat-conversation-actions { grid-template-columns: minmax(0, 1fr); }
+  .staff-chat-conversation-actions { flex-direction: column; }
 }
 @media (max-width: 650px) {
   .admin-content > section,

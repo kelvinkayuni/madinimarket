@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 const bucket = "staff-admin-attachments";
 const maxFileSize = 10 * 1024 * 1024;
+const maxTotalFileSize = 4 * 1024 * 1024;
 const maxFilesPerMessage = 5;
 const allowedTypes: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -44,6 +45,9 @@ export async function saveStaffChatAttachments(
   staffMemberId: number,
 ) {
   if (files.length > maxFilesPerMessage) throw new Error("Attach no more than 5 files to a message.");
+  if (files.reduce((total, file) => total + file.size, 0) > maxTotalFileSize) {
+    throw new Error("Attachments must total 4 MB or less per message. Choose fewer or smaller files.");
+  }
   for (const file of files) {
     if (!allowedTypes[file.type] || file.size < 1 || file.size > maxFileSize) {
       throw new Error("Files must be images, PDF, TXT, DOCX, or XLSX, and no larger than 10 MB each.");

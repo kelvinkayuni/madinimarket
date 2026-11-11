@@ -30,6 +30,8 @@ type StaffChatMessage = {
   reply_to_message: string | null;
 };
 
+const maxTotalAttachmentSize = 4 * 1024 * 1024;
+
 export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { admin: boolean; onNotice: (message: string) => void; onUnreadCount: (count: number) => void }) {
   const [conversations, setConversations] = useState<StaffConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -229,7 +231,15 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
         headers: await getHeaders(),
         body: form,
       });
-      const result = await response.json();
+      let result: { error?: string; conversation?: { id: string } };
+      try {
+        result = await response.json();
+      } catch {
+        if (response.status === 413) {
+          throw new Error("Attachments must total 4 MB or less per message. Choose fewer or smaller files.");
+        }
+        throw new Error("The server returned an invalid response. Please try sending smaller files.");
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not send your message.");
       setReply("");
       setReplyTo(null);
@@ -238,8 +248,10 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       await loadConversations();
       if (result.conversation?.id) {
         setSelectedId(result.conversation.id);
+        shouldScrollToBottomRef.current = true;
         await loadMessages(result.conversation.id, selectedStaffMemberId ?? undefined);
       } else if (selectedStaffMemberId) {
+        shouldScrollToBottomRef.current = true;
         await loadMessages(selectedId, selectedStaffMemberId);
       }
     } catch (error) {
@@ -373,9 +385,15 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
               setFiles([]);
               return;
             }
+            if (selectedFiles.reduce((total, file) => total + file.size, 0) > maxTotalAttachmentSize) {
+              onNotice("Attachments must total 4 MB or less per message. Choose fewer or smaller files.");
+              event.target.value = "";
+              setFiles([]);
+              return;
+            }
             setFiles(selectedFiles);
           }} /></label>
-          <small>Up to 5 files per message; images, PDF, TXT, DOCX, or XLSX, 10 MB per file.</small>
+          <small>Up to 5 files per message; images, PDF, TXT, DOCX, or XLSX, 4 MB total.</small>
           <button className="button button-dark" type="submit" disabled={sending || (!reply.trim() && !files.length) || (admin && !selectedStaffMemberId)}>{sending ? "Sending…" : "Send message"}</button>
         </form>
       </> : <p className="support-empty">{loading ? "Loading staff conversations…" : "Select a staff conversation."}</p>}
