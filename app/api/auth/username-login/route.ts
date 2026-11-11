@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
-import { escapeUsernameLikePattern } from "@/lib/username-lookup";
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,10 +29,9 @@ export async function POST(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
-    const normalizedUsername = username.toUpperCase();
-    const isStaffCode = /^MMSA-\d{4,}$/.test(normalizedUsername);
+    const isStaffCode = /^MMSA-\d{4,}$/i.test(username);
     const { data: staffMember, error: staffLookupError } = isStaffCode
-      ? await admin.from("staff_members").select("user_id").eq("employee_code", normalizedUsername).maybeSingle()
+      ? await admin.from("staff_members").select("user_id").eq("employee_code", username).maybeSingle()
       : { data: null, error: null };
     if (staffLookupError) {
       console.error("Could not look up the staff sign-in account.", staffLookupError);
@@ -44,7 +42,7 @@ export async function POST(request: Request) {
       ? await profileQuery.eq("id", staffMember.user_id).maybeSingle()
       : isStaffCode
         ? { data: null, error: null }
-        : await profileQuery.ilike("username", escapeUsernameLikePattern(username)).maybeSingle();
+        : await profileQuery.eq("username", username).maybeSingle();
 
     if (profileError) {
       console.error("Could not look up the sign-in account.", profileError);
