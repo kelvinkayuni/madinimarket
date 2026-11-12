@@ -96,17 +96,23 @@ export async function GET(request: Request) {
   const staffMemberIds = (staffMembers ?? []).map((member) => member.id);
   const { data: roleAssignments, error: roleAssignmentsError } = staffMemberIds.length
     ? await admin.from("staff_member_roles")
-      .select("staff_member_id,role:staff_roles(name)")
+      .select("staff_member_id,role_id")
       .in("staff_member_id", staffMemberIds)
     : { data: [], error: null };
   if (roleAssignmentsError) return NextResponse.json({ error: "Could not load staff roles." }, { status: 503 });
+  const roleIds = [...new Set((roleAssignments ?? []).map((assignment) => assignment.role_id))];
+  const { data: roles, error: rolesError } = roleIds.length
+    ? await admin.from("staff_roles").select("id,name").in("id", roleIds)
+    : { data: [], error: null };
+  if (rolesError) return NextResponse.json({ error: "Could not load staff roles." }, { status: 503 });
+  const roleNamesById = new Map((roles ?? []).map((role) => [role.id, role.name]));
   const rolesByStaffMemberId = new Map<number, string[]>();
   for (const assignment of roleAssignments ?? []) {
-    const roleNames = (assignment.role ?? []).map((role) => role.name);
-    rolesByStaffMemberId.set(assignment.staff_member_id, [
-      ...(rolesByStaffMemberId.get(assignment.staff_member_id) ?? []),
-      ...roleNames,
-    ]);
+    const roleName = roleNamesById.get(assignment.role_id);
+    if (!roleName) continue;
+    const staffRoles = rolesByStaffMemberId.get(assignment.staff_member_id) ?? [];
+    staffRoles.push(roleName);
+    rolesByStaffMemberId.set(assignment.staff_member_id, staffRoles);
   }
   for (const roleNames of rolesByStaffMemberId.values()) roleNames.sort((a, b) => a.localeCompare(b));
   try {
