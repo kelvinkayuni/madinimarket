@@ -3831,8 +3831,10 @@ export default function Marketplace() {
 
   if (role === "staff" && staffAccessStatus === "loaded" && staffPermissions.length === 0) {
     return <main className="staff-activation-shell staff-no-role-shell">
-      <section className="dialog-card staff-activation-card">
-        <div className="dialog-kicker">MADINIMARKET STAFF</div><h1>No roles assigned</h1>
+      <section className="dialog-card staff-activation-card staff-no-role-card">
+        <div className="dialog-kicker">MADINIMARKET STAFF</div>
+        <div className="admin-account"><strong>{displayName || user}</strong></div>
+        <h1>No roles assigned</h1>
         <p className="dialog-copy">Your account is active, but no work permissions are assigned yet. Contact the owner administrator.</p>
         <button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button>
       </section>

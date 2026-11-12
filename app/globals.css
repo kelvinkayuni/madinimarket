@@ -188,6 +188,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-staff-row span, .admin-staff-row small { color: #69766a; font-size: 10px; overflow-wrap: anywhere; }
 .staff-activation-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--paper); }
 .staff-activation-card { width: min(460px, 100%); display: grid; gap: 12px; }
+.staff-no-role-card { width: min(360px, 100%); max-height: none; padding: 16px; gap: 7px; }
+.staff-no-role-card h1 { font-size: 23px; }
+.staff-no-role-card .dialog-copy { margin-bottom: 4px; }
 .staff-no-role-shell { place-items: start center; align-content: start; gap: 20px; }
 .staff-no-role-chat { width: min(980px, 100%); }
 .staff-activation-card h1 { margin: 0; color: var(--forest); font-family: var(--font-display), Georgia, serif; font-size: 30px; font-weight: 500; }
