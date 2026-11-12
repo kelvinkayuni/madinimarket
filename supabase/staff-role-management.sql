@@ -95,9 +95,7 @@ as $replace_staff_role_assignments$
 declare
   selected_count integer;
 begin
-  if cardinality(p_role_ids) = 0 then
-    raise exception 'Assign at least one role.' using errcode = '22023';
-  end if;
+  p_role_ids := coalesce(p_role_ids, '{}'::bigint[]);
   perform 1 from public.staff_members where id = p_staff_member_id for update;
   if not found then
     raise exception 'Staff member not found.' using errcode = 'P0002';

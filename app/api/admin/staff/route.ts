@@ -376,8 +376,8 @@ export async function PATCH(request: Request) {
   const memberId = typeof body.staffId === "number" ? body.staffId : Number(body.staffId);
   if (Array.isArray(body.roleIds)) {
     const roleIds = [...new Set(body.roleIds.map((value) => Number(value)))];
-    if (!Number.isSafeInteger(memberId) || memberId < 1 || !roleIds.length || roleIds.some((id) => !Number.isSafeInteger(id) || id < 1)) {
-      return NextResponse.json({ error: "Assign at least one valid staff role." }, { status: 400 });
+    if (!Number.isSafeInteger(memberId) || memberId < 1 || roleIds.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+      return NextResponse.json({ error: "Choose a valid staff member and valid roles." }, { status: 400 });
     }
     const { error: assignmentError } = await owner.admin.rpc("replace_staff_role_assignments", {
       p_staff_member_id: memberId,

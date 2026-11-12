@@ -312,7 +312,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
   return <section className="admin-overview admin-staff-management">
     <div className="admin-page-heading">
       <div><div className="dialog-kicker">ACCESS & ACCOUNTABILITY</div><h1>Staff Management</h1>
-        <p>Create roles from specific work permissions, then assign one or more roles to each staff member. Refunds, account-security settings, and staff management stay owner-only.</p></div>
+        <p>Create roles from specific work permissions, then assign or remove roles for each staff member. Staff may have no roles assigned. Refunds, account-security settings, and staff management stay owner-only.</p></div>
     </div>
     <details className="admin-staff-disclosure">
       <summary><span><strong>Create a staff role</strong><small>Define permissions for staff work</small></span><span className="admin-staff-disclosure-icon" aria-hidden="true">⌄</span></summary>
@@ -448,7 +448,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
           <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small><strong className="admin-staff-assigned-roles">{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"}</strong> · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
             {(member.sex || member.residence) && <small>{member.sex ? `Sex: ${member.sex.replaceAll("_", " ")}` : ""}{member.sex && member.residence ? " · " : ""}{member.residence ? `Residence / work area: ${member.residence}` : ""}</small>}
             {editingRolesFor === member.id && <fieldset className="admin-staff-permissions">
-              <legend>Assigned roles</legend>
+              <legend>Assigned roles (optional)</legend>
               {roles.map((role) => <label key={role.id}>
                 <input type="checkbox" checked={(roleSelections[member.id] ?? []).includes(role.id)} onChange={(event) => {
                   setRoleSelections((current) => ({
