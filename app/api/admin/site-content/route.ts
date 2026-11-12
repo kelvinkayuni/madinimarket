@@ -34,25 +34,61 @@ function parseId(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const authorized = await getAdminClient(request, ["homepage_headlines", "accounts"]);
+    const scope = new URL(request.url).searchParams.get("scope");
+    const staffPermission = scope === "accounts"
+      ? "accounts"
+      : scope === "homepage" ? "homepage_headlines" : null;
+    const authorized = staffPermission
+      ? await getAdminClient(request, staffPermission)
+      : await getAdminClient(request);
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
 
     const admin = createSupabaseAdminClient();
-    const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement").eq("id", true).single(),
-      admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
+    if (scope === "accounts") {
+      const { data: settings, error } = await admin.from("marketplace_settings")
+        .select("account_creation_disabled, non_admin_sign_in_disabled").eq("id", true).single();
+      if (error) throw error;
+      return NextResponse.json({
+        accountCreationDisabled: settings.account_creation_disabled,
+        nonAdminSignInDisabled: settings.non_admin_sign_in_disabled ?? false,
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (scope === "homepage") {
+      const [settingsResult, headlinesResult] = await Promise.all([
+        admin.from("marketplace_settings")
+          .select("homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, homepage_announcement")
+          .eq("id", true).single(),
+        admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
+          .order("created_at", { ascending: true }).order("id", { ascending: true }),
+      ]);
+      if (settingsResult.error) throw settingsResult.error;
+      if (headlinesResult.error) throw headlinesResult.error;
+      return NextResponse.json({
+        headlineFontSize: settingsResult.data.homepage_headline_font_size,
+        sellerCardsPerColumn: settingsResult.data.seller_cards_per_column,
+        buyerCardsPerColumn: settingsResult.data.buyer_cards_per_column,
+        homepageAnnouncement: settingsResult.data.homepage_announcement ?? "",
+        headlines: headlinesResult.data ?? [],
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+    const [settingsResult, headlinesResult] = await Promise.all([
+      admin.from("marketplace_settings")
+        .select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement")
+        .eq("id", true).single(),
+      admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
+        .order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
-    if (settingsError) throw settingsError;
-    if (headlinesError) throw headlinesError;
+    if (settingsResult.error) throw settingsResult.error;
+    if (headlinesResult.error) throw headlinesResult.error;
     return NextResponse.json({
-      swahiliEnabled: settings.swahili_enabled,
-      headlineFontSize: settings.homepage_headline_font_size,
-      sellerCardsPerColumn: settings.seller_cards_per_column,
-      buyerCardsPerColumn: settings.buyer_cards_per_column,
-      accountCreationDisabled: settings.account_creation_disabled,
-      nonAdminSignInDisabled: settings.non_admin_sign_in_disabled ?? false,
-      homepageAnnouncement: settings.homepage_announcement ?? "",
-      headlines: headlines ?? [],
+      swahiliEnabled: settingsResult.data.swahili_enabled,
+      headlineFontSize: settingsResult.data.homepage_headline_font_size,
+      sellerCardsPerColumn: settingsResult.data.seller_cards_per_column,
+      buyerCardsPerColumn: settingsResult.data.buyer_cards_per_column,
+      accountCreationDisabled: settingsResult.data.account_creation_disabled,
+      nonAdminSignInDisabled: settingsResult.data.non_admin_sign_in_disabled ?? false,
+      homepageAnnouncement: settingsResult.data.homepage_announcement ?? "",
+      headlines: headlinesResult.data ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not load homepage and language settings." }, { status: 503 });
@@ -62,8 +98,8 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const values = await readBody(request);
-    const accountSettingKeys = new Set(["accountCreationDisabled", "nonAdminSignInDisabled", "signOutAllUsers", "homepageAnnouncement"]);
-    const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn"]);
+    const accountSettingKeys = new Set(["accountCreationDisabled", "nonAdminSignInDisabled", "signOutAllUsers"]);
+    const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn", "homepageAnnouncement"]);
     const accountSettingsRequested = values !== null && Object.keys(values).some((key) => accountSettingKeys.has(key));
     const staffPermission = accountSettingsRequested ? "accounts" : "homepage_headlines";
     const allowedStaffKeys = new Set([...accountSettingKeys, ...homepageSettingKeys]);

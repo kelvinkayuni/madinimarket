@@ -22,9 +22,10 @@ export async function GET(request: Request) {
   try {
     const admin = await getAdminClient(request, "subscription_payment_confirmations");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "subscription_payment_confirmations");
     const service = createSupabaseAdminClient();
     const [plansResult, pendingResult] = await Promise.all([
-      service.from("subscription_plans")
+      staff ? Promise.resolve(null) : service.from("subscription_plans")
         .select("id, months, price_tzs, price_usd, is_active, updated_at")
         .order("months", { ascending: true }),
       service.from("account_subscriptions")
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
         .eq("status", "pending")
         .order("requested_at", { ascending: true }),
     ]);
-    if (plansResult.error || pendingResult.error) throw new Error("Could not load subscription administration data.");
+    if (plansResult?.error || pendingResult.error) throw new Error("Could not load subscription administration data.");
     const accountIds = [...new Set((pendingResult.data ?? []).map((item) => item.website_user_id))];
     const { data: accounts, error: accountsError } = accountIds.length
       ? await service.from("website_accounts").select("id, display_name, username, email").in("id", accountIds)
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
       };
     }));
     return NextResponse.json({
-      plans: plansResult.data ?? [],
+      plans: plansResult?.data ?? [],
       pendingSubscriptions,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {

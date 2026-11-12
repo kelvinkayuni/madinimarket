@@ -479,22 +479,49 @@ async function loadAdminTranslations(accessToken: string): Promise<TranslationPa
   return result.translations as TranslationPair[];
 }
 
-async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; headlines: HomepageHeadline[] }> {
-  const response = await fetch("/api/admin/site-content", {
+async function fetchAdminSiteContent(accessToken: string, scope?: "accounts" | "homepage"): Promise<Record<string, unknown>> {
+  const response = await fetch(`/api/admin/site-content${scope ? `?scope=${scope}` : ""}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "Could not load homepage and language settings.");
-  if (typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || !Number.isInteger(result.headlineFontSize) ||
-    result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Number.isSafeInteger(result.sellerCardsPerColumn) || result.sellerCardsPerColumn < 1 ||
-    !Number.isSafeInteger(result.buyerCardsPerColumn) || result.buyerCardsPerColumn < 1 || !Array.isArray(result.headlines) ||
-    !result.headlines.every((headline: unknown) =>
-      typeof headline === "object" && headline !== null &&
-      "id" in headline && typeof headline.id === "string" &&
-      "main_phrase" in headline && typeof headline.main_phrase === "string" &&
-      "accent_phrase" in headline && typeof headline.accent_phrase === "string",
-    )) {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    throw new Error("Homepage and language settings are invalid.");
+  }
+  return result as Record<string, unknown>;
+}
+
+type HomepageSettingsContent = {
+  headlineFontSize: number;
+  sellerCardsPerColumn: number;
+  buyerCardsPerColumn: number;
+  homepageAnnouncement: string;
+  headlines: HomepageHeadline[];
+};
+
+function isHomepageHeadline(value: unknown): value is HomepageHeadline {
+  return typeof value === "object" && value !== null &&
+    "id" in value && typeof value.id === "string" &&
+    "main_phrase" in value && typeof value.main_phrase === "string" &&
+    "accent_phrase" in value && typeof value.accent_phrase === "string";
+}
+
+function hasHomepageSettings(value: Record<string, unknown>): value is Record<string, unknown> & HomepageSettingsContent {
+  return typeof value.homepageAnnouncement === "string" &&
+    typeof value.headlineFontSize === "number" && Number.isInteger(value.headlineFontSize) &&
+    value.headlineFontSize >= 24 && value.headlineFontSize <= 72 &&
+    typeof value.sellerCardsPerColumn === "number" && Number.isSafeInteger(value.sellerCardsPerColumn) &&
+    value.sellerCardsPerColumn >= 1 &&
+    typeof value.buyerCardsPerColumn === "number" && Number.isSafeInteger(value.buyerCardsPerColumn) &&
+    value.buyerCardsPerColumn >= 1 &&
+    Array.isArray(value.headlines) && value.headlines.every(isHomepageHeadline);
+}
+
+async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; headlines: HomepageHeadline[] }> {
+  const result = await fetchAdminSiteContent(accessToken);
+  if (typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" ||
+    typeof result.nonAdminSignInDisabled !== "boolean" || !hasHomepageSettings(result)) {
     throw new Error("Homepage and language settings are invalid.");
   }
   return {
@@ -504,6 +531,31 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
     buyerCardsPerColumn: result.buyerCardsPerColumn,
     accountCreationDisabled: result.accountCreationDisabled,
     nonAdminSignInDisabled: result.nonAdminSignInDisabled,
+    homepageAnnouncement: result.homepageAnnouncement,
+    headlines: result.headlines,
+  };
+}
+
+async function loadAdminAccountSettings(accessToken: string): Promise<{ accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean }> {
+  const result = await fetchAdminSiteContent(accessToken, "accounts");
+  if (typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean") {
+    throw new Error("Account settings are invalid.");
+  }
+  return {
+    accountCreationDisabled: result.accountCreationDisabled,
+    nonAdminSignInDisabled: result.nonAdminSignInDisabled,
+  };
+}
+
+async function loadAdminHomepageContent(accessToken: string): Promise<{ headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; homepageAnnouncement: string; headlines: HomepageHeadline[] }> {
+  const result = await fetchAdminSiteContent(accessToken, "homepage");
+  if (!hasHomepageSettings(result)) {
+    throw new Error("Homepage display settings are invalid.");
+  }
+  return {
+    headlineFontSize: result.headlineFontSize,
+    sellerCardsPerColumn: result.sellerCardsPerColumn,
+    buyerCardsPerColumn: result.buyerCardsPerColumn,
     homepageAnnouncement: result.homepageAnnouncement,
     headlines: result.headlines,
   };
@@ -562,6 +614,7 @@ export default function Marketplace() {
   const [swahiliEnabled, setSwahiliEnabled] = useState(true);
   const [accountCreationDisabled, setAccountCreationDisabled] = useState(false);
   const [nonAdminSignInDisabled, setNonAdminSignInDisabled] = useState(false);
+  const [accountSettingsLoaded, setAccountSettingsLoaded] = useState(false);
   const [signOutAllUsersAction, setSignOutAllUsersAction] = useState(false);
   const [homepageAnnouncement, setHomepageAnnouncement] = useState("");
   const [homepageAnnouncementDraft, setHomepageAnnouncementDraft] = useState("");
@@ -1636,6 +1689,18 @@ export default function Marketplace() {
           if (active && (isAdmin || isStaff) && session) {
             const can = (permission: StaffPermission) => isAdmin || assignedPermissions.includes(permission);
             const adminLoads: { label: string; load: Promise<unknown> }[] = [];
+            const applyHomepageContent = (siteContent: HomepageSettingsContent) => {
+              setHomepageAnnouncement(siteContent.homepageAnnouncement);
+              if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
+              setHomepageHeadlineFontSize(siteContent.headlineFontSize);
+              setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
+              setSellerCardsPerColumn(siteContent.sellerCardsPerColumn);
+              setSellerCardsPerColumnInput(String(siteContent.sellerCardsPerColumn));
+              setBuyerCardsPerColumn(siteContent.buyerCardsPerColumn);
+              setBuyerCardsPerColumnInput(String(siteContent.buyerCardsPerColumn));
+              setSiteContentLoaded(true);
+              setHomepageHeadlines(siteContent.headlines);
+            };
             if (can("seller_submission_reviews") || can("buyer_submission_reviews")) {
               adminLoads.push({
                 label: "review submissions",
@@ -1649,29 +1714,38 @@ export default function Marketplace() {
             if (can("accounts")) {
               adminLoads.push({ label: "accounts", load: loadAdminAccounts(session.access_token).then(setWebsiteAccounts) });
               adminLoads.push({ label: "licences", load: loadAdminCertificates(session.access_token).then(setAdminCertificates) });
+              if (!isAdmin) {
+                adminLoads.push({
+                  label: "account settings",
+                  load: loadAdminAccountSettings(session.access_token).then((settings) => {
+                    setAccountCreationDisabled(settings.accountCreationDisabled);
+                    setNonAdminSignInDisabled(settings.nonAdminSignInDisabled);
+                    setAccountSettingsLoaded(true);
+                  }),
+                });
+              }
             }
             if (can("translations")) {
               adminLoads.push({ label: "translations", load: loadAdminTranslations(session.access_token).then(setTranslationPairs) });
             }
             if (can("homepage_headlines")) {
-              adminLoads.push({
-                label: "homepage headlines",
-                load: loadAdminSiteContent(session.access_token).then((siteContent) => {
-                setSwahiliEnabled(siteContent.swahiliEnabled);
-                setAccountCreationDisabled(siteContent.accountCreationDisabled);
-                setNonAdminSignInDisabled(siteContent.nonAdminSignInDisabled);
-                setHomepageAnnouncement(siteContent.homepageAnnouncement);
-                if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
-                setHomepageHeadlineFontSize(siteContent.headlineFontSize);
-                setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
-                setSellerCardsPerColumn(siteContent.sellerCardsPerColumn);
-                setSellerCardsPerColumnInput(String(siteContent.sellerCardsPerColumn));
-                setBuyerCardsPerColumn(siteContent.buyerCardsPerColumn);
-                setBuyerCardsPerColumnInput(String(siteContent.buyerCardsPerColumn));
-                setSiteContentLoaded(true);
-                setHomepageHeadlines(siteContent.headlines);
-                }),
-              });
+              if (isAdmin) {
+                adminLoads.push({
+                  label: "homepage headlines",
+                  load: loadAdminSiteContent(session.access_token).then((siteContent) => {
+                  setSwahiliEnabled(siteContent.swahiliEnabled);
+                  setAccountCreationDisabled(siteContent.accountCreationDisabled);
+                  setNonAdminSignInDisabled(siteContent.nonAdminSignInDisabled);
+                  setAccountSettingsLoaded(true);
+                    applyHomepageContent(siteContent);
+                  }),
+                });
+              } else {
+                adminLoads.push({
+                  label: "homepage headlines",
+                  load: loadAdminHomepageContent(session.access_token).then(applyHomepageContent),
+                });
+              }
             }
             if (isAdmin || can("subscription_payment_confirmations")) {
               adminLoads.push({
@@ -2529,6 +2603,7 @@ export default function Marketplace() {
     setSwahiliEnabled(content.swahiliEnabled);
     setAccountCreationDisabled(content.accountCreationDisabled);
     setNonAdminSignInDisabled(content.nonAdminSignInDisabled);
+    setAccountSettingsLoaded(true);
     setHomepageAnnouncement(content.homepageAnnouncement);
     if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(content.homepageAnnouncement);
     setHomepageHeadlineFontSize(content.headlineFontSize);
@@ -4282,6 +4357,17 @@ export default function Marketplace() {
               </form>
             </div>
           </div>
+          <details className="admin-homepage-announcement-disclosure">
+            <summary className="admin-homepage-announcement-toggle">
+              <div><strong>Homepage announcement</strong><span>{!siteContentLoaded ? "Loading announcement settings…" : homepageAnnouncement ? "Message is currently displayed" : "No message is displayed"}</span></div>
+              <ChevronDown className="admin-homepage-announcement-chevron" size={17} aria-hidden="true" />
+            </summary>
+            <form className="admin-homepage-announcement-form" onSubmit={(event) => void saveHomepageAnnouncement(event)}>
+              <label className="field-label" htmlFor="admin-homepage-announcement">Message</label>
+              <textarea className="text-input" id="admin-homepage-announcement" rows={3} maxLength={500} value={homepageAnnouncementDraft} placeholder="The website is under development…" disabled={!canAct} onChange={(event) => { homepageAnnouncementDirty.current = true; setHomepageAnnouncementDraft(event.target.value); }} />
+              <div className="admin-homepage-announcement-actions"><span>{homepageAnnouncement ? "Currently displayed on the homepage" : "No homepage announcement is displayed"}</span><button className="button button-outline" type="button" disabled={!canAct || (!homepageAnnouncementDraft && !homepageAnnouncement) || busyActions.has("homepage-announcement-save")} onClick={() => void clearHomepageAnnouncement()}>Clear</button><button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-announcement-save") || homepageAnnouncementDraft.trim() === homepageAnnouncement}>Save message</button></div>
+            </form>
+          </details>
           <form className="admin-homepage-headline-form" onSubmit={(event) => void saveHomepageHeadline(event)}>
             <label className="field-label">Regular phrase<input className="text-input" value={homepageHeadlineForm.mainPhrase} maxLength={120} placeholder="Find your next" onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, mainPhrase: event.target.value }))} /></label>
             <label className="field-label">Highlighted phrase<input className="text-input" value={homepageHeadlineForm.accentPhrase} maxLength={120} placeholder="good stone." onChange={(event) => setHomepageHeadlineForm((current) => ({ ...current, accentPhrase: event.target.value }))} /></label>
@@ -4294,28 +4380,17 @@ export default function Marketplace() {
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Seller/Buyer Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
           <StaffTaskClaim type="account_setting" taskId="homepage" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <div className="admin-account-controls">
             <div className="admin-account-control-row">
-              <div><strong>Account creation</strong><span>{!siteContentLoaded ? "Loading account settings…" : accountCreationDisabled ? "New account creation is suspended." : "New account creation is enabled."}</span></div>
-              <button className={`admin-currency-switch${accountCreationDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={accountCreationDisabled} aria-label="Suspend new account creation" disabled={!canAct || !siteContentLoaded || busyActions.has("account-creation-setting")} onClick={() => void updateAccountCreationAvailability(!accountCreationDisabled)}><span /></button>
+              <div><strong>Account creation</strong><span>{!accountSettingsLoaded ? "Loading account settings…" : accountCreationDisabled ? "New account creation is suspended." : "New account creation is enabled."}</span></div>
+              <button className={`admin-currency-switch${accountCreationDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={accountCreationDisabled} aria-label="Suspend new account creation" disabled={!canAct || !accountSettingsLoaded || busyActions.has("account-creation-setting")} onClick={() => void updateAccountCreationAvailability(!accountCreationDisabled)}><span /></button>
             </div>
             <div className="admin-account-control-row">
-              <div><strong>User sign-in</strong><span>{!siteContentLoaded ? "Loading sign-in settings…" : nonAdminSignInDisabled ? "Non-administrator sign-in is suspended." : "User sign-in is enabled."}</span></div>
-              <button className={`admin-currency-switch${nonAdminSignInDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={nonAdminSignInDisabled} aria-label="Suspend non-administrator sign-in" disabled={!canAct || !siteContentLoaded || busyActions.has("non-admin-signin-setting")} onClick={() => void updateNonAdminSignInAvailability(!nonAdminSignInDisabled)}><span /></button>
+              <div><strong>User sign-in</strong><span>{!accountSettingsLoaded ? "Loading sign-in settings…" : nonAdminSignInDisabled ? "Non-administrator sign-in is suspended." : "User sign-in is enabled."}</span></div>
+              <button className={`admin-currency-switch${nonAdminSignInDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={nonAdminSignInDisabled} aria-label="Suspend non-administrator sign-in" disabled={!canAct || !accountSettingsLoaded || busyActions.has("non-admin-signin-setting")} onClick={() => void updateNonAdminSignInAvailability(!nonAdminSignInDisabled)}><span /></button>
             </div>
             <div className="admin-account-control-row">
               <div><strong>Sign out all users</strong><span>{signOutAllUsersAction ? "Ending all user sessions…" : "Ends every normal user session; admin stays signed in."}</span></div>
-              <button className={`admin-currency-switch${signOutAllUsersAction ? " is-on" : ""}`} type="button" role="switch" aria-checked={signOutAllUsersAction} aria-label="Sign out all users" disabled={!canAct || !siteContentLoaded || busyActions.has("sign-out-all-users")} onClick={() => void signOutAllUsers()}><span /></button>
+              <button className={`admin-currency-switch${signOutAllUsersAction ? " is-on" : ""}`} type="button" role="switch" aria-checked={signOutAllUsersAction} aria-label="Sign out all users" disabled={!canAct || !accountSettingsLoaded || busyActions.has("sign-out-all-users")} onClick={() => void signOutAllUsers()}><span /></button>
             </div>
-            <details className="admin-homepage-announcement-disclosure">
-              <summary className="admin-homepage-announcement-toggle">
-                <div><strong>Homepage announcement</strong><span>{!siteContentLoaded ? "Loading announcement settings…" : homepageAnnouncement ? "Message is currently displayed" : "No message is displayed"}</span></div>
-                <ChevronDown className="admin-homepage-announcement-chevron" size={17} aria-hidden="true" />
-              </summary>
-              <form className="admin-homepage-announcement-form" onSubmit={(event) => void saveHomepageAnnouncement(event)}>
-                <label className="field-label" htmlFor="admin-homepage-announcement">Message</label>
-                <textarea className="text-input" id="admin-homepage-announcement" rows={3} maxLength={500} value={homepageAnnouncementDraft} placeholder="The website is under development…" disabled={!canAct} onChange={(event) => { homepageAnnouncementDirty.current = true; setHomepageAnnouncementDraft(event.target.value); }} />
-                <div className="admin-homepage-announcement-actions"><span>{homepageAnnouncement ? "Currently displayed on the homepage" : "No homepage announcement is displayed"}</span><button className="button button-outline" type="button" disabled={!canAct || (!homepageAnnouncementDraft && !homepageAnnouncement) || busyActions.has("homepage-announcement-save")} onClick={() => void clearHomepageAnnouncement()}>Clear</button><button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-announcement-save") || homepageAnnouncementDraft.trim() === homepageAnnouncement}>Save message</button></div>
-              </form>
-            </details>
           </div>}</StaffTaskClaim>
           <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search accounts by name, username, email, or ID" placeholder="Search name, username, email, or ID" value={accountSearch} onChange={(event) => { setAccountSearch(event.target.value); setAccountPage(1); if (accountListRef.current) accountListRef.current.scrollTop = 0; }} /></label>
           <div className="admin-account-filters" aria-label="Filter accounts">
