@@ -89,16 +89,6 @@ function orderIsCompleted(order: Order) {
 
 function orderQueueLabel(order: Order, filter: OrderFilter) {
   if (filter === "processing_completed") return "Completed";
-  if (filter === "processing_history") return "Order history";
-  if (filter.startsWith("processing")) {
-    if (order.payment_status === "payment_submitted") return "Payment verification";
-    if (order.payment_status === "awaiting_sellers") return "Awaiting seller responses";
-    if (order.payment_status === "awaiting_payment") return "Awaiting buyer payment";
-    if (order.items.some((item) => item.status === "payout_due")) return "Seller payout";
-    if (order.items.some((item) => item.status === "delivered")) return "Awaiting buyer receipt confirmation";
-    if (order.items.some((item) => ["paid", "shipped"].includes(item.status))) return "Order in progress";
-    return "Marketplace order";
-  }
   if (filter === "disputes") return "Open dispute";
   if (filter === "refund_due") return "Buyer refund";
   if (order.payment_status === "payment_submitted") return "Payment verification";
@@ -296,7 +286,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         }}>
           {!isStaff && <option value="needs_action">Needs admin action</option>}
           {canProcessOrders && <>
-            <option value="processing">Active order processing</option>
+            <option value="processing">Active orders</option>
             <option value="payment_submitted">Payments awaiting verification</option>
             <option value="awaiting_sellers">Awaiting seller responses</option>
             <option value="awaiting_payment">Awaiting buyer payment</option>
@@ -309,9 +299,9 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
               <option value="all">All orders</option>
             </>}
             {isStaff && <>
-              <option value="processing_completed">Completed orders</option>
+              <option value="processing_completed">Completed</option>
               <option value="processing_history">Order history</option>
-              <option value="processing_all">All orders (excluding delivery, disputes, and refunds)</option>
+              <option value="processing_all">All orders</option>
             </>}
           </>}
           {!isStaff && canConfirmDelivery && <option value="delivery_due">Delivery confirmation</option>}
