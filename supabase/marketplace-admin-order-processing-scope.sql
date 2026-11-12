@@ -28,7 +28,19 @@ as $$
         i.status in ('paid', 'shipped')
         and nullif(btrim(coalesce(i.shipping_carrier, '')), '') is not null
         and nullif(btrim(coalesce(i.tracking_number, '')), '') is not null
-      ), false) as can_confirm_delivery
+      ), false) as can_confirm_delivery,
+      coalesce(bool_or(
+        i.status not in (
+          'disputed', 'refund_due', 'unavailable', 'payout_paid', 'refunded', 'expired', 'cancelled'
+        )
+        and not (
+          i.status in ('paid', 'shipped')
+          and nullif(btrim(coalesce(i.shipping_carrier, '')), '') is not null
+          and nullif(btrim(coalesce(i.tracking_number, '')), '') is not null
+        )
+      ), false) as has_processing_item,
+      coalesce(bool_or(i.status in ('unavailable', 'payout_paid', 'expired', 'cancelled')), false)
+        as has_processing_history_item
     from public.marketplace_orders o
     left join public.marketplace_order_items i on i.order_id = o.id
     group by o.id
@@ -61,11 +73,26 @@ as $$
       )
       and case p_filter
         when 'processing' then
-          payment_status = 'payment_submitted'
-          or exists (
-            select 1 from public.marketplace_order_items i
-            where i.order_id = classified.id and i.status = 'payout_due'
+          not is_history
+          and (
+            payment_status in ('awaiting_sellers', 'awaiting_payment', 'payment_submitted')
+            or has_processing_item
           )
+        when 'processing_completed' then
+          payment_status = 'paid'
+          and item_count > 0
+          and item_count = completed_item_count
+          and has_processing_history_item
+        when 'processing_history' then
+          is_history
+          and (
+            payment_status in ('expired', 'cancelled')
+            or has_processing_history_item
+          )
+        when 'processing_all' then
+          payment_status in ('awaiting_sellers', 'awaiting_payment', 'payment_submitted', 'expired', 'cancelled')
+          or has_processing_item
+          or has_processing_history_item
         when 'needs_action' then
           payment_status = 'payment_submitted'
           or has_admin_item_action

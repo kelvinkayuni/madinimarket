@@ -57,6 +57,9 @@ type Order = {
 
 type OrderFilter =
   | "processing"
+  | "processing_completed"
+  | "processing_history"
+  | "processing_all"
   | "needs_action"
   | "active"
   | "payment_submitted"
@@ -85,8 +88,16 @@ function orderIsCompleted(order: Order) {
 }
 
 function orderQueueLabel(order: Order, filter: OrderFilter) {
-  if (filter === "processing") {
-    return order.payment_status === "payment_submitted" ? "Payment verification" : "Seller payout";
+  if (filter === "processing_completed") return "Completed";
+  if (filter === "processing_history") return "Order history";
+  if (filter.startsWith("processing")) {
+    if (order.payment_status === "payment_submitted") return "Payment verification";
+    if (order.payment_status === "awaiting_sellers") return "Awaiting seller responses";
+    if (order.payment_status === "awaiting_payment") return "Awaiting buyer payment";
+    if (order.items.some((item) => item.status === "payout_due")) return "Seller payout";
+    if (order.items.some((item) => item.status === "delivered")) return "Awaiting buyer receipt confirmation";
+    if (order.items.some((item) => ["paid", "shipped"].includes(item.status))) return "Order in progress";
+    return "Marketplace order";
   }
   if (filter === "disputes") return "Open dispute";
   if (filter === "refund_due") return "Buyer refund";
@@ -255,7 +266,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
   return <section className="admin-overview admin-commerce-orders">
     <div className="admin-page-heading">
       <div><div className="dialog-kicker">BUYER PAYMENTS & SELLER PAYOUTS</div><h1>{initialFilter === "disputes" ? "Order Disputes" : initialFilter === "refund_due" ? "Buyer Refunds" : isStaff ? "Marketplace Orders Processing" : "Marketplace orders"}</h1>
-        {initialFilter === "disputes" ? <p>Review and resolve open order disputes.</p> : initialFilter === "refund_due" ? <p>Review and process buyer refunds due.</p> : <p><strong>{marketplaceOrdersNeedingAction}</strong> order{marketplaceOrdersNeedingAction === 1 ? "" : "s"} need admin action. Orders requiring the most urgent action are shown first.</p>}</div>
+        {initialFilter === "disputes" ? <p>Review and resolve open order disputes.</p> : initialFilter === "refund_due" ? <p>Review and process buyer refunds due.</p> : isStaff ? <p><strong>{marketplaceOrdersNeedingAction}</strong> order{marketplaceOrdersNeedingAction === 1 ? "" : "s"} in the processing queue. Delivery confirmation, disputes, and buyer refunds are handled in their separate workspaces.</p> : <p><strong>{marketplaceOrdersNeedingAction}</strong> order{marketplaceOrdersNeedingAction === 1 ? "" : "s"} need admin action. Orders requiring the most urgent action are shown first.</p>}</div>
       <button className="button button-outline" type="button" disabled={busy === "refresh"} onClick={() => {
         setBusy("refresh");
         void load().then(() => onNotice("Marketplace orders refreshed.")).catch((error: unknown) => onNotice(error instanceof Error ? error.message : "Could not refresh orders.")).finally(() => setBusy(""));
@@ -277,28 +288,35 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
           setLoading(true);
         }}>Clear search</button>}
       </form>
-      {!isStaff && <label className="field-label admin-order-filter">Show
+      {(!isStaff || canProcessOrders) && <label className="field-label admin-order-filter">Show
         <select className="text-input" value={filter} onChange={(event) => {
           setFilter(event.target.value as OrderFilter);
           setPage(1);
           setLoading(true);
         }}>
-          <option value="needs_action">Needs admin action</option>
-          <option value="processing">Order processing tasks</option>
+          {!isStaff && <option value="needs_action">Needs admin action</option>}
           {canProcessOrders && <>
-            <option value="active">Active orders</option>
+            <option value="processing">Active order processing</option>
             <option value="payment_submitted">Payments awaiting verification</option>
             <option value="awaiting_sellers">Awaiting seller responses</option>
             <option value="awaiting_payment">Awaiting buyer payment</option>
             <option value="receipt_confirmation">Orders awaiting receipt confirmation</option>
             <option value="payout_due">Seller payouts due</option>
-            <option value="completed">Completed</option>
-            <option value="history">Order history</option>
-            <option value="all">All orders</option>
+            {!isStaff && <>
+              <option value="active">Active orders</option>
+              <option value="completed">Completed</option>
+              <option value="history">Order history</option>
+              <option value="all">All orders</option>
+            </>}
+            {isStaff && <>
+              <option value="processing_completed">Completed orders</option>
+              <option value="processing_history">Order history</option>
+              <option value="processing_all">All orders (excluding delivery, disputes, and refunds)</option>
+            </>}
           </>}
-          {canConfirmDelivery && <option value="delivery_due">Delivery confirmation</option>}
-          {canResolveDisputes && <option value="disputes">Open disputes</option>}
-          {canRecordRefunds && <option value="refund_due">Buyer refunds due</option>}
+          {!isStaff && canConfirmDelivery && <option value="delivery_due">Delivery confirmation</option>}
+          {!isStaff && canResolveDisputes && <option value="disputes">Open disputes</option>}
+          {!isStaff && canRecordRefunds && <option value="refund_due">Buyer refunds due</option>}
         </select>
       </label>}
     </div>
@@ -329,7 +347,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             group.push(item);
             shipmentGroups.set(shipmentKey, group);
           }
-          return shipmentGroups.size > 0 && <div className="admin-shipment-groups">
+          return canConfirmDelivery && shipmentGroups.size > 0 && <div className="admin-shipment-groups">
             {[...shipmentGroups.entries()].map(([shipmentKey, items]) => {
               const firstItem = items[0];
               return <div className="admin-shipment-group" key={shipmentKey}>

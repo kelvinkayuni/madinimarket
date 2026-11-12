@@ -85,13 +85,14 @@ export async function GET(request: Request) {
   if (!filters.has(requestedFilter)) {
     return NextResponse.json({ error: "Choose a valid marketplace order filter." }, { status: 400 });
   }
-  const hasFilterAccess = requestedFilter === "processing"
-    ? canProcessOrders
-    : requestedFilter === "disputes"
-      ? canResolveDisputes
-      : requestedFilter === "refund_due"
-        ? canRecordRefunds
-        : !staffAccess;
+  const processingFilters = new Set([
+    "processing", "processing_completed", "processing_history", "processing_all",
+    "payment_submitted", "awaiting_sellers", "awaiting_payment", "receipt_confirmation", "payout_due",
+  ]);
+  const hasFilterAccess = !staffAccess
+    || (canProcessOrders && processingFilters.has(requestedFilter))
+    || (canResolveDisputes && requestedFilter === "disputes")
+    || (canRecordRefunds && requestedFilter === "refund_due");
   if (!hasFilterAccess) {
     return NextResponse.json({ error: "You do not have access to this marketplace order queue." }, { status: 403 });
   }
@@ -174,8 +175,13 @@ export async function GET(request: Request) {
         status: string;
         payout_receipt_path?: string | null;
       })[];
-      const selectedItems = staffAccess && requestedFilter === "processing" && order.payment_status !== "payment_submitted"
-        ? orderItems.filter((item) => item.status === "payout_due")
+      const selectedItems = staffAccess && canProcessOrders
+        ? orderItems.filter((item) => !["disputed", "refund_due", "refunded"].includes(item.status)
+          && !(
+            ["paid", "shipped"].includes(item.status)
+            && Boolean(String(item.shipping_carrier ?? "").trim())
+            && Boolean(String(item.tracking_number ?? "").trim())
+          ))
         : orderItems;
       const items = await Promise.all(selectedItems.map(async (item) => {
         const {
@@ -186,6 +192,7 @@ export async function GET(request: Request) {
           payout_bank_snapshot_at: payoutBankSnapshotAt,
           payout_reference: payoutReference,
           refund_reference: refundReference,
+          dispute_reason: disputeReason,
           ...safeItem
         } = item;
         const payout_group_key = marketplacePayoutGroupKey(item.order_id, item.seller_id, receiptPath ?? null);
@@ -205,7 +212,7 @@ export async function GET(request: Request) {
         const { data: receipt, error: receiptError } = await admin.storage.from(PAYOUT_RECEIPT_BUCKET)
           .createSignedUrl(receiptPath, 10 * 60);
         if (receiptError) throw receiptError;
-        return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_reference: payoutReference, payout_receipt_url: receipt.signedUrl, refund_reference: canRecordRefunds ? refundReference : null };
+        return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_reference: payoutReference, payout_receipt_url: receipt.signedUrl, refund_reference: canRecordRefunds ? refundReference : null, dispute_reason: staffAccess ? null : disputeReason };
       }));
       const {
         payment_proof_path: paymentProofPath,
