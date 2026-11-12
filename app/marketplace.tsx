@@ -28,7 +28,7 @@ type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff" | "staff-chat";
+type AdminPanel = "review" | "seller-reviews" | "buyer-reviews" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-disputes" | "buyer-refunds" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff" | "staff-chat";
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
@@ -180,9 +180,12 @@ const sellerPriceDetails = (listing: Pick<Seller, "seller_price" | "platform_fee
 const isAdminRole = (role: "user" | "admin" | "staff" | null): boolean => role === "admin";
 
 function defaultStaffPanel(permissions: StaffPermission[]): AdminPanel {
-  if (permissions.some((permission) => ["marketplace_orders", "order_disputes", "buyer_refunds"].includes(permission))) return "orders";
+  if (permissions.includes("marketplace_orders")) return "orders";
+  if (permissions.includes("order_disputes")) return "order-disputes";
+  if (permissions.includes("buyer_refunds")) return "buyer-refunds";
   if (permissions.includes("subscription_payment_confirmations")) return "subscriptions";
-  if (permissions.includes("seller_submission_reviews") || permissions.includes("buyer_submission_reviews")) return "review";
+  if (permissions.includes("seller_submission_reviews")) return "seller-reviews";
+  if (permissions.includes("buyer_submission_reviews")) return "buyer-reviews";
   if (permissions.includes("accounts")) return "accounts";
   if (permissions.includes("customer_support")) return "support";
   if (permissions.includes("translations")) return "translations";
@@ -191,20 +194,24 @@ function defaultStaffPanel(permissions: StaffPermission[]): AdminPanel {
   return "staff-chat";
 }
 const adminPanels: AdminPanel[] = [
-  "review", "ledger", "translations", "homepage", "accounts", "subscriptions", "listing-fee",
-  "market-hours", "orders", "delivery", "order-time-limits", "payment-instructions", "support", "staff", "staff-chat",
+  "review", "seller-reviews", "buyer-reviews", "ledger", "translations", "homepage", "accounts", "subscriptions", "listing-fee",
+  "market-hours", "orders", "order-disputes", "buyer-refunds", "delivery", "order-time-limits", "payment-instructions", "support", "staff", "staff-chat",
 ];
 function isAdminPanel(value: string | null): value is AdminPanel {
   return value !== null && adminPanels.some((panel) => panel === value);
 }
 function canStaffOpenPanel(panel: AdminPanel, permissions: StaffPermission[]) {
   if (panel === "staff-chat") return true;
-  if (panel === "review") return permissions.includes("seller_submission_reviews") || permissions.includes("buyer_submission_reviews");
+  if (panel === "review") return false;
+  if (panel === "seller-reviews") return permissions.includes("seller_submission_reviews");
+  if (panel === "buyer-reviews") return permissions.includes("buyer_submission_reviews");
   if (panel === "accounts") return permissions.includes("accounts");
   if (panel === "support") return permissions.includes("customer_support");
   if (panel === "translations") return permissions.includes("translations");
   if (panel === "homepage") return permissions.includes("homepage_headlines");
-  if (panel === "orders") return ["marketplace_orders", "order_disputes", "buyer_refunds"].some((permission) => permissions.includes(permission as StaffPermission));
+  if (panel === "orders") return permissions.includes("marketplace_orders");
+  if (panel === "order-disputes") return permissions.includes("order_disputes");
+  if (panel === "buyer-refunds") return permissions.includes("buyer_refunds");
   if (panel === "delivery") return permissions.includes("delivery_confirmation");
   if (panel === "subscriptions") return permissions.includes("subscription_payment_confirmations");
   return false;
@@ -3849,8 +3856,16 @@ export default function Marketplace() {
     const staffCan = (permission: StaffPermission) => role === "admin" || staffPermissions.includes(permission);
     const staffCanSellerReview = staffCan("seller_submission_reviews");
     const staffCanBuyerReview = staffCan("buyer_submission_reviews");
-    const staffCanReview = staffCanSellerReview || staffCanBuyerReview;
-    const staffCanOrders = staffCan("marketplace_orders") || staffCan("order_disputes") || staffCan("buyer_refunds");
+    const staffCanOrders = staffCan("marketplace_orders");
+    const staffCanDisputes = staffCan("order_disputes");
+    const staffCanRefunds = staffCan("buyer_refunds");
+    const canOpenReviewPanel = role === "admin"
+      ? activeAdminPanel === "review"
+      : activeAdminPanel === "seller-reviews"
+        ? staffCanSellerReview
+        : activeAdminPanel === "buyer-reviews" && staffCanBuyerReview;
+    const showSellerReviewQueue = role === "admin" || (staffCanSellerReview && activeAdminPanel === "seller-reviews");
+    const showBuyerReviewQueue = role === "admin" || (staffCanBuyerReview && activeAdminPanel === "buyer-reviews");
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
     const formatLedgerMoney = (amount: number, currency: Currency) => money(
       new Intl.NumberFormat("en-US", {
@@ -3908,16 +3923,17 @@ export default function Marketplace() {
                     </section>)}
                   </div>
                 </details>
-                {staffCanReview && <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>}
+                {staffCanSellerReview && <button className={activeAdminPanel === "seller-reviews" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("seller-reviews"); setAdminMenuOpen(false); }}>Seller Submission Reviews<span>{pendingSellers.length}</span></button>}
+                {staffCanBuyerReview && <button className={activeAdminPanel === "buyer-reviews" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("buyer-reviews"); setAdminMenuOpen(false); }}>Buyer Submission Reviews<span>{pendingBuyers.length}</span></button>}
                 {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Seller/Buyer Accounts<span>{websiteAccounts.length}</span></button>}
-                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace Orders Processing<span>{marketplaceOrdersNeedingAction}</span></button>}
-                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery Confirmation</button>}
                 {staffCan("customer_support") && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
                 {staffCan("translations") && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
                 {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage Display</button>}
                 {staffCan("subscription_payment_confirmations") && <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscription payments."); } }); }}>Subscription Payment Confirmations<span>{pendingSubscriptions.length}</span></button>}
-                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace Orders Processing<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
-                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery confirmation</button>}
+                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace Orders Processing</button>}
+                {staffCanDisputes && <button className={activeAdminPanel === "order-disputes" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-disputes"); setAdminMenuOpen(false); }}>Order Disputes</button>}
+                {staffCanRefunds && <button className={activeAdminPanel === "buyer-refunds" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("buyer-refunds"); setAdminMenuOpen(false); }}>Buyer Refunds</button>}
+                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery Confirmation</button>}
               </>}              {role === "admin" && <div className="admin-menu-currency">
                 <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                 <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
@@ -4067,17 +4083,17 @@ export default function Marketplace() {
             </> : <small>Loading saved schedule…</small>}
           </div>
         </section>}
-        {activeAdminPanel === "review" && (role === "admin" || staffCanReview) && <>
+        {canOpenReviewPanel && <>
         <section className="admin-overview">
-          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div>{role === "admin" && <button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSiteContent(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button>}</div>
+          <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>{activeAdminPanel === "seller-reviews" ? "Seller Submission Reviews" : activeAdminPanel === "buyer-reviews" ? "Buyer Submission Reviews" : "Review submissions"}</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div>{role === "admin" && <button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSiteContent(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button>}</div>
           <div className="admin-summary">
-            {staffCanSellerReview && <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>}
-            {staffCanBuyerReview && <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>}
-            {staffCanSellerReview && staffCanBuyerReview && <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>}
+            {showSellerReviewQueue && <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>}
+            {showBuyerReviewQueue && <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>}
+            {showSellerReviewQueue && showBuyerReviewQueue && <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>}
           </div>
         </section>
         <div className="admin-queues">
-          {staffCanSellerReview && <section className="admin-queue" aria-labelledby="admin-sellers-heading">
+          {showSellerReviewQueue && <section className="admin-queue" aria-labelledby="admin-sellers-heading">
             <div className="admin-queue-heading"><div><span>SELLERS</span><h2 id="admin-sellers-heading">Mineral listings</h2></div><strong>{pendingSellers.length}</strong></div>
             {pendingSellers.length ? <div className="admin-queue-list">{pendingSellers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-seller-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3><small>{item.seller} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.price, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
@@ -4098,7 +4114,7 @@ export default function Marketplace() {
               </div>
             </details>)}</div> : <p className="admin-empty">No seller listings are waiting for review.</p>}
           </section>}
-          {staffCanBuyerReview && <section className="admin-queue" aria-labelledby="admin-buyers-heading">
+          {showBuyerReviewQueue && <section className="admin-queue" aria-labelledby="admin-buyers-heading">
             <div className="admin-queue-heading"><div><span>BUYERS</span><h2 id="admin-buyers-heading">Buying requests</h2></div><strong>{pendingBuyers.length}</strong></div>
             {pendingBuyers.length ? <div className="admin-queue-list">{pendingBuyers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-buyer-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3><small>{item.buyer} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.offer, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
@@ -4390,7 +4406,9 @@ export default function Marketplace() {
             </div>
           </> : <p className="admin-empty">No accounts match the selected filters{accountSearch.trim() ? ` and “${accountSearch.trim()}”` : ""}.</p> : <p className="admin-empty">No website accounts have been created.</p>}
         </section>}
-        {activeAdminPanel === "orders" && staffCanOrders && <AdminMarketplaceOrders onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} staffPermissions={role === "staff" ? staffPermissions : undefined} />}
+        {activeAdminPanel === "orders" && staffCanOrders && <AdminMarketplaceOrders key="orders" initialFilter={role === "staff" ? "processing" : "needs_action"} staffScope={role === "staff" ? "processing" : undefined} onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} staffPermissions={role === "staff" ? staffPermissions : undefined} />}
+        {activeAdminPanel === "order-disputes" && staffCanDisputes && <AdminMarketplaceOrders key="order-disputes" initialFilter="disputes" staffScope="disputes" onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} staffPermissions={role === "staff" ? staffPermissions : undefined} />}
+        {activeAdminPanel === "buyer-refunds" && staffCanRefunds && <AdminMarketplaceOrders key="buyer-refunds" initialFilter="refund_due" staffScope="refunds" onNotice={setNotice} marketplaceOrdersNeedingAction={marketplaceOrdersNeedingAction} staffPermissions={role === "staff" ? staffPermissions : undefined} />}
         {activeAdminPanel === "delivery" && role === "staff" && staffCan("delivery_confirmation") && <StaffOrderQueue onNotice={setNotice} />}
         {activeAdminPanel === "staff" && role === "admin" && <AdminStaffManagement onNotice={setNotice} />}
         {activeAdminPanel === "order-time-limits" && role === "admin" && <AdminOrderTimeLimits onNotice={setNotice} />}

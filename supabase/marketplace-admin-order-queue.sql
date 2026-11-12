@@ -60,6 +60,12 @@ as $$
         or buyer_email ilike '%' || p_search || '%'
       )
       and case p_filter
+        when 'processing' then
+          payment_status = 'payment_submitted'
+          or exists (
+            select 1 from public.marketplace_order_items i
+            where i.order_id = classified.id and i.status = 'payout_due'
+          )
         when 'needs_action' then
           payment_status = 'payment_submitted'
           or has_admin_item_action

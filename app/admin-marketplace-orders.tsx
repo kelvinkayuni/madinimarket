@@ -56,6 +56,7 @@ type Order = {
 };
 
 type OrderFilter =
+  | "processing"
   | "needs_action"
   | "active"
   | "payment_submitted"
@@ -83,7 +84,12 @@ function orderIsCompleted(order: Order) {
     order.items.every((item) => terminalItemStatuses.includes(item.status));
 }
 
-function orderQueueLabel(order: Order) {
+function orderQueueLabel(order: Order, filter: OrderFilter) {
+  if (filter === "processing") {
+    return order.payment_status === "payment_submitted" ? "Payment verification" : "Seller payout";
+  }
+  if (filter === "disputes") return "Open dispute";
+  if (filter === "refund_due") return "Buyer refund";
   if (order.payment_status === "payment_submitted") return "Payment verification";
   if (order.items.some((item) => item.status === "disputed")) return "Open dispute";
   if (order.items.some((item) => item.status === "payout_due")) return "Payout due";
@@ -103,23 +109,25 @@ function orderNeedsAdminAttention(order: Order) {
   );
 }
 
-export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeedingAction, staffPermissions }: {
+export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeedingAction, staffPermissions, initialFilter, staffScope }: {
   onNotice: (message: string) => void;
   marketplaceOrdersNeedingAction: number;
   staffPermissions?: readonly StaffPermission[];
+  initialFilter?: OrderFilter;
+  staffScope?: "processing" | "disputes" | "refunds";
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const isStaff = staffPermissions !== undefined;
-  const canProcessOrders = !isStaff || staffPermissions.includes("marketplace_orders");
-  const canConfirmDelivery = !isStaff || staffPermissions.includes("delivery_confirmation");
-  const canResolveDisputes = !isStaff || staffPermissions.includes("order_disputes");
-  const canRecordRefunds = !isStaff || staffPermissions.includes("buyer_refunds");
-  const [filter, setFilter] = useState<OrderFilter>(() => canProcessOrders
+  const canProcessOrders = !isStaff || (staffScope === "processing" && staffPermissions.includes("marketplace_orders"));
+  const canConfirmDelivery = !isStaff;
+  const canResolveDisputes = !isStaff || (staffScope === "disputes" && staffPermissions.includes("order_disputes"));
+  const canRecordRefunds = !isStaff || (staffScope === "refunds" && staffPermissions.includes("buyer_refunds"));
+  const [filter, setFilter] = useState<OrderFilter>(() => initialFilter ?? (canProcessOrders
     ? "needs_action"
-    : canConfirmDelivery ? "delivery_due" : canResolveDisputes ? "disputes" : "refund_due");
+    : canConfirmDelivery ? "delivery_due" : canResolveDisputes ? "disputes" : "refund_due"));
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -246,8 +254,8 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
 
   return <section className="admin-overview admin-commerce-orders">
     <div className="admin-page-heading">
-      <div><div className="dialog-kicker">BUYER PAYMENTS & SELLER PAYOUTS</div><h1>Marketplace orders</h1>
-        <p><strong>{marketplaceOrdersNeedingAction}</strong> order{marketplaceOrdersNeedingAction === 1 ? "" : "s"} need admin action. Orders requiring the most urgent action are shown first.</p></div>
+      <div><div className="dialog-kicker">BUYER PAYMENTS & SELLER PAYOUTS</div><h1>{initialFilter === "disputes" ? "Order Disputes" : initialFilter === "refund_due" ? "Buyer Refunds" : isStaff ? "Marketplace Orders Processing" : "Marketplace orders"}</h1>
+        {initialFilter === "disputes" ? <p>Review and resolve open order disputes.</p> : initialFilter === "refund_due" ? <p>Review and process buyer refunds due.</p> : <p><strong>{marketplaceOrdersNeedingAction}</strong> order{marketplaceOrdersNeedingAction === 1 ? "" : "s"} need admin action. Orders requiring the most urgent action are shown first.</p>}</div>
       <button className="button button-outline" type="button" disabled={busy === "refresh"} onClick={() => {
         setBusy("refresh");
         void load().then(() => onNotice("Marketplace orders refreshed.")).catch((error: unknown) => onNotice(error instanceof Error ? error.message : "Could not refresh orders.")).finally(() => setBusy(""));
@@ -269,13 +277,14 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
           setLoading(true);
         }}>Clear search</button>}
       </form>
-      <label className="field-label admin-order-filter">Show
+      {!isStaff && <label className="field-label admin-order-filter">Show
         <select className="text-input" value={filter} onChange={(event) => {
           setFilter(event.target.value as OrderFilter);
           setPage(1);
           setLoading(true);
         }}>
-          {(!isStaff || canProcessOrders) && <option value="needs_action">Needs admin action</option>}
+          <option value="needs_action">Needs admin action</option>
+          <option value="processing">Order processing tasks</option>
           {canProcessOrders && <>
             <option value="active">Active orders</option>
             <option value="payment_submitted">Payments awaiting verification</option>
@@ -291,7 +300,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
           {canResolveDisputes && <option value="disputes">Open disputes</option>}
           {canRecordRefunds && <option value="refund_due">Buyer refunds due</option>}
         </select>
-      </label>
+      </label>}
     </div>
     {orders.length ? <div className="commerce-list">
       {orders.map((order) => <details className="commerce-order admin-commerce-order" key={order.id}>
@@ -300,7 +309,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
           {canProcessOrders ? <span>{order.buyer_name} · {order.buyer_email}</span> : <span>{order.items.length} task item{order.items.length === 1 ? "" : "s"}</span>}
           {canProcessOrders && <span>{money(order.total_amount, order.currency)}</span>}
           <span>{new Date(order.created_at).toLocaleDateString()}</span>
-          <span className={`admin-order-status${orderNeedsAdminAttention(order) ? " needs-action" : orderIsCompleted(order) ? " completed" : ""}`}>{orderQueueLabel(order)}</span>
+          <span className={`admin-order-status${orderNeedsAdminAttention(order) ? " needs-action" : orderIsCompleted(order) ? " completed" : ""}`}>{orderQueueLabel(order, filter)}</span>
         </summary>
         <div className="admin-commerce-order-details">
         <p>{canProcessOrders ? `${money(order.total_amount, order.currency)} · ` : ""}Created {new Date(order.created_at).toLocaleString()}</p>

@@ -16,8 +16,6 @@ type OrderQueueItem = {
   weight: number | string;
   unit: string;
   status: string;
-  shipping_carrier: string | null;
-  tracking_number: string | null;
   dispute_reason: string | null;
   seller_amount: number | string;
   total_price: number | string;
@@ -53,14 +51,13 @@ export async function GET(request: Request) {
   const admin = await getAdminClient(request, ["marketplace_orders", "delivery_confirmation", "order_disputes", "buyer_refunds"]);
   if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
   const canProcessOrders = !staffAccess || staffAccess.permissions.includes("marketplace_orders");
-  const canConfirmDelivery = !staffAccess || staffAccess.permissions.includes("delivery_confirmation");
   const canResolveDisputes = !staffAccess || staffAccess.permissions.includes("order_disputes");
   const canRecordRefunds = !staffAccess || staffAccess.permissions.includes("buyer_refunds");
   const searchParams = new URL(request.url).searchParams;
   if (searchParams.get("summary") === "1") {
     if (!canProcessOrders) return NextResponse.json({ error: "Marketplace order processing access is required." }, { status: 403 });
     const { data, error } = await admin.rpc("admin_marketplace_order_queue", {
-      p_filter: "needs_action",
+      p_filter: staffAccess ? "processing" : "needs_action",
       p_search: "",
       p_offset: 0,
       p_limit: 1,
@@ -81,20 +78,20 @@ export async function GET(request: Request) {
     );
   }
   const filters = new Set([
-    "needs_action", "active", "payment_submitted", "awaiting_sellers", "awaiting_payment",
+    "processing", "needs_action", "active", "payment_submitted", "awaiting_sellers", "awaiting_payment",
     "delivery_due", "receipt_confirmation", "disputes", "payout_due", "refund_due", "completed", "history", "all",
   ]);
   const requestedFilter = searchParams.get("filter") ?? "needs_action";
   if (!filters.has(requestedFilter)) {
     return NextResponse.json({ error: "Choose a valid marketplace order filter." }, { status: 400 });
   }
-  const hasFilterAccess = requestedFilter === "delivery_due"
-    ? canConfirmDelivery
+  const hasFilterAccess = requestedFilter === "processing"
+    ? canProcessOrders
     : requestedFilter === "disputes"
       ? canResolveDisputes
       : requestedFilter === "refund_due"
         ? canRecordRefunds
-        : canProcessOrders;
+        : !staffAccess;
   if (!hasFilterAccess) {
     return NextResponse.json({ error: "You do not have access to this marketplace order queue." }, { status: 403 });
   }
@@ -113,7 +110,7 @@ export async function GET(request: Request) {
   });
   if (queueError) {
     console.error("Admin could not query marketplace order queue", queueError);
-    return NextResponse.json({ error: "Could not load marketplace order queue. Run supabase/marketplace-admin-order-queue.sql in Supabase and retry." }, { status: 503 });
+    return NextResponse.json({ error: "Could not load marketplace order queue. Run or update the marketplace order queue SQL in Supabase and retry." }, { status: 503 });
   }
   const queueRows = queue as { order_id: string | null; total_count: number | string; action_priority: number }[] | null;
   const totalCount = Number(queueRows?.[0]?.total_count ?? 0);
@@ -134,12 +131,10 @@ export async function GET(request: Request) {
       if (!order) return null;
       if (staffAccess && !canProcessOrders) {
         const orderItems = (order.items ?? []) as OrderQueueItem[];
-        const relevantItems = orderItems.filter((item) => requestedFilter === "delivery_due"
-          ? ["paid", "shipped"].includes(item.status) && Boolean(item.shipping_carrier?.trim()) && Boolean(item.tracking_number?.trim())
-          : requestedFilter === "disputes"
-            ? item.status === "disputed"
-            : item.status === "refund_due");
-        const items = relevantItems.map((item) => requestedFilter === "delivery_due"
+        const relevantItems = orderItems.filter((item) => requestedFilter === "disputes"
+          ? item.status === "disputed"
+          : item.status === "refund_due");
+        const items = relevantItems.map((item) => requestedFilter === "disputes"
           ? {
             id: item.id,
             seller_id: item.seller_id,
@@ -147,32 +142,21 @@ export async function GET(request: Request) {
             weight: item.weight,
             unit: item.unit,
             status: item.status,
-            shipping_carrier: item.shipping_carrier,
-            tracking_number: item.tracking_number,
+            dispute_reason: item.dispute_reason,
+            seller_amount: item.seller_amount,
+            total_price: item.total_price,
+            currency: item.currency,
           }
-          : requestedFilter === "disputes"
-            ? {
-              id: item.id,
-              seller_id: item.seller_id,
-              mineral_name: item.mineral_name,
-              weight: item.weight,
-              unit: item.unit,
-              status: item.status,
-              dispute_reason: item.dispute_reason,
-              seller_amount: item.seller_amount,
-              total_price: item.total_price,
-              currency: item.currency,
-            }
-            : {
-              id: item.id,
-              mineral_name: item.mineral_name,
-              weight: item.weight,
-              unit: item.unit,
-              status: item.status,
-              total_price: item.total_price,
-              currency: item.currency,
-              refund_reference: canRecordRefunds ? item.refund_reference : null,
-            });
+          : {
+            id: item.id,
+            mineral_name: item.mineral_name,
+            weight: item.weight,
+            unit: item.unit,
+            status: item.status,
+            total_price: item.total_price,
+            currency: item.currency,
+            refund_reference: canRecordRefunds ? item.refund_reference : null,
+          });
         return {
           id: order.id,
           control_number: order.control_number,
@@ -184,11 +168,16 @@ export async function GET(request: Request) {
         ? await admin.storage.from("marketplace-payment-proofs").createSignedUrl(order.payment_proof_path, 10 * 60)
         : null;
       if (paymentProof?.error) throw paymentProof.error;
-      const items = await Promise.all((order.items ?? []).map(async (item: Record<string, unknown> & {
+      const orderItems = (order.items ?? []) as (Record<string, unknown> & {
         order_id: string;
         seller_id: string | null;
+        status: string;
         payout_receipt_path?: string | null;
-      }) => {
+      })[];
+      const selectedItems = staffAccess && requestedFilter === "processing" && order.payment_status !== "payment_submitted"
+        ? orderItems.filter((item) => item.status === "payout_due")
+        : orderItems;
+      const items = await Promise.all(selectedItems.map(async (item) => {
         const {
           payout_receipt_path: receiptPath,
           payout_bank_name: payoutBankName,
