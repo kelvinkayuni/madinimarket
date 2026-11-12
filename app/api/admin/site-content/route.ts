@@ -34,7 +34,7 @@ function parseId(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const authorized = await getAdminClient(request, "homepage_headlines");
+    const authorized = await getAdminClient(request, ["homepage_headlines", "accounts"]);
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
 
     const admin = createSupabaseAdminClient();
@@ -62,15 +62,20 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const values = await readBody(request);
-    const staffEditableKeys = new Set(["homepageAnnouncement", "headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn"]);
-    const hasOwnerOnlyChange = values !== null && Object.keys(values).some((key) => !staffEditableKeys.has(key));
+    const accountSettingKeys = new Set(["accountCreationDisabled", "nonAdminSignInDisabled", "signOutAllUsers", "homepageAnnouncement"]);
+    const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn"]);
+    const accountSettingsRequested = values !== null && Object.keys(values).some((key) => accountSettingKeys.has(key));
+    const staffPermission = accountSettingsRequested ? "accounts" : "homepage_headlines";
+    const allowedStaffKeys = new Set([...accountSettingKeys, ...homepageSettingKeys]);
+    const hasOwnerOnlyChange = values !== null && Object.keys(values).some((key) => !allowedStaffKeys.has(key));
     const authorized = hasOwnerOnlyChange
       ? await getAdminClient(request)
-      : await getAdminClient(request, "homepage_headlines");
+      : await getAdminClient(request, staffPermission);
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
-    const staff = await getStaffAccess(request, "homepage_headlines");
-    if (staff && !await ownsStaffTaskClaim(authorized, staff.staffId, "homepage_setting", "homepage")) {
-      return NextResponse.json({ error: "Claim homepage settings before editing them." }, { status: 409 });
+    const staff = await getStaffAccess(request, staffPermission);
+    const taskType = accountSettingsRequested ? "account_setting" : "homepage_setting";
+    if (staff && !await ownsStaffTaskClaim(authorized, staff.staffId, taskType, "homepage")) {
+      return NextResponse.json({ error: `Claim ${accountSettingsRequested ? "account" : "homepage"} settings before editing them.` }, { status: 409 });
     }
     if (typeof values?.accountCreationDisabled === "boolean") {
       const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")

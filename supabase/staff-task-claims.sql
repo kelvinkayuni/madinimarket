@@ -27,7 +27,9 @@ as $claim_staff_task$
 begin
   if p_task_type not in (
     'listing_review', 'buyer_request_review', 'certificate_review',
-    'marketplace_order', 'marketplace_order_item', 'support_thread',
+    'marketplace_order', 'marketplace_order_item', 'marketplace_delivery',
+    'marketplace_payout', 'marketplace_dispute', 'buyer_refund',
+    'subscription_payment', 'account_setting', 'support_thread',
     'website_account', 'translation_pair', 'homepage_headline', 'homepage_setting'
   ) or nullif(trim(p_task_id), '') is null or length(p_task_id) > 160 then
     raise exception 'Choose a valid staff task.' using errcode = '22023';

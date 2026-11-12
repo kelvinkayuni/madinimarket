@@ -16,14 +16,17 @@ begin
   if length(normalized_name) < 2 or length(normalized_name) > 80
     or cardinality(p_permissions) = 0
     or not (p_permissions <@ array[
-      'delivery_confirmation',
-      'marketplace_orders',
-      'accounting',
-      'customer_support',
-      'market_moderation',
       'accounts',
       'translations',
-      'homepage_headlines'
+      'homepage_headlines',
+      'marketplace_orders',
+      'delivery_confirmation',
+      'order_disputes',
+      'buyer_refunds',
+      'seller_submission_reviews',
+      'buyer_submission_reviews',
+      'subscription_payment_confirmations',
+      'customer_support'
     ]::text[])
   then
     raise exception 'Enter a role name and choose at least one valid permission.'

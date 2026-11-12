@@ -93,7 +93,7 @@ function orderQueueLabel(order: Order) {
   )) return "Delivery confirmation";
   if (order.items.some((item) => item.status === "delivered")) return "Orders awaiting receipt confirmation";
   if (orderIsCompleted(order)) return "Completed";
-  return order.payment_status.replaceAll("_", " ");
+  return order.payment_status?.replaceAll("_", " ") ?? order.items[0]?.status.replaceAll("_", " ") ?? "Order task";
 }
 
 function orderNeedsAdminAttention(order: Order) {
@@ -112,17 +112,20 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
-  const [filter, setFilter] = useState<OrderFilter>("needs_action");
+  const isStaff = staffPermissions !== undefined;
+  const canProcessOrders = !isStaff || staffPermissions.includes("marketplace_orders");
+  const canConfirmDelivery = !isStaff || staffPermissions.includes("delivery_confirmation");
+  const canResolveDisputes = !isStaff || staffPermissions.includes("order_disputes");
+  const canRecordRefunds = !isStaff || staffPermissions.includes("buyer_refunds");
+  const [filter, setFilter] = useState<OrderFilter>(() => canProcessOrders
+    ? "needs_action"
+    : canConfirmDelivery ? "delivery_due" : canResolveDisputes ? "disputes" : "refund_due");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [payoutReferences, setPayoutReferences] = useState<Record<string, string>>({});
   const [payoutReceipts, setPayoutReceipts] = useState<Record<string, File | undefined>>({});
   const [refundReferences, setRefundReferences] = useState<Record<string, string>>({});
-  const isStaff = staffPermissions !== undefined;
-  const canAccount = !isStaff || staffPermissions.includes("accounting");
-  const canProcessOrders = !isStaff || staffPermissions.includes("marketplace_orders");
-  const canConfirmDelivery = !isStaff || canProcessOrders || staffPermissions.includes("delivery_confirmation");
   const claimTask = (type: StaffTaskType, taskId: string, render: (canAct: boolean) => ReactNode) =>
     isStaff
       ? <StaffTaskClaim type={type} taskId={taskId} onNotice={onNotice}>{({ canAct }) => render(canAct)}</StaffTaskClaim>
@@ -272,19 +275,21 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
           setPage(1);
           setLoading(true);
         }}>
-          <option value="needs_action">Needs admin action</option>
-          <option value="active">Active orders</option>
-          <option value="payment_submitted">Payments awaiting verification</option>
-          <option value="awaiting_sellers">Awaiting seller responses</option>
-          <option value="awaiting_payment">Awaiting buyer payment</option>
-          <option value="delivery_due">Delivery confirmation</option>
-          <option value="receipt_confirmation">Orders awaiting receipt confirmation</option>
-          <option value="disputes">Open disputes</option>
-          <option value="payout_due">Seller payouts due</option>
-          <option value="refund_due">Buyer refunds due</option>
-          <option value="completed">Completed</option>
-          <option value="history">Order history</option>
-          <option value="all">All orders</option>
+          {(!isStaff || canProcessOrders) && <option value="needs_action">Needs admin action</option>}
+          {canProcessOrders && <>
+            <option value="active">Active orders</option>
+            <option value="payment_submitted">Payments awaiting verification</option>
+            <option value="awaiting_sellers">Awaiting seller responses</option>
+            <option value="awaiting_payment">Awaiting buyer payment</option>
+            <option value="receipt_confirmation">Orders awaiting receipt confirmation</option>
+            <option value="payout_due">Seller payouts due</option>
+            <option value="completed">Completed</option>
+            <option value="history">Order history</option>
+            <option value="all">All orders</option>
+          </>}
+          {canConfirmDelivery && <option value="delivery_due">Delivery confirmation</option>}
+          {canResolveDisputes && <option value="disputes">Open disputes</option>}
+          {canRecordRefunds && <option value="refund_due">Buyer refunds due</option>}
         </select>
       </label>
     </div>
@@ -292,18 +297,20 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
       {orders.map((order) => <details className="commerce-order admin-commerce-order" key={order.id}>
         <summary className="admin-commerce-summary">
           <strong>{order.control_number}</strong>
-          <span>{order.buyer_name} · {order.buyer_email}</span>
-          <span>{money(order.total_amount, order.currency)}</span>
+          {canProcessOrders ? <span>{order.buyer_name} · {order.buyer_email}</span> : <span>{order.items.length} task item{order.items.length === 1 ? "" : "s"}</span>}
+          {canProcessOrders && <span>{money(order.total_amount, order.currency)}</span>}
           <span>{new Date(order.created_at).toLocaleDateString()}</span>
           <span className={`admin-order-status${orderNeedsAdminAttention(order) ? " needs-action" : orderIsCompleted(order) ? " completed" : ""}`}>{orderQueueLabel(order)}</span>
         </summary>
         <div className="admin-commerce-order-details">
-        <p>{money(order.total_amount, order.currency)} · Created {new Date(order.created_at).toLocaleString()}</p>
-        <p>Buyer: {order.buyer_name} · {order.buyer_email} · {order.buyer_phone}</p>
-        <p>Delivery: {order.delivery_address}, {order.delivery_district}, {order.delivery_region}, {order.delivery_country}</p>
-        {canAccount && order.payment_reference && <p>Buyer payment reference: <strong>{order.payment_reference}</strong>{order.payment_note ? ` · ${order.payment_note}` : ""}</p>}
-        {canAccount && order.payment_proof_url && <p><a className="certificate-file-link" href={order.payment_proof_url} target="_blank" rel="noreferrer">Open submitted payment proof</a></p>}
-        {canAccount && order.payment_status === "payment_submitted" && claimTask("marketplace_order", order.id, (canAct) => <button className="button button-dark" type="button" disabled={!canAct || busy === `verify-${order.id}`} onClick={() => void act(`verify-${order.id}`, { action: "verify_payment", orderId: order.id })}>{busy === `verify-${order.id}` ? "Verifying payment & notifying sellers…" : "Verify payment & notify sellers"}</button>)}
+        <p>{canProcessOrders ? `${money(order.total_amount, order.currency)} · ` : ""}Created {new Date(order.created_at).toLocaleString()}</p>
+        {canProcessOrders && <>
+          <p>Buyer: {order.buyer_name} · {order.buyer_email} · {order.buyer_phone}</p>
+          <p>Delivery: {order.delivery_address}, {order.delivery_district}, {order.delivery_region}, {order.delivery_country}</p>
+        </>}
+        {canProcessOrders && order.payment_reference && <p>Buyer payment reference: <strong>{order.payment_reference}</strong>{order.payment_note ? ` · ${order.payment_note}` : ""}</p>}
+        {canProcessOrders && order.payment_proof_url && <p><a className="certificate-file-link" href={order.payment_proof_url} target="_blank" rel="noreferrer">Open submitted payment proof</a></p>}
+        {canProcessOrders && order.payment_status === "payment_submitted" && claimTask("marketplace_order", order.id, (canAct) => <button className="button button-dark" type="button" disabled={!canAct || busy === `verify-${order.id}`} onClick={() => void act(`verify-${order.id}`, { action: "verify_payment", orderId: order.id })}>{busy === `verify-${order.id}` ? "Verifying payment & notifying sellers…" : "Verify payment & notify sellers"}</button>)}
         {(() => {
           const shipmentGroups = new Map<string, Item[]>();
           for (const item of order.items) {
@@ -321,7 +328,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                 <span>Carrier: {firstItem.shipping_carrier} · Tracking: {firstItem.tracking_number}</span>
                 <small>Confirming delivery will update every item below that shares this shipment tracking.</small>
                 <ul>{items.map((shipmentItem) => <li key={shipmentItem.id}>{shipmentItem.mineral_name} · {shipmentItem.weight} {shipmentItem.unit}</li>)}</ul>
-                {canConfirmDelivery && claimTask("marketplace_order_item", firstItem.id, (canAct) => <button className="button button-outline" type="button" disabled={!canAct || busy === `delivered-${firstItem.id}`} onClick={() => {
+                {canConfirmDelivery && claimTask("marketplace_delivery", firstItem.id, (canAct) => <button className="button button-outline" type="button" disabled={!canAct || busy === `delivered-${firstItem.id}`} onClick={() => {
                   if (window.confirm(`Confirm that the carrier's tracking shows this shipment of ${items.length} ${items.length === 1 ? "item" : "items"} as delivered?`)) {
                     void act(`delivered-${firstItem.id}`, { action: "mark_delivered", itemId: firstItem.id });
                   }
@@ -330,7 +337,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             })}
           </div>;
         })()}
-        {canAccount && (() => {
+        {canProcessOrders && (() => {
           const payoutGroups = new Map<string, Item[]>();
           for (const item of order.items) {
             if (item.status !== "payout_due" || !item.seller_id) continue;
@@ -364,7 +371,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                     {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
                   </> : <span className="commerce-warning">No bank detail snapshot is available. Verify the seller’s bank details before transferring.</span>}
                 </div>
-                {claimTask("marketplace_order_item", firstItem.id, (canAct) => <form className="admin-reference-form" onSubmit={(event) => {
+                {claimTask("marketplace_payout", firstItem.id, (canAct) => <form className="admin-reference-form" onSubmit={(event) => {
                   event.preventDefault();
                   void recordPayout(firstItem.id, payoutKey);
                 }}>
@@ -380,7 +387,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             })}
           </div>;
         })()}
-        {canAccount && (() => {
+        {canProcessOrders && (() => {
           const completedPayoutGroups = new Map<string, Item[]>();
           for (const item of order.items) {
             if (item.status !== "payout_paid" || !item.payout_group_key) continue;
@@ -415,13 +422,13 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         })()}
         {order.items.map((item) => <div className="admin-commerce-item" key={item.id}>
           <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-            <small>Status: {item.status.replaceAll("_", " ")} · Buyer total {money(item.total_price, item.currency)}</small>
-            <small>Seller amount {money(item.seller_amount, item.currency)} · Market fee {money(item.platform_fee_amount, item.currency)}</small>
-            <small>Seller contact: {item.seller_email}</small>
+            <small>Status: {item.status.replaceAll("_", " ")}{item.currency ? ` · Buyer total ${money(item.total_price, item.currency)}` : ""}</small>
+            {(canProcessOrders || canResolveDisputes) && item.currency && <small>Seller amount {money(item.seller_amount, item.currency)}{canProcessOrders ? ` · Market fee ${money(item.platform_fee_amount, item.currency)}` : ""}</small>}
+            {canProcessOrders && <small>Seller contact: {item.seller_email}</small>}
             {item.shipping_carrier && <small>Tracking: {item.shipping_carrier} · {item.tracking_number}</small>}
             {item.dispute_reason && <p className="commerce-warning">Buyer dispute: {item.dispute_reason}</p>}
-            {canAccount && item.payout_reference && !item.payout_group_key && <small>Seller payout reference: {item.payout_reference}</small>}
-            {canAccount && item.status === "payout_paid" && !item.payout_group_key && <div className="admin-payout-bank-details">
+            {canProcessOrders && item.payout_reference && !item.payout_group_key && <small>Seller payout reference: {item.payout_reference}</small>}
+            {canProcessOrders && item.status === "payout_paid" && !item.payout_group_key && <div className="admin-payout-bank-details">
               <strong>Bank account paid to</strong>
               {item.payout_bank_name && item.payout_bank_account_number && item.payout_bank_account_holder_name ? <>
                 <span>Bank Name: {item.payout_bank_name}</span>
@@ -430,15 +437,15 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                 {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
               </> : <span className="commerce-warning">No bank account details were recorded for this payout.</span>}
             </div>}
-            {canAccount && item.payout_receipt_url && !item.payout_group_key && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
-            {!isStaff && item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
+            {canProcessOrders && item.payout_receipt_url && !item.payout_group_key && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
+            {canRecordRefunds && item.refund_reference && <small>Buyer refund reference: {item.refund_reference}</small>}
           </div>
           {["paid", "shipped"].includes(item.status) && (!item.shipping_carrier?.trim() || !item.tracking_number?.trim()) && <small className="commerce-warning">The seller must enter both carrier and tracking number before delivery can be confirmed.</small>}
-          {item.status === "disputed" && (canProcessOrders || !isStaff) && claimTask("marketplace_order_item", item.id, (canAct) => <div className="commerce-item-actions">
+          {item.status === "disputed" && canResolveDisputes && claimTask("marketplace_dispute", item.id, (canAct) => <div className="commerce-item-actions">
             <button className="button button-dark" type="button" disabled={!canAct || busy === `seller-resolution-${item.id}`} onClick={() => void act(`seller-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "seller" })}>Resolve for seller (payout due)</button>
-            {!isStaff && <button className="button button-outline" type="button" disabled={busy === `buyer-resolution-${item.id}`} onClick={() => void act(`buyer-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "buyer" })}>Resolve for buyer (refund due)</button>}
+            <button className="button button-outline" type="button" disabled={!canAct || busy === `buyer-resolution-${item.id}`} onClick={() => void act(`buyer-resolution-${item.id}`, { action: "resolve_dispute", itemId: item.id, outcome: "buyer" })}>Resolve for buyer (refund due)</button>
           </div>)}
-          {item.status === "refund_due" && !isStaff && <form className="admin-reference-form" onSubmit={(event) => {
+          {item.status === "refund_due" && canRecordRefunds && claimTask("buyer_refund", item.id, (canAct) => <form className="admin-reference-form" onSubmit={(event) => {
             event.preventDefault();
             const reference = refundReferences[item.id]?.trim() ?? "";
             if (reference.length < 3) {
@@ -452,8 +459,8 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
             <label className="field-label">Buyer refund transaction reference
               <input className="text-input" required minLength={3} maxLength={120} value={refundReferences[item.id] ?? ""} onChange={(event) => setRefundReferences((current) => ({ ...current, [item.id]: event.target.value }))} />
             </label>
-            <button className="button button-outline" type="submit" disabled={busy === `refund-${item.id}` || (refundReferences[item.id]?.trim().length ?? 0) < 3}>{busy === `refund-${item.id}` ? "Recording…" : "Record buyer refund"}</button>
-          </form>}
+            <button className="button button-outline" type="submit" disabled={!canAct || busy === `refund-${item.id}` || (refundReferences[item.id]?.trim().length ?? 0) < 3}>{busy === `refund-${item.id}` ? "Recording…" : "Record buyer refund"}</button>
+          </form>)}
         </div>)}
         </div>
       </details>)}

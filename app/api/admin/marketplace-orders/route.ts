@@ -9,6 +9,21 @@ import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 type Body = Record<string, unknown>;
+type OrderQueueItem = {
+  id: string;
+  seller_id: string | null;
+  mineral_name: string;
+  weight: number | string;
+  unit: string;
+  status: string;
+  shipping_carrier: string | null;
+  tracking_number: string | null;
+  dispute_reason: string | null;
+  seller_amount: number | string;
+  total_price: number | string;
+  currency: string;
+  refund_reference: string | null;
+};
 
 const PAYOUT_RECEIPT_BUCKET = "marketplace-seller-payout-receipts";
 const MAX_PAYOUT_RECEIPT_BYTES = 4 * 1024 * 1024;
@@ -35,11 +50,15 @@ async function readBody(request: Request): Promise<Body | null> {
 
 export async function GET(request: Request) {
   const staffAccess = await getStaffAccess(request);
-  const admin = await getAdminClient(request, ["marketplace_orders", "accounting"]);
+  const admin = await getAdminClient(request, ["marketplace_orders", "delivery_confirmation", "order_disputes", "buyer_refunds"]);
   if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
-  const canAccessAccounting = !staffAccess || staffAccess.permissions.includes("accounting");
+  const canProcessOrders = !staffAccess || staffAccess.permissions.includes("marketplace_orders");
+  const canConfirmDelivery = !staffAccess || staffAccess.permissions.includes("delivery_confirmation");
+  const canResolveDisputes = !staffAccess || staffAccess.permissions.includes("order_disputes");
+  const canRecordRefunds = !staffAccess || staffAccess.permissions.includes("buyer_refunds");
   const searchParams = new URL(request.url).searchParams;
   if (searchParams.get("summary") === "1") {
+    if (!canProcessOrders) return NextResponse.json({ error: "Marketplace order processing access is required." }, { status: 403 });
     const { data, error } = await admin.rpc("admin_marketplace_order_queue", {
       p_filter: "needs_action",
       p_search: "",
@@ -68,6 +87,16 @@ export async function GET(request: Request) {
   const requestedFilter = searchParams.get("filter") ?? "needs_action";
   if (!filters.has(requestedFilter)) {
     return NextResponse.json({ error: "Choose a valid marketplace order filter." }, { status: 400 });
+  }
+  const hasFilterAccess = requestedFilter === "delivery_due"
+    ? canConfirmDelivery
+    : requestedFilter === "disputes"
+      ? canResolveDisputes
+      : requestedFilter === "refund_due"
+        ? canRecordRefunds
+        : canProcessOrders;
+  if (!hasFilterAccess) {
+    return NextResponse.json({ error: "You do not have access to this marketplace order queue." }, { status: 403 });
   }
   const page = Number(searchParams.get("page") ?? 1);
   if (!Number.isSafeInteger(page) || page < 1 || page > 40_000) {
@@ -103,7 +132,55 @@ export async function GET(request: Request) {
     const signedOrders = await Promise.all(orderIds.map(async (id) => {
       const order = ordersById.get(id);
       if (!order) return null;
-      const paymentProof = canAccessAccounting && order.payment_proof_path
+      if (staffAccess && !canProcessOrders) {
+        const orderItems = (order.items ?? []) as OrderQueueItem[];
+        const relevantItems = orderItems.filter((item) => requestedFilter === "delivery_due"
+          ? ["paid", "shipped"].includes(item.status) && Boolean(item.shipping_carrier?.trim()) && Boolean(item.tracking_number?.trim())
+          : requestedFilter === "disputes"
+            ? item.status === "disputed"
+            : item.status === "refund_due");
+        const items = relevantItems.map((item) => requestedFilter === "delivery_due"
+          ? {
+            id: item.id,
+            seller_id: item.seller_id,
+            mineral_name: item.mineral_name,
+            weight: item.weight,
+            unit: item.unit,
+            status: item.status,
+            shipping_carrier: item.shipping_carrier,
+            tracking_number: item.tracking_number,
+          }
+          : requestedFilter === "disputes"
+            ? {
+              id: item.id,
+              seller_id: item.seller_id,
+              mineral_name: item.mineral_name,
+              weight: item.weight,
+              unit: item.unit,
+              status: item.status,
+              dispute_reason: item.dispute_reason,
+              seller_amount: item.seller_amount,
+              total_price: item.total_price,
+              currency: item.currency,
+            }
+            : {
+              id: item.id,
+              mineral_name: item.mineral_name,
+              weight: item.weight,
+              unit: item.unit,
+              status: item.status,
+              total_price: item.total_price,
+              currency: item.currency,
+              refund_reference: canRecordRefunds ? item.refund_reference : null,
+            });
+        return {
+          id: order.id,
+          control_number: order.control_number,
+          created_at: order.created_at,
+          items,
+        };
+      }
+      const paymentProof = canProcessOrders && order.payment_proof_path
         ? await admin.storage.from("marketplace-payment-proofs").createSignedUrl(order.payment_proof_path, 10 * 60)
         : null;
       if (paymentProof?.error) throw paymentProof.error;
@@ -118,11 +195,12 @@ export async function GET(request: Request) {
           payout_bank_account_number: payoutBankAccountNumber,
           payout_bank_account_holder_name: payoutBankAccountHolderName,
           payout_bank_snapshot_at: payoutBankSnapshotAt,
+          payout_reference: payoutReference,
           refund_reference: refundReference,
           ...safeItem
         } = item;
         const payout_group_key = marketplacePayoutGroupKey(item.order_id, item.seller_id, receiptPath ?? null);
-        if (!canAccessAccounting) {
+        if (!canProcessOrders) {
           return {
             ...safeItem,
             payout_group_key,
@@ -131,14 +209,14 @@ export async function GET(request: Request) {
             payout_bank_account_holder_name: null,
             payout_bank_snapshot_at: null,
             payout_reference: null,
-            refund_reference: staffAccess ? null : refundReference,
+            refund_reference: canRecordRefunds ? refundReference : null,
           };
         }
-        if (!receiptPath) return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, refund_reference: staffAccess ? null : refundReference };
+        if (!receiptPath) return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_reference: payoutReference, refund_reference: canRecordRefunds ? refundReference : null };
         const { data: receipt, error: receiptError } = await admin.storage.from(PAYOUT_RECEIPT_BUCKET)
           .createSignedUrl(receiptPath, 10 * 60);
         if (receiptError) throw receiptError;
-        return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_receipt_url: receipt.signedUrl, refund_reference: staffAccess ? null : refundReference };
+        return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_reference: payoutReference, payout_receipt_url: receipt.signedUrl, refund_reference: canRecordRefunds ? refundReference : null };
       }));
       const {
         payment_proof_path: paymentProofPath,
@@ -148,7 +226,7 @@ export async function GET(request: Request) {
       } = order;
       return {
         ...safeOrder,
-        ...(canAccessAccounting ? {
+        ...(canProcessOrders ? {
           payment_proof_path: paymentProofPath,
           payment_reference: paymentReference,
           payment_note: paymentNote,
@@ -167,7 +245,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const staffAccess = await getStaffAccess(request);
-  const admin = await getAdminClient(request, "accounting");
+  const admin = await getAdminClient(request, "marketplace_orders");
   if (!admin) return NextResponse.json({ error: "Administrator access required." }, { status: 401 });
 
   let form: FormData;
@@ -184,7 +262,7 @@ export async function POST(request: Request) {
   }
   if (staffAccess) {
     try {
-      if (!await ownsStaffTaskClaim(admin, staffAccess.staffId, "marketplace_order_item", itemId)) {
+      if (!await ownsStaffTaskClaim(admin, staffAccess.staffId, "marketplace_payout", itemId)) {
         return NextResponse.json({ error: "Claim this payout before recording it. Another staff member may already be handling it." }, { status: 409 });
       }
     } catch (error) {
@@ -315,11 +393,13 @@ export async function PATCH(request: Request) {
   const itemId = text(body.itemId, 60);
   const staffAccess = await getStaffAccess(request);
   const permission = action === "verify_payment"
-    ? "accounting"
+    ? "marketplace_orders"
     : action === "mark_delivered"
-      ? ["delivery_confirmation", "marketplace_orders"] as const
+      ? "delivery_confirmation"
       : action === "resolve_dispute"
-        ? "marketplace_orders"
+        ? "order_disputes"
+        : action === "mark_refunded"
+          ? "buyer_refunds"
         : null;
   const admin = permission ? await getAdminClient(request, permission) : await getAdminClient(request);
   if (!admin) return NextResponse.json({ error: "Administrator or assigned staff access required." }, { status: 403 });
@@ -370,7 +450,7 @@ export async function PATCH(request: Request) {
     }
 
     if (action === "mark_delivered") {
-      if (staffAccess && !await ownsStaffTaskClaim(service, staffAccess.staffId, "marketplace_order_item", itemId)) {
+      if (staffAccess && !await ownsStaffTaskClaim(service, staffAccess.staffId, "marketplace_delivery", itemId)) {
         return NextResponse.json({ error: "Claim this delivery task before handling it." }, { status: 409 });
       }
       const { data, error } = staffAccess
@@ -388,14 +468,11 @@ export async function PATCH(request: Request) {
     }
 
     if (action === "resolve_dispute") {
-      if (staffAccess && !await ownsStaffTaskClaim(service, staffAccess.staffId, "marketplace_order_item", itemId)) {
+      if (staffAccess && !await ownsStaffTaskClaim(service, staffAccess.staffId, "marketplace_dispute", itemId)) {
         return NextResponse.json({ error: "Claim this dispute before handling it." }, { status: 409 });
       }
       const outcome = text(body.outcome, 20);
       if (!["seller", "buyer"].includes(outcome)) return NextResponse.json({ error: "Choose a dispute outcome." }, { status: 400 });
-      if (staffAccess && outcome === "buyer") {
-        return NextResponse.json({ error: "Refund-related dispute resolutions require the owner administrator." }, { status: 403 });
-      }
       const { data, error } = await service.from("marketplace_order_items").update({
         status: outcome === "seller" ? "payout_due" : "refund_due",
         dispute_resolution: outcome,
@@ -421,8 +498,8 @@ export async function PATCH(request: Request) {
     }
 
     if (action === "mark_refunded") {
-      if (staffAccess) {
-        return NextResponse.json({ error: "Refund transfers require the owner administrator." }, { status: 403 });
+      if (staffAccess && !await ownsStaffTaskClaim(service, staffAccess.staffId, "buyer_refund", itemId)) {
+        return NextResponse.json({ error: "Claim this buyer refund before recording it." }, { status: 409 });
       }
       const reference = text(body.reference, 120);
       if (reference.length < 3) return NextResponse.json({ error: "Enter the refund transaction reference." }, { status: 400 });
@@ -432,6 +509,19 @@ export async function PATCH(request: Request) {
       }).eq("id", itemId).eq("status", "refund_due").select("id").maybeSingle();
       if (error) throw error;
       if (!data) return NextResponse.json({ error: "This refund is not awaiting a recorded transfer." }, { status: 409 });
+      if (staffAccess) {
+        const { error: auditError } = await service.from("staff_audit_log").insert({
+          actor_user_id: staffAccess.userId,
+          staff_member_id: staffAccess.staffId,
+          action: "record_buyer_refund",
+          entity_type: "marketplace_order_item",
+          entity_id: itemId,
+        });
+        if (auditError) {
+          console.error("Buyer refund recorded, but the staff audit entry could not be saved.", auditError);
+          return NextResponse.json({ error: "The refund was recorded, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
+        }
+      }
       return NextResponse.json({ ok: true });
     }
 

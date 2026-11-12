@@ -97,7 +97,7 @@ export default function StaffOrderQueue({ onNotice }: {
   const pages = Math.max(1, Math.ceil(totalCount / 25));
   return <section className="admin-overview staff-order-queue" id="staff-home">
       <div className="admin-page-heading">
-        <div><div className="dialog-kicker">ORDER OPERATIONS</div><h1>Delivery confirmation tasks</h1><p>Confirm carrier delivery only after checking the shipment tracking status. Payment, payout, refund, and dispute decisions remain with the owner administrator.</p></div>
+        <div><div className="dialog-kicker">ORDER OPERATIONS</div><h1>Delivery confirmation tasks</h1><p>Confirm carrier delivery only after checking the shipment tracking status. Payment, payout, refund, and dispute decisions are handled by their assigned teams.</p></div>
         <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => {
           setBusy("refresh");
           void load().then(() => onNotice("Delivery tasks refreshed.")).catch((error: unknown) => onNotice(error instanceof Error ? error.message : "Could not refresh delivery tasks.")).finally(() => setBusy(""));
@@ -122,7 +122,7 @@ export default function StaffOrderQueue({ onNotice }: {
                 return <div className="commerce-delivery-details" key={key}>
                   <strong>{first.shipping_carrier} · Tracking {first.tracking_number}</strong>
                   <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</li>)}</ul>
-                  <StaffTaskClaim type="marketplace_order_item" taskId={first.id} onNotice={onNotice}>
+                  <StaffTaskClaim type="marketplace_delivery" taskId={first.id} onNotice={onNotice}>
                     {({ canAct }) => <button className="button button-dark" type="button" disabled={!canAct || busy !== ""} onClick={() => void confirmDelivery(first.id, key, items.length)}>
                       {busy === key ? "Confirming…" : `Confirm carrier delivery for ${items.length} ${items.length === 1 ? "item" : "items"}`}
                     </button>}

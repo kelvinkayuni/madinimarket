@@ -89,7 +89,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    if (!await ownsStaffTaskClaim(staff.admin, staff.staffId, "marketplace_order_item", itemId)) {
+    if (!await ownsStaffTaskClaim(staff.admin, staff.staffId, "marketplace_delivery", itemId)) {
       return NextResponse.json({ error: "Claim this shipment before confirming delivery. Another staff member may already be handling it." }, { status: 409 });
     }
   } catch (error) {

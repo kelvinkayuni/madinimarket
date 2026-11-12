@@ -7,14 +7,17 @@ create table if not exists public.staff_roles (
   permissions text[] not null check (
     cardinality(permissions) > 0
     and permissions <@ array[
-      'delivery_confirmation',
-      'marketplace_orders',
-      'accounting',
-      'customer_support',
-      'market_moderation',
       'accounts',
       'translations',
-      'homepage_headlines'
+      'homepage_headlines',
+      'marketplace_orders',
+      'delivery_confirmation',
+      'order_disputes',
+      'buyer_refunds',
+      'seller_submission_reviews',
+      'buyer_submission_reviews',
+      'subscription_payment_confirmations',
+      'customer_support'
     ]::text[]
   ),
   created_by uuid references auth.users (id) on delete set null,
@@ -143,8 +146,8 @@ begin
   select id into selected_staff_id
   from public.staff_members
   where user_id = p_staff_user_id and status = 'active';
-  if not found or not public.staff_has_permission(p_staff_user_id, 'market_moderation') then
-    raise exception 'Active market moderation access is required.' using errcode = '42501';
+  if not found or not public.staff_has_permission(p_staff_user_id, 'seller_submission_reviews') then
+    raise exception 'Active seller submission review access is required.' using errcode = '42501';
   end if;
   if not p_approved and nullif(trim(p_message), '') is null then
     raise exception 'A rejection message is required.' using errcode = '22023';
@@ -179,8 +182,8 @@ begin
   select id into selected_staff_id
   from public.staff_members
   where user_id = p_staff_user_id and status = 'active';
-  if not found or not public.staff_has_permission(p_staff_user_id, 'market_moderation') then
-    raise exception 'Active market moderation access is required.' using errcode = '42501';
+  if not found or not public.staff_has_permission(p_staff_user_id, 'buyer_submission_reviews') then
+    raise exception 'Active buyer submission review access is required.' using errcode = '42501';
   end if;
   if not p_approved and nullif(trim(p_message), '') is null then
     raise exception 'A rejection message is required.' using errcode = '22023';
@@ -229,13 +232,10 @@ begin
       from public.staff_member_roles as assignment
       join public.staff_roles as role on role.id = assignment.role_id
       where assignment.staff_member_id = member.id
-        and (
-          'delivery_confirmation' = any(role.permissions)
-          or 'marketplace_orders' = any(role.permissions)
-        )
+        and 'delivery_confirmation' = any(role.permissions)
     );
   if not found then
-    raise exception 'Active marketplace order access is required.' using errcode = '42501';
+    raise exception 'Active delivery confirmation access is required.' using errcode = '42501';
   end if;
 
   updated_items := public.confirm_marketplace_order_shipment_delivery(p_order_item_id);

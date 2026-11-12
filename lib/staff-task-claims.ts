@@ -4,16 +4,21 @@ import { getStaffAccess } from "@/lib/staff-auth";
 import type { StaffPermission } from "@/lib/staff-permissions";
 
 export const STAFF_TASK_PERMISSIONS: Record<string, readonly StaffPermission[]> = {
-  listing_review: ["market_moderation"],
-  buyer_request_review: ["market_moderation"],
+  listing_review: ["seller_submission_reviews"],
+  buyer_request_review: ["buyer_submission_reviews"],
   certificate_review: ["accounts"],
-  marketplace_order: ["accounting"],
-  marketplace_order_item: ["delivery_confirmation", "marketplace_orders", "accounting"],
+  marketplace_order: ["marketplace_orders"],
+  marketplace_delivery: ["delivery_confirmation"],
+  marketplace_payout: ["marketplace_orders"],
+  marketplace_dispute: ["order_disputes"],
+  buyer_refund: ["buyer_refunds"],
   support_thread: ["customer_support"],
   website_account: ["accounts"],
   translation_pair: ["translations"],
   homepage_headline: ["homepage_headlines"],
   homepage_setting: ["homepage_headlines"],
+  account_setting: ["accounts"],
+  subscription_payment: ["subscription_payment_confirmations"],
 };
 
 export type StaffTaskType = keyof typeof STAFF_TASK_PERMISSIONS;

@@ -180,13 +180,15 @@ const sellerPriceDetails = (listing: Pick<Seller, "seller_price" | "platform_fee
 const isAdminRole = (role: "user" | "admin" | "staff" | null): boolean => role === "admin";
 
 function defaultStaffPanel(permissions: StaffPermission[]): AdminPanel {
-  if (permissions.includes("marketplace_orders") || permissions.includes("accounting")) return "orders";
-  if (permissions.includes("market_moderation")) return "review";
+  if (permissions.some((permission) => ["marketplace_orders", "order_disputes", "buyer_refunds"].includes(permission))) return "orders";
+  if (permissions.includes("subscription_payment_confirmations")) return "subscriptions";
+  if (permissions.includes("seller_submission_reviews") || permissions.includes("buyer_submission_reviews")) return "review";
   if (permissions.includes("accounts")) return "accounts";
   if (permissions.includes("customer_support")) return "support";
   if (permissions.includes("translations")) return "translations";
   if (permissions.includes("homepage_headlines")) return "homepage";
-  return "delivery";
+  if (permissions.includes("delivery_confirmation")) return "delivery";
+  return "staff-chat";
 }
 const adminPanels: AdminPanel[] = [
   "review", "ledger", "translations", "homepage", "accounts", "subscriptions", "listing-fee",
@@ -197,13 +199,14 @@ function isAdminPanel(value: string | null): value is AdminPanel {
 }
 function canStaffOpenPanel(panel: AdminPanel, permissions: StaffPermission[]) {
   if (panel === "staff-chat") return true;
-  if (panel === "review") return permissions.includes("market_moderation");
+  if (panel === "review") return permissions.includes("seller_submission_reviews") || permissions.includes("buyer_submission_reviews");
   if (panel === "accounts") return permissions.includes("accounts");
   if (panel === "support") return permissions.includes("customer_support");
   if (panel === "translations") return permissions.includes("translations");
   if (panel === "homepage") return permissions.includes("homepage_headlines");
-  if (panel === "orders") return permissions.includes("marketplace_orders") || permissions.includes("accounting");
+  if (panel === "orders") return ["marketplace_orders", "order_disputes", "buyer_refunds"].some((permission) => permissions.includes(permission as StaffPermission));
   if (panel === "delivery") return permissions.includes("delivery_confirmation");
+  if (panel === "subscriptions") return permissions.includes("subscription_payment_confirmations");
   return false;
 }
 const weightInGrams = (weight: number, unit: Unit | StoneWeightUnit) =>
@@ -278,7 +281,7 @@ async function getSignedMineralImageUrl(
   }
 }
 
-async function loadMarketplaceListings(includeOwnSubmissions = false, adminAccessToken?: string) {
+async function loadMarketplaceListings(includeOwnSubmissions = false, adminAccessToken?: string, requireAdminReviewQueue = false) {
   const supabase = getSupabaseBrowserClient();
 
   const loadPublicSellerRows = async () => {
@@ -353,7 +356,8 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       if (!response.ok) throw new Error(reviewQueue.error ?? "Could not load pending submissions.");
       sellerRows = [...sellerRows, ...(reviewQueue.sellers ?? [])];
       buyerRows = [...buyerRows, ...(reviewQueue.buyers ?? [])];
-    } catch {
+    } catch (error) {
+      if (requireAdminReviewQueue) throw error;
       // Admin review queue is optional for public market loading. Keep the public listings available even if
       // the queue endpoint is temporarily unavailable or the admin session cannot be validated.
     }
@@ -968,7 +972,7 @@ export default function Marketplace() {
     };
   }, [accountOrderStatusChannel, role, userId]);
   useEffect(() => {
-    if ((role !== "admin" && !(role === "staff" && (staffPermissions.includes("marketplace_orders") || staffPermissions.includes("accounting")))) ||
+    if ((role !== "admin" && !(role === "staff" && staffPermissions.includes("marketplace_orders"))) ||
       !userId || !isSupabaseConfigured) return;
     let active = true;
     let loading = false;
@@ -1625,10 +1629,10 @@ export default function Marketplace() {
           if (active && (isAdmin || isStaff) && session) {
             const can = (permission: StaffPermission) => isAdmin || assignedPermissions.includes(permission);
             const adminLoads: { label: string; load: Promise<unknown> }[] = [];
-            if (can("market_moderation")) {
+            if (can("seller_submission_reviews") || can("buyer_submission_reviews")) {
               adminLoads.push({
                 label: "review submissions",
-                load: loadMarketplaceListings(false, session.access_token).then((listings) => {
+                load: loadMarketplaceListings(false, session.access_token, true).then((listings) => {
                   setSellers(listings.sellers);
                   setBuyers(listings.buyers);
                   setLastUpdated(new Date());
@@ -1662,7 +1666,7 @@ export default function Marketplace() {
                 }),
               });
             }
-            if (isAdmin) {
+            if (isAdmin || can("subscription_payment_confirmations")) {
               adminLoads.push({
                 label: "subscriptions",
                 load: loadAdminSubscriptions(session.access_token).then((subscriptions) => {
@@ -3313,8 +3317,12 @@ export default function Marketplace() {
       wantedListRef.current.scrollTop = accountListScroll.current.wanted;
     }
   }, [dialog, myWantedMinerals, userAccountListPage]);
-  const pendingSellers = role === "admin" ? sellers.filter((item) => item.status === "pending") : [];
-  const pendingBuyers = role === "admin" ? buyers.filter((item) => item.status === "pending") : [];
+  const pendingSellers = (role === "admin" || staffPermissions.includes("seller_submission_reviews"))
+    ? sellers.filter((item) => item.status === "pending")
+    : [];
+  const pendingBuyers = (role === "admin" || staffPermissions.includes("buyer_submission_reviews"))
+    ? buyers.filter((item) => item.status === "pending")
+    : [];
 
   const openAccountCreation = () => {
     if (accountCreationDisabled) {
@@ -3837,8 +3845,10 @@ export default function Marketplace() {
 
   if (isAdminRole(role) || role === "staff") {
     const staffCan = (permission: StaffPermission) => role === "admin" || staffPermissions.includes(permission);
-    const staffCanReview = staffCan("market_moderation");
-    const staffCanOrders = staffCan("marketplace_orders") || staffCan("accounting");
+    const staffCanSellerReview = staffCan("seller_submission_reviews");
+    const staffCanBuyerReview = staffCan("buyer_submission_reviews");
+    const staffCanReview = staffCanSellerReview || staffCanBuyerReview;
+    const staffCanOrders = staffCan("marketplace_orders") || staffCan("order_disputes") || staffCan("buyer_refunds");
     const pendingTotal = pendingSellers.length + pendingBuyers.length;
     const formatLedgerMoney = (amount: number, currency: Currency) => money(
       new Intl.NumberFormat("en-US", {
@@ -3869,16 +3879,16 @@ export default function Marketplace() {
             <nav className="admin-menu-popover" id="admin-panel-menu" aria-label="Admin panels">
               <span className="admin-menu-heading">{role === "staff" ? "STAFF MENU" : "ADMIN PANELS"}</span>
               {role === "admin" ? <>
-                <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>
+                <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Seller/Buyer Accounts<span>{websiteAccounts.length}</span></button>
                 <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
                 <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>
-                <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>
+                <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage Display</button>
                 <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
-                <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
+                <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace Orders Processing<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
                 <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
                 <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>
                 <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>
-                <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
+                <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Subscription Payment Confirmations<span>{pendingSubscriptions.length}</span></button>
                 <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>
                 <button className={activeAdminPanel === "staff" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff"); setAdminMenuOpen(false); }}>Staff Management</button>
                 <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Staff messages{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread staff messages`}>{staffChatUnreadCount}</span>}</button>
@@ -3897,11 +3907,14 @@ export default function Marketplace() {
                   </div>
                 </details>
                 {staffCanReview && <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>}
-                {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
+                {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Seller/Buyer Accounts<span>{websiteAccounts.length}</span></button>}
+                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace Orders Processing<span>{marketplaceOrdersNeedingAction}</span></button>}
+                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery Confirmation</button>}
                 {staffCan("customer_support") && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
                 {staffCan("translations") && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
-                {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>}
-                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
+                {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage Display</button>}
+                {staffCan("subscription_payment_confirmations") && <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscription payments."); } }); }}>Subscription Payment Confirmations<span>{pendingSubscriptions.length}</span></button>}
+                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace Orders Processing<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
                 {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery confirmation</button>}
               </>}              {role === "admin" && <div className="admin-menu-currency">
                 <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
@@ -4056,13 +4069,13 @@ export default function Marketplace() {
         <section className="admin-overview">
           <div className="admin-page-heading"><div><div className="dialog-kicker">ADMIN WORKSPACE</div><h1>Review submissions</h1><p>Approve licences, listings, and buyer requests before they appear in the market.</p></div>{role === "admin" && <button className="button button-outline" type="button" disabled={busyActions.has("admin-refresh")} onClick={() => void withProgress("admin-refresh", async () => { try { await Promise.all([refreshRemoteListings(), refreshAdminAccounts(), refreshAdminCertificates(), refreshAdminTranslations(), refreshAdminSiteContent(), refreshAdminSubscriptions()]); } catch { setNotice("Could not refresh admin data."); } })}>{busyActions.has("admin-refresh") ? "Refreshing…" : <><RefreshCw size={15} /> Refresh</>}</button>}</div>
           <div className="admin-summary">
-            <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>
-            <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>
-            <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>
+            {staffCanSellerReview && <div><span>SELLER LISTINGS</span><strong>{pendingSellers.length}</strong><small>Awaiting review</small></div>}
+            {staffCanBuyerReview && <div><span>BUYER REQUESTS</span><strong>{pendingBuyers.length}</strong><small>Awaiting review</small></div>}
+            {staffCanSellerReview && staffCanBuyerReview && <div><span>TOTAL PENDING</span><strong>{pendingTotal}</strong><small>Across both queues</small></div>}
           </div>
         </section>
         <div className="admin-queues">
-          <section className="admin-queue" aria-labelledby="admin-sellers-heading">
+          {staffCanSellerReview && <section className="admin-queue" aria-labelledby="admin-sellers-heading">
             <div className="admin-queue-heading"><div><span>SELLERS</span><h2 id="admin-sellers-heading">Mineral listings</h2></div><strong>{pendingSellers.length}</strong></div>
             {pendingSellers.length ? <div className="admin-queue-list">{pendingSellers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-seller-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>SELLER LISTING</span><h3>{item.mineral}</h3><small>{item.seller} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.price, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
@@ -4082,8 +4095,8 @@ export default function Marketplace() {
                 </>}</StaffTaskClaim>
               </div>
             </details>)}</div> : <p className="admin-empty">No seller listings are waiting for review.</p>}
-          </section>
-          <section className="admin-queue" aria-labelledby="admin-buyers-heading">
+          </section>}
+          {staffCanBuyerReview && <section className="admin-queue" aria-labelledby="admin-buyers-heading">
             <div className="admin-queue-heading"><div><span>BUYERS</span><h2 id="admin-buyers-heading">Buying requests</h2></div><strong>{pendingBuyers.length}</strong></div>
             {pendingBuyers.length ? <div className="admin-queue-list">{pendingBuyers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-buyer-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3><small>{item.buyer} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.offer, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
@@ -4095,7 +4108,7 @@ export default function Marketplace() {
                 </>}</StaffTaskClaim>
               </div>
             </details>)}</div> : <p className="admin-empty">No buyer requests are waiting for review.</p>}
-          </section>
+          </section>}
         </div>
         </>}
         {activeAdminPanel === "ledger" && role === "admin" && <section className="admin-ledger" aria-labelledby="admin-ledger-heading">
@@ -4260,32 +4273,32 @@ export default function Marketplace() {
           </div>}</StaffTaskClaim>
         </section>}
         {activeAdminPanel === "accounts" && (role === "admin" || staffCan("accounts")) && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
-          <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
-          <div className="admin-account-controls">
+          <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Seller/Buyer Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
+          <StaffTaskClaim type="account_setting" taskId="homepage" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <div className="admin-account-controls">
             <div className="admin-account-control-row">
               <div><strong>Account creation</strong><span>{!siteContentLoaded ? "Loading account settings…" : accountCreationDisabled ? "New account creation is suspended." : "New account creation is enabled."}</span></div>
-              <button className={`admin-currency-switch${accountCreationDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={accountCreationDisabled} aria-label="Suspend new account creation" disabled={!siteContentLoaded || busyActions.has("account-creation-setting")} onClick={() => void updateAccountCreationAvailability(!accountCreationDisabled)}><span /></button>
+              <button className={`admin-currency-switch${accountCreationDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={accountCreationDisabled} aria-label="Suspend new account creation" disabled={!canAct || !siteContentLoaded || busyActions.has("account-creation-setting")} onClick={() => void updateAccountCreationAvailability(!accountCreationDisabled)}><span /></button>
             </div>
             <div className="admin-account-control-row">
               <div><strong>User sign-in</strong><span>{!siteContentLoaded ? "Loading sign-in settings…" : nonAdminSignInDisabled ? "Non-administrator sign-in is suspended." : "User sign-in is enabled."}</span></div>
-              <button className={`admin-currency-switch${nonAdminSignInDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={nonAdminSignInDisabled} aria-label="Suspend non-administrator sign-in" disabled={!siteContentLoaded || busyActions.has("non-admin-signin-setting")} onClick={() => void updateNonAdminSignInAvailability(!nonAdminSignInDisabled)}><span /></button>
+              <button className={`admin-currency-switch${nonAdminSignInDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={nonAdminSignInDisabled} aria-label="Suspend non-administrator sign-in" disabled={!canAct || !siteContentLoaded || busyActions.has("non-admin-signin-setting")} onClick={() => void updateNonAdminSignInAvailability(!nonAdminSignInDisabled)}><span /></button>
             </div>
             <div className="admin-account-control-row">
               <div><strong>Sign out all users</strong><span>{signOutAllUsersAction ? "Ending all user sessions…" : "Ends every normal user session; admin stays signed in."}</span></div>
-              <button className={`admin-currency-switch${signOutAllUsersAction ? " is-on" : ""}`} type="button" role="switch" aria-checked={signOutAllUsersAction} aria-label="Sign out all users" disabled={!siteContentLoaded || busyActions.has("sign-out-all-users")} onClick={() => void signOutAllUsers()}><span /></button>
+              <button className={`admin-currency-switch${signOutAllUsersAction ? " is-on" : ""}`} type="button" role="switch" aria-checked={signOutAllUsersAction} aria-label="Sign out all users" disabled={!canAct || !siteContentLoaded || busyActions.has("sign-out-all-users")} onClick={() => void signOutAllUsers()}><span /></button>
             </div>
             <details className="admin-homepage-announcement-disclosure">
               <summary className="admin-homepage-announcement-toggle">
                 <div><strong>Homepage announcement</strong><span>{!siteContentLoaded ? "Loading announcement settings…" : homepageAnnouncement ? "Message is currently displayed" : "No message is displayed"}</span></div>
                 <ChevronDown className="admin-homepage-announcement-chevron" size={17} aria-hidden="true" />
               </summary>
-              <StaffTaskClaim type="homepage_setting" taskId="homepage" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <form className="admin-homepage-announcement-form" onSubmit={(event) => void saveHomepageAnnouncement(event)}>
+              <form className="admin-homepage-announcement-form" onSubmit={(event) => void saveHomepageAnnouncement(event)}>
                 <label className="field-label" htmlFor="admin-homepage-announcement">Message</label>
                 <textarea className="text-input" id="admin-homepage-announcement" rows={3} maxLength={500} value={homepageAnnouncementDraft} placeholder="The website is under development…" disabled={!canAct} onChange={(event) => { homepageAnnouncementDirty.current = true; setHomepageAnnouncementDraft(event.target.value); }} />
                 <div className="admin-homepage-announcement-actions"><span>{homepageAnnouncement ? "Currently displayed on the homepage" : "No homepage announcement is displayed"}</span><button className="button button-outline" type="button" disabled={!canAct || (!homepageAnnouncementDraft && !homepageAnnouncement) || busyActions.has("homepage-announcement-save")} onClick={() => void clearHomepageAnnouncement()}>Clear</button><button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-announcement-save") || homepageAnnouncementDraft.trim() === homepageAnnouncement}>Save message</button></div>
-              </form>}</StaffTaskClaim>
+              </form>
             </details>
-          </div>
+          </div>}</StaffTaskClaim>
           <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search accounts by name, username, email, or ID" placeholder="Search name, username, email, or ID" value={accountSearch} onChange={(event) => { setAccountSearch(event.target.value); setAccountPage(1); if (accountListRef.current) accountListRef.current.scrollTop = 0; }} /></label>
           <div className="admin-account-filters" aria-label="Filter accounts">
             {([
@@ -4380,9 +4393,10 @@ export default function Marketplace() {
         {activeAdminPanel === "staff" && role === "admin" && <AdminStaffManagement onNotice={setNotice} />}
         {activeAdminPanel === "order-time-limits" && role === "admin" && <AdminOrderTimeLimits onNotice={setNotice} />}
         {activeAdminPanel === "payment-instructions" && role === "admin" && <AdminPaymentInstructions onNotice={setNotice} />}
-        {activeAdminPanel === "subscriptions" && role === "admin" && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">
-          <div className="admin-queue-heading"><div><span>SELLER AND BUYER ACCESS</span><h2 id="admin-subscriptions-heading">Seller/buyer subscription</h2></div><button className="button button-outline" type="button" disabled={busyActions.has("subscription-refresh")} onClick={() => void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not refresh subscriptions."); } })}><RefreshCw size={14} /> Refresh</button></div>
+        {activeAdminPanel === "subscriptions" && (role === "admin" || staffCan("subscription_payment_confirmations")) && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">
+          <div className="admin-queue-heading"><div><span>SELLER AND BUYER ACCESS</span><h2 id="admin-subscriptions-heading">Subscription Payment Confirmations</h2></div><button className="button button-outline" type="button" disabled={busyActions.has("subscription-refresh")} onClick={() => void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not refresh subscriptions."); } })}><RefreshCw size={14} /> Refresh</button></div>
           <p className="admin-subscription-help">Plans use 30-day months. Saving a duration that already exists updates its price; previous subscriptions keep their original price and duration.</p>
+          {role === "admin" && <>
           <form className="admin-subscription-plan-form" onSubmit={(event) => void saveSubscriptionPlan(event)}>
             <label className="field-label">Months<input className="text-input" type="number" name="months" min="1" max="120" step="1" required value={subscriptionPlanForm.months} onChange={(event) => setSubscriptionPlanForm((current) => ({ ...current, months: event.target.value }))} /></label>
             <label className="field-label">Amount in TSh<input className="text-input" type="number" name="price_tzs" min="0.01" step="0.01" required value={subscriptionPlanForm.price_tzs} onChange={(event) => setSubscriptionPlanForm((current) => ({ ...current, price_tzs: event.target.value }))} /></label>
@@ -4396,6 +4410,7 @@ export default function Marketplace() {
               <button className="button button-outline" type="button" onClick={() => { setEditingSubscriptionPlanId(plan.id); setSubscriptionPlanForm({ months: String(plan.months), price_tzs: String(plan.price_tzs), price_usd: String(plan.price_usd) }); }}>Edit</button>
             </article>)}</div> : <p className="admin-empty">No subscription plans saved yet.</p>}
           </div>
+          </>}
           <div className="admin-subscription-requests">
             <div className="admin-queue-heading"><div><span>PAYMENT CONFIRMATION</span><h3>Pending user requests</h3></div><strong>{pendingSubscriptions.length}</strong></div>
             {pendingSubscriptions.length ? <div className="admin-subscription-request-list">{pendingSubscriptions.map((subscription) => <article className="admin-subscription-request" key={subscription.id}>
@@ -4403,11 +4418,13 @@ export default function Marketplace() {
               <p>{subscription.months} month{subscription.months === 1 ? "" : "s"} · {money(Number(subscription.amount).toFixed(subscription.currency === "USD" ? 2 : 0), subscription.currency)} · Requested {new Date(subscription.requested_at).toLocaleString()}</p>
               <p><strong>Payment reference:</strong> {subscription.payment_reference || "Not provided for this older request"}</p>
               {subscription.payment_receipt_url ? <p><a href={subscription.payment_receipt_url} target="_blank" rel="noopener noreferrer">Open uploaded payment receipt</a></p> : <p>No receipt was attached to this older request.</p>}
-              <label className="field-label admin-subscription-review-note">Rejection reason<textarea className="text-input" rows={2} maxLength={500} value={subscriptionRejectionNotes[subscription.id] ?? ""} onChange={(event) => setSubscriptionRejectionNotes((current) => ({ ...current, [subscription.id]: event.target.value }))} placeholder="Explain what needs to be corrected" /></label>
-              <div className="admin-subscription-request-actions">
-                <button className="button button-dark" type="button" disabled={busyActions.has(`subscription-review-${subscription.id}`)} onClick={() => void reviewSubscriptionPayment(subscription, true)}>{busyActions.has(`subscription-review-${subscription.id}`) ? "Updating…" : "Confirm payment"}</button>
-                <button className="button button-outline" type="button" disabled={busyActions.has(`subscription-review-${subscription.id}`) || !(subscriptionRejectionNotes[subscription.id] ?? "").trim()} onClick={() => void reviewSubscriptionPayment(subscription, false)}>Reject request</button>
-              </div>
+              <StaffTaskClaim type="subscription_payment" taskId={subscription.id} enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <>
+                <label className="field-label admin-subscription-review-note">Rejection reason<textarea className="text-input" rows={2} maxLength={500} value={subscriptionRejectionNotes[subscription.id] ?? ""} disabled={!canAct} onChange={(event) => setSubscriptionRejectionNotes((current) => ({ ...current, [subscription.id]: event.target.value }))} placeholder="Explain what needs to be corrected" /></label>
+                <div className="admin-subscription-request-actions">
+                  <button className="button button-dark" type="button" disabled={!canAct || busyActions.has(`subscription-review-${subscription.id}`)} onClick={() => void reviewSubscriptionPayment(subscription, true)}>{busyActions.has(`subscription-review-${subscription.id}`) ? "Updating…" : "Confirm payment"}</button>
+                  <button className="button button-outline" type="button" disabled={!canAct || busyActions.has(`subscription-review-${subscription.id}`) || !(subscriptionRejectionNotes[subscription.id] ?? "").trim()} onClick={() => void reviewSubscriptionPayment(subscription, false)}>Reject request</button>
+                </div>
+              </>}</StaffTaskClaim>
             </article>)}</div> : <p className="admin-empty">No subscription payments are waiting for confirmation.</p>}
           </div>
         </section>}

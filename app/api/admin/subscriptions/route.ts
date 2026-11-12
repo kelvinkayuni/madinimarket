@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getStaffAccess } from "@/lib/staff-auth";
+import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -18,7 +20,7 @@ async function readBody(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const admin = await getAdminClient(request);
+    const admin = await getAdminClient(request, "subscription_payment_confirmations");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const service = createSupabaseAdminClient();
     const [plansResult, pendingResult] = await Promise.all([
@@ -89,7 +91,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const authorized = await getAdminClient(request);
+    const authorized = await getAdminClient(request, "subscription_payment_confirmations");
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!token) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
@@ -102,6 +104,10 @@ export async function PATCH(request: Request) {
       : null;
     if (!subscriptionId || typeof body?.paid !== "boolean") {
       return NextResponse.json({ error: "Choose whether to confirm or reject this payment." }, { status: 400 });
+    }
+    const staff = await getStaffAccess(request, "subscription_payment_confirmations");
+    if (staff && !await ownsStaffTaskClaim(staff.admin, staff.staffId, "subscription_payment", subscriptionId)) {
+      return NextResponse.json({ error: "Claim this subscription payment before reviewing it." }, { status: 409 });
     }
     const reviewNote = typeof body.reviewNote === "string" ? body.reviewNote.trim() : "";
     if (!body.paid && !reviewNote) {
@@ -121,6 +127,20 @@ export async function PATCH(request: Request) {
     if (error?.code === "42501") return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     if (error?.code === "22023") return NextResponse.json({ error: error.message }, { status: 409 });
     if (error) throw error;
+    if (staff) {
+      const { error: auditError } = await service.from("staff_audit_log").insert({
+        actor_user_id: staff.userId,
+        staff_member_id: staff.staffId,
+        action: body.paid ? "confirm_subscription_payment" : "reject_subscription_payment",
+        entity_type: "account_subscription",
+        entity_id: subscriptionId,
+        details: { review_note: reviewNote || null },
+      });
+      if (auditError) {
+        console.error("Subscription payment reviewed, but the staff audit entry could not be saved.", auditError);
+        return NextResponse.json({ error: "The payment was reviewed, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
+      }
+    }
     return NextResponse.json({ subscription: data }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not update that subscription payment." }, { status: 503 });

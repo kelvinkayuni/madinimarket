@@ -1,12 +1,15 @@
 export const STAFF_PERMISSION_OPTIONS = [
-  { id: "delivery_confirmation", label: "Delivery confirmation" },
-  { id: "marketplace_orders", label: "Marketplace order processing" },
-  { id: "accounting", label: "Accounting — payment verification and payouts; no refunds" },
-  { id: "customer_support", label: "Customer support" },
-  { id: "market_moderation", label: "Market moderation" },
-  { id: "accounts", label: "Accounts" },
-  { id: "translations", label: "English–Swahili translations" },
-  { id: "homepage_headlines", label: "Homepage headlines" },
+  { id: "accounts", label: "Seller/Buyer Accounts" },
+  { id: "translations", label: "English–Swahili Translations" },
+  { id: "homepage_headlines", label: "Homepage Display" },
+  { id: "marketplace_orders", label: "Marketplace Orders Processing" },
+  { id: "delivery_confirmation", label: "Delivery Confirmation" },
+  { id: "order_disputes", label: "Order Disputes" },
+  { id: "buyer_refunds", label: "Buyer Refunds" },
+  { id: "seller_submission_reviews", label: "Seller Submission Reviews" },
+  { id: "buyer_submission_reviews", label: "Buyer Submission Reviews" },
+  { id: "subscription_payment_confirmations", label: "Subscription Payment Confirmations" },
+  { id: "customer_support", label: "Support Inbox" },
 ] as const;
 
 export type StaffPermission = (typeof STAFF_PERMISSION_OPTIONS)[number]["id"];

@@ -6,10 +6,6 @@ import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 export async function POST(request: Request) {
   try {
     const staff = await getStaffAccess(request);
-    if (!staff || !staff.permissions.includes("market_moderation")) {
-      return NextResponse.json({ error: "Assigned review access is required." }, { status: 403 });
-    }
-
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid review details." }, { status: 400 });
@@ -22,13 +18,17 @@ export async function POST(request: Request) {
     if (!["seller", "buyer"].includes(String(kind)) || !Number.isSafeInteger(id) || id < 1 || typeof approved !== "boolean") {
       return NextResponse.json({ error: "Invalid review details." }, { status: 400 });
     }
+    const permission = kind === "seller" ? "seller_submission_reviews" : "buyer_submission_reviews";
+    if (!staff || !staff.permissions.includes(permission)) {
+      return NextResponse.json({ error: "Assigned review access is required." }, { status: 403 });
+    }
     if (!approved && (!message || message.length > 1000)) {
       return NextResponse.json({ error: "Enter a rejection reason of 1 to 1000 characters." }, { status: 400 });
     }
-    const taskType = kind === "seller" ? "listing_review" : "buyer_request_review";
+    const claimType = kind === "seller" ? "listing_review" : "buyer_request_review";
     let ownsClaim = false;
     try {
-      ownsClaim = await ownsStaffTaskClaim(staff.admin, staff.staffId, taskType, String(id));
+      ownsClaim = await ownsStaffTaskClaim(staff.admin, staff.staffId, claimType, String(id));
     } catch (error) {
       console.error("Could not verify the staff review claim.", error);
       return NextResponse.json({ error: "Could not verify task ownership." }, { status: 503 });
