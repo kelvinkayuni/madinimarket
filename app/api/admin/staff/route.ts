@@ -51,11 +51,17 @@ export async function GET(request: Request) {
     { data: staff, error: staffError },
     { data: roles, error: rolesError },
     { data: assignments, error: assignmentsError },
+    completionResult,
   ] = await Promise.all([
     owner.admin.from("staff_members").select("id, employee_code, user_id, full_name, sex, residence, job_role, status, created_at, updated_at").order("id"),
     owner.admin.from("staff_roles").select("id, name, permissions, created_at").order("name"),
     owner.admin.from("staff_member_roles").select("staff_member_id, role_id"),
+    owner.admin.rpc("admin_staff_completion_counts"),
   ]);
+  if (completionResult.error) {
+    console.error("Could not load staff task completion totals.", completionResult.error);
+    return NextResponse.json({ error: "Could not load task completion totals. Apply supabase/staff-task-completions.sql." }, { status: 503 });
+  }
   if (staffError || rolesError || assignmentsError) {
     console.error("Could not load staff management data.", staffError ?? rolesError ?? assignmentsError);
     return NextResponse.json({ error: "Could not load staff management data. Apply the staff management migration." }, { status: 503 });
@@ -83,13 +89,33 @@ export async function GET(request: Request) {
   const completedSetupIds = new Set((acceptedInvitations ?? []).map((entry) => entry.staff_member_id));
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
   const roleAssignmentCounts = new Map<number, number>();
+  const completionCounts = new Map<number, {
+    today: number;
+    month: number;
+    year: number;
+    byTaskType: Record<string, { today: number; month: number; year: number }>;
+  }>();
   for (const assignment of assignments ?? []) {
     roleAssignmentCounts.set(assignment.role_id, (roleAssignmentCounts.get(assignment.role_id) ?? 0) + 1);
+  }
+  for (const row of completionResult.data ?? []) {
+    const counts = completionCounts.get(row.staff_member_id) ?? { today: 0, month: 0, year: 0, byTaskType: {} };
+    const taskCounts = {
+      today: Number(row.today_count),
+      month: Number(row.month_count),
+      year: Number(row.year_count),
+    };
+    counts.today += taskCounts.today;
+    counts.month += taskCounts.month;
+    counts.year += taskCounts.year;
+    counts.byTaskType[row.task_type] = taskCounts;
+    completionCounts.set(row.staff_member_id, counts);
   }
   return NextResponse.json({
     staff: (staff ?? []).map((member) => ({
       ...member,
       setupComplete: completedSetupIds.has(member.id) || member.status === "active",
+      taskCompletionCounts: completionCounts.get(member.id) ?? { today: 0, month: 0, year: 0, byTaskType: {} },
       email: profileById.get(member.user_id)?.email ?? "",
       username: profileById.get(member.user_id)?.username ?? "",
       roles: (assignments ?? [])

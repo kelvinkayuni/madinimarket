@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminClient } from "@/lib/admin-auth";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 import { publicTranslationPhrases } from "@/lib/public-translation-catalog";
 import { normalizeTranslationPhrase } from "@/lib/translation-phrase-normalization";
 
@@ -71,10 +72,12 @@ export async function POST(request: Request) {
     if (!await phraseExistsOnSite(admin, pair.english_phrase)) {
       return NextResponse.json({ error: "That English phrase does not match a complete phrase in the public interface." }, { status: 400 });
     }
+    const staff = await getStaffAccess(request, "translations");
     const { data, error } = await admin.from("translation_pairs").insert(pair)
       .select("id, english_phrase, swahili_phrase").single();
     if (error?.code === "23505") return NextResponse.json({ error: "A translation for that English phrase already exists." }, { status: 409 });
     if (error) throw error;
+    await recordStaffTaskCompletion(admin, staff, "translation_pair", data.id, "add_translation");
     return NextResponse.json({ translation: data }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Could not save the translation pair." }, { status: 503 });
@@ -102,6 +105,7 @@ export async function PATCH(request: Request) {
     if (error?.code === "23505") return NextResponse.json({ error: "A translation for that English phrase already exists." }, { status: 409 });
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Translation pair not found." }, { status: 404 });
+    await recordStaffTaskCompletion(admin, staff, "translation_pair", id, "update_translation");
     return NextResponse.json({ translation: data });
   } catch {
     return NextResponse.json({ error: "Could not update the translation pair." }, { status: 503 });
@@ -123,6 +127,7 @@ export async function DELETE(request: Request) {
     const { data, error } = await admin.from("translation_pairs").delete().eq("id", id).select("id").maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Translation pair not found." }, { status: 404 });
+    await recordStaffTaskCompletion(admin, staff, "translation_pair", id, "delete_translation");
     return NextResponse.json({ deleted: true });
   } catch {
     return NextResponse.json({ error: "Could not delete the translation pair." }, { status: 503 });

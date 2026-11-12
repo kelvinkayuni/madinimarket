@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 
 export async function POST(request: Request) {
   try {
@@ -49,6 +50,11 @@ export async function POST(request: Request) {
       console.error("Staff review action failed.", error);
       return NextResponse.json({ error: "Could not save the review decision." }, { status: 503 });
     }
+    await recordStaffTaskCompletion(staff.admin, {
+      staffId: staff.staffId,
+      fullName: staff.fullName,
+      employeeCode: staff.employeeCode,
+    }, claimType, String(id), approved ? "approve" : "reject");
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Could not process the staff review action.", error);

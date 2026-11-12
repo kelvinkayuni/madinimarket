@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/admin-auth";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 
 export async function GET(request: Request) {
   const admin = await getAdminClient(request, "customer_support");
@@ -72,6 +73,10 @@ export async function PATCH(request: Request) {
     if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "support_thread", threadId)) {
       return NextResponse.json({ error: "Claim this support conversation before handling it." }, { status: 409 });
     }
+    const { data: currentThread, error: currentThreadError } = await admin.from("support_threads")
+      .select("status").eq("id", threadId).maybeSingle();
+    if (currentThreadError) throw currentThreadError;
+    if (!currentThread) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
     if (typeof values.internalNote === "string") {
       const { error } = await admin.from("support_threads").update({ internal_note: values.internalNote.slice(0, 5000), updated_at: new Date().toISOString() }).eq("id", threadId);
       if (error) throw error;
@@ -89,6 +94,9 @@ export async function PATCH(request: Request) {
     const update: Record<string, unknown> = { status, unread_by_admin: false, unread_by_user: Boolean(reply), updated_at: now }; if (reply) update.last_message_at = now;
     const { error } = await admin.from("support_threads").update(update).eq("id", threadId);
     if (error) throw error;
+    if (status === "resolved" && currentThread.status !== "resolved") {
+      await recordStaffTaskCompletion(admin, staff, "support_thread", threadId, "resolve_conversation");
+    }
     return NextResponse.json({ saved: true });
   } catch {
     return NextResponse.json({ error: "Could not update the support conversation." }, { status: 503 });

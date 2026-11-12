@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -107,5 +108,10 @@ export async function PATCH(request: Request) {
     console.error("Order operations staff could not confirm shipment delivery.", error);
     return NextResponse.json({ error: "Could not confirm shipment delivery." }, { status: 503 });
   }
+  await recordStaffTaskCompletion(staff.admin, {
+    staffId: staff.staffId,
+    fullName: staff.fullName,
+    employeeCode: staff.employeeCode,
+  }, "marketplace_delivery", itemId, "confirm_delivery");
   return NextResponse.json({ ok: true, itemsUpdated: data });
 }

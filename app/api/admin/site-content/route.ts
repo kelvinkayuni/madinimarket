@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 
 function readObject(body: unknown): Record<string, unknown> | null {
   return typeof body === "object" && body !== null && !Array.isArray(body)
@@ -120,6 +121,7 @@ export async function PATCH(request: Request) {
         .select("account_creation_disabled")
         .single();
       if (error) throw error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "suspend_account_creation");
       return NextResponse.json({ accountCreationDisabled: data.account_creation_disabled }, { headers: { "Cache-Control": "no-store" } });
     }
     if (typeof values?.nonAdminSignInDisabled === "boolean") {
@@ -129,6 +131,7 @@ export async function PATCH(request: Request) {
         .select("non_admin_sign_in_disabled")
         .single();
       if (error) throw error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "suspend_user_sign_in");
       return NextResponse.json({ nonAdminSignInDisabled: data.non_admin_sign_in_disabled }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values?.signOutAllUsers === true) {
@@ -147,6 +150,7 @@ export async function PATCH(request: Request) {
       const results = await Promise.all(updates);
       const failed = results.find((result) => result.error);
       if (failed?.error) throw failed.error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "sign_out_all_users");
       return NextResponse.json({ signedOutUsers: (accounts ?? []).length }, { headers: { "Cache-Control": "no-store" } });
     }
     if (typeof values?.homepageAnnouncement === "string") {
@@ -157,6 +161,7 @@ export async function PATCH(request: Request) {
         .select("homepage_announcement")
         .single();
       if (error) throw error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "update_announcement");
       return NextResponse.json({ homepageAnnouncement: data.homepage_announcement ?? "" }, { headers: { "Cache-Control": "no-store" } });
     }
     if (typeof values?.swahiliEnabled === "boolean") {
@@ -179,6 +184,7 @@ export async function PATCH(request: Request) {
         .select("homepage_headline_font_size")
         .single();
       if (error) throw error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "update_headline_font_size");
       return NextResponse.json({ headlineFontSize: data.homepage_headline_font_size }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values && "headlineFontSize" in values) {
@@ -191,6 +197,7 @@ export async function PATCH(request: Request) {
         .select("seller_cards_per_column")
         .single();
       if (error) throw error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "update_seller_card_layout");
       return NextResponse.json({ sellerCardsPerColumn: data.seller_cards_per_column }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values && Number.isSafeInteger(values.buyerCardsPerColumn) && typeof values.buyerCardsPerColumn === "number" && values.buyerCardsPerColumn >= 1) {
@@ -200,6 +207,7 @@ export async function PATCH(request: Request) {
         .select("buyer_cards_per_column")
         .single();
       if (error) throw error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "update_buyer_card_layout");
       return NextResponse.json({ buyerCardsPerColumn: data.buyer_cards_per_column }, { headers: { "Cache-Control": "no-store" } });
     }
     return NextResponse.json({ error: "Choose a valid site setting." }, { status: 400 });
@@ -226,6 +234,7 @@ export async function POST(request: Request) {
     const { data, error } = await createSupabaseAdminClient().from("homepage_headlines").insert(headline)
       .select("id, main_phrase, accent_phrase").single();
     if (error) throw error;
+    await recordStaffTaskCompletion(authorized, staff, "homepage_setting", data.id, "add_headline");
     return NextResponse.json({ headline: data }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not save the homepage phrase." }, { status: 503 });
@@ -248,6 +257,7 @@ export async function DELETE(request: Request) {
       .delete().eq("id", id).select("id").maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Homepage phrase not found." }, { status: 404 });
+    await recordStaffTaskCompletion(authorized, staff, "homepage_setting", id, "delete_headline");
     return NextResponse.json({ deleted: true }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not delete the homepage phrase." }, { status: 503 });

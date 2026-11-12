@@ -24,6 +24,29 @@ type StaffMember = {
   status: "invited" | "active" | "suspended";
   setupComplete: boolean;
   created_at: string;
+  taskCompletionCounts: {
+    today: number;
+    month: number;
+    year: number;
+    byTaskType: Record<string, { today: number; month: number; year: number }>;
+  };
+};
+
+const staffTaskLabels: Record<string, string> = {
+  listing_review: "Seller submission reviews",
+  buyer_request_review: "Buyer submission reviews",
+  certificate_review: "Licence reviews",
+  marketplace_order: "Marketplace order processing",
+  marketplace_delivery: "Delivery confirmations",
+  marketplace_payout: "Seller payouts",
+  marketplace_dispute: "Order disputes",
+  buyer_refund: "Buyer refunds",
+  support_thread: "Support conversations",
+  website_account: "Seller/Buyer accounts",
+  translation_pair: "Translations",
+  homepage_setting: "Homepage display",
+  account_setting: "Account settings",
+  subscription_payment: "Subscription payment confirmations",
 };
 export default function AdminStaffManagement({ onNotice }: { onNotice: (message: string) => void }) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -447,6 +470,21 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         {staff.map((member) => <article className="admin-staff-row" key={member.id}>
           <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small><strong className="admin-staff-assigned-roles">{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"}</strong> · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
             {(member.sex || member.residence) && <small>{member.sex ? `Sex: ${member.sex.replaceAll("_", " ")}` : ""}{member.sex && member.residence ? " · " : ""}{member.residence ? `Residence / work area: ${member.residence}` : ""}</small>}
+            <details className="admin-staff-completion-details">
+              <summary>Completed tasks · Today {member.taskCompletionCounts.today} · This month {member.taskCompletionCounts.month} · This year {member.taskCompletionCounts.year}</summary>
+              <p>Counts begin when completion tracking is enabled. Periods use Tanzania time.</p>
+              {Object.keys(member.taskCompletionCounts.byTaskType).length ? <div className="admin-staff-completion-table" role="table" aria-label={`Completed tasks by type for ${member.full_name}`}>
+                <div role="row"><strong role="columnheader">Task type</strong><strong role="columnheader">Today</strong><strong role="columnheader">This month</strong><strong role="columnheader">This year</strong></div>
+                {Object.entries(member.taskCompletionCounts.byTaskType)
+                  .sort(([a], [b]) => (staffTaskLabels[a] ?? a).localeCompare(staffTaskLabels[b] ?? b))
+                  .map(([taskType, counts]) => <div role="row" key={taskType}>
+                    <span role="cell">{staffTaskLabels[taskType] ?? taskType}</span>
+                    <span role="cell">{counts.today}</span>
+                    <span role="cell">{counts.month}</span>
+                    <span role="cell">{counts.year}</span>
+                  </div>)}
+              </div> : <small>No staff tasks completed this year.</small>}
+            </details>
             {editingRolesFor === member.id && <fieldset className="admin-staff-permissions">
               <legend>Assigned roles (optional)</legend>
               {roles.map((role) => <label key={role.id}>

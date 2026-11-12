@@ -7,6 +7,7 @@ import { marketplacePayoutGroupKey } from "@/lib/marketplace-payouts";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 
 type Body = Record<string, unknown>;
 type OrderQueueItem = {
@@ -378,6 +379,11 @@ export async function POST(request: Request) {
       console.error("Seller payout recorded, but the staff audit entry could not be saved.", auditError);
       return NextResponse.json({ error: "The payout was recorded, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
     }
+    await recordStaffTaskCompletion(admin, {
+      staffId: staffAccess.staffId,
+      fullName: staffAccess.fullName,
+      employeeCode: staffAccess.employeeCode,
+    }, "marketplace_payout", itemId, "record_payout");
   }
   return NextResponse.json({ ok: true, itemCount: updated.length });
 }
@@ -442,6 +448,11 @@ export async function PATCH(request: Request) {
           console.error("Order payment verified, but the staff audit entry could not be saved.", auditError);
           return NextResponse.json({ error: "Payment was verified, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
         }
+        await recordStaffTaskCompletion(service, {
+          staffId: staffAccess.staffId,
+          fullName: staffAccess.fullName,
+          employeeCode: staffAccess.employeeCode,
+        }, "marketplace_order", order.id, "verify_payment");
       }
       return NextResponse.json({ ok: true });
     }
@@ -461,6 +472,11 @@ export async function PATCH(request: Request) {
         throw error;
       }
       if (!data) return NextResponse.json({ error: "This shipment is no longer awaiting carrier delivery confirmation." }, { status: 409 });
+      await recordStaffTaskCompletion(service, staffAccess ? {
+        staffId: staffAccess.staffId,
+        fullName: staffAccess.fullName,
+        employeeCode: staffAccess.employeeCode,
+      } : null, "marketplace_delivery", itemId, "confirm_delivery");
       return NextResponse.json({ ok: true });
     }
 
@@ -490,6 +506,11 @@ export async function PATCH(request: Request) {
           console.error("Dispute resolved, but the staff audit entry could not be saved.", auditError);
           return NextResponse.json({ error: "The dispute was resolved, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
         }
+        await recordStaffTaskCompletion(service, {
+          staffId: staffAccess.staffId,
+          fullName: staffAccess.fullName,
+          employeeCode: staffAccess.employeeCode,
+        }, "marketplace_dispute", itemId, `resolve_${outcome}`);
       }
       return NextResponse.json({ ok: true });
     }
@@ -518,6 +539,11 @@ export async function PATCH(request: Request) {
           console.error("Buyer refund recorded, but the staff audit entry could not be saved.", auditError);
           return NextResponse.json({ error: "The refund was recorded, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
         }
+        await recordStaffTaskCompletion(service, {
+          staffId: staffAccess.staffId,
+          fullName: staffAccess.fullName,
+          employeeCode: staffAccess.employeeCode,
+        }, "buyer_refund", itemId, "record_refund");
       }
       return NextResponse.json({ ok: true });
     }

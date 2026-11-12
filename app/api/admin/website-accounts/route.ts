@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 
@@ -109,6 +110,7 @@ export async function PATCH(request: Request) {
         .maybeSingle();
       if (error) throw error;
       if (!data) return NextResponse.json({ error: "Account not found." }, { status: 404 });
+      await recordStaffTaskCompletion(admin, staff, "website_account", id, `bank_edit_${bankEditPermission ? "enabled" : "disabled"}`);
       return NextResponse.json({ account: data });
     }
     if (typeof values.is_active !== "boolean") {
@@ -118,6 +120,7 @@ export async function PATCH(request: Request) {
       .eq("id", id).select("id, is_active").maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Account not found." }, { status: 404 });
+    await recordStaffTaskCompletion(admin, staff, "website_account", id, `set_active_${values.is_active}`);
     return NextResponse.json({ account: data });
   } catch (error) {
     console.error("Could not update website account.", error);
@@ -153,6 +156,7 @@ export async function DELETE(request: Request) {
     if (certificateError) throw certificateError;
     const { error } = await admin.from("website_accounts").delete().eq("id", id);
     if (error) throw error;
+    await recordStaffTaskCompletion(admin, staff, "website_account", id, "delete_account");
     if (imagePaths.length) await admin.storage.from("mineral-images").remove(imagePaths);
     const certificatePaths = (certificateRows ?? []).map((row) => row.file_path);
     if (certificatePaths.length) await admin.storage.from("account-certificates").remove(certificatePaths);

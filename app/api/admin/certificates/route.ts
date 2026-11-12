@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/admin-auth";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 
 export async function GET(request: Request) {
   try {
@@ -63,6 +64,11 @@ export async function PATCH(request: Request) {
     }).eq("id", id).eq("status", "pending").select("id").maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "This licence is no longer waiting for review." }, { status: 404 });
+    await recordStaffTaskCompletion(admin, staff ? {
+      staffId: staff.staffId,
+      fullName: staff.fullName,
+      employeeCode: staff.employeeCode,
+    } : null, "certificate_review", id, approved ? "approve" : "reject");
     return NextResponse.json({ reviewed: true });
   } catch {
     return NextResponse.json({ error: "Could not save the licence review." }, { status: 503 });

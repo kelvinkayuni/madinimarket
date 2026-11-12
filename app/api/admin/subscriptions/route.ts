@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
+import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -142,6 +143,7 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "The payment was reviewed, but its audit record could not be saved. Contact the owner administrator." }, { status: 503 });
       }
     }
+    await recordStaffTaskCompletion(service, staff, "subscription_payment", subscriptionId, body.paid ? "confirm_payment" : "reject_payment");
     return NextResponse.json({ subscription: data }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not update that subscription payment." }, { status: 503 });
