@@ -93,6 +93,22 @@ export async function GET(request: Request) {
     .eq("status", "active")
     .order("full_name", { ascending: true });
   if (staffError) return NextResponse.json({ error: "Could not load staff conversations." }, { status: 503 });
+  const staffMemberIds = (staffMembers ?? []).map((member) => member.id);
+  const { data: roleAssignments, error: roleAssignmentsError } = staffMemberIds.length
+    ? await admin.from("staff_member_roles")
+      .select("staff_member_id,role:staff_roles(name)")
+      .in("staff_member_id", staffMemberIds)
+    : { data: [], error: null };
+  if (roleAssignmentsError) return NextResponse.json({ error: "Could not load staff roles." }, { status: 503 });
+  const rolesByStaffMemberId = new Map<number, string[]>();
+  for (const assignment of roleAssignments ?? []) {
+    const roleNames = (assignment.role ?? []).map((role) => role.name);
+    rolesByStaffMemberId.set(assignment.staff_member_id, [
+      ...(rolesByStaffMemberId.get(assignment.staff_member_id) ?? []),
+      ...roleNames,
+    ]);
+  }
+  for (const roleNames of rolesByStaffMemberId.values()) roleNames.sort((a, b) => a.localeCompare(b));
   try {
     const unreadCounts = await Promise.all(conversations.map((conversation) =>
       getStaffChatUnreadCount(admin, conversation.id, "staff")));
@@ -108,11 +124,13 @@ export async function GET(request: Request) {
         ...conversation,
         full_name: member.full_name,
         employee_code: member.employee_code,
+        role_names: rolesByStaffMemberId.get(member.id) ?? [],
       } : {
         id: null,
         staff_member_id: member.id,
         full_name: member.full_name,
         employee_code: member.employee_code,
+        role_names: rolesByStaffMemberId.get(member.id) ?? [],
         unread_count: 0,
         unread_by_admin: false,
         unread_by_staff: false,

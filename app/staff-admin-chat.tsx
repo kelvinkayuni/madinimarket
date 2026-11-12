@@ -10,6 +10,7 @@ type StaffConversation = {
   staff_member_id: number;
   full_name: string;
   employee_code: string;
+  role_names?: string[];
   updated_at: string | null;
   last_message_at: string | null;
   unread_count: number;
@@ -397,7 +398,9 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             setReplyTo(null);
             setMobileConversationOpen(true);
           }}>
-            <span><strong>{item.employee_code}</strong><small>{item.full_name}</small></span>
+            <span><strong>{item.employee_code}</strong><small>{item.full_name} · {item.role_names?.length
+              ? `${item.role_names.length === 1 ? "Role" : "Roles"}: ${item.role_names.join(", ")}`
+              : "No assigned role"}</small></span>
             <b>{item.unread_count > 0 ? `New from ${item.full_name}` : item.id ? "Direct chat" : "Start a chat"}</b>
             {item.last_message_at && <em>{new Date(item.last_message_at).toLocaleString()}</em>}
             {item.unread_count > 0 && <i>{item.unread_count} unread</i>}
@@ -415,6 +418,9 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             {admin && <button className="support-mobile-back" type="button" onClick={() => setMobileConversationOpen(false)}>← Back to conversations</button>}
             <span>{admin && selectedConversation ? `${selectedConversation.employee_code} · ${selectedConversation.full_name}` : "PRIVATE STAFF CHAT"}</span>
             <h2>{admin ? selectedConversation?.full_name ?? "Select a staff conversation" : "Chat with admin"}</h2>
+            {admin && selectedConversation && <small>{selectedConversation.role_names?.length
+              ? `${selectedConversation.role_names.length === 1 ? "Role" : "Roles"}: ${selectedConversation.role_names.join(", ")}`
+              : "No assigned role"}</small>}
             {admin && selectedConversation && !selectedId && <small>Start a new direct conversation with this staff member.</small>}
           </div>
           <div className="staff-chat-conversation-actions">
