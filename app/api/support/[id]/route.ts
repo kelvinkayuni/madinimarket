@@ -34,7 +34,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (!thread) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
     const { data: supportMessage, error } = await admin.from("support_messages").insert({ thread_id: id, sender_type: "user", sender_id: accountId, message }).select("id").single();
     if (error || !supportMessage) throw error ?? new Error("Could not send reply.");
-    for (const value of form.getAll("attachments").filter((item): item is File => item instanceof File)) {
+    const files = form.getAll("attachments").filter((item): item is File =>
+      item instanceof File && !(item.name === "" && item.size === 0),
+    );
+    for (const value of files) {
       if (!["application/pdf", "image/jpeg", "image/png"].includes(value.type) || value.size < 1 || value.size > 4194304) return NextResponse.json({ error: "Attachments must be PDF, JPEG, or PNG and no larger than 4 MB." }, { status: 400 });
       const extension = value.type === "application/pdf" ? "pdf" : value.type === "image/png" ? "png" : "jpg";
       const filePath = `${accountId}/${id}/${randomUUID()}.${extension}`;

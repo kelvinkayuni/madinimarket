@@ -30,7 +30,9 @@ export async function POST(request: Request) {
     if (threadError || !thread) throw threadError ?? new Error("Could not create support ticket.");
     const { data: supportMessage, error: messageError } = await admin.from("support_messages").insert({ thread_id: thread.id, sender_type: "user", sender_id: accountId, message }).select("id").single();
     if (messageError || !supportMessage) throw messageError ?? new Error("Could not save support message.");
-    const files = form.getAll("attachments").filter((value): value is File => value instanceof File);
+    const files = form.getAll("attachments").filter((value): value is File =>
+      value instanceof File && !(value.name === "" && value.size === 0),
+    );
     for (const file of files) {
       if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size < 1 || file.size > 4194304) { await admin.from("support_threads").delete().eq("id", thread.id); return NextResponse.json({ error: "Attachments must be PDF, JPEG, or PNG and no larger than 4 MB." }, { status: 400 }); }
       const extension = file.type === "application/pdf" ? "pdf" : file.type === "image/png" ? "png" : "jpg";
