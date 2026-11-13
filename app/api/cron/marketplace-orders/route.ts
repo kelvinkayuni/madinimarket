@@ -17,6 +17,17 @@ function isAuthorized(request: Request) {
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
+function escapeHtml(value: string) {
+  const entities: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  };
+  return value.replace(/[&<>"']/g, (character) => entities[character]);
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   try {
@@ -290,24 +301,62 @@ export async function GET(request: Request) {
     }
 
     const { data: dispatchItems, error: dispatchError } = await admin.from("marketplace_order_items")
-      .select("id, seller_email, mineral_name, weight, unit, seller_amount, currency, order:marketplace_orders!inner(control_number, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)")
+      .select("id, order_id, seller_id, seller_email, mineral_name, weight, unit, seller_amount, currency, order:marketplace_orders!inner(control_number, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)")
       .eq("status", "paid").is("dispatch_email_sent_at", null).limit(5);
     if (dispatchError) throw dispatchError;
+    const handledDispatchGroups = new Set<string>();
     for (const item of dispatchItems ?? []) {
-      const order = Array.isArray(item.order) ? item.order[0] : item.order;
+      const groupKey = JSON.stringify([item.order_id, item.seller_id ?? item.seller_email.toLowerCase(), item.seller_email.toLowerCase()]);
+      if (handledDispatchGroups.has(groupKey)) continue;
+      handledDispatchGroups.add(groupKey);
+
+      let dispatchGroupQuery = admin.from("marketplace_order_items")
+        .select("id, order_id, seller_id, seller_email, mineral_name, weight, unit, seller_amount, currency, order:marketplace_orders!inner(control_number, buyer_name, buyer_phone, delivery_country, delivery_region, delivery_district, delivery_address)")
+        .eq("order_id", item.order_id)
+        .eq("seller_email", item.seller_email)
+        .eq("status", "paid")
+        .is("dispatch_email_sent_at", null);
+      dispatchGroupQuery = item.seller_id
+        ? dispatchGroupQuery.eq("seller_id", item.seller_id)
+        : dispatchGroupQuery.is("seller_id", null);
+      const { data: dispatchGroupItems, error: dispatchGroupError } = await dispatchGroupQuery;
+      if (dispatchGroupError) {
+        emailFailures += 1;
+        console.error(`Could not load dispatch items for order ${item.order_id} and seller ${item.seller_id ?? item.seller_email}`, dispatchGroupError);
+        continue;
+      }
+      if (!dispatchGroupItems?.length) continue;
+
+      const order = Array.isArray(dispatchGroupItems[0].order) ? dispatchGroupItems[0].order[0] : dispatchGroupItems[0].order;
+      if (!order) {
+        emailFailures += 1;
+        console.error(`Dispatch notification has no parent order for order ${item.order_id}`);
+        continue;
+      }
+      const orderItemLines = dispatchGroupItems.map((groupItem) =>
+        `- ${groupItem.mineral_name} (${groupItem.weight} ${groupItem.unit}) — seller payout ${groupItem.currency} ${Number(groupItem.seller_amount).toLocaleString()}`,
+      );
+      const dispatchTotals = new Map<string, number>();
+      for (const groupItem of dispatchGroupItems) {
+        dispatchTotals.set(groupItem.currency, (dispatchTotals.get(groupItem.currency) ?? 0) + Number(groupItem.seller_amount));
+      }
+      const dispatchTotalsText = [...dispatchTotals].map(([currency, amount]) => `${currency} ${amount.toLocaleString()}`).join(" · ");
+      const deliveryAddress = [order.delivery_address, order.delivery_district, order.delivery_region, order.delivery_country].filter(Boolean).join(", ");
+      const itemIds = dispatchGroupItems.map((groupItem) => groupItem.id);
       try {
         await sendGmailEmail({
           to: item.seller_email,
           subject: `Payment verified: dispatch order ${order.control_number}`,
-          text: `Payment for order ${order.control_number} is verified. Dispatch ${item.mineral_name} (${item.weight} ${item.unit}) and record courier tracking in My orders.\n\nBuyer: ${order.buyer_name}\nPhone: ${order.buyer_phone}\nDelivery: ${order.delivery_address}, ${order.delivery_district}, ${order.delivery_region}, ${order.delivery_country}\nSeller payout (excluding Madinimarket fee): ${item.currency} ${Number(item.seller_amount).toLocaleString()}\n\nThe buyer email is intentionally not included. Sign in at ${getPublicAppUrl()}.`,
+          text: `Payment for order ${order.control_number} is verified. Dispatch all the following items and record courier tracking in My orders:\n${orderItemLines.join("\n")}\n\nBuyer: ${order.buyer_name}\nPhone: ${order.buyer_phone}\nDelivery: ${deliveryAddress}\nTotal seller payout (excluding Madinimarket fee): ${dispatchTotalsText}\n\nThe buyer email is intentionally not included. Sign in at ${getPublicAppUrl()}.`,
+          html: `<p>Payment for order <strong>${escapeHtml(order.control_number)}</strong> is verified. Dispatch all the following items and record courier tracking in My orders:</p><ul>${dispatchGroupItems.map((groupItem) => `<li>${escapeHtml(groupItem.mineral_name)} (${escapeHtml(String(groupItem.weight))} ${escapeHtml(groupItem.unit)}) — seller payout ${escapeHtml(groupItem.currency)} ${Number(groupItem.seller_amount).toLocaleString()}</li>`).join("")}</ul><p><strong>Buyer:</strong> ${escapeHtml(order.buyer_name)}<br><strong>Phone:</strong> ${escapeHtml(order.buyer_phone ?? "")}<br><strong>Delivery:</strong> ${escapeHtml(deliveryAddress)}</p><p><strong>Total seller payout (excluding Madinimarket fee):</strong> ${escapeHtml(dispatchTotalsText)}</p><p>The buyer email is intentionally not included. <a href="${escapeHtml(getPublicAppUrl().toString())}">Sign in to Madinimarket</a>.</p>`,
         });
         const { error } = await admin.from("marketplace_order_items")
-          .update({ dispatch_email_sent_at: new Date().toISOString() }).eq("id", item.id).is("dispatch_email_sent_at", null);
+          .update({ dispatch_email_sent_at: new Date().toISOString() }).in("id", itemIds).is("dispatch_email_sent_at", null);
         if (error) throw error;
         sentCount += 1;
       } catch (error) {
         emailFailures += 1;
-        console.error(`Dispatch notification failed for order item ${item.id}`, error);
+        console.error(`Dispatch notification failed for order ${order.control_number} and seller ${item.seller_id ?? item.seller_email}`, error);
       }
     }
 
@@ -388,24 +437,61 @@ export async function GET(request: Request) {
     }
 
     const { data: payoutDueItems, error: payoutDueError } = await admin.from("marketplace_order_items")
-      .select("id, seller_email, seller_amount, currency, order:marketplace_orders!inner(control_number)")
+      .select("id, order_id, seller_id, seller_email, mineral_name, weight, unit, seller_amount, currency, order:marketplace_orders!inner(control_number)")
       .eq("status", "payout_due").is("payout_due_email_sent_at", null).limit(5);
     if (payoutDueError) throw payoutDueError;
+    const handledPayoutGroups = new Set<string>();
     for (const item of payoutDueItems ?? []) {
-      const order = Array.isArray(item.order) ? item.order[0] : item.order;
+      const groupKey = JSON.stringify([item.order_id, item.seller_id ?? item.seller_email.toLowerCase(), item.seller_email.toLowerCase()]);
+      if (handledPayoutGroups.has(groupKey)) continue;
+      handledPayoutGroups.add(groupKey);
+
+      let payoutGroupQuery = admin.from("marketplace_order_items")
+        .select("id, order_id, seller_id, seller_email, mineral_name, weight, unit, seller_amount, currency, order:marketplace_orders!inner(control_number)")
+        .eq("order_id", item.order_id)
+        .eq("seller_email", item.seller_email)
+        .eq("status", "payout_due")
+        .is("payout_due_email_sent_at", null);
+      payoutGroupQuery = item.seller_id
+        ? payoutGroupQuery.eq("seller_id", item.seller_id)
+        : payoutGroupQuery.is("seller_id", null);
+      const { data: payoutGroupItems, error: payoutGroupError } = await payoutGroupQuery;
+      if (payoutGroupError) {
+        emailFailures += 1;
+        console.error(`Could not load payout items for order ${item.order_id} and seller ${item.seller_id ?? item.seller_email}`, payoutGroupError);
+        continue;
+      }
+      if (!payoutGroupItems?.length) continue;
+
+      const order = Array.isArray(payoutGroupItems[0].order) ? payoutGroupItems[0].order[0] : payoutGroupItems[0].order;
+      if (!order) {
+        emailFailures += 1;
+        console.error(`Payout notification has no parent order for order ${item.order_id}`);
+        continue;
+      }
+      const payoutLinesText = payoutGroupItems.map((groupItem) =>
+        `- ${groupItem.mineral_name} (${groupItem.weight} ${groupItem.unit}): ${groupItem.currency} ${Number(groupItem.seller_amount).toLocaleString()}`,
+      );
+      const payoutTotals = new Map<string, number>();
+      for (const groupItem of payoutGroupItems) {
+        payoutTotals.set(groupItem.currency, (payoutTotals.get(groupItem.currency) ?? 0) + Number(groupItem.seller_amount));
+      }
+      const payoutTotalsText = [...payoutTotals].map(([currency, amount]) => `${currency} ${amount.toLocaleString()}`).join(" · ");
+      const itemIds = payoutGroupItems.map((groupItem) => groupItem.id);
       try {
         await sendGmailEmail({
           to: item.seller_email,
           subject: `Seller payout due for order ${order.control_number}`,
-          text: `Seller payout for your item in order ${order.control_number} is due. The amount excludes the Madinimarket fee: ${item.currency} ${Number(item.seller_amount).toLocaleString()}. The administrator will transfer it outside the app and record the transaction reference.\n\nMadinimarket`,
+          text: `Seller payout for the following items in order ${order.control_number} is due:\n${payoutLinesText.join("\n")}\n\nTotal payout due (excluding the Madinimarket fee): ${payoutTotalsText}\n\nThe administrator will transfer it outside the app and record the transaction reference.\n\nMadinimarket`,
+          html: `<p>Seller payout for the following items in order <strong>${escapeHtml(order.control_number)}</strong> is due:</p><ul>${payoutGroupItems.map((groupItem) => `<li>${escapeHtml(groupItem.mineral_name)} (${escapeHtml(String(groupItem.weight))} ${escapeHtml(groupItem.unit)}): ${escapeHtml(groupItem.currency)} ${Number(groupItem.seller_amount).toLocaleString()}</li>`).join("")}</ul><p><strong>Total payout due (excluding the Madinimarket fee):</strong> ${escapeHtml(payoutTotalsText)}</p><p>The administrator will transfer it outside the app and record the transaction reference.</p><p>Madinimarket</p>`,
         });
         const { error } = await admin.from("marketplace_order_items")
-          .update({ payout_due_email_sent_at: new Date().toISOString() }).eq("id", item.id).is("payout_due_email_sent_at", null);
+          .update({ payout_due_email_sent_at: new Date().toISOString() }).in("id", itemIds).is("payout_due_email_sent_at", null);
         if (error) throw error;
         sentCount += 1;
       } catch (error) {
         emailFailures += 1;
-        console.error(`Payout notification failed for order item ${item.id}`, error);
+        console.error(`Payout notification failed for order ${order.control_number} and seller ${item.seller_id ?? item.seller_email}`, error);
       }
     }
 
