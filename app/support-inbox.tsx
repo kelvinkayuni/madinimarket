@@ -27,6 +27,29 @@ export type SupportMessage = {
 const statusLabels: Record<string, string> = { open: "Open", admin_replied: "Admin replied", pending_user: "Waiting for user", resolved: "Resolved" };
 const supportAttachmentTypes = "application/pdf,image/jpeg,image/png";
 const supportAttachmentSize = 4 * 1024 * 1024;
+const supportAttachmentUrlRefreshMs = 10 * 60 * 1000;
+
+function supportMessagesMatch(current: SupportMessage[], next: SupportMessage[]) {
+  if (current.length !== next.length) return false;
+  const previousById = new Map(current.map((message) => [message.id, message]));
+  return next.every((message) => {
+    const previous = previousById.get(message.id);
+    return previous
+      && previous.sender_type === message.sender_type
+      && previous.message === message.message
+      && previous.created_at === message.created_at
+      && previous.seen_by_admin_at === message.seen_by_admin_at
+      && previous.seen_by_user_at === message.seen_by_user_at
+      && previous.support_attachments.length === message.support_attachments.length
+      && message.support_attachments.every((attachment) => {
+        const previousAttachment = previous.support_attachments.find((item) => item.id === attachment.id);
+        return previousAttachment
+          && previousAttachment.file_name === attachment.file_name
+          && previousAttachment.file_type === attachment.file_type
+          && previousAttachment.file_size === attachment.file_size;
+      });
+  });
+}
 
 export default function SupportInbox({ admin = false, staffClaims = false, onNotice, onUnreadCount }: { admin?: boolean; staffClaims?: boolean; onNotice: (message: string) => void; onUnreadCount?: (count: number) => void }) {
   const [adminAccessToken, setAdminAccessToken] = useState("");
@@ -51,6 +74,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
   const [files, setFiles] = useState<File[]>([]);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentUrlRefreshAt = useRef(new Map<string, number>());
 
   const getFreshAdminHeaders = useCallback(async (includeJson = false) => {
     const { data } = await getSupabaseBrowserClient().auth.getSession();
@@ -82,8 +106,40 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
       const response = await userFetch(admin ? `/api/admin/support?threadId=${encodeURIComponent(id)}` : `/api/support/${id}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load this conversation.");
-      setThread(result.thread); setMessages(result.messages ?? []); setInternalNote(result.thread?.internal_note ?? "");
-      setSelectedMessageIds((current) => new Set([...current].filter((messageId) => (result.messages ?? []).some((message: SupportMessage) => message.id === messageId))));
+      const nextThread = result.thread as SupportThread;
+      const nextMessages = (result.messages ?? []) as SupportMessage[];
+      setThread((current) => current
+        && current.id === nextThread.id
+        && current.status === nextThread.status
+        && current.subject === nextThread.subject
+        && current.updated_at === nextThread.updated_at
+        && current.last_message_at === nextThread.last_message_at
+        && current.internal_note === nextThread.internal_note
+        ? current
+        : nextThread);
+      if (refreshList) setInternalNote(nextThread.internal_note ?? "");
+      const now = Date.now();
+      const hasAttachments = nextMessages.some((message) => message.support_attachments.length > 0);
+      const refreshAttachmentUrls = hasAttachments &&
+        now - (attachmentUrlRefreshAt.current.get(id) ?? 0) >= supportAttachmentUrlRefreshMs;
+      setMessages((current) => {
+        if (!refreshAttachmentUrls && supportMessagesMatch(current, nextMessages)) return current;
+        const previousById = new Map(current.map((message) => [message.id, message]));
+        return nextMessages.map((message) => {
+          const previous = previousById.get(message.id);
+          return {
+            ...message,
+            support_attachments: message.support_attachments.map((attachment) => {
+              const previousAttachment = previous?.support_attachments.find((item) => item.id === attachment.id);
+              return previousAttachment?.signed_url && !refreshAttachmentUrls
+                ? { ...attachment, signed_url: previousAttachment.signed_url }
+                : attachment;
+            }),
+          };
+        });
+      });
+      if (refreshAttachmentUrls) attachmentUrlRefreshAt.current.set(id, now);
+      setSelectedMessageIds((current) => new Set([...current].filter((messageId) => nextMessages.some((message) => message.id === messageId))));
       setThreads((current) => current.map((item) => item.id === id
         ? { ...item, unread_count: 0, ...(admin ? { unread_by_admin: false } : { unread_by_user: false }) }
         : item));
@@ -102,7 +158,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
     void loadDetail(selectedId);
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void loadDetail(selectedId, false);
-    }, 10_000);
+    }, 30_000);
     return () => window.clearInterval(interval);
   }, [selectedId, admin, adminAccessToken, loadDetail]);
 
