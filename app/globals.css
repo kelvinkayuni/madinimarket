@@ -1248,7 +1248,10 @@ h1, h2, h3, p { margin-top: 0; }
 .staff-chat-conversation-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .staff-chat-conversation-actions .button { min-height: 34px; padding: 6px 9px; font-size: 10px; }
 .staff-chat-conversation-actions .staff-chat-delete-conversation { border-color: #b94a42; color: #8d302a; }
-.staff-chat-composer-row { min-width: 0; display: grid; grid-template-columns: 42px minmax(0, 1fr) 42px; align-items: end; gap: 8px; }
+.staff-chat-composer-row { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) 42px; align-items: end; gap: 8px; }
+.staff-chat-composer-tools { min-width: 0; display: flex; align-items: center; gap: 4px; }
+.staff-chat-composer-tools .staff-chat-conversation-actions { flex-wrap: nowrap; gap: 4px; }
+.staff-chat-composer-tools .staff-chat-conversation-actions .button { min-height: 30px; padding: 3px 5px; font-size: 9px; white-space: nowrap; }
 .staff-chat-attach-button, .staff-chat-send-button { width: 42px; height: 42px; min-width: 42px; min-height: 42px; display: grid; place-items: center; padding: 0; border-radius: 50%; }
 .staff-chat-attach-button { position: relative; color: var(--forest); cursor: pointer; }
 .staff-chat-attach-button:hover, .staff-chat-send-button:hover { transform: none; }
@@ -1377,12 +1380,10 @@ h1, h2, h3, p { margin-top: 0; }
     gap: 8px;
   }
   .staff-admin-chat .staff-chat-heading-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px;
+    display: block;
   }
   .staff-admin-chat .staff-chat-heading-copy h2 { margin: 2px 0; font-size: 15px; overflow-wrap: anywhere; }
-  .staff-admin-chat .staff-chat-conversation-actions {
+  .staff-admin-chat .staff-chat-composer-tools .staff-chat-conversation-actions {
     min-width: 0;
     display: flex;
     flex-direction: row;
@@ -1390,7 +1391,7 @@ h1, h2, h3, p { margin-top: 0; }
     align-items: center;
     gap: 4px;
   }
-  .staff-admin-chat .staff-chat-conversation-actions .button {
+  .staff-admin-chat .staff-chat-composer-tools .staff-chat-conversation-actions .button {
     width: auto;
     min-width: 0;
     min-height: 30px;
@@ -1399,6 +1400,7 @@ h1, h2, h3, p { margin-top: 0; }
     line-height: 1.2;
     white-space: nowrap;
   }
+  .staff-admin-chat .staff-chat-composer-row { gap: 5px; }
   .support-message-list { padding: 12px; }
   .support-reply { padding: 10px 12px; }
   .staff-admin-chat .support-reply { grid-template-columns: 1fr; flex: 0 0 auto; min-height: 0; }

@@ -350,10 +350,6 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
                 ? `${selectedConversation.role_names.length === 1 ? "Role" : "Roles"}: ${selectedConversation.role_names.join(", ")}`
                 : "No assigned role"}</small>}
             </div>
-            <div className="staff-chat-conversation-actions">
-              <button className="button button-outline staff-chat-delete-conversation" type="button" aria-label="Delete conversation for everyone" onClick={() => void clearConversation()} disabled={!selectedId}>Delete</button>
-              <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!selectedMessageIds.size}>Delete selected</button>
-            </div>
           </div>
         </div>
         <div className="support-message-list" ref={messageListRef} role="log" aria-live="polite">
@@ -389,20 +385,26 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             {files.map((file, index) => <span key={`${file.name}-${file.lastModified}-${index}`}>{file.name}</span>)}
           </div>}
           <div className="staff-chat-composer-row">
-            <label className="staff-chat-attach-button" title="Attach images or files">
-              <Paperclip size={19} aria-hidden="true" />
-              <span className="staff-chat-visually-hidden">Attach images or files</span>
-              <input ref={fileInputRef} className="staff-chat-file-input" type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,.docx,.xlsx" onChange={(event) => {
-            const selectedFiles = Array.from(event.target.files ?? []);
-            if (selectedFiles.length > 5) {
-              onNotice("Attach no more than 5 files to a message.");
-              event.target.value = "";
-              setFiles([]);
-              return;
-            }
-            setFiles(selectedFiles);
+            <div className="staff-chat-composer-tools">
+              <div className="staff-chat-conversation-actions">
+                <button className="button button-outline staff-chat-delete-conversation" type="button" aria-label="Delete conversation for everyone" onClick={() => void clearConversation()} disabled={!selectedId}>Delete</button>
+                <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!selectedMessageIds.size}>Delete selected</button>
+              </div>
+              <label className="staff-chat-attach-button" title="Attach images or files">
+                <Paperclip size={19} aria-hidden="true" />
+                <span className="staff-chat-visually-hidden">Attach images or files</span>
+                <input ref={fileInputRef} className="staff-chat-file-input" type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,.docx,.xlsx" onChange={(event) => {
+                  const selectedFiles = Array.from(event.target.files ?? []);
+                  if (selectedFiles.length > 5) {
+                    onNotice("Attach no more than 5 files to a message.");
+                    event.target.value = "";
+                    setFiles([]);
+                    return;
+                  }
+                  setFiles(selectedFiles);
               }} />
-            </label>
+              </label>
+            </div>
             <textarea className="text-input staff-chat-message-input" aria-label="Message" rows={1} maxLength={5000} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Message…" />
             <button className="button button-dark staff-chat-send-button" type="submit" aria-label={sending ? "Sending message" : "Send message"} disabled={sending || (!reply.trim() && !files.length) || (admin && !selectedStaffMemberId)}>
               <Send size={18} aria-hidden="true" />
