@@ -35,9 +35,7 @@ begin
     raise exception 'Choose a valid staff task.' using errcode = '22023';
   end if;
 
-  delete from public.staff_task_claims as expired_claims
-  where expired_claims.expires_at <= now();
-
+  -- The upsert below replaces an expired claim for this task; avoid a table-wide cleanup here.
   insert into public.staff_task_claims as claims (
     task_type, task_id, staff_member_id, claimed_at, expires_at
   ) values (

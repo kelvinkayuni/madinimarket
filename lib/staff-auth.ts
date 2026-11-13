@@ -13,18 +13,16 @@ export async function getStaffAccess(request: Request, permission?: StaffPermiss
   if (profileError) throw profileError;
   if (profile?.role !== "staff") return null;
   const { data: member, error: memberError } = await admin.from("staff_members")
-    .select("id, full_name, employee_code")
+    .select("id, full_name, employee_code, staff_member_roles(role:staff_roles(name, permissions))")
     .eq("user_id", user.id)
     .eq("status", "active")
     .maybeSingle();
   if (memberError) throw memberError;
   if (!member) return null;
 
-  const { data: assignments, error: assignmentsError } = await admin.from("staff_member_roles")
-    .select("role:staff_roles(name, permissions)")
-    .eq("staff_member_id", member.id);
-  if (assignmentsError) throw assignmentsError;
-  const roles = (assignments ?? []).flatMap((assignment) => assignment.role ?? []);
+  const roles = (member.staff_member_roles ?? []).flatMap((assignment) =>
+    Array.isArray(assignment.role) ? assignment.role : assignment.role ? [assignment.role] : [],
+  );
   const permissions = [...new Set(roles.flatMap((role) => role.permissions))] as StaffPermission[];
   if (permission && !permissions.includes(permission)) return null;
   return {
