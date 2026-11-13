@@ -47,6 +47,15 @@ export async function GET(request: Request) {
   if (!access.owner) return access.response;
   const { owner } = access;
 
+  if (new URL(request.url).searchParams.get("rolesOnly") === "true") {
+    const { data: roles, error } = await owner.admin.from("staff_roles").select("name, permissions").order("name");
+    if (error) {
+      console.error("Could not load staff role details.", error);
+      return NextResponse.json({ error: "Could not load staff role details." }, { status: 503 });
+    }
+    return NextResponse.json({ roles: roles ?? [] }, { headers: { "Cache-Control": "no-store" } });
+  }
+
   const [
     { data: staff, error: staffError },
     { data: roles, error: rolesError },

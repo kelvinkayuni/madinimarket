@@ -688,6 +688,7 @@ export default function Marketplace() {
   const [role, setRole] = useState<"user" | "admin" | "staff" | null>(null);
   const [staffPermissions, setStaffPermissions] = useState<StaffPermission[]>([]);
   const [staffRoles, setStaffRoles] = useState<StaffRoleDetails[]>([]);
+  const [adminStaffRoleCatalog, setAdminStaffRoleCatalog] = useState<StaffRoleDetails[]>([]);
   const [staffAccessStatus, setStaffAccessStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [staffChatUnreadCount, setStaffChatUnreadCount] = useState(0);
   const staffAccessCache = useRef<{ userId: string; permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null } | null>(null);
@@ -748,6 +749,29 @@ export default function Marketplace() {
       if (staffAccessRequest.current === requestEntry) staffAccessRequest.current = null;
     }
   };
+
+  useEffect(() => {
+    if (role !== "admin" || !userId || !isSupabaseConfigured) return;
+    let active = true;
+    const loadRoleCatalog = async () => {
+      const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+      if (error) throw error;
+      if (!session) throw new Error("Administrator session expired.");
+      const response = await fetch("/api/admin/staff?rolesOnly=true", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not load staff role details.");
+      if (active) setAdminStaffRoleCatalog(parseStaffRoleDetails(result.roles));
+    };
+    void loadRoleCatalog().catch((error: unknown) => {
+      if (active) setNotice(error instanceof Error ? error.message : "Could not load staff role details.");
+    });
+    return () => {
+      active = false;
+    };
+  }, [role, userId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || (role !== "admin" && role !== "staff")) {
@@ -1454,6 +1478,7 @@ export default function Marketplace() {
               setStaffAccessStatus("idle");
               setStaffPermissions([]);
               setStaffRoles([]);
+              setAdminStaffRoleCatalog([]);
               setUser(profile?.username ?? "");
               setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
@@ -3735,16 +3760,16 @@ export default function Marketplace() {
     const staffCanReview = staffCanSellerReview || staffCanBuyerReview;
     const staffCanOrders = staffCan("marketplace_orders");
     const pendingTotal = (staffCanSellerReview ? pendingSellers.length : 0) + (staffCanBuyerReview ? pendingBuyers.length : 0);
-    const staffRoleNamesForPermissions = (permissions: StaffPermission[]) => staffRoles
+    const adminRoleNamesForPermissions = (permissions: StaffPermission[]) => adminStaffRoleCatalog
       .filter((staffRole) => permissions.some((permission) => staffRole.permissions.includes(permission)))
       .map((staffRole) => staffRole.name);
-    const staffMenuRoleBadge = (permissions: StaffPermission[]) => {
-      const names = staffRoleNamesForPermissions(permissions);
+    const adminMenuRoleBadge = (permissions: StaffPermission[]) => {
+      const names = adminRoleNamesForPermissions(permissions);
       return names.length
         ? <small className="admin-menu-staff-role" title={`Assigned role: ${names.join(", ")}`}>{names.join(" · ")}</small>
         : null;
     };
-    const staffPanelPermissions: Partial<Record<AdminPanel, StaffPermission[]>> = {
+    const adminPanelPermissions: Partial<Record<AdminPanel, StaffPermission[]>> = {
       review: ["seller_submission_reviews", "buyer_submission_reviews"],
       accounts: ["accounts"],
       support: ["customer_support"],
@@ -3752,10 +3777,11 @@ export default function Marketplace() {
       homepage: ["homepage_headlines"],
       orders: ["marketplace_orders"],
       delivery: ["delivery_confirmation"],
+      subscriptions: ["subscription_payment_confirmations"],
     };
-    const activePanelPermissions = activeAdminPanel ? staffPanelPermissions[activeAdminPanel] : undefined;
-    const activeStaffPanelRoles = role === "staff" && activePanelPermissions
-      ? staffRoleNamesForPermissions(activePanelPermissions)
+    const activePanelPermissions = activeAdminPanel ? adminPanelPermissions[activeAdminPanel] : undefined;
+    const activeAdminPanelRoles = role === "admin" && activePanelPermissions
+      ? adminRoleNamesForPermissions(activePanelPermissions)
       : [];
     const formatLedgerMoney = (amount: number, currency: Currency) => money(
       new Intl.NumberFormat("en-US", {
@@ -3786,20 +3812,20 @@ export default function Marketplace() {
             <nav className="admin-menu-popover" id="admin-panel-menu" aria-label="Admin panels">
               <span className="admin-menu-heading">{role === "staff" ? "STAFF MENU" : "ADMIN PANELS"}</span>
               {role === "admin" ? <>
-                <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>
+                <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Accounts</span>{adminMenuRoleBadge(["accounts"])}<span>{websiteAccounts.length}</span></button>
                 <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
-                <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>
-                <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>
+                <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">English–Swahili translations</span>{adminMenuRoleBadge(["translations"])}</button>
+                <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Homepage headlines</span>{adminMenuRoleBadge(["homepage_headlines"])}</button>
                 <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
-                <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
+                <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Marketplace orders</span>{adminMenuRoleBadge(["marketplace_orders"])}<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
                 <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
                 <button className={activeAdminPanel === "order-time-limits" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-time-limits"); setAdminMenuOpen(false); }}>Order time limits</button>
-                <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>
-                <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}>Seller/buyer subscription<span>{pendingSubscriptions.length}</span></button>
+                <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Review submissions</span>{adminMenuRoleBadge(["seller_submission_reviews", "buyer_submission_reviews"])}<span>{pendingSellers.length + pendingBuyers.length}</span></button>
+                <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscriptions."); } }); }}><span className="admin-menu-item-name">Seller/buyer subscription</span>{adminMenuRoleBadge(["subscription_payment_confirmations"])}<span>{pendingSubscriptions.length}</span></button>
                 <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>
                 <button className={activeAdminPanel === "staff" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff"); setAdminMenuOpen(false); }}>Staff Management</button>
                 <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Staff messages{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread staff messages`}>{staffChatUnreadCount}</span>}</button>
-                <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>
+                <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Support inbox</span>{adminMenuRoleBadge(["customer_support"])}</button>
                 <div className="admin-menu-currency">
                   <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                   <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
@@ -3819,13 +3845,13 @@ export default function Marketplace() {
                     </section>)}
                   </div>
                 </details>
-                {staffCanReview && <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Review submissions</span>{staffMenuRoleBadge(["seller_submission_reviews", "buyer_submission_reviews"])}<span>{pendingSellers.length + pendingBuyers.length}</span></button>}
-                {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Accounts</span>{staffMenuRoleBadge(["accounts"])}<span>{websiteAccounts.length}</span></button>}
-                {staffCan("customer_support") && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Support inbox</span>{staffMenuRoleBadge(["customer_support"])}</button>}
-                {staffCan("translations") && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">English–Swahili translations</span>{staffMenuRoleBadge(["translations"])}</button>}
-                {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Homepage headlines</span>{staffMenuRoleBadge(["homepage_headlines"])}</button>}
-                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Marketplace orders</span>{staffMenuRoleBadge(["marketplace_orders"])}<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
-                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Delivery confirmation</span>{staffMenuRoleBadge(["delivery_confirmation"])}</button>}
+                {staffCanReview && <button className={activeAdminPanel === "review" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("review"); setAdminMenuOpen(false); }}>Review submissions<span>{pendingSellers.length + pendingBuyers.length}</span></button>}
+                {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
+                {staffCan("customer_support") && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
+                {staffCan("translations") && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
+                {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage headlines</button>}
+                {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace orders<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
+                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery confirmation</button>}
               </>}
             </nav>
           </>}
@@ -3833,9 +3859,9 @@ export default function Marketplace() {
         <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong>{role === "admin" && <small className="admin-mobile-role">ADMIN</small>}{role === "staff" && staffRoles.length > 0 && <small className="staff-mobile-role">{staffRoles.map((staffRole) => staffRole.name).join(" · ")}</small>}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
       <div className="admin-content" id="admin-home">
-        {activeStaffPanelRoles.length > 0 && <div className="admin-active-panel-role" aria-label={`Assigned role: ${activeStaffPanelRoles.join(", ")}`}>
+        {activeAdminPanelRoles.length > 0 && <div className="admin-active-panel-role" aria-label={`Assigned role: ${activeAdminPanelRoles.join(", ")}`}>
           <span>Assigned role</span>
-          {activeStaffPanelRoles.map((staffRoleName) => <strong key={staffRoleName}>{staffRoleName}</strong>)}
+          {activeAdminPanelRoles.map((staffRoleName) => <strong key={staffRoleName}>{staffRoleName}</strong>)}
         </div>}
         {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}
         {activeAdminPanel === "staff-chat" && (role === "admin" || role === "staff") && <section className="admin-support-panel" aria-labelledby="staff-chat-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">STAFF COMMUNICATION</div><h1 id="staff-chat-heading">{role === "admin" ? "Staff messages" : "Chat with admin"}{staffChatUnreadCount > 0 && <span className="staff-chat-heading-count">{staffChatUnreadCount} unread</span>}</h1><p>{role === "admin" ? "Private direct conversations with staff accounts." : "Send a private message directly to the administrator."}</p></div></div><StaffAdminChat admin={role === "admin"} onNotice={setNotice} onUnreadCount={setStaffChatUnreadCount} /></section>}
