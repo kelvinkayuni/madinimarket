@@ -1232,8 +1232,11 @@ h1, h2, h3, p { margin-top: 0; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
+.admin-content:has(> .admin-support-panel #admin-support-heading) { height: calc(100vh - 68px); height: calc(100dvh - 68px); min-height: 0; display: flex; flex-direction: column; }
 .admin-support-panel { min-height: calc(100vh - 68px); }
+.admin-support-panel:has(#admin-support-heading) { min-height: 0; display: flex; flex: 1 1 auto; flex-direction: column; }
 .support-inbox { height: min(680px, calc(100vh - 160px)); min-height: 520px; max-height: calc(100vh - 160px); display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); overflow: hidden; border: 1px solid var(--line); background: #fff; }
+.admin-support-panel:has(#admin-support-heading) .support-inbox { width: 100%; min-height: 0; height: auto; max-height: none; flex: 1 1 0; }
 .support-thread-list { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: #fafbf8; }
 .staff-chat-intro > p { margin: 18px 14px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .staff-chat-unread-badge { min-width: 20px; margin-left: auto; padding: 3px 6px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-weight: 800; text-align: center; }
@@ -1335,11 +1338,13 @@ h1, h2, h3, p { margin-top: 0; }
 .support-inbox:not(.staff-admin-chat) .support-reply { display: flex; flex-direction: column; gap: 8px; }
 .support-resolved-note { color: var(--muted); font-size: 11px; }
 .support-actions { display: flex; gap: 8px; }
-.dialog-panel:has(.support-inbox) { width: min(980px, calc(100vw - 28px)); max-height: calc(100vh - 28px); }
+.dialog-panel:has(.support-inbox) { width: min(980px, 100vw); height: 100vh; height: 100dvh; max-height: 100vh; max-height: 100dvh; padding: 20px 24px; display: flex; flex-direction: column; overflow: hidden; }
+.dialog-panel:has(.support-inbox) .dialog-brand { flex: 0 0 auto; margin-bottom: clamp(8px, 2vh, 20px); }
+.dialog-panel:has(.support-inbox) .support-inbox { min-height: 0; height: auto; max-height: none; flex: 1 1 0; }
 .support-mobile-back { display: none; }
 @media (max-width: 720px) {
-  .admin-content:has(> .admin-support-panel) { padding: 12px 12px 16px; }
-  .admin-support-panel { min-height: 0; }
+  .admin-content:has(> .admin-support-panel #admin-support-heading) { height: calc(100vh - 60px); height: calc(100dvh - 60px); padding: 12px 12px 16px; }
+  .admin-support-panel:has(#admin-support-heading) { min-height: 0; }
   .admin-support-panel .admin-page-heading { margin-bottom: 10px; }
   .support-inbox {
     height: min(760px, calc(100vh - 220px));
@@ -1351,6 +1356,9 @@ h1, h2, h3, p { margin-top: 0; }
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr);
   }
+  .admin-support-panel:has(#admin-support-heading) .support-inbox { height: auto; min-height: 0; max-height: none; }
+  .dialog-panel:has(.support-inbox) { width: 100vw; padding: calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); }
+  .dialog-panel:has(.support-inbox) .dialog-brand { margin-bottom: clamp(8px, 1.5dvh, 16px); }
   .staff-admin-chat.support-inbox {
     height: min(840px, calc(100dvh - 190px));
     min-height: min(380px, calc(100dvh - 190px));
