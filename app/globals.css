@@ -1257,6 +1257,8 @@ h1, h2, h3, p { margin-top: 0; }
 .staff-chat-attach-button:hover, .staff-chat-send-button:hover { transform: none; }
 .staff-chat-attach-button:focus-within { outline: 2px solid var(--forest); outline-offset: 2px; }
 .staff-chat-send-button { border-radius: 50%; }
+.support-send-spinner { animation: support-send-spin 0.9s linear infinite; }
+@keyframes support-send-spin { to { transform: rotate(360deg); } }
 .staff-chat-message-input { width: 100%; min-width: 0; height: auto; min-height: 40px; max-height: 120px; padding: 10px 12px; resize: vertical; }
 .staff-chat-file-input, .staff-chat-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .staff-chat-file-preview { min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; }

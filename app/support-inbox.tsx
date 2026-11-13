@@ -3,7 +3,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Paperclip, Send } from "lucide-react";
+import { LoaderCircle, Paperclip, Send } from "lucide-react";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import StaffTaskClaim from "./staff-task-claim";
@@ -335,8 +335,10 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
                 </label>
               </div>
               <textarea className="text-input staff-chat-message-input" aria-label="Reply" rows={1} maxLength={5000} value={reply} disabled={!canAct || submittingReply} onChange={(event) => setReply(event.target.value)} placeholder="Message…" />
-              <button className="button button-dark staff-chat-send-button" type="submit" aria-label={submittingReply ? "Sending reply" : "Send reply"} disabled={!canAct || submittingReply || (!reply.trim() && !files.length)}>
-                <Send size={18} aria-hidden="true" />
+              <button className="button button-dark staff-chat-send-button" type="submit" aria-label={submittingReply ? "Sending reply" : "Send reply"} aria-busy={submittingReply} disabled={!canAct || submittingReply || (!reply.trim() && !files.length)}>
+                {submittingReply
+                  ? <LoaderCircle className="support-send-spinner" size={18} aria-hidden="true" />
+                  : <Send size={18} aria-hidden="true" />}
               </button>
             </div>
             <small className="staff-chat-attachment-hint">Attach PDF, JPEG, or PNG files up to 4 MB each.</small>
