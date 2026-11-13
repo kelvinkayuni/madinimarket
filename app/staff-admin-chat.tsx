@@ -47,6 +47,8 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
   const selectedIdRef = useRef<string | null>(null);
   const conversationsRequestIdRef = useRef(0);
   const messagesRequestIdRef = useRef(0);
+  const loggedConversationPollErrorRef = useRef(false);
+  const loggedMessagePollErrorRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
@@ -60,7 +62,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
     };
   }, []);
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (backgroundPoll = false) => {
     const requestId = ++conversationsRequestIdRef.current;
     try {
       const response = await fetch(admin ? "/api/admin/staff-chat" : "/api/staff/admin-chat", {
@@ -70,6 +72,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load staff chat.");
       if (requestId !== conversationsRequestIdRef.current) return;
+      loggedConversationPollErrorRef.current = false;
       if (admin) {
         const nextConversations = result.conversations as StaffConversation[];
         conversationsRef.current = nextConversations;
@@ -98,14 +101,21 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       }
     } catch (error) {
       if (requestId === conversationsRequestIdRef.current) {
-        onNotice(error instanceof Error ? error.message : "Could not load staff chat.");
+        if (backgroundPoll) {
+          if (!loggedConversationPollErrorRef.current) {
+            console.error("Could not refresh staff chat conversations.", error);
+            loggedConversationPollErrorRef.current = true;
+          }
+        } else {
+          onNotice(error instanceof Error ? error.message : "Could not load staff chat.");
+        }
       }
     } finally {
       if (requestId === conversationsRequestIdRef.current) setLoading(false);
     }
   }, [admin, getHeaders, onNotice, onUnreadCount]);
 
-  const loadMessages = useCallback(async (conversationId: string | null, staffMemberId?: number, signal?: AbortSignal) => {
+  const loadMessages = useCallback(async (conversationId: string | null, staffMemberId?: number, signal?: AbortSignal, backgroundPoll = false) => {
     const requestId = ++messagesRequestIdRef.current;
     const isCurrentRequest = () => requestId === messagesRequestIdRef.current &&
       !signal?.aborted &&
@@ -122,6 +132,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load this chat.");
       if (!isCurrentRequest()) return;
+      loggedMessagePollErrorRef.current = false;
       const nextMessages = (result.messages ?? []) as StaffChatMessage[];
       setMessages(nextMessages);
       setSelectedMessageIds((current) => new Set([...current].filter((id) => nextMessages.some((item) => item.id === id))));
@@ -163,7 +174,16 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       }
       if (!admin) onUnreadCount(result.unreadCount ?? 0);
     } catch (error) {
-      if (isCurrentRequest()) onNotice(error instanceof Error ? error.message : "Could not load this chat.");
+      if (isCurrentRequest()) {
+        if (backgroundPoll) {
+          if (!loggedMessagePollErrorRef.current) {
+            console.error("Could not refresh staff chat messages.", error);
+            loggedMessagePollErrorRef.current = true;
+          }
+        } else {
+          onNotice(error instanceof Error ? error.message : "Could not load this chat.");
+        }
+      }
     } finally {
       if (isCurrentRequest()) setConversationLoading(false);
     }
@@ -173,7 +193,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
     setLoading(true);
     void loadConversations();
     const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadConversations();
+      if (document.visibilityState === "visible") void loadConversations(true);
     }, 20_000);
     return () => {
       window.clearInterval(interval);
@@ -193,7 +213,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
     setConversationLoading(true);
     if (document.visibilityState === "visible") void loadMessages(selectedId, selectedStaffMemberId, controller.signal);
     const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadMessages(selectedId, selectedStaffMemberId, controller.signal);
+      if (document.visibilityState === "visible") void loadMessages(selectedId, selectedStaffMemberId, controller.signal, true);
     }, 10_000);
     return () => {
       window.clearInterval(interval);
@@ -329,7 +349,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
               : "No assigned role"}</small>}
           </div>
           <div className="staff-chat-conversation-actions">
-            <button className="button button-outline staff-chat-delete-conversation" type="button" onClick={() => void clearConversation()} disabled={!selectedId}>Delete conversation for everyone</button>
+            <button className="button button-outline staff-chat-delete-conversation" type="button" aria-label="Delete conversation for everyone" onClick={() => void clearConversation()} disabled={!selectedId}>Delete</button>
             <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!selectedMessageIds.size}>Delete selected</button>
           </div>
         </div>

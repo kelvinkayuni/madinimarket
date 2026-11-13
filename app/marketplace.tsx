@@ -778,6 +778,7 @@ export default function Marketplace() {
       return;
     }
     let active = true;
+    let loggedUnreadCountError = false;
     const loadUnreadCount = async () => {
       try {
         const { data } = await getSupabaseBrowserClient().auth.getSession();
@@ -790,9 +791,15 @@ export default function Marketplace() {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? "Could not load unread staff messages.");
-        if (active) setStaffChatUnreadCount(result.unreadCount ?? 0);
+        if (active) {
+          setStaffChatUnreadCount(result.unreadCount ?? 0);
+          loggedUnreadCountError = false;
+        }
       } catch (error) {
-        if (active) setNotice(error instanceof Error ? error.message : "Could not load unread staff messages.");
+        if (active && !loggedUnreadCountError) {
+          console.error("Could not load unread staff messages.", error);
+          loggedUnreadCountError = true;
+        }
       }
     };
     void loadUnreadCount();
