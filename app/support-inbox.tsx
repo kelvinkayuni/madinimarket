@@ -78,6 +78,10 @@ function supportMessagesMatch(current: SupportMessage[], next: SupportMessage[])
   });
 }
 
+function isMissingConversationResponse(response: Response, result: { error?: unknown }) {
+  return response.status === 404 && result.error === "Conversation not found.";
+}
+
 export default function SupportInbox({ admin = false, staffClaims = false, onNotice, onUnreadCount }: { admin?: boolean; staffClaims?: boolean; onNotice: (message: string) => void; onUnreadCount?: (count: number) => void }) {
   const [threads, setThreads] = useState<SupportThread[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -101,6 +105,30 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentUrlRefreshAt = useRef(new Map<string, number>());
+  const selectedIdRef = useRef<string | null>(null);
+  const deletingConversationIds = useRef(new Set<string>());
+
+  const updateSelectedId = useCallback((id: string | null) => {
+    selectedIdRef.current = id;
+    setSelectedId(id);
+  }, []);
+  const closeUnavailableConversation = useCallback((id: string, notice?: string) => {
+    if (selectedIdRef.current !== id) return false;
+    updateSelectedId(null);
+    setThread(null);
+    setMessages([]);
+    setReply("");
+    setFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setSelectedMessageIds(new Set());
+    setInternalNote("");
+    setCreating(false);
+    setMobileConversationOpen(false);
+    setThreads((current) => current.filter((item) => item.id !== id));
+    attachmentUrlRefreshAt.current.delete(id);
+    if (notice) onNotice(notice);
+    return true;
+  }, [onNotice, updateSelectedId]);
 
   const getFreshAdminHeaders = useCallback(async (includeJson = false) => {
     const { data, error } = await getSupabaseBrowserClient().auth.getSession();
@@ -127,14 +155,31 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
       if (!response.ok) throw new Error(result.error ?? "Could not load support messages.");
       const nextThreads = (result.threads ?? []) as SupportThread[];
       setThreads((current) => supportThreadsMatch(current, nextThreads) ? current : nextThreads);
+      const selectedId = selectedIdRef.current;
+      if (selectedId && !nextThreads.some((thread) => thread.id === selectedId)) {
+        closeUnavailableConversation(selectedId, deletingConversationIds.current.has(selectedId)
+          ? undefined
+          : admin
+            ? "This support conversation is no longer available. The inbox has been refreshed."
+            : "This support request is no longer available.");
+      }
       onUnreadCount?.(result.unread_count ?? nextThreads.reduce((total, item) => total + (item.unread_count ?? 0), 0));
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load support messages."); }
     finally { setLoading(false); }
-  }, [admin, onNotice, onUnreadCount, userFetch]);
+  }, [admin, closeUnavailableConversation, onNotice, onUnreadCount, userFetch]);
   const loadDetail = useCallback(async (id: string, refreshList = true) => {
     try {
       const response = await userFetch(admin ? `/api/admin/support?threadId=${encodeURIComponent(id)}` : `/api/support/${id}`);
       const result = await response.json();
+      if (selectedIdRef.current !== id) return;
+      if (isMissingConversationResponse(response, result)) {
+        closeUnavailableConversation(id, deletingConversationIds.current.has(id)
+          ? undefined
+          : admin
+            ? "This support conversation is no longer available. The inbox has been refreshed."
+            : "This support request is no longer available.");
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not load this conversation.");
       const nextThread = result.thread as SupportThread;
       const nextMessages = (result.messages ?? []) as SupportMessage[];
@@ -174,9 +219,22 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
           : item);
       });
       if (refreshList) await loadThreads();
-    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load this conversation."); }
-  }, [admin, loadThreads, onNotice, userFetch]);
-  useEffect(() => { void loadThreads(); const interval = window.setInterval(() => void loadThreads(), 30_000); return () => window.clearInterval(interval); }, [loadThreads]);
+    } catch (error) {
+      if (selectedIdRef.current === id) onNotice(error instanceof Error ? error.message : "Could not load this conversation.");
+    }
+  }, [admin, closeUnavailableConversation, loadThreads, onNotice, userFetch]);
+  useEffect(() => {
+    void loadThreads();
+    const interval = window.setInterval(() => void loadThreads(), admin ? 30_000 : 10_000);
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") void loadThreads();
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+    };
+  }, [admin, loadThreads]);
   useEffect(() => {
     if (!selectedId) return;
     void loadDetail(selectedId);
@@ -202,7 +260,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
       formElement.reset();
       setCreating(false);
       await loadThreads();
-      if (result.thread?.id) setSelectedId(result.thread.id);
+      if (result.thread?.id) updateSelectedId(result.thread.id);
       onNotice(result.thread?.ticket_number
         ? `Support request ${result.thread.ticket_number} submitted.`
         : "Support request submitted.");
@@ -222,45 +280,71 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
         const adminHeaders = await getFreshAdminHeaders();
         const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: form });
         const result = await response.json();
+        if (isMissingConversationResponse(response, result)) {
+          closeUnavailableConversation(selectedId, "This support conversation is no longer available. The inbox has been refreshed.");
+          return;
+        }
         if (response.status === 409) {
           await loadDetail(selectedId);
           await loadThreads();
-          onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed.");
+          if (selectedIdRef.current === selectedId) onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed.");
           return;
         }
         if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
       } else {
         const response = await fetchWithWebsiteSession(`/api/support/${selectedId}`, { method: "POST", body: form });
-        const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
+        const result = await response.json();
+        if (isMissingConversationResponse(response, result)) {
+          closeUnavailableConversation(selectedId, "This support request is no longer available.");
+          return;
+        }
+        if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
       }
       setReply(""); setFiles([]); if (fileInputRef.current) fileInputRef.current.value = "";
-      await loadDetail(selectedId); await loadThreads(); onNotice("Reply sent.");
+      await loadDetail(selectedId); await loadThreads();
+      if (selectedIdRef.current === selectedId) onNotice("Reply sent.");
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not send reply."); }
     finally { setSubmittingReply(false); }
   };
   const deleteConversation = async () => {
     if (!selectedId) return;
+    const deletingId = selectedId;
     const confirmation = admin
       ? "Permanently delete this support request, including all messages and attachments, for everyone? This cannot be undone."
       : "Remove this support request from your inbox? Support staff will still be able to see it.";
     if (!window.confirm(confirmation)) return;
+    deletingConversationIds.current.add(deletingId);
     try {
       const response = admin
         ? await fetch("/api/admin/support", {
           method: "DELETE",
           headers: await getFreshAdminHeaders(true),
-          body: JSON.stringify({ threadId: selectedId, clearConversation: true }),
+          body: JSON.stringify({ threadId: deletingId, clearConversation: true }),
         })
-        : await fetchWithWebsiteSession(`/api/support/${selectedId}`, {
+        : await fetchWithWebsiteSession(`/api/support/${deletingId}`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ clearConversation: true }),
         });
       const result = await response.json();
+      if (isMissingConversationResponse(response, result)) {
+        deletingConversationIds.current.delete(deletingId);
+        const notice = admin
+          ? "This support conversation had already been deleted."
+          : "This support request is no longer available.";
+        if (!closeUnavailableConversation(deletingId, notice)) onNotice(notice);
+        await loadThreads();
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not delete the support conversation.");
-      setSelectedId(null); setThread(null); setMessages([]); setSelectedMessageIds(new Set()); setMobileConversationOpen(false); await loadThreads();
+      deletingConversationIds.current.delete(deletingId);
+      closeUnavailableConversation(deletingId);
+      await loadThreads();
       onNotice(admin ? "Support conversation permanently deleted." : "Support conversation removed from your inbox.");
-    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not delete the support conversation."); }
+    } catch (error) {
+      deletingConversationIds.current.delete(deletingId);
+      onNotice(error instanceof Error ? error.message : "Could not delete the support conversation.");
+    }
   };
   const deleteMessages = async (messageIds: string[]) => {
     if (!selectedId || !messageIds.length) return;
@@ -282,11 +366,17 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
           body: JSON.stringify({ messageIds }),
         });
       const result = await response.json();
+      if (isMissingConversationResponse(response, result)) {
+        closeUnavailableConversation(selectedId, admin
+          ? "This support conversation is no longer available. The inbox has been refreshed."
+          : "This support request is no longer available.");
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Could not delete the selected messages.");
       setSelectedMessageIds(new Set());
       await loadDetail(selectedId);
       await loadThreads();
-      onNotice(admin ? "Selected messages permanently deleted." : "Selected messages hidden from your inbox.");
+      if (selectedIdRef.current === selectedId) onNotice(admin ? "Selected messages permanently deleted." : "Selected messages hidden from your inbox.");
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not delete the selected messages."); }
   };
   const deleteSelectedMessages = () => deleteMessages([...selectedMessageIds]);
@@ -295,16 +385,25 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
     const adminHeaders = await getFreshAdminHeaders(true);
     const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, status }) });
     const result = await response.json();
-    if (response.status === 409) { await loadDetail(selectedId); await loadThreads(); onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed."); return; }
+    if (isMissingConversationResponse(response, result)) {
+      closeUnavailableConversation(selectedId, "This support conversation is no longer available. The inbox has been refreshed.");
+      return;
+    }
+    if (response.status === 409) { await loadDetail(selectedId); await loadThreads(); if (selectedIdRef.current === selectedId) onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed."); return; }
     if (!response.ok) { onNotice(result.error ?? "Could not update status."); return; }
-    await loadDetail(selectedId); await loadThreads(); onNotice("Support status updated.");
+    await loadDetail(selectedId); await loadThreads();
+    if (selectedIdRef.current === selectedId) onNotice("Support status updated.");
   };
   const saveNote = async () => {
     if (!admin || !selectedId) return;
     const adminHeaders = await getFreshAdminHeaders(true);
     const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, internalNote }) });
     const result = await response.json();
-    if (response.status === 409) { await loadDetail(selectedId); await loadThreads(); onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed."); return; }
+    if (isMissingConversationResponse(response, result)) {
+      closeUnavailableConversation(selectedId, "This support conversation is no longer available. The inbox has been refreshed.");
+      return;
+    }
+    if (response.status === 409) { await loadDetail(selectedId); await loadThreads(); if (selectedIdRef.current === selectedId) onNotice(result.error ?? "This support task is no longer available. The inbox has been refreshed."); return; }
     if (!response.ok) { onNotice(result.error ?? "Could not save the internal note."); return; }
     onNotice("Internal note saved.");
   };
@@ -347,7 +446,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
   const paginatedThreads = visibleThreads.slice((safePage - 1) * threadsPerPage, safePage * threadsPerPage);
   return <div className={`support-inbox${mobileConversationOpen ? " is-conversation-open" : ""}`}>
     <aside className="support-thread-list">
-      <div className="support-list-heading"><strong>{admin ? "Support inbox" : "Your support"}</strong>{!admin && <button className="button button-dark" type="button" onClick={() => { setCreating(true); setSelectedId(null); setMobileConversationOpen(true); }}>New request</button>}</div>
+      <div className="support-list-heading"><strong>{admin ? "Support inbox" : "Your support"}</strong>{!admin && <button className="button button-dark" type="button" onClick={() => { setCreating(true); updateSelectedId(null); setMobileConversationOpen(true); }}>New request</button>}</div>
       <div className="support-filter-toolbar">
         <label className="field-label">Status<select className="text-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label>
         <label className="field-label">{admin ? "Search user or request" : "Search request ID"}<input className="text-input" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={admin ? "Name, user, email, or MM-ID" : "Enter ticket number"} /></label>
@@ -356,7 +455,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
         <label className="field-label">Sort<select className="text-input" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
       </div>
       <div className="support-thread-scroll">
-        {loading ? <p className="admin-empty">Loading…</p> : paginatedThreads.length ? paginatedThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); setSelectedMessageIds(new Set()); setMobileConversationOpen(true); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(item.unread_count ?? 0) > 0 && <i>{item.unread_count} unread</i>}</button>) : <p className="admin-empty">No support conversations match these filters.</p>}
+        {loading ? <p className="admin-empty">Loading…</p> : paginatedThreads.length ? paginatedThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); updateSelectedId(item.id); setSelectedMessageIds(new Set()); setMobileConversationOpen(true); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(item.unread_count ?? 0) > 0 && <i>{item.unread_count} unread</i>}</button>) : <p className="admin-empty">No support conversations match these filters.</p>}
       </div>
       {visibleThreads.length > 0 && <div className="support-pagination"><button type="button" className="button button-outline" onClick={() => setCurrentPage(Math.max(1, safePage - 1))} disabled={safePage <= 1}>Previous</button><span>Page {safePage} of {totalPages}</span><button type="button" className="button button-outline" onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))} disabled={safePage >= totalPages}>Next</button></div>}
     </aside>
