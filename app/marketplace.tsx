@@ -748,6 +748,7 @@ export default function Marketplace() {
   const [adminStaffRoleCatalog, setAdminStaffRoleCatalog] = useState<StaffRoleDetails[]>([]);
   const [staffAccessStatus, setStaffAccessStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [staffChatUnreadCount, setStaffChatUnreadCount] = useState(0);
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
   const staffAccessCache = useRef<{ userId: string; permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null } | null>(null);
   const staffAccessRequest = useRef<{ userId: string; promise: Promise<{ permissions: StaffPermission[]; roles: StaffRoleDetails[]; fullName: string | null }> } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -866,6 +867,48 @@ export default function Marketplace() {
       window.clearInterval(interval);
     };
   }, [role]);
+
+  useEffect(() => {
+    const canReadSupport = role === "admin" || (role === "staff" && staffPermissions.includes("customer_support"));
+    if (!userId || (role !== "user" && !canReadSupport)) {
+      return;
+    }
+    let active = true;
+    let loggedUnreadCountError = false;
+    const loadUnreadCount = async () => {
+      try {
+        let response: Response;
+        if (role === "user") {
+          response = await fetchWithWebsiteSession("/api/support?unreadOnly=1", { cache: "no-store" });
+        } else {
+          const { data, error } = await getSupabaseBrowserClient().auth.getSession();
+          if (error) throw error;
+          if (!data.session?.access_token) return;
+          response = await fetch("/api/admin/support?unreadOnly=1", {
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+            cache: "no-store",
+          });
+        }
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load unread support messages.");
+        if (active) {
+          setSupportUnreadCount(result.unread_count ?? 0);
+          loggedUnreadCountError = false;
+        }
+      } catch (error) {
+        if (active && !loggedUnreadCountError) {
+          console.error("Could not load unread support messages.", error);
+          loggedUnreadCountError = true;
+        }
+      }
+    };
+    void loadUnreadCount();
+    const interval = window.setInterval(() => void loadUnreadCount(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [role, userId, staffPermissions]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -3924,7 +3967,7 @@ export default function Marketplace() {
                 <button className={activeAdminPanel === "ledger" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("ledger"); setAdminMenuOpen(false); }}>Seller price ledger</button>
                 <button className={activeAdminPanel === "staff" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff"); setAdminMenuOpen(false); }}>Staff Management</button>
                 <button className={activeAdminPanel === "staff-chat" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("staff-chat"); setAdminMenuOpen(false); }}>Staff messages{staffChatUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${staffChatUnreadCount} unread staff messages`}>{staffChatUnreadCount}</span>}</button>
-                <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Support inbox</span>{adminMenuRoleBadge(["customer_support"])}</button>
+                <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Support inbox</span>{adminMenuRoleBadge(["customer_support"])}{supportUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${supportUnreadCount} unread support messages`}>{supportUnreadCount}</span>}</button>
                 <div className="admin-menu-currency">
                   <div><strong>US dollar currency</strong><span>{!currencySettingsLoaded ? "Loading currency settings…" : usdEnabled ? "USD and TSh are available." : "Only TSh is available."}</span></div>
                   <button className={`admin-currency-switch${usdEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={usdEnabled} aria-label="Allow US dollar currency" disabled={!currencySettingsLoaded || busyActions.has("currency-setting")} onClick={() => void updateUsdAvailability(!usdEnabled)}>
@@ -3947,7 +3990,7 @@ export default function Marketplace() {
                 {staffCanSellerReview && <button className={activeAdminPanel === "seller-reviews" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("seller-reviews"); setAdminMenuOpen(false); }}>Seller Submission Reviews<span>{pendingSellers.length}</span></button>}
                 {staffCanBuyerReview && <button className={activeAdminPanel === "buyer-reviews" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("buyer-reviews"); setAdminMenuOpen(false); }}>Buyer Submission Reviews<span>{pendingBuyers.length}</span></button>}
                 {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
-                {staffCan("customer_support") && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox</button>}
+                {staffCan("customer_support") && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox{supportUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${supportUnreadCount} unread support messages`}>{supportUnreadCount}</span>}</button>}
                 {staffCan("translations") && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
                 {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage Display</button>}
                 {staffCan("subscription_payment_confirmations") && <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscription payments."); } }); }}>Subscription Payment Confirmations<span>{pendingSubscriptions.length}</span></button>}
@@ -3966,7 +4009,7 @@ export default function Marketplace() {
           <span>Assigned role</span>
           {activeAdminPanelRoles.map((staffRoleName) => <strong key={staffRoleName}>{staffRoleName}</strong>)}
         </div>}
-        {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} /></section>}
+        {activeAdminPanel === "support" && (role === "admin" || staffCan("customer_support")) && <section className="admin-support-panel" aria-labelledby="admin-support-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">USER COMMUNICATION</div><h1 id="admin-support-heading">Support inbox{supportUnreadCount > 0 && <span className="staff-chat-heading-count">{supportUnreadCount} unread</span>}</h1><p>Review complaints, reply to users, and manage internal follow-up.</p></div></div><SupportInbox admin staffClaims={role === "staff"} onNotice={setNotice} onUnreadCount={setSupportUnreadCount} /></section>}
         {activeAdminPanel === "staff-chat" && (role === "admin" || role === "staff") && <section className="admin-support-panel" aria-labelledby="staff-chat-heading"><div className="admin-page-heading"><div><div className="dialog-kicker">STAFF COMMUNICATION</div><h1 id="staff-chat-heading">{role === "admin" ? "Staff messages" : "Chat with admin"}{staffChatUnreadCount > 0 && <span className="staff-chat-heading-count">{staffChatUnreadCount} unread</span>}</h1><p>{role === "admin" ? "Private direct conversations with staff accounts." : "Send a private message directly to the administrator."}</p></div></div><StaffAdminChat admin={role === "admin"} onNotice={setNotice} onUnreadCount={setStaffChatUnreadCount} /></section>}
         {activeAdminPanel === "listing-fee" && role === "admin" && <section className="admin-listing-fee-panel" aria-labelledby="admin-listing-fee-heading">
           <div className="admin-page-heading">
@@ -4488,7 +4531,7 @@ export default function Marketplace() {
     <header className="site-header">
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
-        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions {accountSubmissionEntries.length > 0 && <span className="account-menu-count" aria-label={`${accountSubmissionEntries.length} pending or rejected submissions`}><strong>{accountSubmissionEntries.length}</strong></span>}<ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("support"); setMenuOpen(false); }}>Help / Contact admin <ArrowUpRight size={15} /></button>{role === "user" && <>        <button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders and Cart <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOpenOrdersCount}</strong> buying active</small><small><strong>{sellerOpenOrdersCount}</strong> selling active</small><small><strong>{cartListingAccountId === userId ? cartListingIds.size : 0}</strong> cart</small></span></button><button type="button" onClick={() => { setDialog("bank-information"); setMenuOpen(false); }}>Bank Information <ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
+        {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions {accountSubmissionEntries.length > 0 && <span className="account-menu-count" aria-label={`${accountSubmissionEntries.length} pending or rejected submissions`}><strong>{accountSubmissionEntries.length}</strong></span>}<ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("support"); setMenuOpen(false); }}>Help / Contact admin{supportUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${supportUnreadCount} unread support messages`}>{supportUnreadCount}</span>}<ArrowUpRight size={15} /></button>{role === "user" && <>        <button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders and Cart <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOpenOrdersCount}</strong> buying active</small><small><strong>{sellerOpenOrdersCount}</strong> selling active</small><small><strong>{cartListingAccountId === userId ? cartListingIds.size : 0}</strong> cart</small></span></button><button type="button" onClick={() => { setDialog("bank-information"); setMenuOpen(false); }}>Bank Information <ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} priority /><span>madini<span className="wordmark-market">market</span></span></a></div>
       <div className="header-search"><Search size={17} /><input aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
       {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span className="user-chip-identity" data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
@@ -4744,7 +4787,7 @@ export default function Marketplace() {
           {!userSubscriptionPlans.length && <p className="admin-empty">No subscription plans are available yet. Please check again later.</p>}
         </>}
       </>}
-      {dialog === "support" && role === "user" && <SupportInbox onNotice={setNotice} />}
+      {dialog === "support" && role === "user" && <SupportInbox onNotice={setNotice} onUnreadCount={setSupportUnreadCount} />}
       {dialog === "commerce" && <CommercePanel onNotice={setNotice} onCounters={updateAccountMenuCounts} />}
       {dialog === "bank-information" && role === "user" && <BankInformationPanel onNotice={setNotice} />}
       {dialog === "private-offer" && privateOfferRequest && <><div className="dialog-kicker">PRIVATE OFFER · REQUEST #{privateOfferRequest.id}</div><h2 id="dialog-title">Offer a mineral privately.</h2><p className="dialog-copy">Send a mineral card and price to this buyer. Your contact details stay private. The current marketplace fee is saved with this offer and included in the buyer total.</p><div className="private-offer-request-summary"><strong>{privateOfferRequest.mineral}</strong><span>{privateOfferRequest.weight} {privateOfferRequest.unit} · {privateOfferRequest.color} · {privateOfferRequest.shape} · {privateOfferRequest.quality}</span><span>Buyer’s request offer: {money(privateOfferRequest.offer, privateOfferRequest.currency)}</span></div>{listingFeeSettingsLoaded ? <PrivateOfferForm requestId={privateOfferRequest.id} threadId={null} feeRate={listingFeePercent / 100} usdEnabled={usdEnabled && currencySettingsLoaded} defaultCurrency={usdEnabled && currencySettingsLoaded ? privateOfferRequest.currency : "TZS"} submitting={busyActions.has("private-offer-submit")} onSubmit={(details) => void sendPrivateOffer(details)} /> : <p className="admin-empty">Loading current marketplace pricing…</p>}</>}

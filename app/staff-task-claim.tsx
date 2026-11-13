@@ -11,12 +11,14 @@ export default function StaffTaskClaim({
   type,
   taskId,
   enabled = true,
+  refreshOnMount = false,
   onNotice,
   children,
 }: {
   type: StaffTaskType;
   taskId: string;
   enabled?: boolean;
+  refreshOnMount?: boolean;
   onNotice: (message: string) => void;
   children: (claim: { canAct: boolean }) => ReactNode;
 }) {
@@ -70,6 +72,20 @@ export default function StaffTaskClaim({
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [claim?.mine, enabled, onNotice, request]);
+
+  useEffect(() => {
+    if (!enabled || !refreshOnMount) return;
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void request().catch((error: unknown) => {
+        if (active) onNotice(error instanceof Error ? error.message : "Could not load task availability.");
+      });
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [enabled, onNotice, refreshOnMount, request]);
 
   const update = async (action: "claim" | "release") => {
     setBusy(true);

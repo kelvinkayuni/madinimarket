@@ -1,22 +1,34 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { Paperclip, Send } from "lucide-react";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import StaffTaskClaim from "./staff-task-claim";
 
 export type SupportThread = {
   id: string; ticket_number: string; category: string; subject: string; status: string;
-  unread_by_admin?: boolean; unread_by_user?: boolean; internal_note?: string;
+  unread_by_admin?: boolean; unread_by_user?: boolean; unread_count?: number; internal_note?: string;
   created_at: string; updated_at: string; last_message_at: string;
   website_accounts?: { id: string; display_name: string; username: string; email: string; phone: string | null } | null;
 };
-export type SupportMessage = { id: string; sender_type: "user" | "admin"; message: string; created_at: string; support_attachments: { id: string; file_name: string; file_type: string; file_size: number; signed_url: string | null }[] };
+export type SupportMessage = {
+  id: string;
+  sender_type: "user" | "admin";
+  message: string;
+  created_at: string;
+  seen_by_admin_at: string | null;
+  seen_by_user_at: string | null;
+  support_attachments: { id: string; file_name: string; file_type: string; file_size: number; signed_url: string | null }[];
+};
 
 const statusLabels: Record<string, string> = { open: "Open", admin_replied: "Admin replied", pending_user: "Waiting for user", resolved: "Resolved" };
+const supportAttachmentTypes = "application/pdf,image/jpeg,image/png";
+const supportAttachmentSize = 4 * 1024 * 1024;
 
-export default function SupportInbox({ admin = false, staffClaims = false, onNotice }: { admin?: boolean; staffClaims?: boolean; onNotice: (message: string) => void }) {
+export default function SupportInbox({ admin = false, staffClaims = false, onNotice, onUnreadCount }: { admin?: boolean; staffClaims?: boolean; onNotice: (message: string) => void; onUnreadCount?: (count: number) => void }) {
   const [adminAccessToken, setAdminAccessToken] = useState("");
   const [threads, setThreads] = useState<SupportThread[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -36,41 +48,63 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [submittingReply, setSubmittingReply] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [files, setFiles] = useState<File[]>([]);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const getFreshAdminHeaders = async (includeJson = false) => {
+  const getFreshAdminHeaders = useCallback(async (includeJson = false) => {
     const { data } = await getSupabaseBrowserClient().auth.getSession();
     return {
       ...(includeJson ? { "Content-Type": "application/json" } : {}),
       ...(data.session?.access_token ? { Authorization: "Bearer " + data.session.access_token } : {}),
     };
-  };
-  const headers = admin && adminAccessToken ? { Authorization: "Bearer " + adminAccessToken } : undefined;
-  const userFetch = (url: string, init?: RequestInit) => admin ? fetch(url, { ...init, headers: { ...(headers ?? {}), ...(init?.headers ?? {}) }, cache: "no-store" }) : fetchWithWebsiteSession(url, init);
-  const loadThreads = async () => {
+  }, []);
+  const userFetch = useCallback((url: string, init?: RequestInit) => admin
+    ? fetch(url, {
+      ...init,
+      headers: { ...(adminAccessToken ? { Authorization: "Bearer " + adminAccessToken } : {}), ...(init?.headers ?? {}) },
+      cache: "no-store",
+    })
+    : fetchWithWebsiteSession(url, init), [admin, adminAccessToken]);
+  const loadThreads = useCallback(async () => {
     try {
       const response = await userFetch(admin ? `/api/admin/support` : `/api/support`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load support messages.");
-      setThreads(result.threads ?? []);
+      const nextThreads = (result.threads ?? []) as SupportThread[];
+      setThreads(nextThreads);
+      onUnreadCount?.(result.unread_count ?? nextThreads.reduce((total, item) => total + (item.unread_count ?? 0), 0));
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load support messages."); }
     finally { setLoading(false); }
-  };
-  const loadDetail = async (id: string) => {
+  }, [admin, onNotice, onUnreadCount, userFetch]);
+  const loadDetail = useCallback(async (id: string, refreshList = true) => {
     try {
       const response = await userFetch(admin ? `/api/admin/support?threadId=${encodeURIComponent(id)}` : `/api/support/${id}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load this conversation.");
       setThread(result.thread); setMessages(result.messages ?? []); setInternalNote(result.thread?.internal_note ?? "");
+      setSelectedMessageIds((current) => new Set([...current].filter((messageId) => (result.messages ?? []).some((message: SupportMessage) => message.id === messageId))));
+      setThreads((current) => current.map((item) => item.id === id
+        ? { ...item, unread_count: 0, ...(admin ? { unread_by_admin: false } : { unread_by_user: false }) }
+        : item));
+      if (refreshList) await loadThreads();
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load this conversation."); }
-  };
+  }, [admin, loadThreads, onNotice, userFetch]);
   useEffect(() => {
     if (!admin) { void loadThreads(); return; }
     void getSupabaseBrowserClient().auth.getSession().then(({ data }) => {
       if (data.session?.access_token) setAdminAccessToken(data.session.access_token);
     });
-  }, [admin]);
-  useEffect(() => { if (admin && !adminAccessToken) return; void loadThreads(); const interval = window.setInterval(() => void loadThreads(), 30_000); return () => window.clearInterval(interval); }, [admin, adminAccessToken]);
-  useEffect(() => { if (selectedId) void loadDetail(selectedId); }, [selectedId]);
+  }, [admin, loadThreads]);
+  useEffect(() => { if (admin && !adminAccessToken) return; void loadThreads(); const interval = window.setInterval(() => void loadThreads(), 30_000); return () => window.clearInterval(interval); }, [admin, adminAccessToken, loadThreads]);
+  useEffect(() => {
+    if (!selectedId || (admin && !adminAccessToken)) return;
+    void loadDetail(selectedId);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadDetail(selectedId, false);
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [selectedId, admin, adminAccessToken, loadDetail]);
 
 
   const submitTicket = async (event: FormEvent<HTMLFormElement>) => {
@@ -96,12 +130,17 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
     finally { setSubmittingRequest(false); }
   };
   const submitReply = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); if (!selectedId || !reply.trim() || submittingReply) return;
+    event.preventDefault(); if (!selectedId || (!reply.trim() && !files.length) || submittingReply) return;
     setSubmittingReply(true);
     try {
+      const form = new FormData();
+      form.set(admin ? "reply" : "message", reply.trim());
+      for (const file of files) form.append("attachments", file);
       if (admin) {
-        const adminHeaders = await getFreshAdminHeaders(true);
-        const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId, reply, status: "admin_replied" }) });
+        form.set("threadId", selectedId);
+        form.set("status", "admin_replied");
+        const adminHeaders = await getFreshAdminHeaders();
+        const response = await fetch("/api/admin/support", { method: "PATCH", headers: adminHeaders, body: form });
         const result = await response.json();
         if (response.status === 409) {
           await loadDetail(selectedId);
@@ -111,25 +150,66 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
         }
         if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
       } else {
-        const form = new FormData(); form.set("message", reply);
         const response = await fetchWithWebsiteSession(`/api/support/${selectedId}`, { method: "POST", body: form });
         const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "Could not send reply.");
       }
-      setReply(""); await loadDetail(selectedId); await loadThreads(); onNotice("Reply sent.");
+      setReply(""); setFiles([]); if (fileInputRef.current) fileInputRef.current.value = "";
+      await loadDetail(selectedId); await loadThreads(); onNotice("Reply sent.");
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not send reply."); }
     finally { setSubmittingReply(false); }
   };
   const deleteConversation = async () => {
-    if (!admin || !selectedId || thread?.status !== "resolved") return;
-    if (!window.confirm("Permanently delete this resolved support conversation and its attachments? This cannot be undone.")) return;
+    if (!selectedId) return;
+    const confirmation = admin
+      ? "Permanently delete this support request, including all messages and attachments, for everyone? This cannot be undone."
+      : "Remove this support request from your inbox? Support staff will still be able to see it.";
+    if (!window.confirm(confirmation)) return;
     try {
-      const adminHeaders = await getFreshAdminHeaders(true);
-      const response = await fetch("/api/admin/support", { method: "DELETE", headers: adminHeaders, body: JSON.stringify({ threadId: selectedId }) });
+      const response = admin
+        ? await fetch("/api/admin/support", {
+          method: "DELETE",
+          headers: await getFreshAdminHeaders(true),
+          body: JSON.stringify({ threadId: selectedId, clearConversation: true }),
+        })
+        : await fetchWithWebsiteSession(`/api/support/${selectedId}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clearConversation: true }),
+        });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not delete the support conversation.");
-      setSelectedId(null); setThread(null); setMessages([]); setMobileConversationOpen(false); await loadThreads(); onNotice("Resolved support conversation deleted.");
+      setSelectedId(null); setThread(null); setMessages([]); setSelectedMessageIds(new Set()); setMobileConversationOpen(false); await loadThreads();
+      onNotice(admin ? "Support conversation permanently deleted." : "Support conversation removed from your inbox.");
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not delete the support conversation."); }
   };
+  const deleteMessages = async (messageIds: string[]) => {
+    if (!selectedId || !messageIds.length) return;
+    const itemLabel = messageIds.length === 1 ? "this message" : `${messageIds.length} selected messages`;
+    const confirmation = admin
+      ? `Permanently delete ${itemLabel} for everyone? This cannot be undone.`
+      : `Hide ${itemLabel} from your inbox? Support staff will still be able to see them.`;
+    if (!window.confirm(confirmation)) return;
+    try {
+      const response = admin
+        ? await fetch("/api/admin/support", {
+          method: "DELETE",
+          headers: await getFreshAdminHeaders(true),
+          body: JSON.stringify({ threadId: selectedId, messageIds }),
+        })
+        : await fetchWithWebsiteSession(`/api/support/${selectedId}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageIds }),
+        });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not delete the selected messages.");
+      setSelectedMessageIds(new Set());
+      await loadDetail(selectedId);
+      await loadThreads();
+      onNotice(admin ? "Selected messages permanently deleted." : "Selected messages hidden from your inbox.");
+    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not delete the selected messages."); }
+  };
+  const deleteSelectedMessages = () => deleteMessages([...selectedMessageIds]);
   const updateStatus = async (status: string) => {
     if (!admin || !selectedId) return;
     const adminHeaders = await getFreshAdminHeaders(true);
@@ -196,7 +276,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
         <label className="field-label">Sort<select className="text-input" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
       </div>
       <div className="support-thread-scroll">
-        {loading ? <p className="admin-empty">Loading…</p> : paginatedThreads.length ? paginatedThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); setMobileConversationOpen(true); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(admin ? item.unread_by_admin : item.unread_by_user) && <i>Unread</i>}</button>) : <p className="admin-empty">No support conversations match these filters.</p>}
+        {loading ? <p className="admin-empty">Loading…</p> : paginatedThreads.length ? paginatedThreads.map((item) => <button type="button" key={item.id} className={`support-thread${selectedId === item.id ? " is-selected" : ""}`} onClick={() => { setCreating(false); setSelectedId(item.id); setSelectedMessageIds(new Set()); setMobileConversationOpen(true); }}><span><strong>{item.ticket_number}</strong><small>{item.category}</small></span><b>{item.subject}</b><em>{statusLabels[item.status] ?? item.status}</em>{(item.unread_count ?? 0) > 0 && <i>{item.unread_count} unread</i>}</button>) : <p className="admin-empty">No support conversations match these filters.</p>}
       </div>
       {visibleThreads.length > 0 && <div className="support-pagination"><button type="button" className="button button-outline" onClick={() => setCurrentPage(Math.max(1, safePage - 1))} disabled={safePage <= 1}>Previous</button><span>Page {safePage} of {totalPages}</span><button type="button" className="button button-outline" onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))} disabled={safePage >= totalPages}>Next</button></div>}
     </aside>
@@ -204,10 +284,63 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
       {creating && !admin ? <form className="support-form form-stack" onSubmit={submitTicket}><button className="support-mobile-back" type="button" onClick={() => { setCreating(false); setMobileConversationOpen(false); }}>← Back to requests</button><div className="dialog-kicker">CONTACT ADMIN</div><h2>Create a support request</h2><label className="field-label">Category<select className="text-input" name="category" required><option value="">Choose a category</option>{["Account","Subscription","Payment","Product listing","Order","Other"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="field-label">Subject<input className="text-input" name="subject" minLength={3} maxLength={160} required /></label><label className="field-label">Message<textarea className="text-input" name="message" rows={6} maxLength={5000} required /></label><label className="field-label">Attachments (optional)<input className="text-input" name="attachments" type="file" multiple accept="application/pdf,image/jpeg,image/png" /></label><p className="user-subscription-receipt-help">PDF, JPEG, or PNG. Maximum 4 MB per file.</p><div className="support-actions"><button className="button button-dark" type="submit" disabled={submittingRequest}>{submittingRequest ? "Submitting…" : "Submit request"}</button><button className="button button-outline" type="button" onClick={() => { setCreating(false); setMobileConversationOpen(false); }} disabled={submittingRequest}>Cancel</button></div></form>
       : selectedId && thread ? <>
         <div className="support-detail-heading"><div><button className="support-mobile-back" type="button" onClick={() => setMobileConversationOpen(false)}>← Back to requests</button><span>{thread.ticket_number} · {thread.category}</span><h2>{thread.subject}</h2>{admin && thread.website_accounts && <small>{thread.website_accounts.display_name} · {thread.website_accounts.username} · {thread.website_accounts.email}</small>}</div><span className={`support-status status-${thread.status}`}>{statusLabels[thread.status] ?? thread.status}</span></div>
-        <div className="support-message-list">{messages.map((message) => <article className={`support-message ${message.sender_type}`} key={message.id}><span>{message.sender_type === "admin" ? "Administrator" : "You"}</span><p>{message.message}</p>{message.support_attachments?.map((attachment) => attachment.signed_url && <a key={attachment.id} href={attachment.signed_url} target="_blank" rel="noreferrer">{attachment.file_name}</a>)}<small>{new Date(message.created_at).toLocaleString()}</small></article>)}</div>
-        <StaffTaskClaim type="support_thread" taskId={thread.id} enabled={admin && staffClaims} onNotice={onNotice}>{({ canAct }) => <>
-          {admin && <div className="support-admin-tools"><label className="field-label">Status<select className="text-input" value={thread.status} disabled={!canAct} onChange={(event) => void updateStatus(event.target.value)}><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label><label className="field-label">Internal admin note<textarea className="text-input" rows={3} maxLength={5000} value={internalNote} disabled={!canAct} onChange={(event) => setInternalNote(event.target.value)} /></label><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void saveNote()}>Save note</button>{thread.status === "resolved" && <button className="button button-outline" type="button" disabled={!canAct} onClick={() => void deleteConversation()}>Delete conversation</button>}</div>}
-          <form className="support-reply form-stack" onSubmit={submitReply}><label className="field-label">Reply<textarea className="text-input" rows={4} maxLength={5000} value={reply} disabled={!canAct || submittingReply} onChange={(event) => setReply(event.target.value)} placeholder="Write a clear response…" required /></label>{thread.status === "resolved" && <p className="support-resolved-note">This conversation is resolved. You can reopen it by replying.</p>}<button className="button button-dark" type="submit" disabled={!canAct || submittingReply || !reply.trim()}>{submittingReply ? "Sending…" : "Send reply"}</button></form>
+        <StaffTaskClaim type="support_thread" taskId={thread.id} enabled={admin && staffClaims} refreshOnMount={staffClaims} onNotice={onNotice}>{({ canAct }) => <>
+          <div className="support-message-list" role="log" aria-live="polite">
+            {messages.length ? messages.map((message) => {
+              const ownMessage = message.sender_type === (admin ? "admin" : "user");
+              const seenAt = admin ? message.seen_by_user_at : message.seen_by_admin_at;
+              return <article className={`support-message ${message.sender_type}`} key={message.id}>
+                {ownMessage && <label className="staff-chat-message-select"><input type="checkbox" checked={selectedMessageIds.has(message.id)} disabled={!canAct} onChange={(event) => setSelectedMessageIds((current) => {
+                  const next = new Set(current);
+                  if (event.target.checked) next.add(message.id);
+                  else next.delete(message.id);
+                  return next;
+                })} /> Select your message</label>}
+                <span>{message.sender_type === "admin" ? "Administrator" : admin ? thread.website_accounts?.display_name ?? "User" : "You"}</span>
+                <p>{message.message}</p>
+                {message.support_attachments?.map((attachment) => attachment.signed_url && (attachment.file_type.startsWith("image/")
+                  ? <a className="staff-chat-attachment staff-chat-image-attachment" key={attachment.id} href={attachment.signed_url} target="_blank" rel="noreferrer"><Image src={attachment.signed_url} width={240} height={180} unoptimized alt={attachment.file_name} /><span>{attachment.file_name}</span></a>
+                  : <a className="staff-chat-attachment" key={attachment.id} href={attachment.signed_url} target="_blank" rel="noreferrer">{attachment.file_name} <small>({Math.ceil(attachment.file_size / 1024)} KB)</small></a>))}
+                <small className="staff-chat-message-footer">{new Date(message.created_at).toLocaleString()}
+                  {ownMessage && <span className={`staff-chat-receipt${seenAt ? " is-seen" : ""}`} aria-label={seenAt ? "Seen" : "Sent"}>{seenAt ? "✓✓" : "✓"}</span>}
+                </small>
+                {ownMessage && <div className="staff-chat-message-actions"><button type="button" disabled={!canAct} onClick={() => void deleteMessages([message.id])}>Delete</button></div>}
+              </article>;
+            }) : <p className="support-empty">No messages in this conversation yet.</p>}
+          </div>
+          {admin && <div className="support-admin-tools"><label className="field-label">Status<select className="text-input" value={thread.status} disabled={!canAct} onChange={(event) => void updateStatus(event.target.value)}><option value="open">Open</option><option value="admin_replied">Admin replied</option><option value="pending_user">Waiting for user</option><option value="resolved">Resolved</option></select></label><label className="field-label">Internal admin note<textarea className="text-input" rows={3} maxLength={5000} value={internalNote} disabled={!canAct} onChange={(event) => setInternalNote(event.target.value)} /></label><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void saveNote()}>Save note</button></div>}
+          <form className="support-reply" onSubmit={submitReply}>
+            {thread.status === "resolved" && <p className="support-resolved-note">This conversation is resolved. You can reopen it by replying.</p>}
+            {files.length > 0 && <div className="staff-chat-file-preview" aria-live="polite">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}-${index}`}>{file.name}</span>)}</div>}
+            <div className="staff-chat-composer-row">
+              <div className="staff-chat-composer-tools">
+                <div className="staff-chat-conversation-actions">
+                  <button className="button button-outline staff-chat-delete-conversation" type="button" aria-label={admin ? "Permanently delete support conversation for everyone" : "Remove support conversation from your inbox"} onClick={() => void deleteConversation()} disabled={!canAct}>Delete</button>
+                  <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!canAct || !selectedMessageIds.size}>Delete selected</button>
+                </div>
+                <label className="staff-chat-attach-button" title="Attach a PDF, JPEG, or PNG">
+                  <Paperclip size={19} aria-hidden="true" />
+                  <span className="staff-chat-visually-hidden">Attach a file</span>
+                  <input ref={fileInputRef} className="staff-chat-file-input" type="file" multiple accept={supportAttachmentTypes} disabled={!canAct || submittingReply} onChange={(event) => {
+                    const selectedFiles = Array.from(event.target.files ?? []);
+                    const invalidFile = selectedFiles.find((file) => !supportAttachmentTypes.split(",").includes(file.type) || file.size < 1 || file.size > supportAttachmentSize);
+                    if (invalidFile) {
+                      onNotice("Attachments must be PDF, JPEG, or PNG and no larger than 4 MB.");
+                      event.target.value = "";
+                      setFiles([]);
+                      return;
+                    }
+                    setFiles(selectedFiles);
+                  }} />
+                </label>
+              </div>
+              <textarea className="text-input staff-chat-message-input" aria-label="Reply" rows={1} maxLength={5000} value={reply} disabled={!canAct || submittingReply} onChange={(event) => setReply(event.target.value)} placeholder="Message…" />
+              <button className="button button-dark staff-chat-send-button" type="submit" aria-label={submittingReply ? "Sending reply" : "Send reply"} disabled={!canAct || submittingReply || (!reply.trim() && !files.length)}>
+                <Send size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <small className="staff-chat-attachment-hint">Attach PDF, JPEG, or PNG files up to 4 MB each.</small>
+          </form>
         </>}</StaffTaskClaim>
       </> : <p className="support-empty">Select a conversation or {admin ? "choose one from the inbox." : "create a new support request."}</p>}
     </section>

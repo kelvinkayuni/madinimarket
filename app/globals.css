@@ -1320,6 +1320,10 @@ h1, h2, h3, p { margin-top: 0; }
 .support-reply { padding: 12px 18px; border-top: 1px solid var(--line); }
 .support-reply textarea, .support-form textarea, .support-admin-tools textarea { resize: vertical; }
 .support-admin-tools { padding: 10px 18px; display: grid; grid-template-columns: 160px minmax(0, 1fr) auto auto; align-items: end; gap: 10px; border-top: 1px solid var(--line); }
+.support-inbox:not(.staff-admin-chat) .admin-staff-row-actions { padding: 8px 18px; border-bottom: 1px solid var(--line); }
+.support-inbox:not(.staff-admin-chat) .support-message-list { flex: 1 1 0; min-height: 170px; }
+.support-inbox:not(.staff-admin-chat) .support-admin-tools { grid-template-columns: 160px minmax(0, 1fr) auto; }
+.support-inbox:not(.staff-admin-chat) .support-reply { display: flex; flex-direction: column; gap: 8px; }
 .support-resolved-note { color: var(--muted); font-size: 11px; }
 .support-actions { display: flex; gap: 8px; }
 .dialog-panel:has(.support-inbox) { width: min(980px, calc(100vw - 28px)); max-height: calc(100vh - 28px); }
@@ -1353,6 +1357,7 @@ h1, h2, h3, p { margin-top: 0; }
   .support-message { width: 92%; }
   .support-message-list { flex: 0 0 min(34vh, 240px); min-height: 140px; }
   .staff-admin-chat .support-message-list { flex: 1 1 0; min-height: 0; }
+  .support-inbox:not(.staff-admin-chat) .support-message-list { flex: 1 1 0; min-height: 0; }
   .support-admin-tools { grid-template-columns: 1fr; align-items: stretch; }
   .support-inbox:not(.is-conversation-open) .support-conversation { display: none; }
   .support-inbox.is-conversation-open { grid-template-rows: minmax(0, 1fr); }
@@ -1403,6 +1408,10 @@ h1, h2, h3, p { margin-top: 0; }
   .staff-admin-chat .staff-chat-composer-row { gap: 5px; }
   .support-message-list { padding: 12px; }
   .support-reply { padding: 10px 12px; }
+  .support-inbox:not(.staff-admin-chat) .admin-staff-row-actions { padding: 8px 12px; }
+  .support-inbox:not(.staff-admin-chat) .support-admin-tools { grid-template-columns: 1fr; align-items: stretch; }
+  .support-inbox:not(.staff-admin-chat) .staff-chat-composer-tools .staff-chat-conversation-actions { flex-direction: row; flex-wrap: nowrap; gap: 4px; }
+  .support-inbox:not(.staff-admin-chat) .staff-chat-composer-tools .staff-chat-conversation-actions .button { min-height: 30px; padding: 3px 4px; font-size: 8px; white-space: nowrap; }
   .staff-admin-chat .support-reply { grid-template-columns: 1fr; flex: 0 0 auto; min-height: 0; }
   .staff-admin-chat .staff-chat-reply-preview { flex-wrap: wrap; }
   .staff-admin-chat .staff-chat-reply-preview > div { min-width: 0; flex: 1 1 100%; }
