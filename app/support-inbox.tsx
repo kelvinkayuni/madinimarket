@@ -79,7 +79,6 @@ function supportMessagesMatch(current: SupportMessage[], next: SupportMessage[])
 }
 
 export default function SupportInbox({ admin = false, staffClaims = false, onNotice, onUnreadCount }: { admin?: boolean; staffClaims?: boolean; onNotice: (message: string) => void; onUnreadCount?: (count: number) => void }) {
-  const [adminAccessToken, setAdminAccessToken] = useState("");
   const [threads, setThreads] = useState<SupportThread[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
@@ -104,19 +103,23 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
   const attachmentUrlRefreshAt = useRef(new Map<string, number>());
 
   const getFreshAdminHeaders = useCallback(async (includeJson = false) => {
-    const { data } = await getSupabaseBrowserClient().auth.getSession();
+    const { data, error } = await getSupabaseBrowserClient().auth.getSession();
+    if (error) throw error;
+    if (!data.session) throw new Error("Admin session expired. Sign in again.");
     return {
       ...(includeJson ? { "Content-Type": "application/json" } : {}),
-      ...(data.session?.access_token ? { Authorization: "Bearer " + data.session.access_token } : {}),
+      Authorization: "Bearer " + data.session.access_token,
     };
   }, []);
-  const userFetch = useCallback((url: string, init?: RequestInit) => admin
-    ? fetch(url, {
+  const userFetch = useCallback(async (url: string, init?: RequestInit) => {
+    if (!admin) return fetchWithWebsiteSession(url, init);
+    const headers = await getFreshAdminHeaders();
+    return fetch(url, {
       ...init,
-      headers: { ...(adminAccessToken ? { Authorization: "Bearer " + adminAccessToken } : {}), ...(init?.headers ?? {}) },
+      headers: { ...headers, ...(init?.headers ?? {}) },
       cache: "no-store",
-    })
-    : fetchWithWebsiteSession(url, init), [admin, adminAccessToken]);
+    });
+  }, [admin, getFreshAdminHeaders]);
   const loadThreads = useCallback(async () => {
     try {
       const response = await userFetch(admin ? `/api/admin/support` : `/api/support`);
@@ -173,21 +176,15 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
       if (refreshList) await loadThreads();
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load this conversation."); }
   }, [admin, loadThreads, onNotice, userFetch]);
+  useEffect(() => { void loadThreads(); const interval = window.setInterval(() => void loadThreads(), 30_000); return () => window.clearInterval(interval); }, [loadThreads]);
   useEffect(() => {
-    if (!admin) { void loadThreads(); return; }
-    void getSupabaseBrowserClient().auth.getSession().then(({ data }) => {
-      if (data.session?.access_token) setAdminAccessToken(data.session.access_token);
-    });
-  }, [admin, loadThreads]);
-  useEffect(() => { if (admin && !adminAccessToken) return; void loadThreads(); const interval = window.setInterval(() => void loadThreads(), 30_000); return () => window.clearInterval(interval); }, [admin, adminAccessToken, loadThreads]);
-  useEffect(() => {
-    if (!selectedId || (admin && !adminAccessToken)) return;
+    if (!selectedId) return;
     void loadDetail(selectedId);
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void loadDetail(selectedId, false);
     }, 10_000);
     return () => window.clearInterval(interval);
-  }, [selectedId, admin, adminAccessToken, loadDetail]);
+  }, [selectedId, admin, loadDetail]);
 
 
   const submitTicket = async (event: FormEvent<HTMLFormElement>) => {
