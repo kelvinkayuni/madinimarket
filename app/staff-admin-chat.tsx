@@ -327,7 +327,6 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             {admin && selectedConversation && <small>{selectedConversation.role_names?.length
               ? `${selectedConversation.role_names.length === 1 ? "Role" : "Roles"}: ${selectedConversation.role_names.join(", ")}`
               : "No assigned role"}</small>}
-            {admin && selectedConversation && !selectedId && <small>Start a new direct conversation with this staff member.</small>}
           </div>
           <div className="staff-chat-conversation-actions">
             <button className="button button-outline staff-chat-delete-conversation" type="button" onClick={() => void clearConversation()} disabled={!selectedId}>Delete conversation for everyone</button>
