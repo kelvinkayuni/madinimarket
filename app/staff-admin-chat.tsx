@@ -3,6 +3,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { Paperclip, Send } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 type StaffConversation = {
@@ -340,17 +341,19 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
     <section className="support-conversation">
       {selectedConversation || !admin ? <>
         <div className="support-detail-heading">
-          <div>
-            {admin && <button className="support-mobile-back" type="button" onClick={() => setMobileConversationOpen(false)}>← Back to conversations</button>}
-            <span>{admin && selectedConversation ? `${selectedConversation.employee_code} · ${selectedConversation.full_name}` : "PRIVATE STAFF CHAT"}</span>
-            <h2>{admin ? selectedConversation?.full_name ?? "Select a staff conversation" : "Chat with admin"}</h2>
-            {admin && selectedConversation && <small>{selectedConversation.role_names?.length
-              ? `${selectedConversation.role_names.length === 1 ? "Role" : "Roles"}: ${selectedConversation.role_names.join(", ")}`
-              : "No assigned role"}</small>}
-          </div>
-          <div className="staff-chat-conversation-actions">
-            <button className="button button-outline staff-chat-delete-conversation" type="button" aria-label="Delete conversation for everyone" onClick={() => void clearConversation()} disabled={!selectedId}>Delete</button>
-            <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!selectedMessageIds.size}>Delete selected</button>
+          {admin && <button className="support-mobile-back" type="button" onClick={() => setMobileConversationOpen(false)}>← Back to conversations</button>}
+          <div className="staff-chat-heading-row">
+            <div className="staff-chat-heading-copy">
+              <span>{admin && selectedConversation ? `${selectedConversation.employee_code} · ${selectedConversation.full_name}` : "PRIVATE STAFF CHAT"}</span>
+              <h2>{admin ? selectedConversation?.full_name ?? "Select a staff conversation" : "Chat with admin"}</h2>
+              {admin && selectedConversation && <small>{selectedConversation.role_names?.length
+                ? `${selectedConversation.role_names.length === 1 ? "Role" : "Roles"}: ${selectedConversation.role_names.join(", ")}`
+                : "No assigned role"}</small>}
+            </div>
+            <div className="staff-chat-conversation-actions">
+              <button className="button button-outline staff-chat-delete-conversation" type="button" aria-label="Delete conversation for everyone" onClick={() => void clearConversation()} disabled={!selectedId}>Delete</button>
+              <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!selectedMessageIds.size}>Delete selected</button>
+            </div>
           </div>
         </div>
         <div className="support-message-list" ref={messageListRef} role="log" aria-live="polite">
@@ -382,8 +385,14 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
         </div>
         <form className="support-reply form-stack" onSubmit={(event) => void sendReply(event)}>
           {replyTo && <div className="staff-chat-reply-preview"><div><strong>Replying to {replyTo.sender_type === "admin" ? "Admin" : admin ? selectedConversation?.full_name ?? "Staff" : "You"}</strong><span>{replyTo.message}</span></div><button className="button button-outline" type="button" onClick={() => setReplyTo(null)}>Cancel reply</button></div>}
-          <label className="field-label">Message<textarea className="text-input" rows={3} maxLength={5000} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a message to the admin…" /></label>
-          <label className="field-label">Attach images or files<input ref={fileInputRef} className="text-input" type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,.docx,.xlsx" onChange={(event) => {
+          {files.length > 0 && <div className="staff-chat-file-preview" aria-live="polite">
+            {files.map((file, index) => <span key={`${file.name}-${file.lastModified}-${index}`}>{file.name}</span>)}
+          </div>}
+          <div className="staff-chat-composer-row">
+            <label className="staff-chat-attach-button" title="Attach images or files">
+              <Paperclip size={19} aria-hidden="true" />
+              <span className="staff-chat-visually-hidden">Attach images or files</span>
+              <input ref={fileInputRef} className="staff-chat-file-input" type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,.docx,.xlsx" onChange={(event) => {
             const selectedFiles = Array.from(event.target.files ?? []);
             if (selectedFiles.length > 5) {
               onNotice("Attach no more than 5 files to a message.");
@@ -392,9 +401,14 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
               return;
             }
             setFiles(selectedFiles);
-          }} /></label>
-          <small>Up to 5 files per message; images, PDF, TXT, DOCX, or XLSX, 10 MB per file.</small>
-          <button className="button button-dark" type="submit" disabled={sending || (!reply.trim() && !files.length) || (admin && !selectedStaffMemberId)}>{sending ? "Sending…" : "Send message"}</button>
+              }} />
+            </label>
+            <textarea className="text-input staff-chat-message-input" aria-label="Message" rows={1} maxLength={5000} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Message…" />
+            <button className="button button-dark staff-chat-send-button" type="submit" aria-label={sending ? "Sending message" : "Send message"} disabled={sending || (!reply.trim() && !files.length) || (admin && !selectedStaffMemberId)}>
+              <Send size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <small className="staff-chat-attachment-hint">Up to 5 files per message; images, PDF, TXT, DOCX, or XLSX, 10 MB per file.</small>
         </form>
       </> : <p className="support-empty">{loading ? "Loading staff conversations…" : "Select a staff conversation."}</p>}
     </section>
