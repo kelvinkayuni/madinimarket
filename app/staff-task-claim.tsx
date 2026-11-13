@@ -12,6 +12,8 @@ export default function StaffTaskClaim({
   taskId,
   enabled = true,
   refreshOnMount = false,
+  controlInChildren = false,
+  compact = false,
   onNotice,
   children,
 }: {
@@ -19,8 +21,10 @@ export default function StaffTaskClaim({
   taskId: string;
   enabled?: boolean;
   refreshOnMount?: boolean;
+  controlInChildren?: boolean;
+  compact?: boolean;
   onNotice: (message: string) => void;
-  children: (claim: { canAct: boolean }) => ReactNode;
+  children: (claim: { canAct: boolean; control: ReactNode | null }) => ReactNode;
 }) {
   const [claim, setClaim] = useState<Claim | null>(null);
   const [busy, setBusy] = useState(false);
@@ -103,15 +107,15 @@ export default function StaffTaskClaim({
     }
   };
 
-  if (!enabled) return children({ canAct: true });
-  return <>
-    <div className="admin-staff-row-actions">
-      {claim?.mine
-        ? <><span>You are handling this task</span><button className="button button-outline" type="button" disabled={busy} onClick={() => void update("release")}>{busy ? "Updating…" : "Release task"}</button></>
-        : claim
-          ? <><span>Being handled by {claim.fullName}</span><button className="button button-outline" type="button" disabled={busy} onClick={() => void update("claim")}>{busy ? "Checking…" : "Try claim"}</button></>
-          : <button className="button button-outline" type="button" disabled={busy} onClick={() => void update("claim")}>{busy ? "Claiming…" : "Claim task"}</button>}
-    </div>
-    {children({ canAct: Boolean(claim?.mine) && !busy })}
-  </>;
+  if (!enabled) return children({ canAct: true, control: null });
+  const taskControl = <div className={`admin-staff-row-actions${compact ? " support-task-claim-inline-actions" : ""}`}>
+    {claim?.mine
+      ? <><span title="You are handling this task">{compact ? "Claimed" : "You are handling this task"}</span><button className="button button-outline" type="button" aria-label="Release task" disabled={busy} onClick={() => void update("release")}>{busy ? "Updating…" : compact ? "Release" : "Release task"}</button></>
+      : claim
+        ? <><span title={`Being handled by ${claim.fullName}`}>{compact ? `With ${claim.fullName}` : `Being handled by ${claim.fullName}`}</span><button className="button button-outline" type="button" aria-label="Try to claim task" disabled={busy} onClick={() => void update("claim")}>{busy ? "Checking…" : compact ? "Try" : "Try claim"}</button></>
+        : <button className="button button-outline" type="button" aria-label="Claim task" title="Claim task" disabled={busy} onClick={() => void update("claim")}>{busy ? "Claiming…" : compact ? "Claim" : "Claim task"}</button>}
+  </div>;
+  const claimControl = compact ? <div className="support-task-claim-inline">{taskControl}</div> : taskControl;
+  if (controlInChildren) return children({ canAct: Boolean(claim?.mine) && !busy, control: claimControl });
+  return <>{claimControl}{children({ canAct: Boolean(claim?.mine) && !busy, control: null })}</>;
 }

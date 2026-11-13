@@ -282,9 +282,8 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
     </aside>
     <section className="support-conversation">
       {creating && !admin ? <form className="support-form form-stack" onSubmit={submitTicket}><button className="support-mobile-back" type="button" onClick={() => { setCreating(false); setMobileConversationOpen(false); }}>← Back to requests</button><div className="dialog-kicker">CONTACT ADMIN</div><h2>Create a support request</h2><label className="field-label">Category<select className="text-input" name="category" required><option value="">Choose a category</option>{["Account","Subscription","Payment","Product listing","Order","Other"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="field-label">Subject<input className="text-input" name="subject" minLength={3} maxLength={160} required /></label><label className="field-label">Message<textarea className="text-input" name="message" rows={6} maxLength={5000} required /></label><label className="field-label">Attachments (optional)<input className="text-input" name="attachments" type="file" multiple accept="application/pdf,image/jpeg,image/png" /></label><p className="user-subscription-receipt-help">PDF, JPEG, or PNG. Maximum 4 MB per file.</p><div className="support-actions"><button className="button button-dark" type="submit" disabled={submittingRequest}>{submittingRequest ? "Submitting…" : "Submit request"}</button><button className="button button-outline" type="button" onClick={() => { setCreating(false); setMobileConversationOpen(false); }} disabled={submittingRequest}>Cancel</button></div></form>
-      : selectedId && thread ? <>
-        <div className="support-detail-heading"><div><button className="support-mobile-back" type="button" onClick={() => setMobileConversationOpen(false)}>← Back to requests</button><span>{thread.ticket_number} · {thread.category}</span><h2>{thread.subject}</h2>{admin && thread.website_accounts && <small>{thread.website_accounts.display_name} · {thread.website_accounts.username} · {thread.website_accounts.email}</small>}</div><span className={`support-status status-${thread.status}`}>{statusLabels[thread.status] ?? thread.status}</span></div>
-        <StaffTaskClaim type="support_thread" taskId={thread.id} enabled={admin && staffClaims} refreshOnMount={staffClaims} onNotice={onNotice}>{({ canAct }) => <>
+      : selectedId && thread ? <StaffTaskClaim type="support_thread" taskId={thread.id} enabled={admin && staffClaims} refreshOnMount={staffClaims} controlInChildren compact onNotice={onNotice}>{({ canAct, control }) => <>
+        <div className="support-detail-heading"><div><button className="support-mobile-back" type="button" onClick={() => setMobileConversationOpen(false)}>← Back to requests</button><span>{thread.ticket_number} · {thread.category}</span><div className="support-detail-subject-row"><h2>{thread.subject}</h2>{control}</div>{admin && thread.website_accounts && <small>{thread.website_accounts.display_name} · {thread.website_accounts.username} · {thread.website_accounts.email}</small>}</div><span className={`support-status status-${thread.status}`}>{statusLabels[thread.status] ?? thread.status}</span></div>
           <div className="support-message-list" role="log" aria-live="polite">
             {messages.length ? messages.map((message) => {
               const ownMessage = message.sender_type === (admin ? "admin" : "user");
@@ -343,8 +342,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
             </div>
             <small className="staff-chat-attachment-hint">Attach PDF, JPEG, or PNG files up to 4 MB each.</small>
           </form>
-        </>}</StaffTaskClaim>
-      </> : <p className="support-empty">Select a conversation or {admin ? "choose one from the inbox." : "create a new support request."}</p>}
+        </>}</StaffTaskClaim> : <p className="support-empty">Select a conversation or {admin ? "choose one from the inbox." : "create a new support request."}</p>}
     </section>
   </div>;
 }
