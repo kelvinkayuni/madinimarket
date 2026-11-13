@@ -11,8 +11,8 @@ type StaffConversation = {
   full_name: string;
   employee_code: string;
   role_names?: string[];
-  updated_at: string | null;
-  last_message_at: string | null;
+  updated_at: string;
+  last_message_at: string;
   unread_count: number;
   unread_by_admin: boolean;
   unread_by_staff: boolean;
@@ -31,8 +31,6 @@ type StaffChatMessage = {
   reply_to_message: string | null;
 };
 
-const maxTotalAttachmentSize = 4 * 1024 * 1024;
-
 export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { admin: boolean; onNotice: (message: string) => void; onUnreadCount: (count: number) => void }) {
   const [conversations, setConversations] = useState<StaffConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -44,7 +42,6 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
   const [sending, setSending] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
-  const shouldScrollToBottomRef = useRef(true);
   const conversationsRef = useRef<StaffConversation[]>([]);
   const selectedStaffMemberIdRef = useRef<number | null>(null);
   const selectedIdRef = useRef<string | null>(null);
@@ -62,20 +59,6 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       ...(data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {}),
     };
   }, []);
-  const updateConversation = (staffMemberId: number, updates: Partial<StaffConversation>) => {
-    const nextConversations = conversationsRef.current.map((item) => item.staff_member_id === staffMemberId
-      ? { ...item, ...updates }
-      : item);
-    if (admin) {
-      nextConversations.sort((a, b) => {
-        if (a.unread_count !== b.unread_count) return b.unread_count - a.unread_count;
-        return String(b.last_message_at ?? "").localeCompare(String(a.last_message_at ?? ""));
-      });
-    }
-    conversationsRef.current = nextConversations;
-    setConversations(nextConversations);
-    if (admin) onUnreadCount(nextConversations.reduce((total, item) => total + item.unread_count, 0));
-  };
 
   const loadConversations = useCallback(async () => {
     const requestId = ++conversationsRequestIdRef.current;
@@ -140,9 +123,6 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       if (!response.ok) throw new Error(result.error ?? "Could not load this chat.");
       if (!isCurrentRequest()) return;
       const nextMessages = (result.messages ?? []) as StaffChatMessage[];
-      const messageList = messageListRef.current;
-      shouldScrollToBottomRef.current = !messageList ||
-        messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight < 80;
       setMessages(nextMessages);
       setSelectedMessageIds((current) => new Set([...current].filter((id) => nextMessages.some((item) => item.id === id))));
 
@@ -223,89 +203,39 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
 
   useEffect(() => {
     const element = messageListRef.current;
-    if (element && shouldScrollToBottomRef.current) {
-      element.scrollTop = element.scrollHeight;
-      shouldScrollToBottomRef.current = false;
-    }
+    if (element) element.scrollTop = element.scrollHeight;
   }, [messages]);
 
   const sendReply = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const message = reply.trim();
     if ((!message && !files.length) || sending || (admin && !selectedStaffMemberId)) return;
-    const targetStaffMemberId = selectedStaffMemberId;
     setSending(true);
     try {
       const form = new FormData();
       form.set("message", message);
       if (replyTo) form.set("replyToMessageId", replyTo.id);
       if (admin && selectedId) form.set("conversationId", selectedId);
-      if (admin && targetStaffMemberId) form.set("staffMemberId", String(targetStaffMemberId));
+      if (admin && selectedStaffMemberId) form.set("staffMemberId", String(selectedStaffMemberId));
       for (const file of files) form.append("attachments", file);
       const response = await fetch(admin ? "/api/admin/staff-chat" : "/api/staff/admin-chat", {
         method: "POST",
         headers: await getHeaders(),
         body: form,
       });
-      let result: {
-        error?: string;
-        conversation?: Partial<StaffConversation> & { id: string };
-        message?: StaffChatMessage;
-      };
-      try {
-        result = await response.json();
-      } catch {
-        if (response.status === 413) {
-          throw new Error("Attachments must total 4 MB or less per message. Choose fewer or smaller files.");
-        }
-        throw new Error("The server returned an invalid response. Please try sending smaller files.");
-      }
+      const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not send your message.");
-      if (!result.conversation?.id || !result.message) {
-        throw new Error("The message was sent, but its conversation could not be refreshed.");
-      }
-      const postedConversation = result.conversation;
-      const postedMessage = result.message;
-      conversationsRequestIdRef.current += 1;
       setReply("");
       setReplyTo(null);
       setFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      const staffMemberId = postedConversation.staff_member_id ?? targetStaffMemberId;
-      if (staffMemberId) {
-        updateConversation(staffMemberId, postedConversation);
-      }
-      const stillViewingConversation = !admin || selectedStaffMemberIdRef.current === targetStaffMemberId;
-      if (stillViewingConversation) {
-        selectedIdRef.current = postedConversation.id;
-        setSelectedId(postedConversation.id);
-        messagesRequestIdRef.current += 1;
-        shouldScrollToBottomRef.current = true;
-        setMessages((current) => current.some((item) => item.id === postedMessage.id)
-          ? current
-          : [...current, postedMessage]);
-      }
-      if (admin && staffMemberId && stillViewingConversation &&
-        ((selectedConversation?.unread_count ?? 0) > 0 ||
-          messages.some((item) => item.sender_type === "staff" && !item.seen_by_admin_at))) {
-        try {
-          const readResponse = await fetch("/api/admin/staff-chat", {
-            method: "PATCH",
-            headers: await getHeaders(true),
-            body: JSON.stringify({ conversationId: postedConversation.id, readThroughMessageId: postedMessage.id }),
-          });
-          const readResult = await readResponse.json();
-          if (!readResponse.ok) throw new Error(readResult.error ?? "Could not update message read status.");
-          setMessages((current) => current.map((item) => ({
-            ...item,
-            seen_by_admin_at: item.sender_type === "staff" ? item.seen_by_admin_at ?? readResult.seenAt : item.seen_by_admin_at,
-          })));
-          updateConversation(staffMemberId, readResult.conversation);
-        } catch (error) {
-          onNotice(error instanceof Error
-            ? `Message sent, but the read status could not be updated: ${error.message}`
-            : "Message sent, but the read status could not be updated.");
-        }
+      await loadConversations();
+      if (result.conversation?.id) {
+        selectedIdRef.current = result.conversation.id;
+        setSelectedId(result.conversation.id);
+        await loadMessages(result.conversation.id, selectedStaffMemberId ?? undefined);
+      } else if (selectedStaffMemberId) {
+        await loadMessages(selectedId, selectedStaffMemberId);
       }
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not send your message.");
@@ -324,26 +254,13 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not permanently delete this conversation.");
-      conversationsRequestIdRef.current += 1;
-      messagesRequestIdRef.current += 1;
       setMessages([]);
       setSelectedMessageIds(new Set());
       setReplyTo(null);
       selectedIdRef.current = null;
       setSelectedId(null);
       setMobileConversationOpen(false);
-      if (selectedStaffMemberId !== null) {
-        updateConversation(selectedStaffMemberId, {
-          id: null,
-          updated_at: null,
-          last_message_at: null,
-          unread_count: 0,
-          unread_by_admin: false,
-          unread_by_staff: false,
-        });
-      } else if (!admin) {
-        onUnreadCount(0);
-      }
+      await loadConversations();
       onNotice("Conversation permanently deleted for both sides.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not permanently delete this conversation.");
@@ -360,19 +277,9 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not delete the selected messages.");
-      conversationsRequestIdRef.current += 1;
-      messagesRequestIdRef.current += 1;
       setSelectedMessageIds(new Set());
-      const deletedIds = new Set(messageIds);
-      const remainingMessages = messages.filter((item) => !deletedIds.has(item.id));
-      setMessages(remainingMessages);
-      if (admin && selectedStaffMemberId !== null) {
-        const latestMessageAt = remainingMessages[remainingMessages.length - 1]?.created_at ?? null;
-        updateConversation(selectedStaffMemberId, {
-          last_message_at: latestMessageAt,
-          updated_at: latestMessageAt,
-        });
-      }
+      await loadMessages(selectedId, selectedStaffMemberId ?? undefined);
+      await loadConversations();
       onNotice("Selected messages deleted.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not delete the selected messages.");
@@ -391,7 +298,6 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             selectedIdRef.current = item.id;
             setSelectedStaffMemberId(item.staff_member_id);
             setSelectedId(item.id);
-            shouldScrollToBottomRef.current = true;
             setMessages([]);
             setSelectedMessageIds(new Set());
             setConversationLoading(true);
@@ -424,7 +330,7 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
             {admin && selectedConversation && !selectedId && <small>Start a new direct conversation with this staff member.</small>}
           </div>
           <div className="staff-chat-conversation-actions">
-            <button className="button button-outline staff-chat-delete-conversation" type="button" aria-label="Delete conversation for everyone" title="Delete conversation for everyone" onClick={() => void clearConversation()} disabled={!selectedId}>Delete chat</button>
+            <button className="button button-outline staff-chat-delete-conversation" type="button" onClick={() => void clearConversation()} disabled={!selectedId}>Delete conversation for everyone</button>
             <button className="button button-outline" type="button" onClick={() => void deleteSelectedMessages()} disabled={!selectedMessageIds.size}>Delete selected</button>
           </div>
         </div>
@@ -466,14 +372,9 @@ export default function StaffAdminChat({ admin, onNotice, onUnreadCount }: { adm
               setFiles([]);
               return;
             }
-            if (selectedFiles.reduce((total, file) => total + file.size, 0) > maxTotalAttachmentSize) {
-              onNotice("Attachments must total 4 MB or less per message. Choose fewer or smaller files.");
-              event.target.value = "";
-              setFiles([]);
-              return;
-            }
             setFiles(selectedFiles);
           }} /></label>
+          <small>Up to 5 files per message; images, PDF, TXT, DOCX, or XLSX, 10 MB per file.</small>
           <button className="button button-dark" type="submit" disabled={sending || (!reply.trim() && !files.length) || (admin && !selectedStaffMemberId)}>{sending ? "Sending…" : "Send message"}</button>
         </form>
       </> : <p className="support-empty">{loading ? "Loading staff conversations…" : "Select a staff conversation."}</p>}
