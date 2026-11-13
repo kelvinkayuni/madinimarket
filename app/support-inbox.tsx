@@ -29,6 +29,33 @@ const supportAttachmentTypes = "application/pdf,image/jpeg,image/png";
 const supportAttachmentSize = 4 * 1024 * 1024;
 const supportAttachmentUrlRefreshMs = 10 * 60 * 1000;
 
+function supportThreadsMatch(current: SupportThread[], next: SupportThread[]) {
+  if (current.length !== next.length) return false;
+  const previousById = new Map(current.map((thread) => [thread.id, thread]));
+  return next.every((thread) => {
+    const previous = previousById.get(thread.id);
+    const previousAccount = previous?.website_accounts;
+    const nextAccount = thread.website_accounts;
+    return previous
+      && previous.ticket_number === thread.ticket_number
+      && previous.category === thread.category
+      && previous.subject === thread.subject
+      && previous.status === thread.status
+      && previous.unread_by_admin === thread.unread_by_admin
+      && previous.unread_by_user === thread.unread_by_user
+      && previous.unread_count === thread.unread_count
+      && previous.internal_note === thread.internal_note
+      && previous.created_at === thread.created_at
+      && previous.updated_at === thread.updated_at
+      && previous.last_message_at === thread.last_message_at
+      && previousAccount?.id === nextAccount?.id
+      && previousAccount?.display_name === nextAccount?.display_name
+      && previousAccount?.username === nextAccount?.username
+      && previousAccount?.email === nextAccount?.email
+      && previousAccount?.phone === nextAccount?.phone;
+  });
+}
+
 function supportMessagesMatch(current: SupportMessage[], next: SupportMessage[]) {
   if (current.length !== next.length) return false;
   const previousById = new Map(current.map((message) => [message.id, message]));
@@ -96,7 +123,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load support messages.");
       const nextThreads = (result.threads ?? []) as SupportThread[];
-      setThreads(nextThreads);
+      setThreads((current) => supportThreadsMatch(current, nextThreads) ? current : nextThreads);
       onUnreadCount?.(result.unread_count ?? nextThreads.reduce((total, item) => total + (item.unread_count ?? 0), 0));
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load support messages."); }
     finally { setLoading(false); }
@@ -108,15 +135,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
       if (!response.ok) throw new Error(result.error ?? "Could not load this conversation.");
       const nextThread = result.thread as SupportThread;
       const nextMessages = (result.messages ?? []) as SupportMessage[];
-      setThread((current) => current
-        && current.id === nextThread.id
-        && current.status === nextThread.status
-        && current.subject === nextThread.subject
-        && current.updated_at === nextThread.updated_at
-        && current.last_message_at === nextThread.last_message_at
-        && current.internal_note === nextThread.internal_note
-        ? current
-        : nextThread);
+      setThread((current) => current && supportThreadsMatch([current], [nextThread]) ? current : nextThread);
       if (refreshList) setInternalNote(nextThread.internal_note ?? "");
       const now = Date.now();
       const hasAttachments = nextMessages.some((message) => message.support_attachments.length > 0);
@@ -139,10 +158,18 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
         });
       });
       if (refreshAttachmentUrls) attachmentUrlRefreshAt.current.set(id, now);
-      setSelectedMessageIds((current) => new Set([...current].filter((messageId) => nextMessages.some((message) => message.id === messageId))));
-      setThreads((current) => current.map((item) => item.id === id
-        ? { ...item, unread_count: 0, ...(admin ? { unread_by_admin: false } : { unread_by_user: false }) }
-        : item));
+      setSelectedMessageIds((current) => {
+        const next = new Set([...current].filter((messageId) => nextMessages.some((message) => message.id === messageId)));
+        return current.size === next.size && [...current].every((messageId) => next.has(messageId)) ? current : next;
+      });
+      setThreads((current) => {
+        const selectedThread = current.find((item) => item.id === id);
+        const hasUnread = admin ? selectedThread?.unread_by_admin : selectedThread?.unread_by_user;
+        if (!selectedThread || ((selectedThread.unread_count ?? 0) === 0 && !hasUnread)) return current;
+        return current.map((item) => item.id === id
+          ? { ...item, unread_count: 0, ...(admin ? { unread_by_admin: false } : { unread_by_user: false }) }
+          : item);
+      });
       if (refreshList) await loadThreads();
     } catch (error) { onNotice(error instanceof Error ? error.message : "Could not load this conversation."); }
   }, [admin, loadThreads, onNotice, userFetch]);
@@ -158,7 +185,7 @@ export default function SupportInbox({ admin = false, staffClaims = false, onNot
     void loadDetail(selectedId);
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void loadDetail(selectedId, false);
-    }, 30_000);
+    }, 10_000);
     return () => window.clearInterval(interval);
   }, [selectedId, admin, adminAccessToken, loadDetail]);
 
