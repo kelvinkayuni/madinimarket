@@ -1478,7 +1478,6 @@ export default function Marketplace() {
               setStaffAccessStatus("idle");
               setStaffPermissions([]);
               setStaffRoles([]);
-              setAdminStaffRoleCatalog([]);
               setUser(profile?.username ?? "");
               setDisplayName(profile?.display_name ?? profile?.username ?? "");
               setUserId(session.user.id);
@@ -3433,6 +3432,7 @@ export default function Marketplace() {
     setStaffAccessStatus("idle");
     setStaffPermissions([]);
     setStaffRoles([]);
+    setAdminStaffRoleCatalog([]);
     setSellerOpenOrdersCount(0);
     setBuyerOpenOrdersCount(0);
     setPrivateOffersCount(0);
