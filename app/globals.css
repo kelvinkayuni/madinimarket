@@ -1336,6 +1336,10 @@ h1, h2, h3, p { margin-top: 0; }
 .support-inbox:not(.staff-admin-chat) .support-message-list { flex: 1 1 0; min-height: 170px; }
 .support-inbox:not(.staff-admin-chat) .support-admin-tools { grid-template-columns: 160px minmax(0, 1fr) auto; }
 .support-inbox:not(.staff-admin-chat) .support-reply { display: flex; flex-direction: column; gap: 8px; }
+.admin-support-panel:has(#admin-support-heading) .support-conversation,
+.dialog-panel:has(.support-inbox) .support-conversation { min-height: 0; }
+.admin-support-panel:has(#admin-support-heading) .support-message-list,
+.dialog-panel:has(.support-inbox) .support-message-list { min-height: 0; }
 .support-resolved-note { color: var(--muted); font-size: 11px; }
 .support-actions { display: flex; gap: 8px; }
 .dialog-panel:has(.support-inbox) { width: min(980px, 100vw); height: 100vh; height: 100dvh; max-height: 100vh; max-height: 100dvh; padding: 20px 24px; display: flex; flex-direction: column; overflow: hidden; }
@@ -1370,6 +1374,14 @@ h1, h2, h3, p { margin-top: 0; }
   .support-thread-list { max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .staff-chat-intro { display: none; }
   .support-conversation { min-height: 0; overflow-y: auto; }
+  .admin-support-panel:has(#admin-support-heading) .support-conversation { overflow: hidden; }
+  .admin-support-panel:has(#admin-support-heading) .support-admin-tools,
+  .admin-support-panel:has(#admin-support-heading) .support-reply { flex: 0 0 auto; }
+  .admin-support-panel:has(#admin-support-heading) .support-message-list { flex: 1 1 0; min-height: 0; }
+  .admin-support-panel:has(#admin-support-heading) .staff-chat-composer-row { grid-template-columns: minmax(0, 1fr) 42px; gap: 6px; }
+  .admin-support-panel:has(#admin-support-heading) .staff-chat-composer-tools { grid-column: 1 / -1; grid-row: 1; justify-content: space-between; }
+  .admin-support-panel:has(#admin-support-heading) .staff-chat-message-input { grid-column: 1; grid-row: 2; }
+  .admin-support-panel:has(#admin-support-heading) .staff-chat-send-button { grid-column: 2; grid-row: 2; }
   .staff-admin-chat .support-conversation { min-height: 0; overflow: hidden; }
   .support-message { width: 92%; }
   .support-message-list { flex: 0 0 min(34vh, 240px); min-height: 140px; }
