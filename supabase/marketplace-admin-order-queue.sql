@@ -1,8 +1,12 @@
-create or replace function public.admin_marketplace_order_queue(
+drop function if exists public.admin_marketplace_order_queue(text, text, integer, integer);
+drop function if exists public.admin_marketplace_order_queue(text, text, integer, integer, boolean);
+
+create function public.admin_marketplace_order_queue(
   p_filter text default 'needs_action',
   p_search text default '',
   p_offset integer default 0,
-  p_limit integer default 25
+  p_limit integer default 25,
+  p_search_email boolean default true
 )
 returns table (order_id uuid, total_count bigint, action_priority integer)
 language sql
@@ -57,7 +61,7 @@ as $$
         p_search = ''
         or control_number ilike '%' || p_search || '%'
         or buyer_name ilike '%' || p_search || '%'
-        or buyer_email ilike '%' || p_search || '%'
+        or (p_search_email and buyer_email ilike '%' || p_search || '%')
       )
       and case p_filter
         when 'needs_action' then
@@ -112,7 +116,8 @@ as $$
   where not exists (select 1 from page_rows);
 $$;
 
-revoke all on function public.admin_marketplace_order_queue(text, text, integer, integer)
+revoke all on function public.admin_marketplace_order_queue(text, text, integer, integer, boolean)
   from public, anon, authenticated;
-grant execute on function public.admin_marketplace_order_queue(text, text, integer, integer)
+grant execute on function public.admin_marketplace_order_queue(text, text, integer, integer, boolean)
   to service_role;
+notify pgrst, 'reload schema';

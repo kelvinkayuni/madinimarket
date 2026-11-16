@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { getAdminClient } from "@/lib/admin-auth";
+import { getStaffAccess } from "@/lib/staff-auth";
 
 export async function GET(request: Request) {
   try {
     const admin = await getAdminClient(request, "market_moderation");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "market_moderation");
 
     const [sellersResult, buyersResult] = await Promise.all([
       admin.from("listings").select("*").eq("status", "pending").order("created_at", { ascending: false }),
@@ -23,14 +25,20 @@ export async function GET(request: Request) {
       ]);
       const galleryError = gallery.find((result) => result.error)?.error;
       if (galleryError) throw galleryError;
+      const { email, phone, ...safeRow } = row;
       return {
-        ...row,
+        ...safeRow,
+        ...(staff ? {} : { email, phone }),
         signed_image_url: image?.data?.signedUrl ?? "",
         signed_stone_certificate_url: certificate?.data?.signedUrl ?? "",
         signed_image_gallery_urls: gallery.map((result) => result.data?.signedUrl ?? ""),
       };
     }));
-    return NextResponse.json({ sellers, buyers: buyersResult.data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+    const buyers = (buyersResult.data ?? []).map((row) => {
+      const { email, phone, ...safeRow } = row;
+      return { ...safeRow, ...(staff ? {} : { email, phone }) };
+    });
+    return NextResponse.json({ sellers, buyers }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not load pending submissions." }, { status: 503 });
   }

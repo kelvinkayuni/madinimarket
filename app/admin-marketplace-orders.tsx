@@ -15,7 +15,7 @@ type Item = {
   mineral_name: string;
   weight: string | number;
   unit: string;
-  seller_email: string;
+  seller_email?: string;
   total_price: string | number;
   seller_amount: string | number;
   platform_fee_amount: string | number;
@@ -38,8 +38,8 @@ type Order = {
   id: string;
   control_number: string;
   buyer_name: string;
-  buyer_email: string;
-  buyer_phone: string;
+  buyer_email?: string;
+  buyer_phone?: string;
   delivery_country: string;
   delivery_region: string;
   delivery_district: string;
@@ -257,7 +257,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         setLoading(true);
         setSearch(searchInput.trim());
       }}>
-        <label className="field-label">Search orders<input className="text-input" value={searchInput} maxLength={80} placeholder="Order number, buyer name, or email" onChange={(event) => setSearchInput(event.target.value)} /></label>
+        <label className="field-label">Search orders<input className="text-input" value={searchInput} maxLength={80} placeholder={isStaff ? "Order number or buyer name" : "Order number, buyer name, or email"} onChange={(event) => setSearchInput(event.target.value)} /></label>
         <button className="button button-dark" type="submit">Search</button>
         {search && <button className="button button-outline" type="button" onClick={() => {
           setSearch("");
@@ -292,14 +292,14 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
       {orders.map((order) => <details className="commerce-order admin-commerce-order" key={order.id}>
         <summary className="admin-commerce-summary">
           <strong>{order.control_number}</strong>
-          <span>{order.buyer_name} · {order.buyer_email}</span>
+          <span>{order.buyer_name}{!isStaff && order.buyer_email ? ` · ${order.buyer_email}` : ""}</span>
           <span>{money(order.total_amount, order.currency)}</span>
           <span>{new Date(order.created_at).toLocaleDateString()}</span>
           <span className={`admin-order-status${orderNeedsAdminAttention(order) ? " needs-action" : orderIsCompleted(order) ? " completed" : ""}`}>{orderQueueLabel(order)}</span>
         </summary>
         <div className="admin-commerce-order-details">
         <p>{money(order.total_amount, order.currency)} · Created {new Date(order.created_at).toLocaleString()}</p>
-        <p>Buyer: {order.buyer_name} · {order.buyer_email} · {order.buyer_phone}</p>
+        <p>Buyer: {order.buyer_name}{!isStaff && order.buyer_email ? ` · ${order.buyer_email}` : ""}{!isStaff && order.buyer_phone ? ` · ${order.buyer_phone}` : ""}</p>
         <p>Delivery: {order.delivery_address}, {order.delivery_district}, {order.delivery_region}, {order.delivery_country}</p>
         {canAccount && order.payment_reference && <p>Buyer payment reference: <strong>{order.payment_reference}</strong>{order.payment_note ? ` · ${order.payment_note}` : ""}</p>}
         {canAccount && order.payment_proof_url && <p><a className="certificate-file-link" href={order.payment_proof_url} target="_blank" rel="noreferrer">Open submitted payment proof</a></p>}
@@ -394,7 +394,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
               const sellerAmount = items.reduce((total, item) => total + Number(item.seller_amount), 0);
               return <div className="admin-payout-group" key={payoutGroupKey}>
                 <strong>Completed seller payout · {items.length} {items.length === 1 ? "item" : "items"}</strong>
-                <span>Order {order.control_number} · {firstItem.seller_email}</span>
+                <span>Order {order.control_number}{!isStaff && firstItem.seller_email ? ` · ${firstItem.seller_email}` : ""}</span>
                 {firstItem.shipping_carrier && firstItem.tracking_number && <span>Shipment: {firstItem.shipping_carrier} · Tracking {firstItem.tracking_number}</span>}
                 <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}: {money(item.seller_amount, item.currency)}</li>)}</ul>
                 <strong>Total seller payout: {money(sellerAmount, firstItem.currency)}</strong>
@@ -417,7 +417,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
           <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
             <small>Status: {item.status.replaceAll("_", " ")} · Buyer total {money(item.total_price, item.currency)}</small>
             <small>Seller amount {money(item.seller_amount, item.currency)} · Market fee {money(item.platform_fee_amount, item.currency)}</small>
-            <small>Seller contact: {item.seller_email}</small>
+            {!isStaff && item.seller_email && <small>Seller contact: {item.seller_email}</small>}
             {item.shipping_carrier && <small>Tracking: {item.shipping_carrier} · {item.tracking_number}</small>}
             {item.dispute_reason && <p className="commerce-warning">Buyer dispute: {item.dispute_reason}</p>}
             {canAccount && item.payout_reference && !item.payout_group_key && <small>Seller payout reference: {item.payout_reference}</small>}

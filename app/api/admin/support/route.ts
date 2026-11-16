@@ -6,6 +6,7 @@ import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 export async function GET(request: Request) {
   const admin = await getAdminClient(request, "customer_support");
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  const staff = await getStaffAccess(request, "customer_support");
   const url = new URL(request.url);
   const threadId = url.searchParams.get("threadId")?.trim() ?? "";
   if (threadId) {
@@ -21,11 +22,31 @@ export async function GET(request: Request) {
     }
     const resultMessages = (messages ?? []).map((message: Record<string, unknown>) => ({ ...message, support_attachments: ((message.support_attachments as { id: string; file_name: string; file_path: string; file_type: string; file_size: number }[] | null) ?? []).map((attachment) => ({ ...attachment, signed_url: signedUrls[attachment.file_path] ?? null })) }));
     await admin.from("support_threads").update({ unread_by_admin: false }).eq("id", threadId);
-    return NextResponse.json({ thread, messages: resultMessages }, { headers: { "Cache-Control": "no-store" } });
+    const safeThread = staff && thread.website_accounts
+      ? {
+        ...thread,
+        website_accounts: {
+          id: thread.website_accounts.id,
+          display_name: thread.website_accounts.display_name,
+          username: thread.website_accounts.username,
+        },
+      }
+      : thread;
+    return NextResponse.json({ thread: safeThread, messages: resultMessages }, { headers: { "Cache-Control": "no-store" } });
   }
   const { data, error } = await admin.from("support_threads").select("*,website_accounts(id,display_name,username,email,phone)").order("updated_at", { ascending: false });
   if (error) return NextResponse.json({ error: "Could not load the support inbox." }, { status: 503 });
-  return NextResponse.json({ threads: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+  const threads = (data ?? []).map((thread) => staff && thread.website_accounts
+    ? {
+      ...thread,
+      website_accounts: {
+        id: thread.website_accounts.id,
+        display_name: thread.website_accounts.display_name,
+        username: thread.website_accounts.username,
+      },
+    }
+    : thread);
+  return NextResponse.json({ threads }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function DELETE(request: Request) {

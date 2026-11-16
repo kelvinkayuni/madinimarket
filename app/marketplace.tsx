@@ -44,7 +44,7 @@ function parseStaffRoleDetails(value: unknown): StaffRoleDetails[] {
   });
 }
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
-type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email: string } };
+type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email?: string } };
 type Seller = { id: number; user_id?: string; is_own?: boolean; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; color?: string; comment?: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; image_gallery_paths?: string[]; image_gallery?: string[]; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
 type Buyer = { id: number; user_id?: string; is_own?: boolean; offer_enabled?: boolean; mineral: string; weight: string; unit: Unit; color: string; shape: "Cut" | "Uncut"; quality: string; offer: string; currency: Currency; buyer: string; location: string; email: string; phone: string; status: SubmissionStatus; review_message?: string | null };
 type AccountMarketListing = Pick<Seller, "id" | "mineral" | "color" | "comment" | "listing_type" | "weight" | "unit" | "smallest_stone_weight" | "largest_stone_weight" | "stone_weight_unit" | "seller_price" | "platform_fee_rate" | "platform_fee_amount" | "price" | "currency" | "location" | "image"> & {
@@ -71,7 +71,7 @@ type AccountWantedRequest = {
   can_manage: boolean;
   manage_block_reason?: string | null;
 };
-type WebsiteAccount = { id: string; display_name: string; username: string; email: string; phone: string | null; is_active: boolean; created_at: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder_name: string | null; bank_info_added_at: string | null; bank_info_edit_unlocked: boolean; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
+type WebsiteAccount = { id: string; display_name: string; username: string; email?: string; phone?: string | null; is_active: boolean; created_at: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder_name: string | null; bank_info_added_at: string | null; bank_info_edit_unlocked: boolean; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; image_gallery_paths?: string[]; image_gallery_urls?: string[]; updated_at: string };
 type SalesLedgerTotals = Record<Currency, { transactions: number; grossSales: number; sellerAmount: number; marketplaceFee: number }>;
@@ -802,11 +802,16 @@ export default function Marketplace() {
           (accountFilter === "notSubscribed" && !account.subscription) ||
           (accountFilter === "noApprovedLicence" && !hasApprovedLicence) ||
           (accountFilter === "licencePending" && hasPendingLicence);
-        const matchesSearch = !search ||
-          `${account.display_name} ${account.username} ${account.email} ${account.id}`.toLocaleLowerCase().includes(search);
+        const searchableAccount = [
+          account.display_name,
+          account.username,
+          role === "admin" ? account.email : "",
+          account.id,
+        ].filter(Boolean).join(" ");
+        const matchesSearch = !search || searchableAccount.toLocaleLowerCase().includes(search);
         return matchesFilter && matchesSearch;
       });
-  }, [accountFilter, accountSearch, adminCertificates, websiteAccounts]);
+  }, [accountFilter, accountSearch, adminCertificates, role, websiteAccounts]);
   const accountPageSize = 25;
   const accountPageCount = Math.max(1, Math.ceil(filteredWebsiteAccounts.length / accountPageSize));
   const activeAccountPage = Math.min(accountPage, accountPageCount);
@@ -3893,7 +3898,7 @@ export default function Marketplace() {
                   <p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {item.seller}</p>
                   {item.platform_fee_rate ? <p>{sellerPriceDetails(item)} ({(item.platform_fee_rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% fee)</p> : null}
                   {item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}
-                  <p>{item.location} · {item.phone} · {item.email}</p>
+                  {role === "admin" && <p>{item.location} · {item.phone} · {item.email}</p>}
                   {!item.image && <p className="admin-image-missing">No mineral photo attached.</p>}
                   {item.stone_certificate_url && <p><a className="certificate-file-link" href={item.stone_certificate_url} target="_blank" rel="noreferrer">Review stone certificate</a></p>}
                 </div>
@@ -3910,7 +3915,7 @@ export default function Marketplace() {
             {pendingBuyers.length ? <div className="admin-queue-list">{pendingBuyers.map((item) => <details className="admin-review-item admin-submission-disclosure" key={`admin-buyer-${item.id}`}>
               <summary className="admin-review-title admin-submission-toggle"><div><span>BUYER REQUEST</span><h3>{item.mineral}</h3><small>{item.buyer} · {item.weight} {item.unit} · {item.location}</small></div><strong>{money(item.offer, item.currency)}</strong><ChevronDown className="admin-submission-chevron" size={17} /></summary>
               <div className="admin-submission-details admin-buyer-submission-details">
-                <p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{item.location} · {item.buyer} · {item.phone} · {item.email}</p>
+                <p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p>{role === "admin" && <p>{item.location} · {item.buyer} · {item.phone} · {item.email}</p>}
                 <StaffTaskClaim type="buyer_request_review" taskId={String(item.id)} enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <>
                   <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} />
                   <div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct || busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-approve`, () => reviewSubmission("buyer", item.id, true))}>{busyActions.has(`review-buyer-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={!canAct || busyActions.has(`review-buyer-${item.id}-approve`) || busyActions.has(`review-buyer-${item.id}-reject`)} onClick={() => void withProgress(`review-buyer-${item.id}-reject`, () => reviewSubmission("buyer", item.id, false))}>{busyActions.has(`review-buyer-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
@@ -4108,7 +4113,7 @@ export default function Marketplace() {
               </form>}</StaffTaskClaim>
             </details>
           </div>
-          <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search accounts by name, username, email, or ID" placeholder="Search name, username, email, or ID" value={accountSearch} onChange={(event) => { setAccountSearch(event.target.value); setAccountPage(1); if (accountListRef.current) accountListRef.current.scrollTop = 0; }} /></label>
+          <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label={role === "admin" ? "Search accounts by name, username, email, or ID" : "Search accounts by name, username, or ID"} placeholder={role === "admin" ? "Search name, username, email, or ID" : "Search name, username, or ID"} value={accountSearch} onChange={(event) => { setAccountSearch(event.target.value); setAccountPage(1); if (accountListRef.current) accountListRef.current.scrollTop = 0; }} /></label>
           <div className="admin-account-filters" aria-label="Filter accounts">
             {([
               ["all", "All"],
@@ -4130,7 +4135,7 @@ export default function Marketplace() {
             const busy = busyAccountId === account.id;
             return <details className="admin-account-disclosure" key={account.id}>
               <summary className="admin-account-summary">
-                <span className="admin-account-summary-identity"><strong>{account.display_name}</strong><small>{account.username} · {account.email}</small></span>
+                <span className="admin-account-summary-identity"><strong>{account.display_name}</strong><small>{account.username}{role === "admin" ? ` · ${account.email ?? ""}` : ""}</small></span>
                 <span className="admin-account-summary-statuses">
                   <span className={`admin-account-status ${account.is_active ? "is-active" : "is-inactive"}`}>{account.is_active ? "Active" : "Deactivated"}</span>
                   <span className={`admin-account-status ${account.subscription ? "is-subscribed" : "is-not-subscribed"}`}>{account.subscription ? "Subscribed" : "Not subscribed"}</span>
@@ -4140,7 +4145,7 @@ export default function Marketplace() {
                 <ChevronDown className="admin-account-disclosure-chevron" size={16} aria-hidden="true" />
               </summary>
               <StaffTaskClaim type="website_account" taskId={account.id} enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <article className="admin-account-row">
-              <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username} · {account.email}</span><small>{account.phone || "No phone number"}</small></div>
+              <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username}{role === "admin" ? ` · ${account.email ?? ""}` : ""}</span>{role === "admin" && <small>{account.phone || "No phone number"}</small>}</div>
               <div className="admin-account-counts">
                 <span><strong>{totalPosts}</strong> total posted</span>
                 <span>Selling: <strong>{account.listings.total}</strong> ({account.listings.pending} pending · {account.listings.approved} approved · {account.listings.rejected} rejected)</span>

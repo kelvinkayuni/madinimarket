@@ -43,6 +43,7 @@ export async function GET(request: Request) {
     const { data, error } = await admin.rpc("admin_marketplace_order_queue", {
       p_filter: "needs_action",
       p_search: "",
+      p_search_email: !staffAccess,
       p_offset: 0,
       p_limit: 1,
     });
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
   const { data: queue, error: queueError } = await admin.rpc("admin_marketplace_order_queue", {
     p_filter: requestedFilter,
     p_search: search,
+    p_search_email: !staffAccess,
     p_offset: offset,
     p_limit: pageSize,
   });
@@ -113,6 +115,7 @@ export async function GET(request: Request) {
         payout_receipt_path?: string | null;
       }) => {
         const {
+          seller_email: sellerEmail,
           payout_receipt_path: receiptPath,
           payout_bank_name: payoutBankName,
           payout_bank_account_number: payoutBankAccountNumber,
@@ -122,9 +125,10 @@ export async function GET(request: Request) {
           ...safeItem
         } = item;
         const payout_group_key = marketplacePayoutGroupKey(item.order_id, item.seller_id, receiptPath ?? null);
+        const safeItemWithContact = staffAccess ? safeItem : { ...safeItem, seller_email: sellerEmail };
         if (!canAccessAccounting) {
           return {
-            ...safeItem,
+            ...safeItemWithContact,
             payout_group_key,
             payout_bank_name: null,
             payout_bank_account_number: null,
@@ -134,13 +138,15 @@ export async function GET(request: Request) {
             refund_reference: staffAccess ? null : refundReference,
           };
         }
-        if (!receiptPath) return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, refund_reference: staffAccess ? null : refundReference };
+        if (!receiptPath) return { ...safeItemWithContact, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, refund_reference: staffAccess ? null : refundReference };
         const { data: receipt, error: receiptError } = await admin.storage.from(PAYOUT_RECEIPT_BUCKET)
           .createSignedUrl(receiptPath, 10 * 60);
         if (receiptError) throw receiptError;
-        return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_receipt_url: receipt.signedUrl, refund_reference: staffAccess ? null : refundReference };
+        return { ...safeItemWithContact, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_receipt_url: receipt.signedUrl, refund_reference: staffAccess ? null : refundReference };
       }));
       const {
+        buyer_email: buyerEmail,
+        buyer_phone: buyerPhone,
         payment_proof_path: paymentProofPath,
         payment_reference: paymentReference,
         payment_note: paymentNote,
@@ -148,6 +154,7 @@ export async function GET(request: Request) {
       } = order;
       return {
         ...safeOrder,
+        ...(!staffAccess ? { buyer_email: buyerEmail, buyer_phone: buyerPhone } : {}),
         ...(canAccessAccounting ? {
           payment_proof_path: paymentProofPath,
           payment_reference: paymentReference,

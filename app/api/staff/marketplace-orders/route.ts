@@ -22,6 +22,7 @@ export async function GET(request: Request) {
   const { data: queue, error: queueError } = await staff.admin.rpc("admin_marketplace_order_queue", {
     p_filter: "delivery_due",
     p_search: "",
+    p_search_email: false,
     p_offset: (page - 1) * 25,
     p_limit: 25,
   });
