@@ -116,6 +116,9 @@ export async function PATCH(request: Request) {
     if (typeof values.is_active !== "boolean") {
       return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
     }
+    if (staff && !staff.permissions.includes("account_status_management")) {
+      return NextResponse.json({ error: "Your staff role does not allow activating or deactivating buyer/seller accounts." }, { status: 403 });
+    }
     const { data, error } = await admin.from("website_accounts").update({ is_active: values.is_active })
       .eq("id", id).select("id, is_active").maybeSingle();
     if (error) throw error;
@@ -135,6 +138,9 @@ export async function DELETE(request: Request) {
     const staff = await getStaffAccess(request, "accounts");
     const id = await parseAccountId(request);
     if (!id) return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
+    if (staff && !staff.permissions.includes("account_deletion")) {
+      return NextResponse.json({ error: "Your staff role does not allow deleting buyer/seller accounts." }, { status: 403 });
+    }
     if (staff && !await ownsStaffTaskClaim(admin, staff.staffId, "website_account", id)) {
       return NextResponse.json({ error: "Claim this account before handling it." }, { status: 409 });
     }

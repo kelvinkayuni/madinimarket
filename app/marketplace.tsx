@@ -4022,6 +4022,8 @@ export default function Marketplace() {
     const staffCanOrders = staffCan("marketplace_orders");
     const staffCanDisputes = staffCan("order_disputes");
     const staffCanRefunds = staffCan("buyer_refunds");
+    const staffCanAccountStatus = staffCan("account_status_management");
+    const staffCanAccountDeletion = staffCan("account_deletion");
     const canOpenReviewPanel = role === "admin"
       ? activeAdminPanel === "review"
       : activeAdminPanel === "seller-reviews"
@@ -4582,10 +4584,14 @@ export default function Marketplace() {
                 <span className={`admin-account-status ${account.subscription ? "is-subscribed" : "is-not-subscribed"}`}>{account.subscription ? "Subscribed" : "Not subscribed"}</span>
               </div>
               <div className="admin-account-actions">
-                <button className="button button-outline" type="button" disabled={!canAct || busy || account.is_active} onClick={() => void withProgress(`account-${account.id}-activate`, () => updateWebsiteAccount(account, true))}>{busyActions.has(`account-${account.id}-activate`) ? "Activating…" : "Activate"}</button>
-                <button className="button button-outline" type="button" disabled={!canAct || busy || !account.is_active} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
-                <button className="button button-danger" type="button" disabled={!canAct || busy} onClick={() => void withProgress(`account-${account.id}-delete`, () => deleteWebsiteAccount(account))}>{busyActions.has(`account-${account.id}-delete`) ? "Deleting…" : "Delete"}</button>
+                <button className="button button-outline" type="button" disabled={!canAct || !staffCanAccountStatus || busy || account.is_active} title={!staffCanAccountStatus ? "This staff role does not have account status permission." : undefined} onClick={() => void withProgress(`account-${account.id}-activate`, () => updateWebsiteAccount(account, true))}>{busyActions.has(`account-${account.id}-activate`) ? "Activating…" : "Activate"}</button>
+                <button className="button button-outline" type="button" disabled={!canAct || !staffCanAccountStatus || busy || !account.is_active} title={!staffCanAccountStatus ? "This staff role does not have account status permission." : undefined} onClick={() => void withProgress(`account-${account.id}-deactivate`, () => updateWebsiteAccount(account, false))}>{busyActions.has(`account-${account.id}-deactivate`) ? "Deactivating…" : "Deactivate"}</button>
+                <button className="button button-danger" type="button" disabled={!canAct || !staffCanAccountDeletion || busy} title={!staffCanAccountDeletion ? "This staff role does not have account deletion permission." : undefined} onClick={() => void withProgress(`account-${account.id}-delete`, () => deleteWebsiteAccount(account))}>{busyActions.has(`account-${account.id}-delete`) ? "Deleting…" : "Delete"}</button>
               </div>
+              {role === "staff" && (!staffCanAccountStatus || !staffCanAccountDeletion) && <small className="admin-account-permission-note">
+                {!staffCanAccountStatus && "Activation/deactivation is disabled for this staff role. "}
+                {!staffCanAccountDeletion && "Account deletion is disabled for this staff role."}
+              </small>}
               {pendingAccountCertificates.length > 0 && <details className="admin-account-certificates" id={`account-certificates-${account.id}`}>
                 <summary className="admin-account-certificates-toggle"><span>Pending licences</span><strong>{pendingAccountCertificates.length}</strong><ChevronDown className="admin-submission-chevron" size={16} /></summary>
                 <div className="admin-account-certificate-list">{pendingAccountCertificates.map((certificate) => <StaffTaskClaim type="certificate_review" taskId={certificate.id} enabled={role === "staff"} onNotice={setNotice} key={certificate.id}>{({ canAct }) => <article className="admin-account-certificate">

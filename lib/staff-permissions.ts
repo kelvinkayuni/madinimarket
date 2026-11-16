@@ -6,6 +6,8 @@ export const STAFF_PERMISSION_OPTIONS = [
   { id: "delivery_confirmation", label: "Delivery Confirmation" },
   { id: "order_disputes", label: "Order Disputes" },
   { id: "buyer_refunds", label: "Buyer Refunds" },
+  { id: "account_status_management", label: "Activate/deactivate buyer/seller accounts" },
+  { id: "account_deletion", label: "Permanently delete buyer/seller accounts" },
   { id: "seller_submission_reviews", label: "Seller Submission Reviews" },
   { id: "buyer_submission_reviews", label: "Buyer Submission Reviews" },
   { id: "subscription_payment_confirmations", label: "Subscription Payment Confirmations" },

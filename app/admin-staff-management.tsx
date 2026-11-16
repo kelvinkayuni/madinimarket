@@ -12,6 +12,8 @@ type StaffRole = {
   assignedStaffCount: number;
 };
 
+type AccountRolePermission = Extract<StaffPermission, "account_status_management" | "account_deletion">;
+
 type StaffMember = {
   id: number;
   employee_code: string;
@@ -229,6 +231,34 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     }
   };
 
+  const setRoleAccountPermission = async (role: StaffRole, permission: AccountRolePermission, enabled: boolean) => {
+    setBusy(`role-permission-${role.id}-${permission}`);
+    try {
+      const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error("Administrator session expired.");
+      const response = await fetch("/api/admin/staff", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_account_role_permission",
+          roleId: role.id,
+          permission,
+          enabled,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not update the role's account permissions.");
+      await load();
+      const label = STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission;
+      onNotice(`${label} ${enabled ? "enabled" : "disabled"} for the ${role.name} role.`);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not update the role's account permissions.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const deleteRole = async (role: StaffRole) => {
     if (!window.confirm(`Delete the unassigned role “${role.name}”? This cannot be undone.`)) return;
     setBusy(`role-delete-${role.id}`);
@@ -346,7 +376,13 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
           {STAFF_PERMISSION_OPTIONS.map((permission) => {
             const includedIn = rolesWithPermission(permission.id);
             return <label key={permission.id}>
-              <input type="checkbox" name="permissions" value={permission.id} />
+              <input
+                type="checkbox"
+                name="permissions"
+                value={permission.id}
+                className={permission.id === "account_status_management" || permission.id === "account_deletion" ? "admin-staff-permission-switch" : undefined}
+                role={permission.id === "account_status_management" || permission.id === "account_deletion" ? "switch" : undefined}
+              />
               <span>
                 <span>{permission.label}</span>
                 <small className="admin-staff-permission-status">
@@ -378,11 +414,17 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
                   {STAFF_PERMISSION_OPTIONS.map((permission) => {
                     const includedIn = rolesWithPermission(permission.id);
                     return <label key={permission.id}>
-                      <input type="checkbox" checked={editedRolePermissions.includes(permission.id)} onChange={(event) => {
+                      <input
+                        type="checkbox"
+                        checked={editedRolePermissions.includes(permission.id)}
+                        className={permission.id === "account_status_management" || permission.id === "account_deletion" ? "admin-staff-permission-switch" : undefined}
+                        role={permission.id === "account_status_management" || permission.id === "account_deletion" ? "switch" : undefined}
+                        onChange={(event) => {
                         setEditedRolePermissions((current) => event.target.checked
                           ? [...current, permission.id]
                           : current.filter((value) => value !== permission.id));
-                      }} />
+                      }}
+                      />
                       <span>
                         <span>{permission.label}</span>
                         <small className="admin-staff-permission-status">
@@ -394,13 +436,35 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
                 </fieldset>
               </> : <>
                 <strong>{role.name}</strong>
-                <small>{assigned ? `Assigned to staff (${role.assignedStaffCount}) · Editing and deletion are locked` : "Not assigned · can be edited or deleted"}</small>
+                <small>{assigned ? `Assigned to staff (${role.assignedStaffCount}) · General edits and deletion are locked; account switches remain available` : "Not assigned · can be edited or deleted"}</small>
                 <details className="admin-staff-role-permission-details">
                   <summary>View job role ({role.permissions.length})</summary>
                   <ul>{role.permissions.map((permission) => (
                     <li key={permission}>{STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission}</li>
                   ))}</ul>
                 </details>
+                <section className="admin-staff-role-account-controls" aria-label={`Buyer and seller account permissions for ${role.name}`}>
+                  <strong>Buyer/seller account actions</strong>
+                  {(["account_status_management", "account_deletion"] as const).map((permission) => {
+                    const enabled = role.permissions.includes(permission);
+                    const label = STAFF_PERMISSION_OPTIONS.find((option) => option.id === permission)?.label ?? permission;
+                    const isSaving = busy === `role-permission-${role.id}-${permission}`;
+                    const isOnlyPermission = enabled && role.permissions.length === 1;
+                    return <div className="admin-staff-role-account-control" key={permission}>
+                      <span><span>{label}</span><small>{isSaving ? "Saving…" : isOnlyPermission ? "Add another permission before disabling" : enabled ? "Enabled" : "Disabled"}</small></span>
+                      <button
+                        className={`admin-currency-switch${enabled ? " is-on" : ""}`}
+                        type="button"
+                        role="switch"
+                        aria-checked={enabled}
+                        aria-label={`${enabled ? "Disable" : "Enable"} ${label} for ${role.name}`}
+                        title={isOnlyPermission ? "Add another role permission before turning this off." : undefined}
+                        disabled={busy !== "" || editingRoleId !== null || isOnlyPermission}
+                        onClick={() => void setRoleAccountPermission(role, permission, !enabled)}
+                      ><span /></button>
+                    </div>;
+                  })}
+                </section>
               </>}
             </div>
             <div className="admin-staff-row-actions">

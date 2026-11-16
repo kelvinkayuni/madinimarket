@@ -384,6 +384,28 @@ export async function PATCH(request: Request) {
   const { owner } = access;
   const body = await readBody(request);
   if (!body) return NextResponse.json({ error: "Invalid staff update." }, { status: 400 });
+  if (body.action === "set_account_role_permission") {
+    const roleId = typeof body.roleId === "number" ? body.roleId : Number(body.roleId);
+    const permission = body.permission;
+    if (!Number.isSafeInteger(roleId) || roleId < 1
+      || (permission !== "account_status_management" && permission !== "account_deletion")
+      || typeof body.enabled !== "boolean") {
+      return NextResponse.json({ error: "Choose a valid role and account permission." }, { status: 400 });
+    }
+    const { error } = await owner.admin.rpc("set_staff_role_account_permission", {
+      p_role_id: roleId,
+      p_permission: permission,
+      p_enabled: body.enabled,
+      p_actor_user_id: owner.userId,
+    });
+    if (error?.code === "P0002") return NextResponse.json({ error: "Staff role not found." }, { status: 404 });
+    if (error?.code === "22023") return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+      console.error("Could not update staff account permissions.", error);
+      return NextResponse.json({ error: "Could not update the role's account permissions." }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true });
+  }
   if (body.action === "update_role") {
     const roleId = typeof body.roleId === "number" ? body.roleId : Number(body.roleId);
     const name = typeof body.name === "string" ? body.name.trim() : "";
