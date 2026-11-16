@@ -576,7 +576,7 @@ async function loadAdminTranslations(accessToken: string): Promise<TranslationPa
   return result.translations as TranslationPair[];
 }
 
-async function fetchAdminSiteContent(accessToken: string, scope?: "accounts" | "homepage"): Promise<Record<string, unknown>> {
+async function fetchAdminSiteContent(accessToken: string, scope?: "homepage"): Promise<Record<string, unknown>> {
   const response = await fetch(`/api/admin/site-content${scope ? `?scope=${scope}` : ""}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
@@ -630,17 +630,6 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
     nonAdminSignInDisabled: result.nonAdminSignInDisabled,
     homepageAnnouncement: result.homepageAnnouncement,
     headlines: result.headlines,
-  };
-}
-
-async function loadAdminAccountSettings(accessToken: string): Promise<{ accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean }> {
-  const result = await fetchAdminSiteContent(accessToken, "accounts");
-  if (typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean") {
-    throw new Error("Account settings are invalid.");
-  }
-  return {
-    accountCreationDisabled: result.accountCreationDisabled,
-    nonAdminSignInDisabled: result.nonAdminSignInDisabled,
   };
 }
 
@@ -1794,16 +1783,6 @@ export default function Marketplace() {
             if (can("accounts")) {
               adminLoads.push({ label: "accounts", load: loadAdminAccounts(session.access_token).then(setWebsiteAccounts) });
               adminLoads.push({ label: "licences", load: loadAdminCertificates(session.access_token).then(setAdminCertificates) });
-              if (!isAdmin) {
-                adminLoads.push({
-                  label: "account settings",
-                  load: loadAdminAccountSettings(session.access_token).then((settings) => {
-                    setAccountCreationDisabled(settings.accountCreationDisabled);
-                    setNonAdminSignInDisabled(settings.nonAdminSignInDisabled);
-                    setAccountSettingsLoaded(true);
-                  }),
-                });
-              }
             }
             if (can("translations")) {
               adminLoads.push({ label: "translations", load: loadAdminTranslations(session.access_token).then(setTranslationPairs) });
@@ -4503,20 +4482,20 @@ export default function Marketplace() {
         </section>}
         {activeAdminPanel === "accounts" && (role === "admin" || staffCan("accounts")) && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
-          <StaffTaskClaim type="account_setting" taskId="account-settings" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <div className="admin-account-controls">
+          {role === "admin" && <div className="admin-account-controls">
             <div className="admin-account-control-row">
               <div><strong>Account creation</strong><span>{!accountSettingsLoaded ? "Loading account settings…" : accountCreationDisabled ? "New account creation is suspended." : "New account creation is enabled."}</span></div>
-              <button className={`admin-currency-switch${accountCreationDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={accountCreationDisabled} aria-label="Suspend new account creation" disabled={!canAct || !accountSettingsLoaded || busyActions.has("account-creation-setting")} onClick={() => void updateAccountCreationAvailability(!accountCreationDisabled)}><span /></button>
+              <button className={`admin-currency-switch${accountCreationDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={accountCreationDisabled} aria-label="Suspend new account creation" disabled={!accountSettingsLoaded || busyActions.has("account-creation-setting")} onClick={() => void updateAccountCreationAvailability(!accountCreationDisabled)}><span /></button>
             </div>
             <div className="admin-account-control-row">
               <div><strong>User sign-in</strong><span>{!accountSettingsLoaded ? "Loading sign-in settings…" : nonAdminSignInDisabled ? "Non-administrator sign-in is suspended." : "User sign-in is enabled."}</span></div>
-              <button className={`admin-currency-switch${nonAdminSignInDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={nonAdminSignInDisabled} aria-label="Suspend non-administrator sign-in" disabled={!canAct || !accountSettingsLoaded || busyActions.has("non-admin-signin-setting")} onClick={() => void updateNonAdminSignInAvailability(!nonAdminSignInDisabled)}><span /></button>
+              <button className={`admin-currency-switch${nonAdminSignInDisabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={nonAdminSignInDisabled} aria-label="Suspend non-administrator sign-in" disabled={!accountSettingsLoaded || busyActions.has("non-admin-signin-setting")} onClick={() => void updateNonAdminSignInAvailability(!nonAdminSignInDisabled)}><span /></button>
             </div>
             <div className="admin-account-control-row">
               <div><strong>Sign out all users</strong><span>{signOutAllUsersAction ? "Ending all user sessions…" : "Ends every normal user session; admin stays signed in."}</span></div>
-              <button className={`admin-currency-switch${signOutAllUsersAction ? " is-on" : ""}`} type="button" role="switch" aria-checked={signOutAllUsersAction} aria-label="Sign out all users" disabled={!canAct || !accountSettingsLoaded || busyActions.has("sign-out-all-users")} onClick={() => void signOutAllUsers()}><span /></button>
+              <button className={`admin-currency-switch${signOutAllUsersAction ? " is-on" : ""}`} type="button" role="switch" aria-checked={signOutAllUsersAction} aria-label="Sign out all users" disabled={!accountSettingsLoaded || busyActions.has("sign-out-all-users")} onClick={() => void signOutAllUsers()}><span /></button>
             </div>
-          </div>}</StaffTaskClaim>
+          </div>}
           <label className="admin-account-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search accounts by name, username, email, or ID" placeholder="Search name, username, email, or ID" value={accountSearch} onChange={(event) => { setAccountSearch(event.target.value); setAccountPage(1); if (accountListRef.current) accountListRef.current.scrollTop = 0; }} /></label>
           <div className="admin-account-filters" aria-label="Filter accounts">
             {([

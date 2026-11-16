@@ -36,9 +36,7 @@ function parseId(value: unknown) {
 export async function GET(request: Request) {
   try {
     const scope = new URL(request.url).searchParams.get("scope");
-    const staffPermission = scope === "accounts"
-      ? "accounts"
-      : scope === "homepage" ? "homepage_headlines" : null;
+    const staffPermission = scope === "homepage" ? "homepage_headlines" : null;
     const authorized = staffPermission
       ? await getAdminClient(request, staffPermission)
       : await getAdminClient(request);
@@ -105,11 +103,11 @@ export async function PATCH(request: Request) {
     const staffPermission = accountSettingsRequested ? "accounts" : "homepage_headlines";
     const allowedStaffKeys = new Set([...accountSettingKeys, ...homepageSettingKeys]);
     const hasOwnerOnlyChange = values !== null && Object.keys(values).some((key) => !allowedStaffKeys.has(key));
-    const authorized = hasOwnerOnlyChange
+    const authorized = hasOwnerOnlyChange || accountSettingsRequested
       ? await getAdminClient(request)
       : await getAdminClient(request, staffPermission);
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
-    const staff = await getStaffAccess(request, staffPermission);
+    const staff = accountSettingsRequested ? null : await getStaffAccess(request, staffPermission);
     const taskType = accountSettingsRequested ? "account_setting" : "homepage_setting";
     if (staff && !await ownsStaffTaskClaim(authorized, staff.staffId, taskType, "homepage")) {
       return NextResponse.json({ error: `Claim ${accountSettingsRequested ? "account" : "homepage"} settings before editing them.` }, { status: 409 });
