@@ -523,6 +523,13 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .header-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 12px; }
 .header-search input::placeholder { color: #9a9f98; }
 .header-search kbd { display: grid; width: 19px; height: 20px; place-items: center; border: 1px solid #d8ddd5; border-radius: 2px; color: #969c94; font-size: 11px; }
+.mineral-search { position: relative; z-index: 12; }
+.mineral-search-toggle { width: 20px; height: 26px; display: grid; flex: 0 0 20px; place-items: center; padding: 0; border: 0; background: transparent; color: #81877f; cursor: pointer; }
+.mineral-search-toggle:hover { color: var(--forest); }
+.mineral-search-options { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max(100%, 240px); max-width: calc(100vw - 28px); max-height: min(320px, 60vh); overflow-y: auto; padding: 5px; border: 1px solid var(--line); border-radius: 3px; background: #fff; box-shadow: 0 12px 30px rgb(24 40 29 / 18%); scrollbar-width: thin; }
+.mineral-search-option { width: 100%; min-height: 34px; display: block; padding: 8px 10px; border: 0; border-radius: 2px; background: transparent; color: var(--ink); font-size: 12px; text-align: left; cursor: pointer; }
+.mineral-search-option:hover, .mineral-search-option[aria-selected="true"] { background: #edf2e8; color: var(--forest); }
+.mineral-search-empty { margin: 0; padding: 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .header-actions { gap: 20px; flex-shrink: 0; }
 .text-button, .switch-dialog { border: 0; background: transparent; cursor: pointer; }
 .text-button { padding: 8px 0; font-size: 12px; }
@@ -565,6 +572,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-intro-tools { order: 1; display: flex; align-items: flex-start; gap: 8px; width: auto; flex: 0 0 auto; }
 .mobile-market-search { display: flex; flex: 0 0 105px; width: 105px; min-width: 0; height: 40px; gap: 7px; padding: 0 9px; }
 .mobile-market-search input { font-size: 9px; }
+.mobile-market-search > svg:first-child { display: none; }
 .eyebrow { display: flex; align-items: center; gap: 9px; color: #667267; font-size: 9px; font-weight: 700; }
 .eyebrow-line { width: 20px; height: 1px; background: var(--red); }
 .eyebrow-year { margin-left: 3px; color: #a1a79e; font-size: 8px; }

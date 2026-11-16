@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
-import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { Session } from "@supabase/supabase-js";
 
@@ -145,6 +145,128 @@ function onBrowserResume(refresh: () => void | Promise<void>) {
     window.removeEventListener("pageshow", refreshWhenActive);
     window.removeEventListener("online", refreshWhenActive);
   };
+}
+
+function MineralSearchInput({
+  id,
+  options,
+  value,
+  onChange,
+  placeholder,
+  label,
+  className = "",
+  shortcut = false,
+}: {
+  id: string;
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  label: string;
+  className?: string;
+  shortcut?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listId = `${id}-options`;
+  const filteredOptions = useMemo(() => {
+    const search = value.trim().toLocaleLowerCase();
+    return showAll || !search
+      ? options
+      : options.filter((mineral) => mineral.toLocaleLowerCase().includes(search));
+  }, [options, showAll, value]);
+
+  const selectMineral = (mineral: string) => {
+    onChange(mineral);
+    setOpen(false);
+    setShowAll(false);
+    setActiveIndex(-1);
+  };
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+      setActiveIndex(-1);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!open) {
+        setShowAll(true);
+        setOpen(true);
+      } else {
+        setActiveIndex((index) => Math.min(index + 1, filteredOptions.length - 1));
+      }
+    } else if (event.key === "ArrowUp" && open && filteredOptions.length) {
+      event.preventDefault();
+      setActiveIndex((index) => Math.max(index - 1, 0));
+    } else if (event.key === "Enter" && open && activeIndex >= 0) {
+      event.preventDefault();
+      const mineral = filteredOptions[activeIndex];
+      if (mineral) selectMineral(mineral);
+    }
+  };
+
+  return <div
+    className={`header-search mineral-search ${className}`}
+    ref={rootRef}
+    onBlur={(event) => {
+      if (!(event.relatedTarget instanceof Node) || !rootRef.current?.contains(event.relatedTarget)) setOpen(false);
+    }}
+  >
+    <Search size={17} aria-hidden="true" />
+    <input
+      id={id}
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded={open}
+      aria-controls={listId}
+      aria-activedescendant={activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
+      aria-label={label}
+      value={value}
+      onChange={(event) => {
+        onChange(event.target.value);
+        setShowAll(false);
+        setOpen(true);
+        setActiveIndex(-1);
+      }}
+      onFocus={() => { setShowAll(true); setOpen(true); setActiveIndex(-1); }}
+      onClick={() => { setShowAll(true); setOpen(true); setActiveIndex(-1); }}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+    />
+    <button
+      type="button"
+      className="mineral-search-toggle"
+      aria-label={open ? "Close gemstone list" : "Show gemstone list"}
+      aria-expanded={open}
+      aria-controls={listId}
+      onPointerDown={(event) => event.preventDefault()}
+      onClick={() => {
+        if (open) {
+          setOpen(false);
+          setActiveIndex(-1);
+        } else {
+          setShowAll(true);
+          setOpen(true);
+        }
+      }}
+    ><ChevronDown size={16} aria-hidden="true" /></button>
+    {shortcut && <kbd>/</kbd>}
+    {open && <div className="mineral-search-options" id={listId} role="listbox" aria-label="Available gemstones">
+      {filteredOptions.length
+        ? filteredOptions.map((mineral, index) => <button
+          type="button"
+          role="option"
+          id={`${id}-option-${index}`}
+          aria-selected={activeIndex === index}
+          className="mineral-search-option"
+          key={mineral}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => selectMineral(mineral)}
+        >{mineral}</button>)
+        : <div className="mineral-search-empty" role="status">No matching gemstone names. You can keep typing your search.</div>}
+    </div>}
+  </div>;
 }
 
 const money = (value: string, currency: Currency) => `${currency === "TZS" ? "TSh" : "$"} ${value}`;
@@ -4542,12 +4664,11 @@ export default function Marketplace() {
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
         {menuOpen && <><button className="menu-dismiss" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><div className="menu-popover"><span className="menu-kicker">YOUR ACCOUNT</span>{user ? <><button type="button" onClick={() => openDialog("submissions")}>My submissions {accountSubmissionEntries.length > 0 && <span className="account-menu-count" aria-label={`${accountSubmissionEntries.length} pending or rejected submissions`}><strong>{accountSubmissionEntries.length}</strong></span>}<ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("support"); setMenuOpen(false); }}>Help / Contact admin{supportUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${supportUnreadCount} unread support messages`}>{supportUnreadCount}</span>}<ArrowUpRight size={15} /></button>{role === "user" && <>        <button type="button" onClick={() => { setDialog("commerce"); setMenuOpen(false); }}>Orders and Cart <span className="account-menu-counts"><small><strong>{privateOffersCount}</strong> offers</small><small><strong>{buyerOpenOrdersCount}</strong> buying active</small><small><strong>{sellerOpenOrdersCount}</strong> selling active</small><small><strong>{cartListingAccountId === userId ? cartListingIds.size : 0}</strong> cart</small></span></button><button type="button" onClick={() => { setDialog("bank-information"); setMenuOpen(false); }}>Bank Information <ArrowUpRight size={15} /></button><button type="button" onClick={() => { setDialog("subscription"); setMenuOpen(false); void loadUserSubscriptions(); }}>Subscription <ArrowUpRight size={15} /></button><button type="button" disabled={busyActions.has("load-my-market-minerals")} onClick={() => void openAccountMarket("my-market-minerals")}>{busyActions.has("load-my-market-minerals") ? "Loading minerals…" : <>Selling <span className="account-menu-count"><strong>{sellingCount}</strong><small>listed</small></span></>}</button><button type="button" disabled={busyActions.has("load-my-wanted-minerals")} onClick={() => void openAccountMarket("my-wanted-minerals")}>{busyActions.has("load-my-wanted-minerals") ? "Loading requests…" : <>Buying <span className="account-menu-count"><strong>{buyingCount}</strong><small>requests</small></span></>}</button><button type="button" onClick={() => void openAccountLicences()}>My licence <ArrowUpRight size={15} /></button></>}<button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button></> : <><button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}</button><button type="button" onClick={() => openDialog("signin")}>Sign in <ArrowUpRight size={15} /></button></>}{siteContentLoaded && swahiliEnabled && <div className="menu-language"><span>Language</span><button className={`language-switch${language === "sw" ? " is-swahili" : ""}`} type="button" role="switch" aria-checked={language === "sw"} aria-label={`Language: ${language === "sw" ? "Swahili" : "English"}. Switch to ${language === "sw" ? "English" : "Swahili"}`} onClick={() => chooseLanguage(language === "sw" ? "en" : "sw")}><span>English</span><span>Swahili</span><span className="language-switch-thumb" aria-hidden="true" /></button></div>}<div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div></div></>}
       </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} priority /><span>madini<span className="wordmark-market">market</span></span></a></div>
-      <div className="header-search"><Search size={17} /><input list="market-mineral-suggestions" aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals and places" /><kbd>/</kbd></div>
+      <MineralSearchInput id="desktop-mineral-search" options={mineralSearchOptions} value={query} onChange={setQuery} placeholder="Search minerals and places" label="Search minerals and locations" shortcut />
       {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span className="user-chip-identity" data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
     </header>
 
     <div className="market-content" id="top">
-      <datalist id="market-mineral-suggestions">{mineralSearchOptions.map((mineral) => <option key={mineral} value={mineral} />)}</datalist>
       {homepageAnnouncement && <div className="market-announcement" role="status"><span>{homepageAnnouncement}</span></div>}
       <section className="market-intro">
         <div className={`market-intro-heading${homepageHeadlineOverflowing ? " is-overflowing" : ""}`} ref={homepageHeadlineWindowRef}>
@@ -4575,7 +4696,7 @@ export default function Marketplace() {
             )}
           </div>
         </div>
-        <div className="market-intro-tools"><div className="header-search mobile-market-search"><Search size={17} /><input list="market-mineral-suggestions" aria-label="Search minerals and locations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search minerals here" /></div></div>
+        <div className="market-intro-tools"><MineralSearchInput id="mobile-mineral-search" options={mineralSearchOptions} value={query} onChange={setQuery} placeholder="Search minerals here" label="Search minerals and locations" className="mobile-market-search" /></div>
       </section>
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
