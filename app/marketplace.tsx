@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, FileUp, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
@@ -5312,7 +5312,7 @@ export default function Marketplace() {
           <summary className="certificate-option-heading"><h3>{title}</h3><span className={`submission-status status-${certificate?.status ?? "empty"}`}>{certificate?.status ?? "Not submitted"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
           {certificate?.review_message && <p className="submission-message">Admin rejection reason: {certificate.review_message}</p>}
           {certificate && <a className="certificate-file-link" href={certificate.signed_url} target="_blank" rel="noreferrer">View {certificate.file_name}</a>}
-          {canUpload && <><label className="field-label certificate-file-label">Upload PDF, JPEG, or PNG<input className="certificate-file-input" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => {
+          {canUpload && <><label className="field-label certificate-file-label"><span>Select your {kind} licence file</span><input className="file-input certificate-file-input" type="file" aria-label={`Select ${title} document`} accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => {
             const file = event.currentTarget.files?.[0];
             if (file && (file.size > 10 * 1024 * 1024 || !["application/pdf", "image/jpeg", "image/png"].includes(file.type))) {
               setNotice("Choose a PDF, JPEG, or PNG file no larger than 10 MB.");
@@ -5321,7 +5321,7 @@ export default function Marketplace() {
               return;
             }
             setCertificateFiles((current) => ({ ...current, [kind]: file }));
-          }} /><span className="certificate-file-name">{certificateFiles[kind]?.name ?? "Choose a file"}</span></label>
+          }} /><span className="certificate-file-picker"><FileUp size={18} aria-hidden="true" /><span className="certificate-file-picker-copy"><strong>{certificateFiles[kind]?.name ?? "Choose a file to upload"}</strong></span><span className="certificate-file-picker-action">Browse files</span></span></label>
           <button className="button button-dark" type="button" disabled={!certificateFiles[kind] || busyCertificate === kind} onClick={() => void submitCertificate(kind)}>{busyCertificate === kind ? "Submitting for verification…" : "Submit for verification"}</button></>}
           {certificate?.status === "pending" && <p className="certificate-status-note">Received by the admin. Submission is locked while verification is pending.</p>}
           {certificate?.status === "approved" && <p className="certificate-status-note">Verified. Your account is enabled to list minerals.</p>}
