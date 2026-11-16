@@ -1,5 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
-import type { StaffPermission } from "@/lib/staff-permissions";
+import { isStaffAccountActionPermission, type StaffPermission } from "@/lib/staff-permissions";
 
 export async function getStaffAccess(request: Request, permission?: StaffPermission) {
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -20,9 +20,15 @@ export async function getStaffAccess(request: Request, permission?: StaffPermiss
   if (memberError) throw memberError;
   if (!member) return null;
 
-  const roles = (member.staff_member_roles ?? []).flatMap((assignment) =>
+  const assignedRoles = (member.staff_member_roles ?? []).flatMap((assignment) =>
     Array.isArray(assignment.role) ? assignment.role : assignment.role ? [assignment.role] : [],
   );
+  const roles = assignedRoles.map((role) => ({
+    ...role,
+    permissions: role.permissions.filter((rolePermission: unknown) =>
+      role.permissions.includes("accounts") || !isStaffAccountActionPermission(rolePermission),
+    ),
+  }));
   const permissions = [...new Set(roles.flatMap((role) => role.permissions))] as StaffPermission[];
   if (permission && !permissions.includes(permission)) return null;
   return {
