@@ -120,6 +120,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState("");
   const isStaff = staffPermissions !== undefined;
   const canProcessOrders = !isStaff || (staffScope === "processing" && staffPermissions.includes("marketplace_orders"));
@@ -141,25 +142,33 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
       : render(true);
 
   const load = useCallback(async (isCurrent: () => boolean = () => true) => {
-    if (!isSupabaseConfigured) throw new Error("The admin service is not connected.");
-    const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
-    if (sessionError) throw sessionError;
-    if (!session) throw new Error("Admin session expired.");
-    const params = new URLSearchParams({ filter, search, page: String(page) });
-    const response = await fetch(`/api/admin/marketplace-orders?${params}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      cache: "no-store",
-    });
-    const result = await response.json();
-    if (!isCurrent()) return;
-    if (!response.ok) throw new Error(result.error ?? "Could not load marketplace orders.");
-    if (page > Math.max(1, Math.ceil(Number(result.totalCount ?? 0) / 25))) {
-      setLoading(true);
-      setPage(Math.max(1, Math.ceil(Number(result.totalCount ?? 0) / 25)));
-      return;
+    try {
+      if (!isSupabaseConfigured) throw new Error("The admin service is not connected.");
+      const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error("Admin session expired.");
+      const params = new URLSearchParams({ filter, search, page: String(page) });
+      const response = await fetch(`/api/admin/marketplace-orders?${params}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      const result = await response.json();
+      if (!isCurrent()) return;
+      if (!response.ok) throw new Error(result.error ?? "Could not load marketplace orders.");
+      if (page > Math.max(1, Math.ceil(Number(result.totalCount ?? 0) / 25))) {
+        setLoading(true);
+        setPage(Math.max(1, Math.ceil(Number(result.totalCount ?? 0) / 25)));
+        return;
+      }
+      setLoadError("");
+      setOrders(result.orders as Order[]);
+      setTotalCount(result.totalCount as number);
+    } catch (error) {
+      if (isCurrent()) {
+        setLoadError(error instanceof Error ? error.message : "Could not load marketplace orders.");
+      }
+      throw error;
     }
-    setOrders(result.orders as Order[]);
-    setTotalCount(result.totalCount as number);
   }, [filter, page, search]);
 
   useEffect(() => {
@@ -266,6 +275,9 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
       <form className="admin-order-search" onSubmit={(event) => {
         event.preventDefault();
         setPage(1);
+        setOrders([]);
+        setTotalCount(0);
+        setLoadError("");
         setLoading(true);
         setSearch(searchInput.trim());
       }}>
@@ -275,6 +287,9 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
           setSearch("");
           setSearchInput("");
           setPage(1);
+          setOrders([]);
+          setTotalCount(0);
+          setLoadError("");
           setLoading(true);
         }}>Clear search</button>}
       </form>
@@ -282,6 +297,9 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         <select className="text-input" value={filter} onChange={(event) => {
           setFilter(event.target.value as OrderFilter);
           setPage(1);
+          setOrders([]);
+          setTotalCount(0);
+          setLoadError("");
           setLoading(true);
         }}>
           {!isStaff && <option value="needs_action">Needs admin action</option>}
@@ -481,7 +499,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         </div>)}
         </div>
       </details>)}
-    </div> : <p className="admin-empty">{loading ? "Loading marketplace orders…" : "No orders match this filter and search."}</p>}
+    </div> : <p className="admin-empty">{loading ? "Loading marketplace orders…" : loadError || "No orders match this filter and search."}</p>}
     <div className="admin-order-pagination">
       <span>{totalCount ? `Showing ${(page - 1) * 25 + 1}–${Math.min(page * 25, totalCount)} of ${totalCount} orders` : "No matching orders"}</span>
       <div>

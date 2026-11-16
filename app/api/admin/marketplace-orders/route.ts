@@ -115,7 +115,7 @@ export async function GET(request: Request) {
   });
   if (queueError) {
     console.error("Admin could not query marketplace order queue", queueError);
-    return NextResponse.json({ error: "Could not load marketplace order queue. Run or update the marketplace order queue SQL in Supabase and retry." }, { status: 503 });
+    return NextResponse.json({ error: "Could not load marketplace order queue. Run the latest marketplace-admin-order-queue.sql and marketplace-admin-order-processing-scope.sql in Supabase, then retry." }, { status: 503 });
   }
   const queueRows = queue as { order_id: string | null; total_count: number | string; action_priority: number }[] | null;
   const totalCount = Number(queueRows?.[0]?.total_count ?? 0);
