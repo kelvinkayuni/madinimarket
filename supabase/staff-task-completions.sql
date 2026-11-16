@@ -25,6 +25,10 @@ revoke all on public.staff_task_completions from anon, authenticated;
 grant all on public.staff_task_completions to service_role;
 grant usage, select on sequence public.staff_task_completions_id_seq to service_role;
 
+delete from public.staff_task_completions
+where task_type = 'website_account'
+  and action in ('bank_edit_enabled', 'bank_edit_disabled');
+
 create or replace function public.admin_staff_completion_counts()
 returns table (
   staff_member_id bigint,
@@ -56,6 +60,10 @@ as $admin_staff_completion_counts$
   from public.staff_task_completions as completions
   cross join boundaries
   where completions.completed_at >= boundaries.year_start
+    and not (
+      completions.task_type = 'website_account'
+      and completions.action in ('bank_edit_enabled', 'bank_edit_disabled')
+    )
   group by completions.staff_member_id, completions.task_type;
 $admin_staff_completion_counts$;
 
@@ -105,6 +113,10 @@ as $admin_staff_completion_history$
       when 'year' then boundaries.year_start
       else null
     end
+    and not (
+      completions.task_type = 'website_account'
+      and completions.action in ('bank_edit_enabled', 'bank_edit_disabled')
+    )
     and (p_before_id is null or completions.id < p_before_id)
   order by completions.id desc
   limit 51;
@@ -161,7 +173,7 @@ begin
   end if;
 
   if found then
-    if p_staff_member_id is not null then
+    if p_staff_member_id is not null and p_state = 'is_active' then
       insert into public.staff_task_completions (
         staff_member_id,
         staff_name,
@@ -176,10 +188,8 @@ begin
         'website_account',
         p_account_id::text,
         case
-          when p_state = 'is_active' and p_value then 'set_active_true'
-          when p_state = 'is_active' then 'set_active_false'
-          when p_value then 'bank_edit_enabled'
-          else 'bank_edit_disabled'
+          when p_value then 'set_active_true'
+          else 'set_active_false'
         end
       );
     end if;
