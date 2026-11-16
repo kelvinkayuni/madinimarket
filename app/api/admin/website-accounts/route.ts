@@ -104,29 +104,37 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Claim this account before handling it." }, { status: 409 });
     }
     const bankEditPermission = values.bank_info_edit_unlocked;
+    const activeStatus = values.is_active;
+    let state: "bank_info_edit_unlocked" | "is_active";
+    let value: boolean;
     if (typeof bankEditPermission === "boolean") {
-      const { data, error } = await admin.from("website_accounts")
-        .update({ bank_info_edit_unlocked: bankEditPermission })
-        .eq("id", id)
-        .select("id, bank_info_edit_unlocked")
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return NextResponse.json({ error: "Account not found." }, { status: 404 });
-      await recordStaffTaskCompletion(admin, staff, "website_account", id, `bank_edit_${bankEditPermission ? "enabled" : "disabled"}`);
-      return NextResponse.json({ account: data });
-    }
-    if (typeof values.is_active !== "boolean") {
+      state = "bank_info_edit_unlocked";
+      value = bankEditPermission;
+    } else if (typeof activeStatus === "boolean") {
+      state = "is_active";
+      value = activeStatus;
+    } else {
       return NextResponse.json({ error: "Invalid account details." }, { status: 400 });
     }
-    if (staff && !staff.permissions.includes("account_status_management")) {
+    if (state === "is_active" && staff && !staff.permissions.includes("account_status_management")) {
       return NextResponse.json({ error: "Your staff role does not allow activating or deactivating buyer/seller accounts." }, { status: 403 });
     }
-    const { data, error } = await admin.from("website_accounts").update({ is_active: values.is_active })
-      .eq("id", id).select("id, is_active").maybeSingle();
+
+    const { data, error } = await admin.rpc("admin_update_website_account_state", {
+      p_account_id: id,
+      p_state: state,
+      p_value: value,
+      p_staff_member_id: staff?.staffId ?? null,
+      p_staff_name: staff?.fullName ?? null,
+      p_employee_code: staff?.employeeCode ?? null,
+    });
     if (error) throw error;
-    if (!data) return NextResponse.json({ error: "Account not found." }, { status: 404 });
-    await recordStaffTaskCompletion(admin, staff, "website_account", id, `set_active_${values.is_active}`);
-    return NextResponse.json({ account: data });
+    const updatedAccount = data?.[0];
+    if (!updatedAccount) return NextResponse.json({ error: "Account not found." }, { status: 404 });
+    const account = state === "bank_info_edit_unlocked"
+      ? { id: updatedAccount.account_id, bank_info_edit_unlocked: updatedAccount.bank_info_edit_unlocked }
+      : { id: updatedAccount.account_id, is_active: updatedAccount.is_active };
+    return NextResponse.json({ account, changed: updatedAccount.changed });
   } catch (error) {
     console.error("Could not update website account.", error);
     return NextResponse.json({ error: "Could not update that account." }, { status: 503 });

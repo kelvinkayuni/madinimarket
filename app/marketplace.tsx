@@ -3216,6 +3216,10 @@ export default function Marketplace() {
       }
       if (!response.ok) throw new Error(result.error ?? "Could not update account.");
       await refreshAdminAccounts();
+      if (result.changed === false) {
+        setNotice(`Account ${account.username} was already ${isActive ? "active" : "inactive"}. No change was made.`);
+        return;
+      }
       setNotice(`Account ${account.username} ${isActive ? "activated" : "deactivated"}.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not update account.");
@@ -3242,6 +3246,10 @@ export default function Marketplace() {
       }
       if (!response.ok) throw new Error(result.error ?? "Could not update bank information access.");
       await refreshAdminAccounts();
+      if (result.changed === false) {
+        setNotice(`Bank information editing was already ${unlocked ? "enabled" : "disabled"} for ${account.username}. No change was made.`);
+        return;
+      }
       setNotice(unlocked
         ? `One bank information update enabled for ${account.username}.`
         : `Bank information editing disabled for ${account.username}.`);

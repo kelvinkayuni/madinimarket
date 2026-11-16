@@ -38,6 +38,25 @@ type StaffMember = {
   };
 };
 
+type CompletionHistoryPeriod = "today" | "month" | "year";
+type CompletionHistoryEvent = {
+  id: number;
+  taskType: string;
+  taskId: string;
+  action: string;
+  completedAt: string;
+  targetLabel: string | null;
+};
+type CompletionHistoryState = {
+  period: CompletionHistoryPeriod;
+  events: CompletionHistoryEvent[];
+  hasMore: boolean;
+  nextCursor: number | null;
+  loaded: boolean;
+  loading: boolean;
+  error: string | null;
+};
+
 const staffTaskLabels: Record<string, string> = {
   listing_review: "Seller submission reviews",
   buyer_request_review: "Buyer submission reviews",
@@ -54,9 +73,40 @@ const staffTaskLabels: Record<string, string> = {
   account_setting: "Account settings",
   subscription_payment: "Subscription payment confirmations",
 };
+const completionHistoryPeriods: { id: CompletionHistoryPeriod; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "month", label: "This month" },
+  { id: "year", label: "This year" },
+];
+const staffCompletionActionLabels: Record<string, string> = {
+  bank_edit_enabled: "Bank-edit access enabled",
+  bank_edit_disabled: "Bank-edit access disabled",
+  set_active_true: "Account activated",
+  set_active_false: "Account deactivated",
+  delete_account: "Account deleted",
+  resolve_conversation: "Conversation resolved",
+  confirm_payment: "Payment confirmed",
+  reject_payment: "Payment rejected",
+};
+
+function formatStaffCompletionAction(action: string) {
+  const knownLabel = staffCompletionActionLabels[action];
+  if (knownLabel) return knownLabel;
+  return action.replaceAll("_", " ").replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
+
+function formatStaffCompletionTime(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Dar_es_Salaam",
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 export default function AdminStaffManagement({ onNotice }: { onNotice: (message: string) => void }) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [roles, setRoles] = useState<StaffRole[]>([]);
+  const [completionHistory, setCompletionHistory] = useState<Record<number, CompletionHistoryState>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [editingRolesFor, setEditingRolesFor] = useState<number | null>(null);
@@ -68,6 +118,7 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
   const roleListScrollTop = useRef(0);
   const staffListRef = useRef<HTMLDivElement>(null);
   const staffListScrollTop = useRef(0);
+  const completionHistoryRequests = useRef(new Set<number>());
 
   useLayoutEffect(() => {
     if (roleListRef.current) roleListRef.current.scrollTop = roleListScrollTop.current;
@@ -99,6 +150,88 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
     setStaff(result.staff as StaffMember[]);
     setRoles(result.roles as StaffRole[]);
   }, []);
+
+  const loadCompletionHistory = async (
+    staffId: number,
+    period: CompletionHistoryPeriod,
+    beforeId?: number,
+  ) => {
+    if (completionHistoryRequests.current.has(staffId)) return;
+    completionHistoryRequests.current.add(staffId);
+    setCompletionHistory((current) => {
+      const previous = current[staffId];
+      const appending = beforeId !== undefined && previous?.period === period;
+      return {
+        ...current,
+        [staffId]: {
+          period,
+          events: appending ? previous?.events ?? [] : [],
+          hasMore: appending ? previous?.hasMore ?? false : false,
+          nextCursor: appending ? previous?.nextCursor ?? null : null,
+          loaded: appending ? previous?.loaded ?? false : false,
+          loading: true,
+          error: null,
+        },
+      };
+    });
+
+    try {
+      const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error("Administrator session expired.");
+      const params = new URLSearchParams({
+        completionHistoryStaffId: String(staffId),
+        completionHistoryPeriod: period,
+      });
+      if (beforeId !== undefined) params.set("completionHistoryBeforeId", String(beforeId));
+      const response = await fetch(`/api/admin/staff?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      const result = await response.json() as {
+        events?: CompletionHistoryEvent[];
+        hasMore?: boolean;
+        nextCursor?: number | null;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(result.error ?? "Could not load completion history.");
+      setCompletionHistory((current) => {
+        const previous = current[staffId];
+        const appending = beforeId !== undefined && previous?.period === period;
+        return {
+          ...current,
+          [staffId]: {
+            period,
+            events: appending ? [...(previous?.events ?? []), ...(result.events ?? [])] : (result.events ?? []),
+            hasMore: result.hasMore === true,
+            nextCursor: typeof result.nextCursor === "number" ? result.nextCursor : null,
+            loaded: true,
+            loading: false,
+            error: null,
+          },
+        };
+      });
+    } catch (error) {
+      setCompletionHistory((current) => {
+        const previous = current[staffId];
+        const samePeriod = previous?.period === period;
+        return {
+          ...current,
+          [staffId]: {
+            period,
+            events: samePeriod ? previous?.events ?? [] : [],
+            hasMore: samePeriod ? previous?.hasMore ?? false : false,
+            nextCursor: samePeriod ? previous?.nextCursor ?? null : null,
+            loaded: samePeriod && (previous?.loaded ?? false),
+            loading: false,
+            error: error instanceof Error ? error.message : "Could not load completion history.",
+          },
+        };
+      });
+    } finally {
+      completionHistoryRequests.current.delete(staffId);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -538,14 +671,21 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         ref={staffListRef}
         onScroll={(event) => { staffListScrollTop.current = event.currentTarget.scrollTop; }}
       >
-        {staff.map((member) => <article className="admin-staff-row" key={member.id}>
+        {staff.map((member) => {
+          const history = completionHistory[member.id];
+          const historyPeriod = history?.period ?? "today";
+          return <article className="admin-staff-row" key={member.id}>
           <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small><strong className="admin-staff-assigned-roles">{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"}</strong> · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
             {(member.sex || member.residence) && <small>{member.sex ? `Sex: ${member.sex.replaceAll("_", " ")}` : ""}{member.sex && member.residence ? " · " : ""}{member.residence ? `Residence / work area: ${member.residence}` : ""}</small>}
-            <details className="admin-staff-completion-details">
-              <summary>Completed tasks · Today {member.taskCompletionCounts.today} · This month {member.taskCompletionCounts.month} · This year {member.taskCompletionCounts.year}</summary>
+            <details className="admin-staff-completion-details" onToggle={(event) => {
+              if (event.currentTarget.open && !history?.loaded && !history?.loading) {
+                void loadCompletionHistory(member.id, historyPeriod);
+              }
+            }}>
+              <summary>Successful actions · Today {member.taskCompletionCounts.today} · This month {member.taskCompletionCounts.month} · This year {member.taskCompletionCounts.year}</summary>
               <p>Counts begin when completion tracking is enabled. Periods use Tanzania time.</p>
-              {Object.keys(member.taskCompletionCounts.byTaskType).length ? <div className="admin-staff-completion-table" role="table" aria-label={`Completed tasks by type for ${member.full_name}`}>
-                <div role="row"><strong role="columnheader">Task type</strong><strong role="columnheader">Today</strong><strong role="columnheader">This month</strong><strong role="columnheader">This year</strong></div>
+              {Object.keys(member.taskCompletionCounts.byTaskType).length ? <div className="admin-staff-completion-table" role="table" aria-label={`Successful actions by work area for ${member.full_name}`}>
+                <div role="row"><strong role="columnheader">Work area</strong><strong role="columnheader">Today</strong><strong role="columnheader">This month</strong><strong role="columnheader">This year</strong></div>
                 {Object.entries(member.taskCompletionCounts.byTaskType)
                   .sort(([a], [b]) => (staffTaskLabels[a] ?? a).localeCompare(staffTaskLabels[b] ?? b))
                   .map(([taskType, counts]) => <div role="row" key={taskType}>
@@ -554,7 +694,48 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
                     <span role="cell">{counts.month}</span>
                     <span role="cell">{counts.year}</span>
                   </div>)}
-              </div> : <small>No staff tasks completed this year.</small>}
+              </div> : <small>No successful actions recorded this year.</small>}
+              <section className="admin-staff-completion-history" aria-label={`Successful action history for ${member.full_name}`}>
+                <strong>Action history</strong>
+                <div className="admin-staff-completion-periods" role="group" aria-label="Filter action history by period">
+                  {completionHistoryPeriods.map((period) => <button
+                    className={`admin-staff-completion-period${historyPeriod === period.id ? " is-active" : ""}`}
+                    type="button"
+                    key={period.id}
+                    aria-pressed={historyPeriod === period.id}
+                    disabled={history?.loading === true}
+                    onClick={() => void loadCompletionHistory(member.id, period.id)}
+                  >{period.label}</button>)}
+                </div>
+                {history?.loading && history.events.length === 0 && <p className="commerce-note">Loading action history…</p>}
+                {history?.error && <p className="commerce-note" role="alert">{history.error}</p>}
+                {history?.loaded && history.events.length === 0 && <p className="commerce-note">No successful actions in this period.</p>}
+                {history?.events.length ? <>
+                  <div className="admin-staff-completion-history-table" role="table" aria-label={`Successful actions ${historyPeriod} for ${member.full_name}`}>
+                    <div className="admin-staff-completion-history-row is-heading" role="row">
+                      <strong role="columnheader">Time (Tanzania)</strong>
+                      <strong role="columnheader">Work area</strong>
+                      <strong role="columnheader">Action</strong>
+                      <strong role="columnheader">Task reference</strong>
+                    </div>
+                    {history.events.map((entry) => <div className="admin-staff-completion-history-row" role="row" key={entry.id}>
+                      <time role="cell" dateTime={entry.completedAt}>{formatStaffCompletionTime(entry.completedAt)}</time>
+                      <span role="cell">{staffTaskLabels[entry.taskType] ?? entry.taskType}</span>
+                      <span role="cell">{formatStaffCompletionAction(entry.action)}</span>
+                      <span className="admin-staff-completion-target" role="cell">
+                        {entry.targetLabel && <strong>{entry.targetLabel}</strong>}
+                        <code title={entry.taskId}>{entry.taskId}</code>
+                      </span>
+                    </div>)}
+                  </div>
+                  {history.hasMore && history.nextCursor !== null && <button
+                    className="button button-outline"
+                    type="button"
+                    disabled={history.loading}
+                    onClick={() => void loadCompletionHistory(member.id, historyPeriod, history.nextCursor ?? undefined)}
+                  >{history.loading ? "Loading…" : "Load older actions"}</button>}
+                </> : null}
+              </section>
             </details>
             {editingRolesFor === member.id && <fieldset className="admin-staff-permissions">
               <legend>Assigned roles (optional)</legend>
@@ -593,7 +774,8 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
               {busy === `delete-${member.id}` ? "Deleting…" : "Delete account"}
             </button>
           </div>
-        </article>)}
+        </article>;
+        })}
       </div> : <p className="commerce-note">No staff accounts yet.</p>}
     </section>
   </section>;

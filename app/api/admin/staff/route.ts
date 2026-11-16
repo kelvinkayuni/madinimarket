@@ -46,14 +46,75 @@ export async function GET(request: Request) {
   const access = await getOwner(request);
   if (!access.owner) return access.response;
   const { owner } = access;
+  const searchParams = new URL(request.url).searchParams;
 
-  if (new URL(request.url).searchParams.get("rolesOnly") === "true") {
+  if (searchParams.get("rolesOnly") === "true") {
     const { data: roles, error } = await owner.admin.from("staff_roles").select("name, permissions").order("name");
     if (error) {
       console.error("Could not load staff role details.", error);
       return NextResponse.json({ error: "Could not load staff role details." }, { status: 503 });
     }
     return NextResponse.json({ roles: roles ?? [] }, { headers: { "Cache-Control": "no-store" } });
+  }
+
+  if (searchParams.has("completionHistoryStaffId")) {
+    const staffId = Number(searchParams.get("completionHistoryStaffId"));
+    const period = searchParams.get("completionHistoryPeriod");
+    const beforeIdValue = searchParams.get("completionHistoryBeforeId");
+    const beforeId = beforeIdValue === null ? null : Number(beforeIdValue);
+    if (!Number.isSafeInteger(staffId) || staffId < 1) {
+      return NextResponse.json({ error: "Choose a valid staff member." }, { status: 400 });
+    }
+    if (period !== "today" && period !== "month" && period !== "year") {
+      return NextResponse.json({ error: "Choose a valid completion history period." }, { status: 400 });
+    }
+    if (beforeIdValue !== null && (!/^\d+$/.test(beforeIdValue) || !Number.isSafeInteger(Number(beforeIdValue)) || Number(beforeIdValue) < 1)) {
+      return NextResponse.json({ error: "Choose a valid completion history cursor." }, { status: 400 });
+    }
+
+    const completionHistoryResult = await owner.admin.rpc("admin_staff_completion_history", {
+      p_staff_member_id: staffId,
+      p_period: period,
+      p_before_id: beforeId,
+    });
+    if (completionHistoryResult.error) {
+      console.error("Could not load staff task completion history.", completionHistoryResult.error);
+      return NextResponse.json({ error: "Could not load task completion history. Apply supabase/staff-task-completions.sql." }, { status: 503 });
+    }
+
+    const resultRows: {
+      id: number;
+      task_type: string;
+      task_id: string;
+      action: string;
+      completed_at: string;
+    }[] = completionHistoryResult.data ?? [];
+    const pageRows = resultRows.slice(0, 50);
+    const websiteAccountIds = [...new Set(pageRows
+      .filter((row) => row.task_type === "website_account" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.task_id))
+      .map((row) => row.task_id))];
+    const { data: websiteAccounts, error: websiteAccountsError } = websiteAccountIds.length
+      ? await owner.admin.from("website_accounts").select("id, username").in("id", websiteAccountIds)
+      : { data: [], error: null };
+    if (websiteAccountsError) {
+      console.error("Could not resolve staff completion account references.", websiteAccountsError);
+      return NextResponse.json({ error: "Could not load task completion details." }, { status: 503 });
+    }
+    const usernameByAccountId = new Map((websiteAccounts ?? []).map((account) => [account.id, account.username]));
+    const hasMore = resultRows.length > 50;
+    const lastRow = pageRows[pageRows.length - 1];
+    return NextResponse.json({
+      events: pageRows.map((row) => ({
+        id: row.id,
+        taskType: row.task_type,
+        taskId: row.task_id,
+        action: row.action,
+        completedAt: row.completed_at,
+        targetLabel: usernameByAccountId.get(row.task_id) ? `@${usernameByAccountId.get(row.task_id)}` : null,
+      })),
+      hasMore,
+      nextCursor: hasMore && lastRow ? Number(lastRow.id) : null,
+    }, { headers: { "Cache-Control": "no-store" } });
   }
 
   const [
