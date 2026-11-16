@@ -1695,6 +1695,73 @@ export default function Marketplace() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     let active = true;
+    let loading = false;
+    let pendingRefresh = false;
+    let loggedRefreshError = false;
+    let refreshTimer: number | undefined;
+    const refreshAccountCreationSetting = async () => {
+      if (!active || document.visibilityState !== "visible") return;
+      if (loading) {
+        pendingRefresh = true;
+        return;
+      }
+      loading = true;
+      try {
+        const response = await fetch("/api/site-content?scope=account-creation", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok || typeof result.accountCreationDisabled !== "boolean") {
+          throw new Error(result.error ?? "Could not refresh account creation settings.");
+        }
+        if (active) {
+          setAccountCreationDisabled(result.accountCreationDisabled);
+          loggedRefreshError = false;
+        }
+      } catch (error) {
+        if (active && !loggedRefreshError) {
+          console.error("Could not refresh account creation settings.", error);
+          loggedRefreshError = true;
+        }
+      } finally {
+        loading = false;
+        if (pendingRefresh && active && document.visibilityState === "visible") {
+          pendingRefresh = false;
+          scheduleRefresh();
+        }
+      }
+    };
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible" || refreshTimer !== undefined) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        void refreshAccountCreationSetting();
+      }, 250);
+    };
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel("site-content-account-creation")
+      .on("broadcast", { event: "account_creation_setting_changed" }, scheduleRefresh)
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          scheduleRefresh();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`Account-creation settings Realtime status: ${status}. Polling remains enabled.`);
+        }
+      });
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshAccountCreationSetting();
+    }, 30_000);
+    const removeResumeListener = onBrowserResume(refreshAccountCreationSetting);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      removeResumeListener();
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
     let loaded = false;
     const refreshCurrencySettings = async () => {
       try {
