@@ -683,7 +683,6 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
               }
             }}>
               <summary>Successful actions · Today {member.taskCompletionCounts.today} · This month {member.taskCompletionCounts.month} · This year {member.taskCompletionCounts.year}</summary>
-              <p>Counts begin when completion tracking is enabled. Periods use Tanzania time.</p>
               {Object.keys(member.taskCompletionCounts.byTaskType).length ? <div className="admin-staff-completion-table" role="table" aria-label={`Successful actions by work area for ${member.full_name}`}>
                 <div role="row"><strong role="columnheader">Work area</strong><strong role="columnheader">Today</strong><strong role="columnheader">This month</strong><strong role="columnheader">This year</strong></div>
                 {Object.entries(member.taskCompletionCounts.byTaskType)
