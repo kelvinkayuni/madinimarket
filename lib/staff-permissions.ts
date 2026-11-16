@@ -14,8 +14,18 @@ export const STAFF_PERMISSION_OPTIONS = [
   { id: "customer_support", label: "Support Inbox" },
 ] as const;
 
+export const STAFF_ACCOUNT_ACTION_PERMISSIONS = [
+  "account_status_management",
+  "account_deletion",
+] as const;
+
 export type StaffPermission = (typeof STAFF_PERMISSION_OPTIONS)[number]["id"];
+export type StaffAccountActionPermission = (typeof STAFF_ACCOUNT_ACTION_PERMISSIONS)[number];
 
 export function isStaffPermission(value: unknown): value is StaffPermission {
   return typeof value === "string" && STAFF_PERMISSION_OPTIONS.some((permission) => permission.id === value);
+}
+
+export function isStaffAccountActionPermission(value: unknown): value is StaffAccountActionPermission {
+  return typeof value === "string" && STAFF_ACCOUNT_ACTION_PERMISSIONS.some((permission) => permission === value);
 }

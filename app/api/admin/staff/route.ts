@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { sendGmailEmail } from "@/lib/gmail";
 import { getPublicAppUrl } from "@/lib/public-app-url";
-import { isStaffPermission } from "@/lib/staff-permissions";
+import { isStaffAccountActionPermission, isStaffPermission } from "@/lib/staff-permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -226,6 +226,9 @@ export async function POST(request: Request) {
     if (name.length < 2 || name.length > 80 || !permissions.length || !permissions.every(isStaffPermission)) {
       return NextResponse.json({ error: "Enter a role name and choose at least one valid permission." }, { status: 400 });
     }
+    if (permissions.some(isStaffAccountActionPermission) && !permissions.includes("accounts")) {
+      return NextResponse.json({ error: "Account action permissions require Seller/Buyer Accounts access on the role." }, { status: 400 });
+    }
     const { data: role, error: roleError } = await owner.admin.from("staff_roles")
       .insert({ name, permissions, created_by: owner.userId })
       .select("id, name, permissions, created_at")
@@ -413,6 +416,9 @@ export async function PATCH(request: Request) {
     if (!Number.isSafeInteger(roleId) || roleId < 1 || name.length < 2 || name.length > 80
       || !permissions.length || !permissions.every(isStaffPermission)) {
       return NextResponse.json({ error: "Enter a role name and choose at least one valid permission." }, { status: 400 });
+    }
+    if (permissions.some(isStaffAccountActionPermission) && !permissions.includes("accounts")) {
+      return NextResponse.json({ error: "Account action permissions require Seller/Buyer Accounts access on the role." }, { status: 400 });
     }
     const { error } = await owner.admin.rpc("update_unassigned_staff_role", {
       p_role_id: roleId,
