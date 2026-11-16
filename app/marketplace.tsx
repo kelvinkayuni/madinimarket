@@ -4116,7 +4116,7 @@ export default function Marketplace() {
         </div>
         <div className="admin-header-actions"><span className="admin-account"><strong>{role === "staff" ? displayName : user}</strong>{role === "admin" && <small className="admin-mobile-role">ADMIN</small>}{role === "staff" && staffRoles.length > 0 && <small className="staff-mobile-role">{staffRoles.map((staffRole) => staffRole.name).join(" · ")}</small>}</span><button className="text-button" type="button" onClick={() => setDialog("signout")}>Sign out</button></div>
       </header>
-      <div className="admin-content" id="admin-home">
+      <div className={`admin-content${role === "staff" && activeAdminPanel === "accounts" ? " admin-content-staff-accounts" : ""}`} id="admin-home">
         {activeAdminPanelRoles.length > 0 && <div className="admin-active-panel-role" aria-label={`Assigned role: ${activeAdminPanelRoles.join(", ")}`}>
           <span>Assigned role</span>
           {activeAdminPanelRoles.map((staffRoleName) => <strong key={staffRoleName}>{staffRoleName}</strong>)}

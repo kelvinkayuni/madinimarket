@@ -148,6 +148,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .market-closed-notice h2 { margin: 12px 0 8px; color: var(--forest); font-family: var(--font-display), Georgia, serif; font-size: clamp(28px, 4vw, 42px); font-weight: 500; }
 .market-closed-notice p { margin: 0; color: #777f76; font-size: 13px; line-height: 1.6; }
 .admin-content { width: 100%; padding: 38px clamp(18px, 3vw, 48px) 64px; }
+.admin-content.admin-content-staff-accounts { padding-top: 14px; }
+.admin-content.admin-content-staff-accounts > .admin-accounts { padding-top: 0; }
 .admin-overview { padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .admin-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .admin-page-heading h1 { margin: 8px 0 5px; font-family: var(--font-display), Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1.1; }
