@@ -945,6 +945,7 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-order-pagination > div { width: 100%; justify-content: space-between; }
 }
 .rail-hint { display: flex; align-items: center; gap: 9px; margin: 14px 2px 0; color: #91998f; font-size: 8px; font-weight: 700; }
+.marketplace-load-more { display: flex; justify-content: center; margin-top: 12px; }
 .rail-line { width: 46px; height: 1px; background: #c8d0c5; }
 .empty-search { min-height: 104px; flex: 1; display: grid; place-items: center; padding: 24px 20px; border: 1px dashed #d8ded5; color: #788277; font-size: 12px; text-align: center; }
 .buyer-section { flex: 0 0 auto; margin: 10px calc(0px - clamp(18px, 3vw, 48px)) 0; padding: 25px clamp(18px, 3vw, 48px) 21px; border-top: 0; background: var(--forest); color: #f5f6ef; }

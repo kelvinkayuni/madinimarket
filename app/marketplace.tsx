@@ -89,8 +89,48 @@ const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
 const USER_STORAGE_KEY = "madinimarket:user:v1";
 const SALES_LEDGER_PAGE_SIZE = 25;
+const MARKETPLACE_PAGE_SIZE = 24;
 const signedMineralImageUrls = new Map<string, { url: string; expiresAt: number }>();
 
+type MarketplacePageOptions = {
+  sellerOffset?: number | null;
+  buyerOffset?: number | null;
+  search?: string;
+  includeAdminReviewQueue?: boolean;
+};
+
+type MarketplacePage = {
+  sellers: Seller[];
+  buyers: Buyer[];
+  sellerHasMore: boolean;
+  buyerHasMore: boolean;
+  sellerNextOffset: number;
+  buyerNextOffset: number;
+};
+
+function recordMarketplacePerformance(name: string, startTime: number) {
+  performance.measure(`madinimarket:${name}`, { start: startTime, end: performance.now() });
+}
+
+async function measureMarketplacePerformance<T>(name: string, operation: () => PromiseLike<T>) {
+  const startTime = performance.now();
+  try {
+    return await operation();
+  } finally {
+    recordMarketplacePerformance(name, startTime);
+  }
+}
+
+function marketplaceSearchFilter(search: string, columns: string[]) {
+  const escaped = search
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, "\\\"")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/[\r\n]/g, " ");
+  const pattern = `"%${escaped}%"`;
+  return columns.map((column) => `${column}.ilike.${pattern}`).join(",");
+}
 function salesLedgerPeriodKeys(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -371,6 +411,7 @@ async function getSignedMineralImageUrl(
   const cached = signedMineralImageUrls.get(imagePath);
   if (cached && cached.expiresAt > Date.now() + 30_000) return cached.url;
 
+  const startedAt = performance.now();
   try {
     let url = refreshedUrl ?? "";
     if (!url) {
@@ -383,33 +424,119 @@ async function getSignedMineralImageUrl(
   } catch (error) {
     console.error("Could not create a signed mineral image URL.", error);
     return "";
+  } finally {
+    recordMarketplacePerformance("image-url-signing", startedAt);
   }
 }
 
-async function loadMarketplaceListings(includeOwnSubmissions = false, adminAccessToken?: string) {
-  const supabase = getSupabaseBrowserClient();
+function LazySellerImage({
+  imagePath,
+  imageUrl,
+  mineral,
+  onError,
+}: {
+  imagePath: string | null;
+  imageUrl: string;
+  mineral: string;
+  onError: () => void;
+}) {
+  const imageTarget = useRef<HTMLSpanElement>(null);
+  const [isNearViewport, setIsNearViewport] = useState(Boolean(imageUrl));
+  const [signedImageUrl, setSignedImageUrl] = useState("");
+  const imageStartedAt = useRef(0);
+  const onErrorRef = useRef(onError);
+  const source = imageUrl || signedImageUrl;
 
-  const loadPublicSellerRows = async () => {
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    if (imageUrl) imageStartedAt.current = performance.now();
+  }, [imageUrl]);
+
+  useEffect(() => {
+    if (imageUrl || !imagePath || !imageTarget.current) return;
+    if (typeof IntersectionObserver === "undefined") {
+      const timeout = window.setTimeout(() => setIsNearViewport(true), 0);
+      return () => window.clearTimeout(timeout);
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setIsNearViewport(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "200px" });
+    observer.observe(imageTarget.current);
+    return () => observer.disconnect();
+  }, [imagePath, imageUrl]);
+
+  useEffect(() => {
+    if (!isNearViewport || source || !imagePath) return;
+    let active = true;
+    void getSignedMineralImageUrl(getSupabaseBrowserClient(), imagePath).then((url) => {
+      if (!active) return;
+      if (url) {
+        imageStartedAt.current = performance.now();
+        setSignedImageUrl(url);
+      } else {
+        onErrorRef.current();
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [imagePath, isNearViewport, source]);
+
+  return <span ref={imageTarget} style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", zIndex: 0 }}>
+    {source
+      ? <Image className="seller-photo-image" src={source} alt="" fill sizes="(max-width: 650px) 78vw, 320px" unoptimized loading="lazy"
+          onLoad={() => imageStartedAt.current && recordMarketplacePerformance("image-load", imageStartedAt.current)} onError={() => onErrorRef.current()} />
+      : <Gem size={38} strokeWidth={1.2} aria-label={`${mineral} photo loading`} />}
+  </span>;
+}
+
+async function loadMarketplaceListings(
+  includeOwnSubmissions = false,
+  adminAccessToken?: string,
+  options: MarketplacePageOptions = {},
+): Promise<MarketplacePage> {
+  const supabase = getSupabaseBrowserClient();
+  const sellerOffset = options.sellerOffset === undefined ? 0 : options.sellerOffset;
+  const buyerOffset = options.buyerOffset === undefined ? 0 : options.buyerOffset;
+  const search = options.search?.trim() ?? "";
+
+  const loadPublicSellerRows = async (offset: number | null) => {
+    if (offset === null) return { rows: [], hasMore: false, nextOffset: 0 };
     const attempts = [
-      () => supabase.from("market_listing_feed").select("*").order("created_at", { ascending: false }),
-      () => supabase.from("marketplace_listings").select("*").order("created_at", { ascending: false }),
+      () => {
+        let query = supabase.from("market_listing_feed").select("*")
+          .order("created_at", { ascending: false }).order("id", { ascending: false });
+        if (search) query = query.or(marketplaceSearchFilter(search, ["mineral_name", "color", "comment", "country", "region", "district"]));
+        return query.range(offset, offset + MARKETPLACE_PAGE_SIZE);
+      },
+      () => {
+        let query = supabase.from("marketplace_listings").select("*")
+          .order("created_at", { ascending: false }).order("id", { ascending: false });
+        if (search) query = query.or(marketplaceSearchFilter(search, ["mineral_name", "country", "region", "district"]));
+        return query.range(offset, offset + MARKETPLACE_PAGE_SIZE);
+      },
     ];
 
-    const loadPublicRows = async () => {
-      for (const attempt of attempts) {
-        try {
-          const { data, error } = await attempt();
-          if (error) throw error;
-          return data ?? [];
-        } catch {
-          // Try the next fallback view before treating the marketplace as unavailable.
-        }
+    let fetchedRows: Awaited<ReturnType<(typeof attempts)[number]>>["data"] = null;
+    for (const attempt of attempts) {
+      try {
+        const { data, error } = await attempt();
+        if (error) throw error;
+        fetchedRows = data ?? [];
+        break;
+      } catch {
+        // Try the next fallback view before treating the marketplace as unavailable.
       }
-      return null;
-    };
-    const publicRows = await loadPublicRows();
-    if (!publicRows) return [];
-    if (publicRows.length === 0) return [];
+    }
+
+    const publicRows = (fetchedRows ?? []).slice(0, MARKETPLACE_PAGE_SIZE);
+    if (publicRows.length === 0) return { rows: [], hasMore: false, nextOffset: offset };
     const { data: reservationRows, error: reservationError } = await supabase
       .from("marketplace_listing_reservations")
       .select("listing_id, reservation_status")
@@ -418,40 +545,65 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
     const reservationStatusByListing = new Map(
       (reservationRows ?? []).map((row) => [Number(row.listing_id), row.reservation_status as string]),
     );
-    return publicRows.map((row) => ({
-      ...row,
-      reservation_status: reservationStatusByListing.get(Number(row.id)) ?? null,
-    }));
+    return {
+      rows: publicRows.map((row) => ({
+        ...row,
+        reservation_status: reservationStatusByListing.get(Number(row.id)) ?? null,
+      })),
+      hasMore: (fetchedRows ?? []).length > MARKETPLACE_PAGE_SIZE,
+      nextOffset: offset + publicRows.length,
+    };
   };
 
-  const loadPublicBuyerRows = async () => {
+  const loadPublicBuyerRows = async (offset: number | null) => {
+    if (offset === null) return { rows: [], hasMore: false, nextOffset: 0 };
     const attempts = [
-      () => supabase.from("marketplace_buy_requests").select("*").order("created_at", { ascending: false }),
-        () => supabase.from("buy_requests").select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location, status, created_at, is_active").eq("status", "approved").eq("is_active", true).order("created_at", { ascending: false }),
+      () => {
+        let query = supabase.from("marketplace_buy_requests").select("*")
+          .order("created_at", { ascending: false }).order("id", { ascending: false });
+        if (search) query = query.or(marketplaceSearchFilter(search, ["mineral_name", "location"]));
+        return query.range(offset, offset + MARKETPLACE_PAGE_SIZE);
+      },
+      () => {
+        let query = supabase.from("buy_requests")
+          .select("id, mineral_name, weight, unit, color, shape, quality, offer, currency, location, status, created_at, is_active")
+          .eq("status", "approved").eq("is_active", true)
+          .order("created_at", { ascending: false }).order("id", { ascending: false });
+        if (search) query = query.or(marketplaceSearchFilter(search, ["mineral_name", "location"]));
+        return query.range(offset, offset + MARKETPLACE_PAGE_SIZE);
+      },
     ];
 
     for (const attempt of attempts) {
       try {
         const { data, error } = await attempt();
         if (error) throw error;
-        return data ?? [];
+        const fetchedRows = data ?? [];
+        const rows = fetchedRows.slice(0, MARKETPLACE_PAGE_SIZE);
+        return {
+          rows,
+          hasMore: fetchedRows.length > MARKETPLACE_PAGE_SIZE,
+          nextOffset: offset + rows.length,
+        };
       } catch {
         // Continue to the next fallback strategy if a public buy-request view is unavailable.
       }
     }
-    return [];
+    return { rows: [], hasMore: false, nextOffset: offset };
   };
 
+  const startedAt = performance.now();
   const [sellerResult, buyerResult] = await Promise.all([
-    loadPublicSellerRows(),
-    loadPublicBuyerRows(),
+    loadPublicSellerRows(sellerOffset),
+    loadPublicBuyerRows(buyerOffset),
   ]);
+  recordMarketplacePerformance("listings-page", startedAt);
 
-  let sellerRows = sellerResult;
-  let buyerRows = buyerResult;
+  let sellerRows = sellerResult.rows;
+  let buyerRows = buyerResult.rows;
   const ownedSellerListingIds = new Set<number>();
   const ownedBuyerRequestIds = new Set<number>();
-  if (adminAccessToken) {
+  if (adminAccessToken && options.includeAdminReviewQueue !== false && sellerOffset === 0 && buyerOffset === 0) {
     try {
       const response = await fetch("/api/admin/review-queue", {
         headers: { Authorization: `Bearer ${adminAccessToken}` },
@@ -466,7 +618,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       // the queue endpoint is temporarily unavailable or the admin session cannot be validated.
     }
   }
-  if (includeOwnSubmissions) {
+  if (includeOwnSubmissions && sellerOffset === 0 && buyerOffset === 0) {
     try {
       const response = await fetchWithWebsiteSession("/api/website-submissions", { cache: "no-store" });
       if (response.ok) {
@@ -487,17 +639,13 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
     }
   }
 
-  const sellers = await Promise.all(sellerRows.map(async (row) => {
-    let image = "";
-    if (row.image_path) {
-      image = await getSignedMineralImageUrl(supabase, row.image_path, row.signed_image_url);
-    }
+  const sellers = sellerRows.map((row) => {
     const imageGalleryPaths = Array.isArray(row.image_gallery_paths)
       ? row.image_gallery_paths.filter((path: unknown): path is string => typeof path === "string")
       : [];
     const imageGallery = Array.isArray(row.signed_image_gallery_urls)
       ? row.signed_image_gallery_urls.filter((url: unknown): url is string => typeof url === "string" && Boolean(url))
-      : (await Promise.all(imageGalleryPaths.map((path: string) => getSignedMineralImageUrl(supabase, path)))).filter(Boolean);
+      : [];
     return {
       id: Number(row.id), user_id: row.website_user_id ?? row.user_id, is_own: ownedSellerListingIds.has(Number(row.id)), mineral: row.mineral_name, weight: String(row.weight),
       color: typeof row.color === "string" ? row.color : "",
@@ -512,7 +660,8 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       stone_weight_unit: row.stone_weight_unit as StoneWeightUnit | undefined,
       seller: row.seller_name ?? "", country: row.country, region: row.region, district: row.district,
       location: [row.district, row.region, row.country].filter(Boolean).join(", "), email: row.email ?? "", phone: row.phone ?? "",
-      image, image_path: row.image_path, image_gallery_paths: imageGalleryPaths, image_gallery: imageGallery, accent: "#43866b", status: row.status as SubmissionStatus,
+      image: typeof row.signed_image_url === "string" ? row.signed_image_url : "",
+      image_path: row.image_path, image_gallery_paths: imageGalleryPaths, image_gallery: imageGallery, accent: "#43866b", status: row.status as SubmissionStatus,
       reservation_status: row.reservation_status ?? null,
       marketplace_state: row.marketplace_state,
       is_active: row.is_active,
@@ -521,7 +670,7 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
       verified_seller: row.verified_seller === true,
       website_account_seller: Boolean(row.website_user_id),
     } satisfies Seller;
-  }));
+  });
   const buyers = buyerRows.map((row) => ({
     id: Number(row.id), user_id: row.website_user_id ?? row.user_id, is_own: ownedBuyerRequestIds.has(Number(row.id)), mineral: row.mineral_name, weight: String(row.weight),
     unit: row.unit as Unit, color: row.color, shape: row.shape as Buyer["shape"], quality: row.quality,
@@ -529,7 +678,19 @@ async function loadMarketplaceListings(includeOwnSubmissions = false, adminAcces
     email: row.email ?? "", phone: row.phone ?? "", status: row.status as SubmissionStatus, review_message: row.review_message,
     offer_enabled: row.offer_enabled === true,
   } satisfies Buyer));
-  return { sellers, buyers };
+  return {
+    sellers,
+    buyers,
+    sellerHasMore: sellerResult.hasMore,
+    buyerHasMore: buyerResult.hasMore,
+    sellerNextOffset: sellerResult.nextOffset,
+    buyerNextOffset: buyerResult.nextOffset,
+  };
+}
+
+function mergeMarketplacePage<T extends { id: number }>(fresh: T[], retained: T[]) {
+  const freshIds = new Set(fresh.map((item) => item.id));
+  return [...fresh, ...retained.filter((item) => !freshIds.has(item.id))];
 }
 
 async function loadAdminAccounts(accessToken: string): Promise<WebsiteAccount[]> {
@@ -663,6 +824,11 @@ async function loadAdminSubscriptions(accessToken: string): Promise<{ plans: Sub
 export default function Marketplace() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
+  const [sellerHasMore, setSellerHasMore] = useState(false);
+  const [buyerHasMore, setBuyerHasMore] = useState(false);
+  const [sellerNextOffset, setSellerNextOffset] = useState(0);
+  const [buyerNextOffset, setBuyerNextOffset] = useState(0);
+  const [marketplaceSearchLoading, setMarketplaceSearchLoading] = useState(false);
   const [sellerCardsPerColumn, setSellerCardsPerColumn] = useState(4);
   const [buyerCardsPerColumn, setBuyerCardsPerColumn] = useState(4);
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
@@ -866,6 +1032,7 @@ export default function Marketplace() {
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const appVersion = useRef<string | null>(process.env.NEXT_PUBLIC_APP_VERSION ?? null);
   const [query, setQuery] = useState("");
+  const [serverSearch, setServerSearch] = useState("");
   const [notice, setNotice] = useState("");
   const [sellerImagePreview, setSellerImagePreview] = useState<string | null>(null);
   const [sellerGalleryPaths, setSellerGalleryPaths] = useState<string[]>([]);
@@ -876,6 +1043,8 @@ export default function Marketplace() {
   const galleryTouchStartX = useRef<number | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
+  const marketplaceSearchRequest = useRef(0);
+  const lastMarketplaceSearch = useRef("");
   const loadStaffAccess = async (userId: string, accessToken: string) => {
     const cached = staffAccessCache.current;
     if (cached?.userId === userId) {
@@ -1741,10 +1910,15 @@ export default function Marketplace() {
             if (active) setStorageReady(true);
           } else {
             try {
-              const listings = await loadMarketplaceListings(hasWebsiteAccount, isAdmin ? session?.access_token : undefined);
+              const listings = await measureMarketplacePerformance("marketplace-initial-page", () =>
+                loadMarketplaceListings(hasWebsiteAccount, isAdmin ? session?.access_token : undefined));
               if (active) {
                 setSellers(listings.sellers);
                 setBuyers(listings.buyers);
+                setSellerHasMore(listings.sellerHasMore);
+                setBuyerHasMore(listings.buyerHasMore);
+                setSellerNextOffset(listings.sellerNextOffset);
+                setBuyerNextOffset(listings.buyerNextOffset);
                 setLastUpdated(new Date());
                 setStorageReady(true);
               }
@@ -1773,9 +1947,13 @@ export default function Marketplace() {
             if (can("seller_submission_reviews") || can("buyer_submission_reviews")) {
               adminLoads.push({
                 label: "review submissions",
-                load: loadMarketplaceListings(false, session.access_token).then((listings) => {
+                load: measureMarketplacePerformance("admin-review-page", () => loadMarketplaceListings(false, session.access_token)).then((listings) => {
                   setSellers(listings.sellers);
                   setBuyers(listings.buyers);
+                  setSellerHasMore(listings.sellerHasMore);
+                  setBuyerHasMore(listings.buyerHasMore);
+                  setSellerNextOffset(listings.sellerNextOffset);
+                  setBuyerNextOffset(listings.buyerNextOffset);
                   setLastUpdated(new Date());
                 }),
               });
@@ -2035,14 +2213,14 @@ export default function Marketplace() {
       }
     });
   };
-  const refreshCertificates = async () => {
+  const refreshCertificates = async () => measureMarketplacePerformance("certificate-load", async () => {
     const response = await fetchWithWebsiteSession("/api/website-certificates", { cache: "no-store" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error ?? "Could not load your licences.");
     const nextCertificates: Partial<Record<CertificateKind, CertificateSubmission>> = {};
     for (const certificate of result.certificates as CertificateSubmission[]) nextCertificates[certificate.kind] = certificate;
     setCertificates(nextCertificates);
-  };
+  });
   const openAccountLicences = async () => {
     setMenuOpen(false);
     try {
@@ -2141,18 +2319,111 @@ export default function Marketplace() {
       window.removeEventListener("resize", updateEmptySlots);
     };
   }, [buyerCardsPerColumn, marketHoursLoaded, marketIsOpen, query, visibleBuyers.length]);
-  const refreshRemoteListings = async (includeOwnSubmissions = role === "user") => {
-    let adminAccessToken: string | undefined;
-    if (role === "admin" || role === "staff") {
+  const refreshRemoteListings = async (
+    includeOwnSubmissions = role === "user",
+    preservePages = false,
+    sessionAccessToken?: string,
+  ) => {
+    let adminAccessToken = sessionAccessToken;
+    if (!adminAccessToken && (role === "admin" || role === "staff")) {
       const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
       adminAccessToken = session?.access_token;
     }
-    const listings = await loadMarketplaceListings(includeOwnSubmissions, adminAccessToken);
-    setSellers(listings.sellers);
-    setBuyers(listings.buyers);
+    const listings = await measureMarketplacePerformance("marketplace-refresh", () =>
+      loadMarketplaceListings(includeOwnSubmissions, adminAccessToken, { search: serverSearch }));
+    setSellers((current) => preservePages
+      ? mergeMarketplacePage(listings.sellers, current)
+      : listings.sellers);
+    setBuyers((current) => preservePages
+      ? mergeMarketplacePage(listings.buyers, current)
+      : listings.buyers);
+    setSellerHasMore(listings.sellerHasMore);
+    setBuyerHasMore(listings.buyerHasMore);
+    if (!preservePages) {
+      setSellerNextOffset(listings.sellerNextOffset);
+      setBuyerNextOffset(listings.buyerNextOffset);
+    }
     setLastUpdated(new Date());
     return listings;
   };
+  const loadMoreMarketplace = async (kind: "seller" | "buyer") => {
+    const offset = kind === "seller" ? sellerNextOffset : buyerNextOffset;
+    if (busyActions.has(`marketplace-load-more-${kind}`)) return;
+    await withProgress(`marketplace-load-more-${kind}`, async () => {
+      try {
+        let adminAccessToken: string | undefined;
+        if (role === "admin") {
+          const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+          if (error) throw error;
+          adminAccessToken = session?.access_token;
+        }
+        const page = await measureMarketplacePerformance(`marketplace-${kind}-page`, () =>
+          loadMarketplaceListings(false, adminAccessToken, {
+            sellerOffset: kind === "seller" ? offset : null,
+            buyerOffset: kind === "buyer" ? offset : null,
+            search: serverSearch,
+            includeAdminReviewQueue: false,
+          }));
+        if (kind === "seller") {
+          setSellers((current) => mergeMarketplacePage(page.sellers, current));
+          setSellerHasMore(page.sellerHasMore);
+          setSellerNextOffset(page.sellerNextOffset);
+        } else {
+          setBuyers((current) => mergeMarketplacePage(page.buyers, current));
+          setBuyerHasMore(page.buyerHasMore);
+          setBuyerNextOffset(page.buyerNextOffset);
+        }
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : `Could not load more ${kind === "seller" ? "listings" : "requests"}.`);
+      }
+    });
+  };
+  const loadMarketplaceSearch = useEffectEvent(async (term: string, requestId: number) => {
+    try {
+      let adminAccessToken: string | undefined;
+      if (role === "admin") {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        adminAccessToken = session?.access_token;
+      }
+      const page = await measureMarketplacePerformance("marketplace-search", () =>
+        loadMarketplaceListings(role === "user", adminAccessToken, {
+          search: term,
+          includeAdminReviewQueue: false,
+        }));
+      if (requestId !== marketplaceSearchRequest.current) return;
+      setSellers((current) => mergeMarketplacePage(
+        page.sellers,
+        role === "admin" ? current.filter((item) => item.status !== "approved") : [],
+      ));
+      setBuyers((current) => mergeMarketplacePage(
+        page.buyers,
+        role === "admin" ? current.filter((item) => item.status !== "approved") : [],
+      ));
+      setSellerHasMore(page.sellerHasMore);
+      setBuyerHasMore(page.buyerHasMore);
+      setSellerNextOffset(page.sellerNextOffset);
+      setBuyerNextOffset(page.buyerNextOffset);
+      setServerSearch(term);
+    } catch (error) {
+      if (requestId === marketplaceSearchRequest.current) {
+        setNotice(error instanceof Error ? error.message : "Could not search the marketplace.");
+      }
+    } finally {
+      if (requestId === marketplaceSearchRequest.current) setMarketplaceSearchLoading(false);
+    }
+  });
+  useEffect(() => {
+    const term = query.trim();
+    if (term === lastMarketplaceSearch.current) return;
+    const requestId = ++marketplaceSearchRequest.current;
+    setMarketplaceSearchLoading(true);
+    const timeout = window.setTimeout(() => {
+      lastMarketplaceSearch.current = term;
+      void loadMarketplaceSearch(term, requestId);
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
   const refreshOwnedWantedMinerals = useEffectEvent(async () => {
     if (role !== "user" || dialog !== "my-wanted-minerals") return;
     const response = await fetchWithWebsiteSession("/api/website-submissions", { cache: "no-store" });
@@ -2163,7 +2434,7 @@ export default function Marketplace() {
   const refreshListingsFromRealtime = useEffectEvent(async () => {
     if (document.visibilityState !== "visible") return;
     try {
-      await refreshRemoteListings(role === "user");
+      await refreshRemoteListings(role === "user", true);
       await refreshOwnedWantedMinerals();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not refresh marketplace data.");
@@ -2374,76 +2645,35 @@ export default function Marketplace() {
           if (error) throw error;
           adminAccessToken = session?.access_token;
         }
-        const listings = await loadMarketplaceListings(role === "user", adminAccessToken);
+        const listings = await measureMarketplacePerformance("marketplace-poll", () =>
+          loadMarketplaceListings(role === "user", adminAccessToken, { search: serverSearch }));
 
-        if (active && role === "user") {
-          setSellers(listings.sellers);
-          setBuyers(listings.buyers);
-          setLastUpdated(new Date());
-        } else if (active) {
-          setSellers((previous) => {
-            const retained = previous.filter(
-              (item) => item.status === "pending" || item.status === "rejected"
-            );
-            const pendingFromFresh = listings.sellers.filter(
-              (item) => item.status === "pending"
-            );
-            const approvedFromFresh = listings.sellers.filter(
-              (item) => item.status === "approved"
-            );
-
-            const merged = [...retained, ...pendingFromFresh, ...approvedFromFresh];
-            const seen = new Set<number>();
-
-            return merged.filter((item) => {
-              if (seen.has(item.id)) return false;
-              seen.add(item.id);
-              return true;
-            });
-          });
-
-          setBuyers((previous) => {
-            const retained = previous.filter(
-              (item) => item.status === "pending" || item.status === "rejected"
-            );
-            const pendingFromFresh = listings.buyers.filter(
-              (item) => item.status === "pending"
-            );
-            const approvedFromFresh = listings.buyers.filter(
-              (item) => item.status === "approved"
-            );
-
-            const merged = [...retained, ...pendingFromFresh, ...approvedFromFresh];
-            const seen = new Set<number>();
-
-            return merged.filter((item) => {
-              if (seen.has(item.id)) return false;
-              seen.add(item.id);
-              return true;
-            });
-          });
-
+        if (active) {
+          setSellers((previous) => mergeMarketplacePage(listings.sellers, previous));
+          setBuyers((previous) => mergeMarketplacePage(listings.buyers, previous));
+          setSellerHasMore(listings.sellerHasMore);
+          setBuyerHasMore(listings.buyerHasMore);
           setLastUpdated(new Date());
         }
       } catch {
         // Keep the last successful Supabase snapshot when a poll fails.
       }
       if (active && role === "user") {
-        await Promise.all([refreshWebsiteDrafts(), refreshCertificates()]).catch(() => {});
+        await refreshCertificates().catch(() => {});
       }
       syncing = false;
     };
 
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void synchronize();
-    }, 5000);
+    }, 30_000);
     const removeResumeListener = onBrowserResume(synchronize);
     return () => {
       active = false;
       window.clearInterval(interval);
       removeResumeListener();
     };
-  }, [role, userId]);
+  }, [role, serverSearch, userId]);
   const updateReviewMessage = (key: string, message: string) => {
     setRejectionMessages((current) => ({ ...current, [key]: message }));
   };
@@ -3523,6 +3753,11 @@ export default function Marketplace() {
       setNotice("Account creation is unavailable until the account service is connected.");
     });
   };
+  const refreshUserDataInBackground = () => {
+    void Promise.all([refreshCertificates(), refreshRemoteListings(true)]).catch(() => {
+      setNotice("Signed in, but some marketplace data could not be loaded. Please refresh to try again.");
+    });
+  };
   const signIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -3535,15 +3770,16 @@ export default function Marketplace() {
         return;
       }
       let signedInRole: "user" | "admin" | "staff" = "user";
+      let sessionAccessToken: string | undefined;
       if (isSupabaseConfigured) {
         try {
           let websiteAccount: { id: string; username: string; displayName: string; accessToken: string } | null = null;
           if (/^MM-\d{4}$/i.test(username)) {
-            const websiteResponse = await fetch("/api/auth/website-login", {
+            const websiteResponse = await measureMarketplacePerformance("website-authentication", () => fetch("/api/auth/website-login", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ username, password }),
-            });
+            }));
             if (websiteResponse.ok) websiteAccount = await websiteResponse.json();
           }
           if (websiteAccount) {
@@ -3556,10 +3792,9 @@ export default function Marketplace() {
             setStaffAccessStatus("idle");
             setStaffPermissions([]);
             setStaffRoles([]);
-            await refreshCertificates().catch(() => {});
-            await refreshRemoteListings(true);
             setNotice("Signed in successfully.");
             formElement.reset();
+            refreshUserDataInBackground();
             const certificateListingId = returnToCertificateAfterSignIn.current;
             if (certificateListingId !== null) {
               returnToCertificateAfterSignIn.current = null;
@@ -3572,21 +3807,24 @@ export default function Marketplace() {
             setDialog(shouldOpenOrders ? "commerce" : null);
             return;
           }
-          const response = await fetch("/api/auth/username-login", {
+          const response = await measureMarketplacePerformance("username-authentication", () => fetch("/api/auth/username-login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password }),
-          });
+          }));
           const result = await response.json();
           if (!response.ok) throw new Error(result.error ?? "Username or password is incorrect.");
+          sessionAccessToken = result.accessToken;
           const supabase = getSupabaseBrowserClient();
-          const { data, error } = await supabase.auth.setSession({ access_token: result.accessToken, refresh_token: result.refreshToken });
-          if (error || !data.session) throw error ?? new Error("Sign-in failed.");
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("id, username, display_name, role")
-            .eq("id", data.session.user.id)
-            .single();
+          const { data, error } = await measureMarketplacePerformance("username-session-setup", () =>
+            supabase.auth.setSession({ access_token: result.accessToken, refresh_token: result.refreshToken }));
+          const session = data.session;
+          if (error || !session) throw error ?? new Error("Sign-in failed.");
+          const { data: profile, error: profileError } = await measureMarketplacePerformance("username-profile-load", () =>
+            supabase.from("profiles")
+              .select("id, username, display_name, role")
+              .eq("id", session.user.id)
+              .single());
           if (profileError) throw profileError;
           setUser(profile.username);
           setDisplayName(profile.display_name ?? profile.username);
@@ -3598,13 +3836,12 @@ export default function Marketplace() {
             setStaffAccessStatus("idle");
             setStaffPermissions([]);
             setStaffRoles([]);
-            await refreshRemoteListings();
           } else {
             setStaffAccessStatus("loading");
-            const accessResponse = await fetch("/api/staff/access", {
+            const accessResponse = await measureMarketplacePerformance("staff-access-load", () => fetch("/api/staff/access", {
               headers: { Authorization: `Bearer ${result.accessToken}` },
               cache: "no-store",
-            });
+            }));
             const access = await accessResponse.json();
             if (!accessResponse.ok) throw new Error(access.error ?? "Could not load staff access.");
             const assignedPermissions = access.permissions as StaffPermission[];
@@ -3623,6 +3860,13 @@ export default function Marketplace() {
           return;
         }
         setNotice(signedInRole === "admin" ? "Signed in to the admin account." : signedInRole === "staff" ? "Signed in to the staff account." : `Signed in as ${username}.`);
+        if (signedInRole === "user") {
+          refreshUserDataInBackground();
+        } else {
+          void refreshRemoteListings(false, false, sessionAccessToken).catch(() => {
+            setNotice("Signed in, but marketplace data could not be loaded. Please refresh to try again.");
+          });
+        }
       } else {
         setUser(username);
         setDisplayName(username);
@@ -3943,8 +4187,17 @@ export default function Marketplace() {
       if (form && form.elements.namedItem("seller")) void persistWebsiteDraft("seller", form, false);
     });
   };
-  const showSellerGallery = (seller: Seller) => {
-    const images = [seller.image, ...(seller.image_gallery ?? [])].filter(Boolean);
+  const showSellerGallery = async (seller: Seller) => {
+    const images = await measureMarketplacePerformance("gallery-image-urls", async () => {
+      const supabase = getSupabaseBrowserClient();
+      const primaryImage = seller.image || (seller.image_path
+        ? await getSignedMineralImageUrl(supabase, seller.image_path)
+        : "");
+      const galleryImages = seller.image_gallery?.length
+        ? seller.image_gallery
+        : await Promise.all((seller.image_gallery_paths ?? []).map((path) => getSignedMineralImageUrl(supabase, path)));
+      return [primaryImage, ...galleryImages].filter(Boolean);
+    });
     if (images.length > 1) setGalleryViewer({ images, mineral: seller.mineral, index: 0 });
   };
   const galleryViewerOverlay = galleryViewer && typeof document !== "undefined"
@@ -4290,7 +4543,7 @@ export default function Marketplace() {
                   {!item.image && <p className="admin-image-missing">No mineral photo attached.</p>}
                   {item.stone_certificate_url && <p><a className="certificate-file-link" href={item.stone_certificate_url} target="_blank" rel="noreferrer">Review stone certificate</a></p>}
                 </div>
-                {item.image && <div className="admin-review-photo-group"><div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div>{item.image_gallery?.some(Boolean) && <button className="admin-review-gallery-button" type="button" onClick={() => showSellerGallery(item)}>View all photos</button>}</div>}
+                {item.image && <div className="admin-review-photo-group"><div className="admin-mineral-image"><Image src={item.image} alt={`${item.mineral} mineral submitted by ${item.seller}`} fill sizes="(max-width: 720px) 100vw, 420px" unoptimized /></div>{(item.image_gallery?.some(Boolean) || item.image_gallery_paths?.length) && <button className="admin-review-gallery-button" type="button" onClick={() => void showSellerGallery(item)}>View all photos</button>}</div>}
                 <StaffTaskClaim type="listing_review" taskId={String(item.id)} enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <>
                   <textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} />
                   <div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct || busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-approve`, () => reviewSubmission("seller", item.id, true))}>{busyActions.has(`review-seller-${item.id}-approve`) ? "Approving…" : "Approve"}</button><button className="button button-outline" type="button" disabled={!canAct || busyActions.has(`review-seller-${item.id}-approve`) || busyActions.has(`review-seller-${item.id}-reject`)} onClick={() => void withProgress(`review-seller-${item.id}-reject`, () => reviewSubmission("seller", item.id, false))}>{busyActions.has(`review-seller-${item.id}-reject`) ? "Rejecting…" : "Reject"}</button></div>
@@ -4695,7 +4948,7 @@ export default function Marketplace() {
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>
       <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">LISTED MINERALS</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {query && !visibleSellers.length ? <div className="empty-search">{`No minerals match “${query}”.`}</div> : <div className="seller-rail" ref={sellerRail} style={{ gridTemplateRows: `repeat(${sellerCardsPerColumn}, max-content)` }}>{visibleSellers.map((listing) => {
+        {query && !visibleSellers.length ? <div className="empty-search">{marketplaceSearchLoading ? "Searching minerals…" : `No minerals match “${query}”.`}</div> : <div className="seller-rail" ref={sellerRail} style={{ gridTemplateRows: `repeat(${sellerCardsPerColumn}, max-content)` }}>{visibleSellers.map((listing) => {
           const isReserved = Boolean(listing.reservation_status) || listing.marketplace_state === "reserved";
           const isCheckoutUnavailable = (listing.marketplace_state != null && listing.marketplace_state !== "available") || listing.is_active === false || listing.status !== "approved";
           const isOwnListing = role === "user" && (listing.is_own || listing.user_id === userId);
@@ -4703,14 +4956,14 @@ export default function Marketplace() {
             ? "Temporarily reserved — availability being confirmed"
             : "Reserved for a buyer";
           const isInCart = role === "user" && cartListingAccountId === userId && cartListingIds.has(listing.id);
-          const hasImage = Boolean(listing.image) && !failedSellerImageIds.has(listing.id);
+          const hasImage = Boolean(listing.image || listing.image_path) && !failedSellerImageIds.has(listing.id);
           return <article className="seller-card" key={listing.id}>
             <div className="seller-photo" style={{ backgroundColor: listing.accent }} role="group" aria-label={`${listing.mineral} photos`}>
               {!hasImage && <Gem size={38} strokeWidth={1.2} />}
-              {hasImage && <Image className="seller-photo-image" src={listing.image} alt="" fill sizes="(max-width: 650px) 78vw, 320px" unoptimized onError={() => setFailedSellerImageIds((current) => new Set(current).add(listing.id))} />}
+              {hasImage && <LazySellerImage imagePath={listing.image_path ?? null} imageUrl={listing.image} mineral={listing.mineral} onError={() => setFailedSellerImageIds((current) => new Set(current).add(listing.id))} />}
               {listing.verified_seller && <span className="photo-tag"><span /> VERIFIED SELLER</span>}
               {isReserved && <span className="photo-tag reservation-photo-tag">{reservationLabel}</span>}
-              {Boolean(listing.image_gallery?.some(Boolean)) && <button className="seller-gallery-trigger" type="button" onClick={() => showSellerGallery(listing)}>View more images</button>}
+              {Boolean(listing.image_gallery?.some(Boolean) || listing.image_gallery_paths?.length) && <button className="seller-gallery-trigger" type="button" onClick={() => void showSellerGallery(listing)}>View more images</button>}
             </div>
             <div className="seller-card-info">
               <div className="seller-name-row"><div className="seller-name-color"><h3 data-no-translate>{listing.mineral}</h3>{listing.color && <span className="seller-color-tag" title={listing.color} data-no-translate>{listing.color}</span>}</div><span className="weight-tag" data-no-translate>{listing.listing_type === "batch" ? "Batch · " : ""}{listing.weight} {listing.unit}</span></div>
@@ -4722,11 +4975,12 @@ export default function Marketplace() {
             </div>
           </article>;
         })}{Array.from({ length: sellerEmptySlotCount }, (_, index) => <article className="seller-card seller-empty-card" key={`empty-seller-slot-${index}`} aria-label="Empty mineral listing space"><div className="seller-photo seller-empty-photo"><Plus size={18} aria-hidden="true" /></div><div className="seller-card-info seller-empty-info" /></article>)}</div>}
+        {sellerHasMore && <div className="marketplace-load-more"><button className="button button-outline" type="button" disabled={marketplaceSearchLoading || query.trim() !== serverSearch || busyActions.has("marketplace-load-more-seller")} onClick={() => void loadMoreMarketplace("seller")}>{busyActions.has("marketplace-load-more-seller") ? "Loading listings…" : "Load more listings"}</button></div>}
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
       <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
-        {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{`No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail} style={{ gridTemplateRows: `repeat(${buyerCardsPerColumn}, max-content)` }}>{visibleBuyers.map((request) => {
+        {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{marketplaceSearchLoading ? "Searching requests…" : `No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail} style={{ gridTemplateRows: `repeat(${buyerCardsPerColumn}, max-content)` }}>{visibleBuyers.map((request) => {
           const isOwnRequest = role === "user" && (request.is_own || request.user_id === userId);
           return <article className="buyer-card" key={request.id}>
             <div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div>
@@ -4740,6 +4994,7 @@ export default function Marketplace() {
             </div>
           </article>;
         })}{Array.from({ length: buyerEmptySlotCount }, (_, index) => <article className="buyer-card buyer-empty-card" key={`empty-buyer-slot-${index}`} aria-label="Empty buyer request space"><Plus size={20} aria-hidden="true" /></article>)}</div>}
+        {buyerHasMore && <div className="marketplace-load-more"><button className="button button-lime" type="button" disabled={marketplaceSearchLoading || query.trim() !== serverSearch || busyActions.has("marketplace-load-more-buyer")} onClick={() => void loadMoreMarketplace("buyer")}>{busyActions.has("marketplace-load-more-buyer") ? "Loading requests…" : "Load more requests"}</button></div>}
         <div className="buyer-rail-hint"><span>HAVE WHAT THEY NEED?</span><span className="rail-line" /><button type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <>List a mineral <ArrowUpRight size={14} /></>}</button></div>
       </section>
         </> : <section className="market-closed-notice"><span>MARKET CLOSED</span><h2>{marketHoursError ? "Market status unavailable" : "The market is closed"}</h2><p>{marketHoursError
@@ -5006,7 +5261,7 @@ export default function Marketplace() {
         </details>;
       })}</div></>}
       {dialog === "review" && role === "admin" && <><div className="dialog-kicker">ADMIN REVIEW</div><h2 id="dialog-title">Review queue</h2><p className="dialog-copy">Approved items appear on the market. Rejected items return to their owner with your message.</p><div className="submission-list">
-        {pendingSellers.map((item) => <StaffTaskClaim type="listing_review" taskId={String(item.id)} enabled={false} onNotice={setNotice} key={`review-seller-${item.id}`}>{({ canAct }) => <article className="submission-item review-item"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p>{item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p>{item.location} · {item.phone} · {item.email}</p>{item.image_gallery?.some(Boolean) && <button className="admin-review-gallery-button" type="button" onClick={() => showSellerGallery(item)}>View all photos</button>}<textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct} onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>}</StaffTaskClaim>)}
+        {pendingSellers.map((item) => <StaffTaskClaim type="listing_review" taskId={String(item.id)} enabled={false} onNotice={setNotice} key={`review-seller-${item.id}`}>{({ canAct }) => <article className="submission-item review-item"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p>{item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p>{item.location} · {item.phone} · {item.email}</p>{(item.image_gallery?.some(Boolean) || item.image_gallery_paths?.length) && <button className="admin-review-gallery-button" type="button" onClick={() => void showSellerGallery(item)}>View all photos</button>}<textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct} onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>}</StaffTaskClaim>)}
         {pendingBuyers.map((item) => <StaffTaskClaim type="buyer_request_review" taskId={String(item.id)} enabled={false} onNotice={setNotice} key={`review-buyer-${item.id}`}>{({ canAct }) => <article className="submission-item review-item"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct} onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>}</StaffTaskClaim>)}
         {!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
     </section></div>}
