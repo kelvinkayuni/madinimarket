@@ -4451,7 +4451,7 @@ export default function Marketplace() {
             <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-headline-font-size") || Number(homepageHeadlineFontSizeInput) === homepageHeadlineFontSize}>{busyActions.has("homepage-headline-font-size") ? "Saving…" : "Save font size"}</button>
             <span>Choose from 24–72 px. On narrow screens, the headline scales down to fit.</span>
           </form>
-          <div className="admin-card-columns-settings">
+          {role === "admin" && <div className="admin-card-columns-settings">
             <div className="admin-queue-heading"><div><span>MARKETPLACE LAYOUT</span><h3>Cards per column</h3></div></div>
             <p className="admin-translation-help">Set seller and buyer panels independently. Each column displays the selected number of cards before continuing into the next column. The minimum is one card.</p>
             <div className="admin-card-columns-forms">
@@ -4468,7 +4468,7 @@ export default function Marketplace() {
                 <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("buyer-cards-per-column") || Number(buyerCardsPerColumnInput) === buyerCardsPerColumn}>{busyActions.has("buyer-cards-per-column") ? "Saving…" : "Save buyer layout"}</button>
               </form>
             </div>
-          </div>
+          </div>}
           <details className="admin-homepage-announcement-disclosure">
             <summary className="admin-homepage-announcement-toggle">
               <div><strong>Homepage announcement</strong><span>{!siteContentLoaded ? "Loading announcement settings…" : homepageAnnouncement ? "Message is currently displayed" : "No message is displayed"}</span></div>

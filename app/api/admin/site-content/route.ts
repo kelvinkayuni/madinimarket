@@ -100,6 +100,8 @@ export async function PATCH(request: Request) {
     const accountSettingKeys = new Set(["accountCreationDisabled", "nonAdminSignInDisabled", "signOutAllUsers"]);
     const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn", "homepageAnnouncement"]);
     const accountSettingsRequested = values !== null && Object.keys(values).some((key) => accountSettingKeys.has(key));
+    const marketplaceLayoutRequested = values !== null &&
+      Object.keys(values).some((key) => key === "sellerCardsPerColumn" || key === "buyerCardsPerColumn");
     const staffPermission = accountSettingsRequested ? "accounts" : "homepage_headlines";
     const allowedStaffKeys = new Set([...accountSettingKeys, ...homepageSettingKeys]);
     const hasOwnerOnlyChange = values !== null && Object.keys(values).some((key) => !allowedStaffKeys.has(key));
@@ -108,6 +110,9 @@ export async function PATCH(request: Request) {
       : await getAdminClient(request, staffPermission);
     if (!authorized) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     const staff = accountSettingsRequested ? null : await getStaffAccess(request, staffPermission);
+    if (staff && marketplaceLayoutRequested) {
+      return NextResponse.json({ error: "Staff cannot change the marketplace layout." }, { status: 403 });
+    }
     const taskType = accountSettingsRequested ? "account_setting" : "homepage_setting";
     if (staff && !await ownsStaffTaskClaim(authorized, staff.staffId, taskType, "homepage")) {
       return NextResponse.json({ error: `Claim ${accountSettingsRequested ? "account" : "homepage"} settings before editing them.` }, { status: 409 });
