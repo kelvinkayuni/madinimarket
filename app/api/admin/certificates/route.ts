@@ -9,6 +9,7 @@ export async function GET(request: Request) {
   try {
     const admin = await getAdminClient(request, "accounts");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "accounts");
     const { data: rows, error } = await admin.from("website_account_certificates")
       .select("id, website_user_id, kind, status, file_name, file_path, created_at")
       .in("status", ["pending", "approved"])
@@ -22,7 +23,14 @@ export async function GET(request: Request) {
     const accountById = new Map((accounts ?? []).map((account) => [account.id, account]));
     const certificates = await Promise.all((rows ?? []).map(async (row) => {
       const { data: signed } = await admin.storage.from("account-certificates").createSignedUrl(row.file_path, 3600);
-      return { ...row, account: accountById.get(row.website_user_id), signed_url: signed?.signedUrl ?? "" };
+      const account = accountById.get(row.website_user_id);
+      return {
+        ...row,
+        account: staff && account
+          ? { username: account.username, display_name: account.display_name }
+          : account,
+        signed_url: signed?.signedUrl ?? "",
+      };
     }));
     return NextResponse.json({ certificates }, { headers: { "Cache-Control": "no-store" } });
   } catch {

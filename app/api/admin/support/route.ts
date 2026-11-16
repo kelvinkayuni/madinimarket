@@ -18,6 +18,7 @@ import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
 export async function GET(request: Request) {
   const admin = await getAdminClient(request, "customer_support");
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  const staff = await getStaffAccess(request, "customer_support");
   const url = new URL(request.url);
   const threadId = url.searchParams.get("threadId")?.trim() ?? "";
   if (threadId) {
@@ -50,7 +51,17 @@ export async function GET(request: Request) {
       const { data: refreshedThread, error: refreshedThreadError } = await admin.from("support_threads")
         .select("*,website_accounts(id,display_name,username,email,phone)").eq("id", threadId).single();
       if (refreshedThreadError) throw refreshedThreadError;
-      return NextResponse.json({ thread: refreshedThread, messages: resultMessages }, { headers: { "Cache-Control": "no-store" } });
+      const safeThread = staff && refreshedThread.website_accounts
+        ? {
+          ...refreshedThread,
+          website_accounts: {
+            id: refreshedThread.website_accounts.id,
+            display_name: refreshedThread.website_accounts.display_name,
+            username: refreshedThread.website_accounts.username,
+          },
+        }
+        : refreshedThread;
+      return NextResponse.json({ thread: safeThread, messages: resultMessages }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       console.error("Could not prepare the support conversation.", error);
       return NextResponse.json({ error: "Could not load the support conversation." }, { status: 503 });
@@ -75,7 +86,19 @@ export async function GET(request: Request) {
     const threads = data ?? [];
     const unreadCounts = await getSupportUnreadCounts(admin, threads.map((thread) => thread.id), "admin");
     return NextResponse.json({
-      threads: threads.map((thread) => ({ ...thread, unread_count: unreadCounts.get(thread.id) ?? 0 })),
+      threads: threads.map((thread) => {
+        const result = { ...thread, unread_count: unreadCounts.get(thread.id) ?? 0 };
+        return staff && result.website_accounts
+          ? {
+            ...result,
+            website_accounts: {
+              id: result.website_accounts.id,
+              display_name: result.website_accounts.display_name,
+              username: result.website_accounts.username,
+            },
+          }
+          : result;
+      }),
       unread_count: [...unreadCounts.values()].reduce((total, count) => total + count, 0),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

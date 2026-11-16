@@ -25,6 +25,7 @@ export async function GET(request: Request) {
     p_search: "",
     p_offset: (page - 1) * 25,
     p_limit: 25,
+    p_search_email: false,
   });
   if (queueError) {
     console.error("Order operations staff could not load delivery tasks.", queueError);

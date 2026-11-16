@@ -62,6 +62,7 @@ export async function GET(request: Request) {
       p_search: "",
       p_offset: 0,
       p_limit: 1,
+      p_search_email: !staffAccess,
     });
     if (error) {
       console.error("Admin could not load marketplace orders needing action", error);
@@ -110,6 +111,7 @@ export async function GET(request: Request) {
     p_search: search,
     p_offset: offset,
     p_limit: pageSize,
+    p_search_email: !staffAccess,
   });
   if (queueError) {
     console.error("Admin could not query marketplace order queue", queueError);
@@ -195,12 +197,14 @@ export async function GET(request: Request) {
           payout_reference: payoutReference,
           refund_reference: refundReference,
           dispute_reason: disputeReason,
+          seller_email: sellerEmail,
           ...safeItem
         } = item;
+        const contactSafeItem = staffAccess ? safeItem : { ...safeItem, seller_email: sellerEmail };
         const payout_group_key = marketplacePayoutGroupKey(item.order_id, item.seller_id, receiptPath ?? null);
         if (!canProcessOrders) {
           return {
-            ...safeItem,
+            ...contactSafeItem,
             payout_group_key,
             payout_bank_name: null,
             payout_bank_account_number: null,
@@ -210,20 +214,23 @@ export async function GET(request: Request) {
             refund_reference: canRecordRefunds ? refundReference : null,
           };
         }
-        if (!receiptPath) return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_reference: payoutReference, refund_reference: canRecordRefunds ? refundReference : null };
+        if (!receiptPath) return { ...contactSafeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_reference: payoutReference, refund_reference: canRecordRefunds ? refundReference : null };
         const { data: receipt, error: receiptError } = await admin.storage.from(PAYOUT_RECEIPT_BUCKET)
           .createSignedUrl(receiptPath, 10 * 60);
         if (receiptError) throw receiptError;
-        return { ...safeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_reference: payoutReference, payout_receipt_url: receipt.signedUrl, refund_reference: canRecordRefunds ? refundReference : null, dispute_reason: staffAccess ? null : disputeReason };
+        return { ...contactSafeItem, payout_group_key, payout_bank_name: payoutBankName, payout_bank_account_number: payoutBankAccountNumber, payout_bank_account_holder_name: payoutBankAccountHolderName, payout_bank_snapshot_at: payoutBankSnapshotAt, payout_reference: payoutReference, payout_receipt_url: receipt.signedUrl, refund_reference: canRecordRefunds ? refundReference : null, dispute_reason: staffAccess ? null : disputeReason };
       }));
       const {
         payment_proof_path: paymentProofPath,
         payment_reference: paymentReference,
         payment_note: paymentNote,
+        buyer_email: buyerEmail,
+        buyer_phone: buyerPhone,
         ...safeOrder
       } = order;
       return {
         ...safeOrder,
+        ...(staffAccess ? {} : { buyer_email: buyerEmail, buyer_phone: buyerPhone }),
         ...(canProcessOrders ? {
           payment_proof_path: paymentProofPath,
           payment_reference: paymentReference,

@@ -31,14 +31,20 @@ export async function GET(request: Request) {
       ]);
       const galleryError = gallery.find((result) => result.error)?.error;
       if (galleryError) throw galleryError;
+      const { email, phone, ...safeRow } = row;
       return {
-        ...row,
+        ...safeRow,
+        ...(staff ? {} : { email, phone }),
         signed_image_url: image?.data?.signedUrl ?? "",
         signed_stone_certificate_url: certificate?.data?.signedUrl ?? "",
         signed_image_gallery_urls: gallery.map((result) => result.data?.signedUrl ?? ""),
       };
     }));
-    return NextResponse.json({ sellers, buyers: buyersResult.data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+    const buyers = (buyersResult.data ?? []).map(({ email, phone, ...buyer }) => ({
+      ...buyer,
+      ...(staff ? {} : { email, phone }),
+    }));
+    return NextResponse.json({ sellers, buyers }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not load pending submissions." }, { status: 503 });
   }

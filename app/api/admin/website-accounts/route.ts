@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   try {
     const admin = await getAdminClient(request, "accounts");
     if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    const staff = await getStaffAccess(request, "accounts");
     const [accountsResult, listingsResult, requestsResult] = await Promise.all([
       admin.from("website_accounts").select("id, display_name, username, email, phone, is_active, created_at, bank_name, bank_account_number, bank_account_holder_name, bank_info_added_at, bank_info_edit_unlocked").order("created_at", { ascending: false }),
       admin.from("listings").select("website_user_id, status").not("website_user_id", "is", null),
@@ -71,8 +72,9 @@ export async function GET(request: Request) {
         subscriptionsByAccount.set(subscription.website_user_id, subscription);
       }
     }
-    const resultAccounts = accounts.map((account) => ({
+    const resultAccounts = accounts.map(({ email, phone, ...account }) => ({
       ...account,
+      ...(staff ? {} : { email, phone }),
       listings: listingCounts.get(account.id) ?? { total: 0, pending: 0, approved: 0, rejected: 0 },
       buying_requests: buyingCounts.get(account.id) ?? { total: 0, pending: 0, approved: 0, rejected: 0 },
       subscription: subscriptionsByAccount.get(account.id) ?? null,

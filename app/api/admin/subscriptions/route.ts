@@ -47,10 +47,13 @@ export async function GET(request: Request) {
         ? await service.storage.from("account-subscription-payment-proofs").createSignedUrl(receiptPath, 10 * 60)
         : null;
       if (receipt?.error) throw receipt.error;
+      const account = accountsById.get(subscription.website_user_id) ?? null;
       return {
         ...safeSubscription,
         payment_receipt_url: receipt?.data.signedUrl ?? null,
-        account: accountsById.get(subscription.website_user_id) ?? null,
+        account: staff && account
+          ? { display_name: account.display_name, username: account.username }
+          : account,
       };
     }));
     return NextResponse.json({
