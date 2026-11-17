@@ -674,6 +674,10 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
         {staff.map((member) => {
           const history = completionHistory[member.id];
           const historyPeriod = history?.period ?? "today";
+          const completionCountsByType = { ...member.taskCompletionCounts.byTaskType };
+          if (member.roles.some((role) => role.permissions.includes("delivery_confirmation")) && !completionCountsByType.marketplace_delivery) {
+            completionCountsByType.marketplace_delivery = { today: 0, month: 0, year: 0 };
+          }
           return <article className="admin-staff-row" key={member.id}>
           <div><strong>{member.full_name}</strong><span>{member.employee_code} · Login: {member.email}</span><small><strong className="admin-staff-assigned-roles">{member.roles.map((role) => role.name).join(" · ") || "No roles assigned"}</strong> · {member.status === "invited" ? "Invitation sent" : member.status}{!member.setupComplete ? " · Setup not completed" : ""}</small>
             {(member.sex || member.residence) && <small>{member.sex ? `Sex: ${member.sex.replaceAll("_", " ")}` : ""}{member.sex && member.residence ? " · " : ""}{member.residence ? `Residence / work area: ${member.residence}` : ""}</small>}
@@ -683,9 +687,9 @@ export default function AdminStaffManagement({ onNotice }: { onNotice: (message:
               }
             }}>
               <summary>Successful actions · Today {member.taskCompletionCounts.today} · This month {member.taskCompletionCounts.month} · This year {member.taskCompletionCounts.year}</summary>
-              {Object.keys(member.taskCompletionCounts.byTaskType).length ? <div className="admin-staff-completion-table" role="table" aria-label={`Successful actions by work area for ${member.full_name}`}>
+              {Object.keys(completionCountsByType).length ? <div className="admin-staff-completion-table" role="table" aria-label={`Successful actions by work area for ${member.full_name}`}>
                 <div role="row"><strong role="columnheader">Work area</strong><strong role="columnheader">Today</strong><strong role="columnheader">This month</strong><strong role="columnheader">This year</strong></div>
-                {Object.entries(member.taskCompletionCounts.byTaskType)
+                {Object.entries(completionCountsByType)
                   .sort(([a], [b]) => (staffTaskLabels[a] ?? a).localeCompare(staffTaskLabels[b] ?? b))
                   .map(([taskType, counts]) => <div role="row" key={taskType}>
                     <span role="cell">{staffTaskLabels[taskType] ?? taskType}</span>
