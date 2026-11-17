@@ -486,9 +486,9 @@ export async function GET(request: Request) {
       try {
         await sendGmailEmail({
           to: item.seller_email,
-          subject: `Seller payout due for order ${order.control_number}`,
-          text: `Seller payout for the following items in order ${order.control_number} is due:\n${payoutLinesText.join("\n")}\n\nTotal payout due (excluding the Madinimarket fee): ${payoutTotalsText}\n\nThe administrator will transfer it outside the app and record the transaction reference.\n\nMadinimarket`,
-          html: `<p>Seller payout for the following items in order <strong>${escapeHtml(order.control_number)}</strong> is due:</p><ul>${payoutGroupItems.map((groupItem) => `<li>${escapeHtml(groupItem.mineral_name)} (${escapeHtml(String(groupItem.weight))} ${escapeHtml(groupItem.unit)}): ${escapeHtml(groupItem.currency)} ${Number(groupItem.seller_amount).toLocaleString()}</li>`).join("")}</ul><p><strong>Total payout due (excluding the Madinimarket fee):</strong> ${escapeHtml(payoutTotalsText)}</p><p>The administrator will transfer it outside the app and record the transaction reference.</p><p>Madinimarket</p>`,
+          subject: `Your payout is due for order ${order.control_number}`,
+          text: `Your payout for the following items in order ${order.control_number} is due:\n${payoutLinesText.join("\n")}\n\nTotal payout due (excluding the Madinimarket fee): ${payoutTotalsText}\n\nThe administrator will transfer it to your registered bank account and record the transaction reference.\n\nMadinimarket`,
+          html: `<p>Your payout for the following items in order <strong>${escapeHtml(order.control_number)}</strong> is due:</p><ul>${payoutGroupItems.map((groupItem) => `<li>${escapeHtml(groupItem.mineral_name)} (${escapeHtml(String(groupItem.weight))} ${escapeHtml(groupItem.unit)}): ${escapeHtml(groupItem.currency)} ${Number(groupItem.seller_amount).toLocaleString()}</li>`).join("")}</ul><p><strong>Total payout due (excluding the Madinimarket fee):</strong> ${escapeHtml(payoutTotalsText)}</p><p>The administrator will transfer it to your registered bank account and record the transaction reference.</p><p>Madinimarket</p>`,
         });
         const { error } = await admin.from("marketplace_order_items")
           .update({ payout_due_email_sent_at: new Date().toISOString() }).in("id", itemIds).is("payout_due_email_sent_at", null);
