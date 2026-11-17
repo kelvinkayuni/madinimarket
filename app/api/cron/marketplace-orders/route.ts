@@ -8,6 +8,8 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const maxDuration = 300;
 
+const deliveredEmailStatusFilter = "status.eq.delivered,and(status.eq.payout_due,buyer_received_at.not.is.null)";
+
 function isAuthorized(request: Request) {
   const configuredSecret = process.env.CRON_SECRET;
   const suppliedSecret = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -376,7 +378,7 @@ export async function GET(request: Request) {
         await sendGmailEmail({
           to: order.buyer_email,
           subject: `A shipment from order ${order.control_number} has been sent`,
-          text: `Hello ${order.buyer_name},\n\nA shipment from order ${order.control_number} has been sent via ${item.shipping_carrier ?? "the seller's carrier"}${item.tracking_number ? ` (tracking ${item.tracking_number})` : ""}. Sign in to My orders to follow the status and confirm receipt after the administrator confirms carrier delivery.\n\nMadinimarket`,
+          text: `Hello ${order.buyer_name},\n\nA shipment from order ${order.control_number} has been sent via ${item.shipping_carrier ?? "the seller's carrier"}${item.tracking_number ? ` (tracking ${item.tracking_number})` : ""}. Follow the tracking in My orders. Choose “I received this shipment” only when you have the package and everything is okay. After confirming, you cannot report a delivery issue. If there is a problem, choose “Report a delivery issue.” Madinimarket staff will separately verify carrier delivery before seller payment proceeds.\n\nMadinimarket`,
         });
         const { error } = item.shipping_carrier && item.tracking_number && item.seller_id
           ? await admin.from("marketplace_order_items").update({ buyer_shipped_email_sent_at: new Date().toISOString() })
@@ -399,8 +401,8 @@ export async function GET(request: Request) {
     }
 
     const { data: deliveredItems, error: deliveredError } = await admin.from("marketplace_order_items")
-      .select("id, order_id, seller_id, shipping_carrier, tracking_number, order:marketplace_orders!inner(control_number, buyer_email, buyer_name)")
-      .eq("status", "delivered").is("buyer_delivered_email_sent_at", null).limit(5);
+      .select("id, order_id, seller_id, shipping_carrier, tracking_number, buyer_received_at, order:marketplace_orders!inner(control_number, buyer_email, buyer_name)")
+      .or(deliveredEmailStatusFilter).is("buyer_delivered_email_sent_at", null).limit(5);
     if (deliveredError) throw deliveredError;
     const notifiedDeliveredShipments = new Set<string>();
     for (const item of deliveredItems ?? []) {
@@ -410,24 +412,27 @@ export async function GET(request: Request) {
       if (notifiedDeliveredShipments.has(shipmentKey)) continue;
       notifiedDeliveredShipments.add(shipmentKey);
       const order = Array.isArray(item.order) ? item.order[0] : item.order;
+      const buyerAlreadyConfirmedReceipt = Boolean(item.buyer_received_at);
       try {
         await sendGmailEmail({
           to: order.buyer_email,
-          subject: `Delivery recorded for a shipment from order ${order.control_number}`,
-          text: `Hello ${order.buyer_name},\n\nCarrier delivery was confirmed for a shipment from order ${order.control_number}. Sign in to My orders to confirm receipt for this tracking number or open an item-level dispute. If you do not confirm or dispute, seller payout becomes due seven days after delivery confirmation.\n\nMadinimarket`,
+          subject: `Carrier delivery confirmed for a shipment from order ${order.control_number}`,
+          text: buyerAlreadyConfirmedReceipt
+            ? `Hello ${order.buyer_name},\n\nCarrier delivery was confirmed for a shipment from order ${order.control_number}. You already confirmed receipt, so no further action is needed. Madinimarket will continue processing the seller payment.\n\nMadinimarket`
+            : `Hello ${order.buyer_name},\n\nCarrier delivery was confirmed for a shipment from order ${order.control_number}. In My orders, choose “I received this shipment” only if you have the package and everything is okay. After confirming, you cannot report a delivery issue. If there is a problem, choose “Report a delivery issue.” If you do not confirm receipt or report an issue, seller payout becomes due seven days after this delivery confirmation.\n\nMadinimarket`,
         });
         const { error } = item.shipping_carrier && item.tracking_number && item.seller_id
           ? await admin.from("marketplace_order_items").update({ buyer_delivered_email_sent_at: new Date().toISOString() })
             .eq("order_id", item.order_id).eq("seller_id", item.seller_id)
             .eq("shipping_carrier", item.shipping_carrier).eq("tracking_number", item.tracking_number)
-            .eq("status", "delivered").is("buyer_delivered_email_sent_at", null)
+            .or(deliveredEmailStatusFilter).is("buyer_delivered_email_sent_at", null)
           : item.shipping_carrier && item.tracking_number
             ? await admin.from("marketplace_order_items").update({ buyer_delivered_email_sent_at: new Date().toISOString() })
               .eq("order_id", item.order_id).is("seller_id", null)
               .eq("shipping_carrier", item.shipping_carrier).eq("tracking_number", item.tracking_number)
-              .eq("status", "delivered").is("buyer_delivered_email_sent_at", null)
+              .or(deliveredEmailStatusFilter).is("buyer_delivered_email_sent_at", null)
             : await admin.from("marketplace_order_items").update({ buyer_delivered_email_sent_at: new Date().toISOString() })
-              .eq("id", item.id).eq("status", "delivered").is("buyer_delivered_email_sent_at", null);
+              .eq("id", item.id).or(deliveredEmailStatusFilter).is("buyer_delivered_email_sent_at", null);
         if (error) throw error;
         sentCount += 1;
       } catch (error) {

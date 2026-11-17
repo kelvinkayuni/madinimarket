@@ -618,9 +618,10 @@ export async function POST(request: Request) {
           disputed_at: new Date().toISOString(),
           dispute_reason: reason,
         }).eq("id", itemId).in("status", ["shipped", "delivered", "payout_due"])
-          .in("order_id", (orders ?? []).map((order) => order.id)).select("id").maybeSingle();
+          .in("order_id", (orders ?? []).map((order) => order.id))
+          .is("buyer_received_at", null).select("id").maybeSingle();
         if (error) throw error;
-        if (!data) return NextResponse.json({ error: "This item cannot be disputed in its current state." }, { status: 409 });
+        if (!data) return NextResponse.json({ error: "This item cannot be disputed after receipt is confirmed or when it is no longer eligible." }, { status: 409 });
       }
       return NextResponse.json({ ok: true });
     }

@@ -51,6 +51,7 @@ type OrderItem = {
   tracking_number: string | null;
   shipment_group_key?: string | null;
   delivered_at: string | null;
+  buyer_received_at?: string | null;
   disputed_at: string | null;
   dispute_reason: string | null;
   payout_reference: string | null;
@@ -178,6 +179,9 @@ function buyerOrderStatusLabel(order: BuyerOrder) {
   if (order.items.some((item) => item.status === "refund_due")) return "refund due";
   if (order.items.some((item) => item.status === "payout_due")) return "Seller payout pending";
   if (order.items.some((item) => item.status === "delivered")) return "After your order is delivered, confirm receipt.";
+  if (order.items.some((item) => item.status === "shipped" && item.buyer_received_at)) {
+    return "You confirmed receipt. Waiting for carrier delivery verification.";
+  }
   if (order.items.some((item) => item.status === "shipped")) return "Your order has shipped. Check the tracking details for updates.";
   if (order.items.length > 0 && order.items.every((item) => item.status === "payout_paid")) return "Completed. The seller has been paid.";
   const status = order.payment_status;
@@ -244,6 +248,9 @@ function orderItemStatusLabel(item: OrderItem) {
   if (item.status === "payout_paid") return "Completed. The seller has been paid.";
   if (item.status === "refund_due") return "Refund due";
   if (item.status === "delivered") return "After your order is delivered, confirm receipt.";
+  if (item.status === "shipped" && item.buyer_received_at) {
+    return "You confirmed receipt. Waiting for carrier delivery verification.";
+  }
   if (item.status === "shipped") return "Your order has shipped. Check the tracking details for updates.";
   return statusLabel(item.status);
 }
@@ -697,16 +704,24 @@ export default function CommercePanel({ onNotice, onCounters }: {
       </div>
     </div>)}
     {[...shipmentGroups.entries()].map(([shipmentGroupKey, items]) => {
-      const deliveredItem = items.find((item) => item.status === "delivered");
-      const disputeCandidates = items.filter((item) => ["shipped", "delivered"].includes(item.status));
+      const receiptItem = items.find((item) =>
+        ["shipped", "delivered"].includes(item.status) && !item.buyer_received_at,
+      );
+      const disputeCandidates = items.filter((item) =>
+        ["shipped", "delivered", "payout_due"].includes(item.status) && !item.buyer_received_at,
+      );
       const selectedDisputeItem = disputeCandidates.find((item) => item.id === disputeItems[shipmentGroupKey]);
       return <div className="commerce-delivery-details" key={shipmentGroupKey}>
         <strong>Shipment · {items.length} {items.length === 1 ? "item" : "items"}</strong>
         <span>Carrier: {items[0].shipping_carrier} · Tracking number: {items[0].tracking_number}</span>
         <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit} — {orderItemStatusLabel(item)}</li>)}</ul>
-        {deliveredItem && <div className="commerce-item-actions">
-          <button className="button button-dark" type="button" disabled={busy === `receipt-${deliveredItem.id}`} onClick={() => void perform(`receipt-${deliveredItem.id}`, "confirm_receipt", { itemId: deliveredItem.id })}>{busy === `receipt-${deliveredItem.id}` ? "Confirming receipt…" : "Confirm that you received this shipment"}</button>
+        {receiptItem && <div className="commerce-item-actions">
+          <button className="button button-dark" type="button" disabled={busy === `receipt-${receiptItem.id}`} onClick={() => void perform(`receipt-${receiptItem.id}`, "confirm_receipt", { itemId: receiptItem.id })}>{busy === `receipt-${receiptItem.id}` ? "Confirming receipt…" : "I received this shipment"}</button>
+          <small>Only confirm if you have the package and everything is okay. After confirming, you cannot report a delivery issue.</small>
+          <small>Madinimarket separately verifies carrier delivery.</small>
         </div>}
+        {items.some((item) => item.status === "shipped" && item.buyer_received_at) &&
+          <small>You confirmed receipt. Madinimarket still needs to verify carrier delivery. You cannot report an issue after confirming.</small>}
         {disputeCandidates.length > 0 && <div className="commerce-item-actions">
           <label className="field-label">Item to report
             <select className="text-input" value={selectedDisputeItem?.id ?? ""} onChange={(event) => setDisputeItems((current) => ({ ...current, [shipmentGroupKey]: event.target.value }))}>
