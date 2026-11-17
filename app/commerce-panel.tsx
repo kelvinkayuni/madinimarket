@@ -702,7 +702,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
       <div>
         <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-        <small>{orderItemStatusLabel(item)} · Total {amount(item.total_price, item.currency)}</small>
+        <small>Total {amount(item.total_price, item.currency)}</small>
         {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market is arranging the seller’s payment. No action is needed from you.</small>}
       </div>
     </div>)}
@@ -717,7 +717,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       return <div className="commerce-delivery-details" key={shipmentGroupKey}>
         <strong>Shipment · {items.length} {items.length === 1 ? "item" : "items"}</strong>
         <span>Carrier: {items[0].shipping_carrier} · Tracking number: {items[0].tracking_number}</span>
-        <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit} — {orderItemStatusLabel(item)}</li>)}</ul>
+        <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</li>)}</ul>
         {receiptItem && <div className="commerce-item-actions">
           <button className="button button-dark" type="button" disabled={busy === `receipt-${receiptItem.id}`} onClick={() => void perform(`receipt-${receiptItem.id}`, "confirm_receipt", { itemId: receiptItem.id })}>{busy === `receipt-${receiptItem.id}` ? "Confirming receipt…" : "I received this shipment"}</button>
           <small>Only confirm if you have the package and everything is okay. After confirming, you cannot report a delivery issue.</small>
@@ -758,7 +758,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     }}>{busy === `hide-seller-history-${item.id}` ? "Removing…" : "Delete from history"}</button>}
     <div className="commerce-order-item">
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-      <small>Order {item.order?.control_number} · {history && !["expired", "cancelled", "unavailable", "refunded", "payout_paid"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</small>
+      <small>Order {item.order?.control_number}</small>
       <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
       {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market will send your payout to your registered bank account. This status will update once payment is sent, and the receipt will appear here.</small>}
       {item.payout_reference && !item.payout_group_key && <small>Seller payout reference: {item.payout_reference}</small>}

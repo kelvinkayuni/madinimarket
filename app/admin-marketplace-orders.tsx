@@ -457,7 +457,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
         })()}
         {order.items.map((item) => <div className="admin-commerce-item" key={item.id}>
           <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-            <small>Status: {item.status.replaceAll("_", " ")}{item.currency ? ` · Buyer total ${money(item.total_price, item.currency)}` : ""}</small>
+            {item.currency && <small>Buyer total {money(item.total_price, item.currency)}</small>}
             {(canProcessOrders || canResolveDisputes) && item.currency && <small>Seller amount {money(item.seller_amount, item.currency)}{canProcessOrders ? ` · Market fee ${money(item.platform_fee_amount, item.currency)}` : ""}</small>}
             {canProcessOrders && !isStaff && <small>Seller contact: {item.seller_email}</small>}
             {item.shipping_carrier && <small>Tracking: {item.shipping_carrier} · {item.tracking_number}</small>}
