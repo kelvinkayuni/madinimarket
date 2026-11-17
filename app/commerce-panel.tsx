@@ -174,8 +174,8 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
-const buyerShippedStatusLabel = "Your order has shipped. Check tracking. When you have the package and everything is okay, confirm receipt. If there is a delivery problem, report it.";
-const buyerDeliveredStatusLabel = "Carrier delivery is confirmed. If you have the package and everything is okay, confirm receipt. If there is a delivery problem, report it.";
+const buyerShippedStatusLabel = "Your order has shipped. Confirm receipt. For a delivery issue, report it.";
+const buyerDeliveredStatusLabel = "Carrier delivery confirmed. Confirm receipt. For a delivery problem, report it.";
 
 function buyerOrderStatusLabel(order: BuyerOrder) {
   if (order.items.some((item) => item.status === "disputed")) return "disputed";
