@@ -16,7 +16,9 @@ export async function GET(request: Request) {
   }
   if (!staff) return NextResponse.json({ error: "Active order operations staff access is required." }, { status: 403 });
 
-  const page = Number(new URL(request.url).searchParams.get("page") ?? 1);
+  const searchParams = new URL(request.url).searchParams;
+  const countOnly = searchParams.get("countOnly") === "1";
+  const page = Number(searchParams.get("page") ?? 1);
   if (!Number.isSafeInteger(page) || page < 1 || page > 40_000) {
     return NextResponse.json({ error: "Choose a valid order page." }, { status: 400 });
   }
@@ -34,6 +36,7 @@ export async function GET(request: Request) {
 
   const rows = queue as { order_id: string | null; total_count: number | string }[] | null;
   const totalCount = Number(rows?.[0]?.total_count ?? 0);
+  if (countOnly) return NextResponse.json({ totalCount });
   const orderIds = (rows ?? []).map((row) => row.order_id).filter((id): id is string => Boolean(id));
   if (!orderIds.length) return NextResponse.json({ orders: [], totalCount, page, pageSize: 25 });
 

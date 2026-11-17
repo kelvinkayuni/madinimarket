@@ -1003,6 +1003,7 @@ export default function Marketplace() {
   const [userId, setUserId] = useState("");
   const [accountOrderStatusChannel, setAccountOrderStatusChannel] = useState("");
   const [marketplaceOrdersNeedingAction, setMarketplaceOrdersNeedingAction] = useState(0);
+  const [staffDeliveryTaskCount, setStaffDeliveryTaskCount] = useState<{ userId: string; count: number } | null>(null);
   const [cartListingIds, setCartListingIds] = useState<Set<number>>(() => new Set());
   const [cartListingAccountId, setCartListingAccountId] = useState("");
   const [sellerOpenOrdersCount, setSellerOpenOrdersCount] = useState(0);
@@ -1417,6 +1418,45 @@ export default function Marketplace() {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
       window.clearInterval(interval);
       void supabase.removeChannel(channel);
+      removeResumeListener();
+    };
+  }, [role, staffPermissions, userId]);
+  useEffect(() => {
+    if (role !== "staff" || !staffPermissions.includes("delivery_confirmation") ||
+      !userId || !isSupabaseConfigured) return;
+    let active = true;
+    let loading = false;
+    const refreshStaffDeliveryTaskCount = async () => {
+      if (loading || document.visibilityState !== "visible") return;
+      loading = true;
+      try {
+        const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session) throw new Error("Staff session expired.");
+        const response = await fetch("/api/staff/marketplace-orders?countOnly=1", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load active delivery tasks.");
+        if (!Number.isSafeInteger(result.totalCount) || result.totalCount < 0) {
+          throw new Error("Active delivery task count is invalid.");
+        }
+        if (active) setStaffDeliveryTaskCount({ userId, count: result.totalCount });
+      } catch (error) {
+        if (active) console.error("Could not refresh the staff delivery task count.", error);
+      } finally {
+        loading = false;
+      }
+    };
+    void refreshStaffDeliveryTaskCount();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshStaffDeliveryTaskCount();
+    }, 30_000);
+    const removeResumeListener = onBrowserResume(refreshStaffDeliveryTaskCount);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
       removeResumeListener();
     };
   }, [role, staffPermissions, userId]);
@@ -4437,7 +4477,9 @@ export default function Marketplace() {
                 {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace Orders Processing<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
                 {staffCanDisputes && <button className={activeAdminPanel === "order-disputes" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-disputes"); setAdminMenuOpen(false); }}>Order Disputes</button>}
                 {staffCanRefunds && <button className={activeAdminPanel === "buyer-refunds" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("buyer-refunds"); setAdminMenuOpen(false); }}>Buyer Refunds</button>}
-                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>Delivery confirmation</button>}
+                {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>
+                  Delivery confirmation{staffDeliveryTaskCount?.userId === userId && <span aria-label={`${staffDeliveryTaskCount.count} active delivery tasks`}>{staffDeliveryTaskCount.count}</span>}
+                </button>}
               </>}
             </nav>
           </>}
