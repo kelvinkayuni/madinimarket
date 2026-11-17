@@ -1,11 +1,72 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import PrivateOfferForm from "./private-offer-form";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+
+function PrivateOfferScrollPanel({ children }: { children: ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
+
+  const updateScrollIndicator = useCallback(() => {
+    const viewport = scrollRef.current;
+    const track = trackRef.current;
+    const thumb = thumbRef.current;
+    if (!viewport || !track || !thumb) return;
+
+    const scrollRange = viewport.scrollHeight - viewport.clientHeight;
+    const trackHeight = track.clientHeight;
+    const canScroll = scrollRange > 1 && trackHeight > 0;
+    track.dataset.visible = String(canScroll);
+    if (!canScroll) return;
+
+    const thumbHeight = Math.min(trackHeight, Math.max(24, trackHeight * viewport.clientHeight / viewport.scrollHeight));
+    const thumbTravel = trackHeight - thumbHeight;
+    thumb.style.height = `${thumbHeight}px`;
+    thumb.style.transform = `translateY(${viewport.scrollTop / scrollRange * thumbTravel}px)`;
+  }, []);
+
+  useEffect(() => {
+    const viewport = scrollRef.current;
+    const content = viewport?.firstElementChild;
+    if (!viewport || !content) return;
+
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateScrollIndicator);
+    observer?.observe(viewport);
+    observer?.observe(content);
+    viewport.addEventListener("load", updateScrollIndicator, true);
+    window.addEventListener("resize", updateScrollIndicator);
+    updateScrollIndicator();
+    return () => {
+      observer?.disconnect();
+      viewport.removeEventListener("load", updateScrollIndicator, true);
+      window.removeEventListener("resize", updateScrollIndicator);
+    };
+  }, [updateScrollIndicator]);
+
+  return <div className="commerce-private-offer">
+    <div className="commerce-private-offer-scroll-shell">
+      <div
+        className="commerce-private-offer-scroll"
+        ref={scrollRef}
+        onScroll={updateScrollIndicator}
+        role="region"
+        aria-label="Offer details"
+        tabIndex={0}
+      >
+        <div className="commerce-private-offer-content">{children}</div>
+      </div>
+      <div className="commerce-private-scroll-track" ref={trackRef} data-visible="false" aria-hidden="true">
+        <div className="commerce-private-scroll-thumb" ref={thumbRef} />
+      </div>
+    </div>
+  </div>;
+}
 
 type Currency = "TZS" | "USD";
 type CartListing = {
@@ -1034,7 +1095,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <div className="dialog-card commerce-private-dialog" role="dialog" aria-modal="true" aria-labelledby="private-thread-title">
         <div className="dialog-kicker">{selectedPrivateThread.side === "buyer" ? "OFFERS AS BUYER" : "OFFERS AS SELLER"}</div>
         <h2 id="private-thread-title">{selectedPrivateThread.request?.mineral_name ?? "Private mineral offer"} · Request #{selectedPrivateThread.request_id}</h2>
-        {selectedPrivateThread.offers.map((offer) => <div className="commerce-private-offer" key={offer.id}>
+        {selectedPrivateThread.offers.map((offer) => <PrivateOfferScrollPanel key={offer.id}>
           <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{privateOfferStatusLabel(offer.status, selectedPrivateThread.side, selectedPrivateThread.close_reason)}</span></div>
           {offer.status === "awaiting_buyer_checkout" && offer.checkout_deadline && <p className="commerce-note">Checkout must be completed by {new Date(offer.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time. If the deadline passes, the acceptance is cancelled, the request reopens, and other eligible offers become available again.</p>}
           {offer.status === "closed" && selectedPrivateThread.close_reason === "buyer_checkout_expired" && <p className="commerce-note">The checkout deadline passed before an order was created. No payment was taken; the buyer request and eligible competing offers are available again.</p>}
@@ -1059,7 +1120,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           {selectedPrivateThread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions"><button className="button button-dark" type="button" onClick={() => { setAcceptOffer(offer); setAcceptRequestOffer(selectedPrivateThread.request?.offer ?? null); setAcceptRequestCurrency(selectedPrivateThread.request?.currency ?? offer.currency); setAcceptRequestDetails(selectedPrivateThread.request); }}>Accept to buy</button><button className="button button-outline" type="button" onClick={() => { setDeclineOffer(offer); setDeclineReason(""); setDeclineExplanation(""); }}>Decline offer</button></div>}
           {selectedPrivateThread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}<br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</p>}
           {selectedPrivateThread.side === "seller" && (offer.status === "accepted" || offer.status === "awaiting_buyer_checkout") && <p className="commerce-note"><strong>Buyer accepted your offer.</strong> The buyer can now enter delivery details.</p>}
-        </div>)}
+        </PrivateOfferScrollPanel>)}
         {selectedPrivateThread.side === "buyer" && selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => { event.preventDefault(); const offer = selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]; void performPrivateOffer(`checkout-offer-${offer.id}`, { action: "checkout_offer", offerId: offer.id, buyerName, buyerPhone, country, region, district, address }); }}>
           <h4>Confirm mineral and delivery details</h4>
           <p className="commerce-note">{selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.availability_confirmed_at
