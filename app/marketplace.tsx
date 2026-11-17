@@ -1250,6 +1250,12 @@ export default function Marketplace() {
         return matchesFilter && matchesSearch;
       });
   }, [accountFilter, accountSearch, adminCertificates, role, websiteAccounts]);
+  const pendingLicenceAccountCount = useMemo(
+    () => new Set(adminCertificates
+      .filter((certificate) => certificate.status === "pending")
+      .map((certificate) => certificate.website_user_id)).size,
+    [adminCertificates],
+  );
   const accountPageSize = 25;
   const accountPageCount = Math.max(1, Math.ceil(filteredWebsiteAccounts.length / accountPageSize));
   const activeAccountPage = Math.min(accountPage, accountPageCount);
@@ -4532,7 +4538,7 @@ export default function Marketplace() {
             <nav className="admin-menu-popover" id="admin-panel-menu" aria-label="Admin panels">
               <span className="admin-menu-heading">{role === "staff" ? "STAFF MENU" : "ADMIN PANELS"}</span>
               {role === "admin" ? <>
-                <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Accounts</span>{adminMenuRoleBadge(["accounts"])}<span>{websiteAccounts.length}</span></button>
+                <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Accounts</span>{adminMenuRoleBadge(["accounts"])}<span>{pendingLicenceAccountCount}</span></button>
                 <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
                 <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">English–Swahili translations</span>{adminMenuRoleBadge(["translations"])}</button>
                 <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Homepage headlines</span>{adminMenuRoleBadge(["homepage_headlines"])}</button>
@@ -4567,7 +4573,7 @@ export default function Marketplace() {
                 </details>
                 {staffCanSellerReview && <button className={activeAdminPanel === "seller-reviews" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("seller-reviews"); setAdminMenuOpen(false); }}>Seller Submission Reviews<span>{pendingSellers.length}</span></button>}
                 {staffCanBuyerReview && <button className={activeAdminPanel === "buyer-reviews" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("buyer-reviews"); setAdminMenuOpen(false); }}>Buyer Submission Reviews<span>{pendingBuyers.length}</span></button>}
-                {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{websiteAccounts.length}</span></button>}
+                {staffCan("accounts") && <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}>Accounts<span>{pendingLicenceAccountCount}</span></button>}
                 {staffCan("customer_support") && <button className={activeAdminPanel === "support" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("support"); setAdminMenuOpen(false); }}>Support inbox{supportUnreadCount > 0 && <span className="staff-chat-unread-badge" aria-label={`${supportUnreadCount} unread support messages`}>{supportUnreadCount}</span>}</button>}
                 {staffCan("translations") && <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}>English–Swahili translations</button>}
                 {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage Display</button>}
@@ -4949,7 +4955,7 @@ export default function Marketplace() {
           </div>}</StaffTaskClaim>
         </section>}
         {activeAdminPanel === "accounts" && (role === "admin" || staffCan("accounts")) && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
-          <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{websiteAccounts.length}</strong></div>
+          <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{pendingLicenceAccountCount}</strong></div>
           {role === "admin" && <div className="admin-account-controls">
             <div className="admin-account-control-row">
               <div><strong>Account creation</strong><span>{!accountSettingsLoaded ? "Loading account settings…" : accountCreationDisabled ? "New account creation is suspended." : "New account creation is enabled."}</span></div>
