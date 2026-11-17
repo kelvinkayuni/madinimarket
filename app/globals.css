@@ -747,7 +747,10 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-private-card-meta, .commerce-private-card-status { color: #69766a; font-size: 9px; }
 .commerce-private-card-action { width: fit-content; margin-top: 2px; color: #355f3c; font-size: 9px; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
 .commerce-private-dialog { width: min(760px, 100%); }
-.commerce-private-dialog .commerce-private-offer { max-height: 60vh; overflow-y: auto; }
+.commerce-private-dialog .commerce-private-offer { max-height: 60vh; overflow-y: scroll; scrollbar-color: var(--forest) #e6eddf; scrollbar-width: thin; }
+.commerce-private-dialog .commerce-private-offer::-webkit-scrollbar { width: 10px; }
+.commerce-private-dialog .commerce-private-offer::-webkit-scrollbar-track { border-radius: 5px; background: #e6eddf; }
+.commerce-private-dialog .commerce-private-offer::-webkit-scrollbar-thumb { border: 2px solid #e6eddf; border-radius: 5px; background: var(--forest); }
 .commerce-item, .commerce-order-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 11px 0; border-bottom: 1px solid #edf0ea; }
 .commerce-item { display: block; padding: 0; }
 .commerce-item-summary { min-height: 55px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; list-style: none; cursor: pointer; }
