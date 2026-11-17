@@ -34,6 +34,56 @@ function fail(error: { message: string; code?: string }) {
   );
 }
 
+function isOwnedPrivateOfferPath(accountId: string, path: string, extensions: string[]) {
+  const prefix = `${accountId}/private-offers/`;
+  if (!path.startsWith(prefix)) return false;
+  const filename = path.slice(prefix.length);
+  const extension = filename.split(".").pop()?.toLowerCase();
+  const id = extension ? filename.slice(0, -(extension.length + 1)) : "";
+  return Boolean(extension && extensions.includes(extension) && uuidPattern.test(id));
+}
+
+async function removeUnreferencedOfferUploads(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  accountId: string,
+  imagePath: string | null,
+  certificatePath: string | null,
+) {
+  const uploads = [
+    { bucket: "mineral-images", path: imagePath, column: "image_path", extensions: ["jpg"] },
+    { bucket: "private-offer-certificates", path: certificatePath, column: "certificate_path", extensions: ["pdf", "jpg", "png"] },
+  ] as const;
+  for (const upload of uploads) {
+    if (!upload.path || !isOwnedPrivateOfferPath(accountId, upload.path, [...upload.extensions])) continue;
+    const { data: references, error: referenceError } = await admin.from("marketplace_private_offers")
+      .select("id")
+      .eq(upload.column, upload.path)
+      .limit(1);
+    if (referenceError) throw referenceError;
+    if (references?.length) continue;
+    const { error: removeError } = await admin.storage.from(upload.bucket).remove([upload.path]);
+    if (removeError) throw removeError;
+  }
+}
+
+async function verifyOfferUpload(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  bucket: "mineral-images" | "private-offer-certificates",
+  path: string,
+  maximumSize: number,
+  contentType: string,
+) {
+  const separator = path.lastIndexOf("/");
+  const directory = path.slice(0, separator);
+  const filename = path.slice(separator + 1);
+  const { data, error } = await admin.storage.from(bucket).list(directory, { limit: 1, search: filename });
+  if (error) throw error;
+  const file = data?.find((entry) => entry.name === filename);
+  const size = Number(file?.metadata?.size);
+  return Boolean(file && Number.isFinite(size) && size > 0 && size <= maximumSize
+    && file.metadata?.mimetype === contentType);
+}
+
 export async function GET(request: Request) {
   const accountId = await getWebsiteAccountId(request);
   if (!accountId) return NextResponse.json({ error: "Sign in to view private offers." }, { status: 401 });
@@ -157,6 +207,59 @@ export async function POST(request: Request) {
 
   try {
     const admin = createSupabaseAdminClient();
+    if (action === "create_offer_upload_urls") {
+      const imageSize = numeric(body.imageSize);
+      if (imageSize === null || !Number.isSafeInteger(imageSize) || imageSize < 3 || imageSize > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: "Choose a mineral photo smaller than 5 MB." }, { status: 400 });
+      }
+      const hasCertificateSize = body.certificateSize !== null && body.certificateSize !== undefined;
+      const certificateSize = hasCertificateSize ? numeric(body.certificateSize) : null;
+      const certificateContentType = text(body.certificateContentType, 50);
+      if (hasCertificateSize && (certificateSize === null || !Number.isSafeInteger(certificateSize) || certificateSize < 1
+        || certificateSize > 10 * 1024 * 1024
+        || !["application/pdf", "image/jpeg", "image/png"].includes(certificateContentType))) {
+        return NextResponse.json({ error: "Choose a valid PDF, JPG, or PNG mineral certificate smaller than 10 MB." }, { status: 400 });
+      }
+      if (!hasCertificateSize && certificateContentType) {
+        return NextResponse.json({ error: "Choose a valid mineral certificate." }, { status: 400 });
+      }
+
+      const imagePath = `${accountId}/private-offers/${randomUUID()}.jpg`;
+      const { data: imageUpload, error: imageError } = await admin.storage.from("mineral-images")
+        .createSignedUploadUrl(imagePath, { upsert: false });
+      if (imageError) throw imageError;
+      let certificateUpload: { path: string; token: string } | null = null;
+      if (certificateSize !== null) {
+        const extension = certificateContentType === "application/pdf" ? "pdf"
+          : certificateContentType === "image/png" ? "png" : "jpg";
+        const certificatePath = `${accountId}/private-offers/${randomUUID()}.${extension}`;
+        const { data, error } = await admin.storage.from("private-offer-certificates")
+          .createSignedUploadUrl(certificatePath, { upsert: false });
+        if (error) throw error;
+        certificateUpload = { path: data.path, token: data.token };
+      }
+      return NextResponse.json({
+        image: { path: imageUpload.path, token: imageUpload.token },
+        certificate: certificateUpload,
+      });
+    }
+
+    if (action === "cleanup_offer_uploads") {
+      const imagePath = body.imagePath === null || body.imagePath === undefined
+        ? null
+        : text(body.imagePath, 500);
+      const certificatePath = body.certificatePath === null || body.certificatePath === undefined
+        ? null
+        : text(body.certificatePath, 500);
+      if ((!imagePath && !certificatePath)
+        || (imagePath && !isOwnedPrivateOfferPath(accountId, imagePath, ["jpg"]))
+        || (certificatePath && !isOwnedPrivateOfferPath(accountId, certificatePath, ["pdf", "jpg", "png"]))) {
+        return NextResponse.json({ error: "Choose valid private offer attachments to clean up." }, { status: 400 });
+      }
+      await removeUnreferencedOfferUploads(admin, accountId, imagePath || null, certificatePath || null);
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "close_offer_thread") {
       const threadId = text(body.threadId, 36);
       if (!uuidPattern.test(threadId)) return NextResponse.json({ error: "Choose a valid private offer." }, { status: 400 });
@@ -221,125 +324,107 @@ export async function POST(request: Request) {
     }
 
     if (action === "send_offer") {
-      const requestId = Number(body.requestId);
-      const threadId = body.threadId === null || body.threadId === undefined || body.threadId === ""
+      const imagePath = text(body.imagePath, 500);
+      const certificatePath = body.certificatePath === null || body.certificatePath === undefined
         ? null
-        : text(body.threadId, 36);
-      if (body.availabilityConfirmed !== true) {
-        return NextResponse.json({ error: "Confirm that the mineral is available before sending this offer." }, { status: 400 });
-      }
-      if (!Number.isSafeInteger(requestId) || requestId < 1 || (threadId !== null && !uuidPattern.test(threadId))) {
-        return NextResponse.json({ error: "Choose a valid buyer request." }, { status: 400 });
-      }
-      const { data: requestOwner, error: requestOwnerError } = await admin.from("buy_requests")
-        .select("website_user_id")
-        .eq("id", requestId)
-        .maybeSingle();
-      if (requestOwnerError) throw requestOwnerError;
-      if (requestOwner?.website_user_id === accountId) {
-        return NextResponse.json({ error: "You cannot send a private offer to your own buying request." }, { status: 403 });
-      }
-      const weight = numeric(body.weight);
-      const sellerAmount = numeric(body.sellerAmount);
-      const smallest = body.smallestStoneWeight === "" || body.smallestStoneWeight === null || body.smallestStoneWeight === undefined
-        ? null : numeric(body.smallestStoneWeight);
-      const largest = body.largestStoneWeight === "" || body.largestStoneWeight === null || body.largestStoneWeight === undefined
-        ? null : numeric(body.largestStoneWeight);
-      const imageData = typeof body.imageData === "string" ? body.imageData : "";
-      const imageMatch = /^data:image\/jpeg;base64,([A-Za-z\d+/=]+)$/.exec(imageData);
-      if (!Number.isSafeInteger(requestId) || requestId < 1 || (threadId !== null && !uuidPattern.test(threadId))
-        || weight === null || sellerAmount === null || !imageMatch || imageMatch[1].length > 7_000_000
-        || ((body.listingType === "batch") && (smallest === null || largest === null))) {
-        return NextResponse.json({ error: "Enter valid mineral details and price, and attach a mineral photo." }, { status: 400 });
-      }
-      const imageBytes = Buffer.from(imageMatch[1], "base64");
-      if (imageBytes.length < 3 || imageBytes.length > 5 * 1024 * 1024 ||
-        imageBytes[0] !== 0xff || imageBytes[1] !== 0xd8 || imageBytes[2] !== 0xff) {
-        return NextResponse.json({ error: "Choose a mineral photo smaller than 5 MB." }, { status: 400 });
-      }
-      const certificateData = typeof body.certificateData === "object" && body.certificateData !== null
-        ? body.certificateData as Record<string, unknown> : null;
-      let certificatePath: string | null = null;
-      let certificateFileName: string | null = null;
-      let certificateContentType: string | null = null;
-      if (certificateData) {
-        const certificateType = text(certificateData.type, 50);
-        const certificateRaw = typeof certificateData.data === "string" ? certificateData.data : "";
-        const certificateMatch = /^data:(application\/pdf|image\/jpeg|image\/png);base64,([A-Za-z\d+/=]+)$/.exec(certificateRaw);
-        if (!certificateMatch || !["application/pdf", "image/jpeg", "image/png"].includes(certificateType) || certificateType !== certificateMatch[1]) {
-          return NextResponse.json({ error: "Choose a valid PDF, JPG, or PNG mineral certificate." }, { status: 400 });
+        : text(body.certificatePath, 500);
+      let offerCreated = false;
+      try {
+        const requestId = Number(body.requestId);
+        const threadId = body.threadId === null || body.threadId === undefined || body.threadId === ""
+          ? null
+          : text(body.threadId, 36);
+        if (body.availabilityConfirmed !== true) {
+          return NextResponse.json({ error: "Confirm that the mineral is available before sending this offer." }, { status: 400 });
         }
-        const certificateBytes = Buffer.from(certificateMatch[2], "base64");
-        if (certificateBytes.length < 1 || certificateBytes.length > 10 * 1024 * 1024) {
-          return NextResponse.json({ error: "Choose a mineral certificate smaller than 10 MB." }, { status: 400 });
+        if (!Number.isSafeInteger(requestId) || requestId < 1 || (threadId !== null && !uuidPattern.test(threadId))) {
+          return NextResponse.json({ error: "Choose a valid buyer request." }, { status: 400 });
         }
-        certificateFileName = text(certificateData.name, 180);
-        certificateContentType = certificateType;
-        const extension = certificateType === "application/pdf" ? "pdf" : certificateType === "image/png" ? "png" : "jpg";
-        certificatePath = `${accountId}/${randomUUID()}.${extension}`;
-      }
-      const imagePath = `${accountId}/${randomUUID()}.jpg`;
-      const { error: uploadError } = await admin.storage.from("mineral-images").upload(imagePath, imageBytes, {
-        contentType: "image/jpeg",
-      });
-      if (uploadError) throw uploadError;
-      let uploadedCertificatePath: string | null = null;
-      if (certificatePath && certificateContentType && certificateData?.data) {
-        const certificateMatch = /^data:[^;]+;base64,([A-Za-z\d+/=]+)$/.exec(String(certificateData.data));
-        if (certificateMatch) {
-          const { error: certificateUploadError } = await admin.storage.from("private-offer-certificates").upload(
-            certificatePath,
-            Buffer.from(certificateMatch[1], "base64"),
-            { contentType: certificateContentType },
-          );
-          if (certificateUploadError) {
-            await admin.storage.from("mineral-images").remove([imagePath]);
-            throw certificateUploadError;
-          }
-          uploadedCertificatePath = certificatePath;
+        const { data: requestOwner, error: requestOwnerError } = await admin.from("buy_requests")
+          .select("website_user_id")
+          .eq("id", requestId)
+          .maybeSingle();
+        if (requestOwnerError) throw requestOwnerError;
+        if (requestOwner?.website_user_id === accountId) {
+          return NextResponse.json({ error: "You cannot send a private offer to your own buying request." }, { status: 403 });
         }
-      }
-      const { data: offerId, error } = await admin.rpc("send_marketplace_private_offer", {
-        p_seller_id: accountId,
-        p_request_id: requestId,
-        p_thread_id: threadId,
-        p_mineral_name: text(body.mineralName, 120),
-        p_listing_type: text(body.listingType, 20),
-        p_weight: weight,
-        p_unit: text(body.unit, 20),
-        p_smallest_stone_weight: smallest,
-        p_largest_stone_weight: largest,
-        p_stone_weight_unit: text(body.stoneWeightUnit, 20) || null,
-        p_color: text(body.color, 100),
-        p_shape: text(body.shape, 20),
-        p_quality: text(body.quality, 200),
-        p_image_path: imagePath,
-        p_country: text(body.country, 100),
-        p_region: text(body.region, 100),
-        p_district: text(body.district, 100),
-        p_seller_amount: sellerAmount,
-        p_currency: text(body.currency, 3),
-      });
-      if (error) {
-        await admin.storage.from("mineral-images").remove([imagePath]);
-        if (uploadedCertificatePath) await admin.storage.from("private-offer-certificates").remove([uploadedCertificatePath]);
-        return fail(error);
-      }
-      if (uploadedCertificatePath && typeof offerId === "string") {
-        const { error: metadataError } = await admin.from("marketplace_private_offers")
-          .update({
-            certificate_path: uploadedCertificatePath,
-            certificate_file_name: certificateFileName,
-            certificate_content_type: certificateContentType,
-          })
-          .eq("id", offerId);
-        if (metadataError) {
-          await admin.storage.from("mineral-images").remove([imagePath]);
-          await admin.storage.from("private-offer-certificates").remove([uploadedCertificatePath]);
-          throw metadataError;
+        const weight = numeric(body.weight);
+        const sellerAmount = numeric(body.sellerAmount);
+        const smallest = body.smallestStoneWeight === "" || body.smallestStoneWeight === null || body.smallestStoneWeight === undefined
+          ? null : numeric(body.smallestStoneWeight);
+        const largest = body.largestStoneWeight === "" || body.largestStoneWeight === null || body.largestStoneWeight === undefined
+          ? null : numeric(body.largestStoneWeight);
+        const imagePathValid = isOwnedPrivateOfferPath(accountId, imagePath, ["jpg"]);
+        const certificateContentType = text(body.certificateContentType, 50);
+        const certificateFileName = text(body.certificateFileName, 180);
+        const expectedCertificateExtension = certificateContentType === "application/pdf" ? "pdf"
+          : certificateContentType === "image/png" ? "png"
+            : certificateContentType === "image/jpeg" ? "jpg" : "";
+        const certificatePathValid = certificatePath === null
+          || Boolean(expectedCertificateExtension
+            && isOwnedPrivateOfferPath(accountId, certificatePath, [expectedCertificateExtension]));
+        if (weight === null || sellerAmount === null || !imagePathValid || !certificatePathValid
+          || (certificatePath !== null && (!certificateFileName || !expectedCertificateExtension))
+          || (body.listingType === "batch" && (smallest === null || largest === null))) {
+          return NextResponse.json({ error: "Enter valid mineral details and price, and attach a mineral photo." }, { status: 400 });
+        }
+        if (!(await verifyOfferUpload(admin, "mineral-images", imagePath, 5 * 1024 * 1024, "image/jpeg"))) {
+          return NextResponse.json({ error: "Choose a valid mineral photo smaller than 5 MB." }, { status: 400 });
+        }
+        const { data: imageFile, error: imageDownloadError } = await admin.storage.from("mineral-images").download(imagePath);
+        if (imageDownloadError) throw imageDownloadError;
+        const imageHeader = new Uint8Array(await imageFile.slice(0, 3).arrayBuffer());
+        if (imageHeader[0] !== 0xff || imageHeader[1] !== 0xd8 || imageHeader[2] !== 0xff) {
+          return NextResponse.json({ error: "Choose a valid JPG mineral photo." }, { status: 400 });
+        }
+        if (certificatePath && !(await verifyOfferUpload(
+          admin,
+          "private-offer-certificates",
+          certificatePath,
+          10 * 1024 * 1024,
+          certificateContentType,
+        ))) {
+          return NextResponse.json({ error: "Choose a valid PDF, JPG, or PNG mineral certificate smaller than 10 MB." }, { status: 400 });
+        }
+        const { data: offerId, error } = await admin.rpc("send_marketplace_private_offer", {
+          p_seller_id: accountId,
+          p_request_id: requestId,
+          p_thread_id: threadId,
+          p_mineral_name: text(body.mineralName, 120),
+          p_listing_type: text(body.listingType, 20),
+          p_weight: weight,
+          p_unit: text(body.unit, 20),
+          p_smallest_stone_weight: smallest,
+          p_largest_stone_weight: largest,
+          p_stone_weight_unit: text(body.stoneWeightUnit, 20) || null,
+          p_color: text(body.color, 100),
+          p_shape: text(body.shape, 20),
+          p_quality: text(body.quality, 200),
+          p_image_path: imagePath,
+          p_country: text(body.country, 100),
+          p_region: text(body.region, 100),
+          p_district: text(body.district, 100),
+          p_seller_amount: sellerAmount,
+          p_currency: text(body.currency, 3),
+        });
+        if (error) return fail(error);
+        offerCreated = true;
+        if (certificatePath && typeof offerId === "string") {
+          const { error: metadataError } = await admin.from("marketplace_private_offers")
+            .update({
+              certificate_path: certificatePath,
+              certificate_file_name: certificateFileName,
+              certificate_content_type: certificateContentType,
+            })
+            .eq("id", offerId);
+          if (metadataError) throw metadataError;
+        }
+        return NextResponse.json({ ok: true, offerId });
+      } finally {
+        if (!offerCreated) {
+          await removeUnreferencedOfferUploads(admin, accountId, imagePath || null, certificatePath);
         }
       }
-      return NextResponse.json({ ok: true, offerId });
     }
 
     if (action === "decide_offer") {

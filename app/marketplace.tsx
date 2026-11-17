@@ -1550,18 +1550,116 @@ export default function Marketplace() {
 
   const sendPrivateOffer = async (details: Record<string, unknown>) => {
     await withProgress("private-offer-submit", async () => {
+      const uploadedPaths = { imagePath: "", certificatePath: "" };
+      const readResponse = async (response: Response, fallback: string) => {
+        const responseText = await response.text();
+        let payload: unknown;
+        try {
+          payload = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          const serverMessage = responseText.trim().slice(0, 200);
+          throw new Error(!response.ok && serverMessage ? serverMessage : fallback);
+        }
+        if (!response.ok) {
+          const message = typeof payload === "object" && payload !== null && "error" in payload
+            && typeof payload.error === "string"
+            ? payload.error
+            : "";
+          throw new Error(message || `The request failed (${response.status}).`);
+        }
+        if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+          throw new Error(fallback);
+        }
+        return payload as Record<string, unknown>;
+      };
+      const readUploadTicket = (value: unknown) => {
+        if (typeof value !== "object" || value === null || Array.isArray(value)
+          || !("path" in value) || typeof value.path !== "string"
+          || !("token" in value) || typeof value.token !== "string") {
+          throw new Error("Could not prepare the private offer attachments.");
+        }
+        return { path: value.path, token: value.token };
+      };
       try {
+        const imageFile = details.imageFile;
+        const certificateFile = details.certificateFile;
+        if (!(imageFile instanceof Blob) || imageFile.type !== "image/jpeg"
+          || (certificateFile !== null && certificateFile !== undefined && !(certificateFile instanceof File))) {
+          throw new Error("Choose a valid mineral photo and certificate.");
+        }
+        const uploadResponse = await fetchWithWebsiteSession("/api/marketplace-offers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "create_offer_upload_urls",
+            imageSize: imageFile.size,
+            certificateSize: certificateFile instanceof File ? certificateFile.size : null,
+            certificateContentType: certificateFile instanceof File ? certificateFile.type : null,
+          }),
+        });
+        const uploadResult = await readResponse(uploadResponse, "Could not prepare the private offer attachments.");
+        const imageUpload = readUploadTicket(uploadResult.image);
+        uploadedPaths.imagePath = imageUpload.path;
+        const certificateUpload = certificateFile instanceof File
+          ? readUploadTicket(uploadResult.certificate)
+          : null;
+        if (certificateUpload) uploadedPaths.certificatePath = certificateUpload.path;
+
+        const supabase = getSupabaseBrowserClient();
+        const { error: imageUploadError } = await supabase.storage.from("mineral-images").uploadToSignedUrl(
+          imageUpload.path,
+          imageUpload.token,
+          imageFile,
+          { contentType: "image/jpeg" },
+        );
+        if (imageUploadError) throw new Error(`Could not upload the mineral photo: ${imageUploadError.message}`);
+        if (certificateUpload && certificateFile instanceof File) {
+          const { error: certificateUploadError } = await supabase.storage.from("private-offer-certificates").uploadToSignedUrl(
+            certificateUpload.path,
+            certificateUpload.token,
+            certificateFile,
+            { contentType: certificateFile.type },
+          );
+          if (certificateUploadError) {
+            throw new Error(`Could not upload the mineral certificate: ${certificateUploadError.message}`);
+          }
+        }
+
+        const offerDetails = { ...details };
+        delete offerDetails.imageFile;
+        delete offerDetails.certificateFile;
         const response = await fetchWithWebsiteSession("/api/marketplace-offers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(details),
+          body: JSON.stringify({
+            ...offerDetails,
+            imagePath: imageUpload.path,
+            certificatePath: certificateUpload?.path ?? null,
+            certificateFileName: certificateFile instanceof File ? certificateFile.name.slice(0, 180) : null,
+            certificateContentType: certificateFile instanceof File ? certificateFile.type : null,
+          }),
         });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error ?? "Could not send your private offer.");
+        await readResponse(response, "Could not send your private offer.");
         setDialog(null);
         setPrivateOfferRequest(null);
         setNotice("Private offer sent. The buyer can review it in their account.");
       } catch (error) {
+        if (uploadedPaths.imagePath || uploadedPaths.certificatePath) {
+          try {
+            const cleanupResponse = await fetchWithWebsiteSession("/api/marketplace-offers", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "cleanup_offer_uploads",
+                imagePath: uploadedPaths.imagePath || null,
+                certificatePath: uploadedPaths.certificatePath || null,
+              }),
+            });
+            await readResponse(cleanupResponse, "Could not clean up private offer attachments.");
+          } catch (cleanupError) {
+            console.error("Could not clean up private offer attachments after submission failed", cleanupError);
+          }
+        }
         setNotice(error instanceof Error ? error.message : "Could not send your private offer.");
       }
     });

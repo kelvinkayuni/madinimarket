@@ -33,17 +33,11 @@ export type FinalizedOfferDetails = {
   district: string;
 };
 
-async function encodeCertificate(file: File) {
+function validateCertificate(file: File) {
   if (file.size > 10 * 1024 * 1024 || !["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
     throw new Error("Choose a PDF, JPG, or PNG mineral certificate smaller than 10 MB.");
   }
-  const bytes = await file.arrayBuffer();
-  let binary = "";
-  const chunk = new Uint8Array(bytes);
-  for (let index = 0; index < chunk.length; index += 0x8000) {
-    binary += String.fromCharCode(...chunk.subarray(index, index + 0x8000));
-  }
-  return { data: `data:${file.type};base64,${btoa(binary)}`, name: file.name.slice(0, 180), type: file.type };
+  return file;
 }
 
 async function encodeMineralPhoto(file: File) {
@@ -75,7 +69,12 @@ async function encodeMineralPhoto(file: File) {
     side,
   );
   bitmap.close();
-  return canvas.toDataURL("image/jpeg", 0.82);
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Could not prepare the mineral photo."));
+    }, "image/jpeg", 0.82);
+  });
 }
 
 export function FinalizePrivateOfferForm({
@@ -161,10 +160,10 @@ export default function PrivateOfferForm({
     setPreparingPhoto(true);
     setPhotoError("");
     try {
-      const imageData = await encodeMineralPhoto(photo);
+      const imageFile = await encodeMineralPhoto(photo);
       const certificate = values.get("certificate");
-      const certificateData = certificate instanceof File && certificate.size > 0
-        ? await encodeCertificate(certificate)
+      const certificateFile = certificate instanceof File && certificate.size > 0
+        ? validateCertificate(certificate)
         : null;
       onSubmit({
         action: "send_offer",
@@ -186,8 +185,8 @@ export default function PrivateOfferForm({
         district: String(values.get("district") ?? ""),
         sellerAmount: Number(sellerAmount),
         currency,
-        imageData,
-        certificateData,
+        imageFile,
+        certificateFile,
       });
     } catch (error) {
       setPhotoError(error instanceof Error ? error.message : "Could not prepare the mineral photo.");
