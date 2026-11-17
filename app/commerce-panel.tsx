@@ -176,6 +176,7 @@ function statusLabel(status: string) {
 
 const buyerShippedStatusLabel = "Your order has shipped. Confirm receipt. For a delivery issue, report it.";
 const buyerDeliveredStatusLabel = "Carrier delivery confirmed. Confirm receipt. For a delivery problem, report it.";
+const buyerReceiptConfirmedStatusLabel = "You confirmed receipt.";
 
 function buyerOrderStatusLabel(order: BuyerOrder) {
   if (order.items.some((item) => item.status === "disputed")) return "disputed";
@@ -183,7 +184,7 @@ function buyerOrderStatusLabel(order: BuyerOrder) {
   if (order.items.some((item) => item.status === "payout_due")) return "Seller payout pending";
   if (order.items.some((item) => item.status === "delivered")) return buyerDeliveredStatusLabel;
   if (order.items.some((item) => item.status === "shipped" && item.buyer_received_at)) {
-    return "You confirmed receipt. Waiting for carrier delivery verification.";
+    return buyerReceiptConfirmedStatusLabel;
   }
   if (order.items.some((item) => item.status === "shipped")) return buyerShippedStatusLabel;
   if (order.items.length > 0 && order.items.every((item) => item.status === "payout_paid")) return "Completed. The seller has been paid.";
@@ -252,7 +253,7 @@ function orderItemStatusLabel(item: OrderItem) {
   if (item.status === "refund_due") return "Refund due";
   if (item.status === "delivered") return buyerDeliveredStatusLabel;
   if (item.status === "shipped" && item.buyer_received_at) {
-    return "You confirmed receipt. Waiting for carrier delivery verification.";
+    return buyerReceiptConfirmedStatusLabel;
   }
   if (item.status === "shipped") return buyerShippedStatusLabel;
   return statusLabel(item.status);
