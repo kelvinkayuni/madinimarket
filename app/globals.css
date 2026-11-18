@@ -744,6 +744,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-private-card-side { justify-items: end; text-align: right; }
 .commerce-private-card-role { color: #789c68; font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .commerce-private-card strong { overflow: hidden; color: #304b39; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.commerce-private-card-description { font-size: 11px; }
 .commerce-private-card-price { color: #244f3a; font-size: 11px; font-weight: 800; }
 .commerce-private-card-meta, .commerce-private-card-status { color: #69766a; font-size: 9px; }
 .commerce-private-card-action { width: fit-content; margin-top: 2px; color: #355f3c; font-size: 9px; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
