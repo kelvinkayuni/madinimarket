@@ -692,8 +692,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-history-list { max-height: 390px; padding-right: 5px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .commerce-history > summary { cursor: pointer; color: #526052; font-size: 12px; font-weight: 600; list-style-position: inside; }
 .commerce-history[open] > summary { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.commerce-history-clear { justify-self: start; }
-.commerce-history-entry-delete { justify-self: start; }
+.commerce-history-clear, .commerce-history-entry-delete { min-height: 30px; justify-self: start; padding: 0 9px; font-size: 9px; }
 .commerce-history-more { justify-self: start; }
 .commerce-private-thread { display: block; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-private-thread > .commerce-order-summary { padding: 10px 12px; }
