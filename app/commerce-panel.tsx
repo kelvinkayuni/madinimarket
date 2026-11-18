@@ -859,7 +859,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
     <div className={`commerce-order-details${history ? " commerce-order-details-history" : ""}`}>
     {history
       ? <div className="commerce-history-entry-header">
-          <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
           <button className="button button-outline commerce-history-entry-delete" type="button" disabled={busy !== ""} onClick={() => {
             if (window.confirm(`Remove order ${order.control_number} from your buying history? It will remain in Madinimarket records.`)) {
               void perform(`hide-buyer-history-${order.id}`, "hide_order_history", { side: "buyer", entryId: order.id });

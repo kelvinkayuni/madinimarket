@@ -814,9 +814,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-order-item-history { grid-template-columns: minmax(0, 1fr) auto; }
 .commerce-order-item-history > :not(:first-child):not(.commerce-history-entry-delete) { grid-column: 1 / -1; }
 .commerce-history-entry-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.commerce-history-entry-header > p { min-width: 0; margin: 0; padding-top: 9px; color: #667366; font-size: 10px; }
 .commerce-order-details-history > .commerce-history-entry-header { justify-content: flex-end; gap: 8px; }
-.commerce-order-details-history .commerce-history-entry-header > p { padding-top: 2px; }
 .commerce-order-details-history > .commerce-order-item-history-content,
 .commerce-order-details-history > .commerce-order-item-history { gap: 4px; padding: 4px 0; }
 .commerce-order-details-history .commerce-order-item > div:first-child { gap: 2px; }
