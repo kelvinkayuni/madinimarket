@@ -56,28 +56,56 @@ export async function GET(request: Request) {
   const canRecordRefunds = !staffAccess || staffAccess.permissions.includes("buyer_refunds");
   const searchParams = new URL(request.url).searchParams;
   if (searchParams.get("summary") === "1") {
-    if (!canProcessOrders) return NextResponse.json({ error: "Marketplace order processing access is required." }, { status: 403 });
-    const { data, error } = await admin.rpc("admin_marketplace_order_queue", {
-      p_filter: staffAccess ? "processing" : "needs_action",
-      p_search: "",
-      p_offset: 0,
-      p_limit: 1,
-      p_search_email: !staffAccess,
-    });
-    if (error) {
-      console.error("Admin could not load marketplace orders needing action", error);
-      return NextResponse.json({ error: "Could not load marketplace orders needing action." }, { status: 503 });
+    if (!canProcessOrders && !canResolveDisputes && !canRecordRefunds) {
+      return NextResponse.json({ error: "Marketplace queue access is required." }, { status: 403 });
     }
-    const queueRows = data as { total_count: number | string }[] | null;
-    const marketplaceOrdersNeedingAction = Number(queueRows?.[0]?.total_count ?? 0);
-    if (!Number.isSafeInteger(marketplaceOrdersNeedingAction) || marketplaceOrdersNeedingAction < 0) {
-      console.error("Admin received invalid marketplace orders needing action count", { marketplaceOrdersNeedingAction });
-      return NextResponse.json({ error: "Could not load marketplace orders needing action." }, { status: 503 });
+    const countQueue = async (filter: string) => {
+      const { data, error } = await admin.rpc("admin_marketplace_order_queue", {
+        p_filter: filter,
+        p_search: "",
+        p_offset: 0,
+        p_limit: 1,
+        p_search_email: !staffAccess,
+      });
+      if (error) {
+        console.error(`Admin could not load ${filter} marketplace order count.`, error);
+        return null;
+      }
+      const queueRows = data as { total_count: number | string }[] | null;
+      const count = Number(queueRows?.[0]?.total_count ?? 0);
+      if (!Number.isSafeInteger(count) || count < 0) {
+        console.error(`Admin received invalid ${filter} marketplace order count.`, { count });
+        return null;
+      }
+      return count;
+    };
+    const summary: {
+      marketplaceOrdersNeedingAction?: number;
+      orderDisputeCount?: number;
+      buyerRefundCount?: number;
+    } = {};
+    if (canProcessOrders) {
+      const count = await countQueue(staffAccess ? "processing" : "needs_action");
+      if (count === null) {
+        return NextResponse.json({ error: "Could not load marketplace orders needing action." }, { status: 503 });
+      }
+      summary.marketplaceOrdersNeedingAction = count;
     }
-    return NextResponse.json(
-      { marketplaceOrdersNeedingAction },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    if (staffAccess && canResolveDisputes) {
+      const count = await countQueue("disputes");
+      if (count === null) {
+        return NextResponse.json({ error: "Could not load open marketplace disputes." }, { status: 503 });
+      }
+      summary.orderDisputeCount = count;
+    }
+    if (staffAccess && canRecordRefunds) {
+      const count = await countQueue("refund_due");
+      if (count === null) {
+        return NextResponse.json({ error: "Could not load buyer refunds due." }, { status: 503 });
+      }
+      summary.buyerRefundCount = count;
+    }
+    return NextResponse.json(summary, { headers: { "Cache-Control": "no-store" } });
   }
   const filters = new Set([
     "processing", "processing_completed", "processing_history", "processing_all",

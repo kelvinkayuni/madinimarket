@@ -1012,6 +1012,11 @@ export default function Marketplace() {
   const [userId, setUserId] = useState("");
   const [accountOrderStatusChannel, setAccountOrderStatusChannel] = useState("");
   const [marketplaceOrdersNeedingAction, setMarketplaceOrdersNeedingAction] = useState(0);
+  const [staffMarketplaceQueueCounts, setStaffMarketplaceQueueCounts] = useState<{
+    userId: string;
+    disputes: number;
+    refunds: number;
+  } | null>(null);
   const [staffDeliveryTaskCount, setStaffDeliveryTaskCount] = useState<{ userId: string; count: number } | null>(null);
   const [cartListingIds, setCartListingIds] = useState<Set<number>>(() => new Set());
   const [cartListingAccountId, setCartListingAccountId] = useState("");
@@ -1377,7 +1382,12 @@ export default function Marketplace() {
     };
   }, [accountOrderStatusChannel, role, userId]);
   useEffect(() => {
-    if ((role !== "admin" && !(role === "staff" && staffPermissions.includes("marketplace_orders"))) ||
+    const canViewMarketplaceQueueCounts = role === "admin" || (role === "staff" && (
+      staffPermissions.includes("marketplace_orders") ||
+      staffPermissions.includes("order_disputes") ||
+      staffPermissions.includes("buyer_refunds")
+    ));
+    if (!canViewMarketplaceQueueCounts ||
       !userId || !isSupabaseConfigured) return;
     let active = true;
     let loading = false;
@@ -1395,10 +1405,21 @@ export default function Marketplace() {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? "Could not load marketplace orders needing action.");
-        if (!Number.isSafeInteger(result.marketplaceOrdersNeedingAction) || result.marketplaceOrdersNeedingAction < 0) {
-          throw new Error("Marketplace orders needing action count is invalid.");
+        if (role === "admin" || staffPermissions.includes("marketplace_orders")) {
+          if (!Number.isSafeInteger(result.marketplaceOrdersNeedingAction) || result.marketplaceOrdersNeedingAction < 0) {
+            throw new Error("Marketplace orders needing action count is invalid.");
+          }
+          if (active) setMarketplaceOrdersNeedingAction(result.marketplaceOrdersNeedingAction);
         }
-        if (active) setMarketplaceOrdersNeedingAction(result.marketplaceOrdersNeedingAction);
+        if (role === "staff") {
+          const disputes = staffPermissions.includes("order_disputes") ? result.orderDisputeCount : 0;
+          const refunds = staffPermissions.includes("buyer_refunds") ? result.buyerRefundCount : 0;
+          if ((staffPermissions.includes("order_disputes") && (!Number.isSafeInteger(disputes) || disputes < 0)) ||
+            (staffPermissions.includes("buyer_refunds") && (!Number.isSafeInteger(refunds) || refunds < 0))) {
+            throw new Error("Staff marketplace queue count is invalid.");
+          }
+          if (active) setStaffMarketplaceQueueCounts({ userId, disputes, refunds });
+        }
       } catch (error) {
         if (active) console.error("Could not refresh marketplace orders needing action.", error);
       } finally {
@@ -4482,6 +4503,8 @@ export default function Marketplace() {
     const staffCanOrders = staffCan("marketplace_orders");
     const staffCanDisputes = staffCan("order_disputes");
     const staffCanRefunds = staffCan("buyer_refunds");
+    const staffOpenDisputeCount = staffMarketplaceQueueCounts?.userId === userId ? staffMarketplaceQueueCounts.disputes : 0;
+    const staffBuyerRefundCount = staffMarketplaceQueueCounts?.userId === userId ? staffMarketplaceQueueCounts.refunds : 0;
     const staffCanAccountStatus = staffCan("account_status_management");
     const staffCanAccountDeletion = staffCan("account_deletion");
     const canOpenReviewPanel = role === "admin"
@@ -4588,8 +4611,8 @@ export default function Marketplace() {
                 {staffCan("homepage_headlines") && <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}>Homepage Display</button>}
                 {staffCan("subscription_payment_confirmations") && <button className={activeAdminPanel === "subscriptions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("subscriptions"); setAdminMenuOpen(false); void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not load subscription payments."); } }); }}>Subscription Payment Confirmations<span>{pendingSubscriptions.length}</span></button>}
                 {staffCanOrders && <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}>Marketplace Orders Processing<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>}
-                {staffCanDisputes && <button className={activeAdminPanel === "order-disputes" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-disputes"); setAdminMenuOpen(false); }}>Order Disputes</button>}
-                {staffCanRefunds && <button className={activeAdminPanel === "buyer-refunds" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("buyer-refunds"); setAdminMenuOpen(false); }}>Buyer Refunds</button>}
+                {staffCanDisputes && <button className={activeAdminPanel === "order-disputes" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("order-disputes"); setAdminMenuOpen(false); }}>Order Disputes<span aria-label={`${staffOpenDisputeCount} open disputes`}>{staffOpenDisputeCount}</span></button>}
+                {staffCanRefunds && <button className={activeAdminPanel === "buyer-refunds" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("buyer-refunds"); setAdminMenuOpen(false); }}>Buyer Refunds<span aria-label={`${staffBuyerRefundCount} buyer refunds due`}>{staffBuyerRefundCount}</span></button>}
                 {staffCan("delivery_confirmation") && <button className={activeAdminPanel === "delivery" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("delivery"); setAdminMenuOpen(false); }}>
                   Delivery confirmation{staffDeliveryTaskCount?.userId === userId && <span aria-label={`${staffDeliveryTaskCount.count} active delivery tasks`}>{staffDeliveryTaskCount.count}</span>}
                 </button>}
