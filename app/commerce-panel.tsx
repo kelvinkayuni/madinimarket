@@ -1141,7 +1141,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         {filteredBuyerHistory.length
           ? <div className="commerce-list commerce-history-list">{visibleBuyerHistory.map((order) => renderBuyerOrder(order, true))}</div>
           : <p className="commerce-note">{buyerOrderHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
-        {renderOrderPagination(filteredBuyerHistory.length, currentBuyerHistoryPage, buyerHistoryPageCount, "buying history orders", setBuyerHistoryPage)}
+        {filteredBuyerHistory.length > orderPageSize && renderOrderPagination(filteredBuyerHistory.length, currentBuyerHistoryPage, buyerHistoryPageCount, "buying history orders", setBuyerHistoryPage)}
         {buyerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("buyer")}>{historyLoading === "buyer" ? "Loading…" : "Load older orders"}</button>}
       </details>
     </section>}
@@ -1215,7 +1215,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         {filteredSellerHistory.length
           ? <div className="commerce-list commerce-history-list">{visibleSellerHistory.map((item) => renderSellerItem(item, true))}</div>
           : <p className="commerce-note">{sellerItemHistory.length ? "No history orders match your search and status filter." : "No completed or closed orders yet."}</p>}
-        {renderOrderPagination(filteredSellerHistory.length, currentSellerHistoryPage, sellerHistoryPageCount, "selling history items", setSellerHistoryPage)}
+        {filteredSellerHistory.length > orderPageSize && renderOrderPagination(filteredSellerHistory.length, currentSellerHistoryPage, sellerHistoryPageCount, "selling history items", setSellerHistoryPage)}
         {sellerHistoryHasMore && <button className="button button-outline commerce-history-more" type="button" disabled={historyLoading !== ""} onClick={() => void loadOlderHistory("seller")}>{historyLoading === "seller" ? "Loading…" : "Load older orders"}</button>}
       </details>
     </section>}
