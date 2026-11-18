@@ -856,7 +856,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <strong className="commerce-order-summary-total">{amount(order.total_amount, order.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
     </summary>
-    <div className="commerce-order-details">
+    <div className={`commerce-order-details${history ? " commerce-order-details-history" : ""}`}>
     {history
       ? <div className="commerce-history-entry-header">
           <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
@@ -891,7 +891,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <input type="hidden" name="orderId" value={order.id} />
       <button className="button button-dark" type="submit" disabled={busy === `payment-${order.id}` || !data.paymentMethods.length}>{busy === `payment-${order.id}` ? "Submitting…" : !data.paymentMethods.length ? "Payment details unavailable" : "Submit proof for verification"}</button>
     </form>}
-    {(order.items ?? []).map((item) => <div className="commerce-order-item" key={item.id}>
+    {(order.items ?? []).map((item) => <div className={`commerce-order-item${history ? " commerce-order-item-history-content" : ""}`} key={item.id}>
       <div>
         <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
         <small>Total {amount(item.total_price, item.currency)}</small>
@@ -942,7 +942,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <strong className="commerce-order-summary-total">{amount(item.seller_amount, item.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
     </summary>
-    <div className="commerce-order-details">
+    <div className={`commerce-order-details${history ? " commerce-order-details-history" : ""}`}>
     <div className={`commerce-order-item${history ? " commerce-order-item-history" : ""}`}>
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
       <small>Order {item.order?.control_number}</small>
