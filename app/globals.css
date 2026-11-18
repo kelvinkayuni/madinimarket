@@ -690,8 +690,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-history { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding-top: 4px; }
 .commerce-order-section > .commerce-history { gap: 10px; padding: 10px 12px; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-history-list { max-height: 390px; padding-right: 5px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.commerce-history > summary { grid-column: 1 / -1; grid-row: 1; min-height: 30px; cursor: pointer; color: #526052; font-size: 12px; font-weight: 600; list-style-position: inside; }
-.commerce-history:has(> .commerce-history-clear) > summary { padding-right: 145px; }
+.commerce-history > summary { grid-column: 1; grid-row: 1; min-height: 30px; cursor: pointer; color: #526052; font-size: 12px; font-weight: 600; list-style-position: inside; }
 .commerce-history[open] > summary { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .commerce-history > .commerce-history-clear { grid-column: 2; grid-row: 1; align-self: center; justify-self: end; }
 .commerce-history > :not(summary):not(.commerce-history-clear) { grid-column: 1 / -1; }
