@@ -908,7 +908,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
       return <div className="commerce-delivery-details" key={shipmentGroupKey}>
         <strong>Shipment · {items.length} {items.length === 1 ? "item" : "items"}</strong>
         <span>Carrier: {items[0].shipping_carrier} · Tracking number: {items[0].tracking_number}</span>
-        <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</li>)}</ul>
         {receiptItem && <div className="commerce-item-actions">
           <button className="button button-dark" type="button" disabled={busy === `receipt-${receiptItem.id}`} onClick={() => void perform(`receipt-${receiptItem.id}`, "confirm_receipt", { itemId: receiptItem.id })}>{busy === `receipt-${receiptItem.id}` ? "Confirming receipt…" : "I received this shipment"}</button>
           <small>Only confirm if you have the package and everything is okay. After confirming, you cannot report a delivery issue.</small>
