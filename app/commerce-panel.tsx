@@ -944,7 +944,13 @@ export default function CommercePanel({ onNotice, onCounters }: {
     </div>
   </details>;
   };
-  const renderSellerItem = (item: OrderItem, history = false) => <details className="commerce-seller-order-item" key={item.id}>
+  const renderSellerItem = (item: OrderItem, history = false) => {
+    const deliveryShownInShipmentGroup = !history &&
+      item.status === "paid" &&
+      !item.shipping_carrier?.trim() &&
+      !item.tracking_number?.trim();
+
+    return <details className="commerce-seller-order-item" key={item.id}>
     <summary className="commerce-order-summary">
       <span><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small><span className="commerce-order-number">Order {item.order?.control_number}</span></small></span>
       <span className="commerce-order-summary-status">{history && !["expired", "cancelled", "unavailable", "refunded", "payout_paid"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</span>
@@ -983,7 +989,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <p className="commerce-warning">This mineral is hidden from the public market. Confirm that it is in stock before relisting it.</p>
       <button className="button button-outline" type="button" disabled={busy === `relist-${item.id}`} onClick={() => void perform(`relist-${item.id}`, "relist_unavailable", { itemId: item.id })}>{busy === `relist-${item.id}` ? "Relisting…" : "Confirm stock and relist"}</button>
     </div>}
-    {["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status) && item.order?.buyer_name && <div className="commerce-delivery-details">
+    {["paid", "shipped", "delivered", "disputed", "payout_due", "payout_paid", "refund_due", "refunded"].includes(item.status) && item.order?.buyer_name && !deliveryShownInShipmentGroup && <div className="commerce-delivery-details">
       <strong>Deliver to</strong>
       <span>{item.order.buyer_name} · {item.order.buyer_phone}</span>
       <span>{item.order.delivery_address}, {item.order.delivery_district}, {item.order.delivery_region}, {item.order.delivery_country}</span>
@@ -993,6 +999,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     </div>
     </div>
   </details>;
+  };
 
   return <div className="commerce-panel">
     <div className="dialog-kicker">BUYER & SELLER ORDERS</div>
@@ -1178,6 +1185,11 @@ export default function CommercePanel({ onNotice, onCounters }: {
             return <div className="commerce-order-item" key={`shipment-${firstItem.order?.id}`}>
               <div>
                 <strong><span className="commerce-order-number">Order {firstItem.order?.control_number}</span></strong>
+                {firstItem.order?.buyer_name && <div className="commerce-delivery-details">
+                  <strong>Deliver to</strong>
+                  <span>{firstItem.order.buyer_name} · {firstItem.order.buyer_phone}</span>
+                  <span>{firstItem.order.delivery_address}, {firstItem.order.delivery_district}, {firstItem.order.delivery_region}, {firstItem.order.delivery_country}</span>
+                </div>}
                 <small>Enter one carrier and tracking number for these {group.length} {group.length === 1 ? "item" : "items"} going to the same delivery address.</small>
                 {group.map((item) => <span key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</span>)}
               </div>
