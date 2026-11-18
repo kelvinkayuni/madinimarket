@@ -687,12 +687,16 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-order-subsection { display: grid; gap: 10px; }
 .commerce-order-subsection > h4 { display: flex; align-items: center; gap: 5px; margin: 0; color: #405544; font-size: 12px; font-weight: 700; }
 .commerce-section-count { min-width: 21px; height: 21px; display: inline-grid; place-items: center; margin-left: 5px; border-radius: 50%; background: #e6eddf; color: #355443; font: 600 10px var(--font-body), sans-serif; vertical-align: 2px; }
-.commerce-history { display: grid; gap: 12px; padding-top: 4px; }
+.commerce-history { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding-top: 4px; }
 .commerce-order-section > .commerce-history { gap: 10px; padding: 10px 12px; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-history-list { max-height: 390px; padding-right: 5px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.commerce-history > summary { cursor: pointer; color: #526052; font-size: 12px; font-weight: 600; list-style-position: inside; }
+.commerce-history > summary { grid-column: 1 / -1; grid-row: 1; min-height: 30px; cursor: pointer; color: #526052; font-size: 12px; font-weight: 600; list-style-position: inside; }
+.commerce-history:has(> .commerce-history-clear) > summary { padding-right: 145px; }
 .commerce-history[open] > summary { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.commerce-history-clear, .commerce-history-entry-delete { min-height: 30px; justify-self: start; padding: 0 9px; font-size: 9px; }
+.commerce-history > .commerce-history-clear { grid-column: 2; grid-row: 1; align-self: center; justify-self: end; }
+.commerce-history > :not(summary):not(.commerce-history-clear) { grid-column: 1 / -1; }
+.commerce-history-clear, .commerce-history-entry-delete { min-height: 30px; justify-self: end; padding: 0 9px; border-color: #e3bdb5; background: #fff0ed; color: #8b4035; font-size: 9px; }
+.commerce-history-clear.button-outline:hover, .commerce-history-entry-delete.button-outline:hover { background: #fce1dc; }
 .commerce-history-more { justify-self: start; }
 .commerce-private-thread { display: block; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-private-thread > .commerce-order-summary { padding: 10px 12px; }
@@ -807,6 +811,10 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-order-details { display: grid; gap: 8px; padding: 0 12px 12px; border-top: 1px solid #e2e8df; }
 .commerce-order-details > p { margin: 0; padding-top: 9px; color: #667366; font-size: 10px; }
 .commerce-order-item { grid-template-columns: minmax(0, 1fr); gap: 9px; border-bottom: 0; }
+.commerce-order-item-history { grid-template-columns: minmax(0, 1fr) auto; }
+.commerce-order-item-history > :not(:first-child):not(.commerce-history-entry-delete) { grid-column: 1 / -1; }
+.commerce-history-entry-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.commerce-history-entry-header > p { min-width: 0; margin: 0; padding-top: 9px; color: #667366; font-size: 10px; }
 .commerce-payment-form { margin-top: 4px; }
 .commerce-payment-form p { margin: 0; color: #68766a; font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
 .commerce-item-actions, .commerce-delivery-details { display: grid; justify-items: start; gap: 8px; }

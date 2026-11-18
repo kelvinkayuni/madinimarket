@@ -857,12 +857,16 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
     </summary>
     <div className="commerce-order-details">
-    <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
-    {history && <button className="button button-outline commerce-history-entry-delete" type="button" disabled={busy !== ""} onClick={() => {
-      if (window.confirm(`Remove order ${order.control_number} from your buying history? It will remain in Madinimarket records.`)) {
-        void perform(`hide-buyer-history-${order.id}`, "hide_order_history", { side: "buyer", entryId: order.id });
-      }
-    }}>{busy === `hide-buyer-history-${order.id}` ? "Removing…" : "Delete from history"}</button>}
+    {history
+      ? <div className="commerce-history-entry-header">
+          <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>
+          <button className="button button-outline commerce-history-entry-delete" type="button" disabled={busy !== ""} onClick={() => {
+            if (window.confirm(`Remove order ${order.control_number} from your buying history? It will remain in Madinimarket records.`)) {
+              void perform(`hide-buyer-history-${order.id}`, "hide_order_history", { side: "buyer", entryId: order.id });
+            }
+          }}>{busy === `hide-buyer-history-${order.id}` ? "Removing…" : "Delete from history"}</button>
+        </div>
+      : <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>}
     {order.payment_status === "awaiting_payment" && <form className="commerce-payment-form" onSubmit={(event) => void submitPaymentProof(event, order.id)}>
       {data.paymentMethods.length
         ? <div className="commerce-payment-methods">
@@ -939,12 +943,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
     </summary>
     <div className="commerce-order-details">
-    {history && <button className="button button-outline commerce-history-entry-delete" type="button" disabled={busy !== ""} onClick={() => {
-      if (window.confirm(`Remove this item from your selling history? It will remain in Madinimarket records.`)) {
-        void perform(`hide-seller-history-${item.id}`, "hide_order_history", { side: "seller", entryId: item.id });
-      }
-    }}>{busy === `hide-seller-history-${item.id}` ? "Removing…" : "Delete from history"}</button>}
-    <div className="commerce-order-item">
+    <div className={`commerce-order-item${history ? " commerce-order-item-history" : ""}`}>
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
       <small>Order {item.order?.control_number}</small>
       <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
@@ -961,6 +960,11 @@ export default function CommercePanel({ onNotice, onCounters }: {
       </div>}
       {item.payout_receipt_url && !item.payout_group_key && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
     </div>
+    {history && <button className="button button-outline commerce-history-entry-delete" type="button" disabled={busy !== ""} onClick={() => {
+      if (window.confirm(`Remove this item from your selling history? It will remain in Madinimarket records.`)) {
+        void perform(`hide-seller-history-${item.id}`, "hide_order_history", { side: "seller", entryId: item.id });
+      }
+    }}>{busy === `hide-seller-history-${item.id}` ? "Removing…" : "Delete from history"}</button>}
     {item.status === "awaiting_seller" && <div className="commerce-item-actions">
       <button className="button button-dark" type="button" disabled={busy === `available-${item.id}` || busy === `unavailable-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>{busy === `available-${item.id}` ? "Confirming availability…" : "Available"}</button>
       <button className="button button-outline" type="button" disabled={busy === `available-${item.id}` || busy === `unavailable-${item.id}`} onClick={() => void perform(`unavailable-${item.id}`, "seller_availability", { itemId: item.id, available: false })}>{busy === `unavailable-${item.id}` ? "Updating availability…" : "Unavailable"}</button>
@@ -1003,7 +1007,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       {data.privateOffers.threads.length > 0 && <div className="commerce-collection-tools">
         <label className="commerce-order-search">Search private offers<input className="text-input" type="search" value={privateOfferSearch} placeholder="Mineral, seller, or request number" onChange={(event) => { setPrivateOfferSearch(event.target.value); }} /></label>
         <label className="commerce-order-filter">Offer status<select className="text-input" value={privateOfferStatusFilter} onChange={(event) => { setPrivateOfferStatusFilter(event.target.value); }}><option value="all">All offers</option><option value="open">Open</option><option value="closed">Closed</option></select></label>
-        {data.privateOffers.threads.some((thread) => thread.state === "closed") && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Clear all closed private offers from your view?")) void performPrivateOffer("clear-closed-offers", { action: "clear_closed_offer_threads" }); }}>Clear closed offers</button>}
+        {data.privateOffers.threads.some((thread) => thread.state === "closed") && <button className="button button-outline commerce-history-clear" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Clear all closed private offers from your view?")) void performPrivateOffer("clear-closed-offers", { action: "clear_closed_offer_threads" }); }}>Clear closed offers</button>}
       </div>}
       {data.privateOffers.threads.length ? <div className="commerce-private-board">
         <details className="commerce-private-role-group" open>
