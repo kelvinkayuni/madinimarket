@@ -862,7 +862,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
 
     return <details className="commerce-order" key={order.id}>
     <summary className="commerce-order-summary">
-      <span><strong><span className="commerce-order-number">Order {order.control_number}</span></strong>{!history && <small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small>}</span>
+      <span><strong><span className="commerce-order-number">Order {order.control_number}</span></strong></span>
       <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : buyerOrderStatusLabel(order)}</span>
       <strong className="commerce-order-summary-total">{amount(order.total_amount, order.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
@@ -876,7 +876,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             }
           }}>{busy === `hide-buyer-history-${order.id}` ? "Removing…" : "Delete from history"}</button>
         </div>
-      : <p>{amount(order.total_amount, order.currency)}{order.payment_deadline && order.payment_status === "awaiting_payment" ? ` · Pay by ${new Date(order.payment_deadline).toLocaleString()}` : ""}</p>}
+      : order.payment_deadline && order.payment_status === "awaiting_payment" && <p>Pay by {new Date(order.payment_deadline).toLocaleString()}</p>}
     {order.payment_status === "awaiting_payment" && <form className="commerce-payment-form" onSubmit={(event) => void submitPaymentProof(event, order.id)}>
       {data.paymentMethods.length
         ? <div className="commerce-payment-methods">
@@ -904,7 +904,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     {(order.items ?? []).map((item) => <div className={`commerce-order-item${history ? " commerce-order-item-history-content" : ""}`} key={item.id}>
       <div>
         <strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-        <small>Total {amount(item.total_price, item.currency)}</small>
+        {history && <small>Total {amount(item.total_price, item.currency)}</small>}
         {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market is arranging the seller’s payment. No action is needed from you.</small>}
       </div>
     </div>)}
