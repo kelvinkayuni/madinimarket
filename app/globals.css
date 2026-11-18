@@ -695,8 +695,8 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-history[open] > summary { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .commerce-history > .commerce-history-clear { grid-column: 2; grid-row: 1; align-self: center; justify-self: end; }
 .commerce-history > :not(summary):not(.commerce-history-clear) { grid-column: 1 / -1; }
-.commerce-history-clear, .commerce-history-entry-delete { min-height: 30px; justify-self: end; padding: 0 9px; border-color: #e3bdb5; background: #fff0ed; color: #8b4035; font-size: 9px; }
-.commerce-history-clear.button-outline:hover, .commerce-history-entry-delete.button-outline:hover { background: #fce1dc; }
+.commerce-history-clear, .commerce-history-entry-delete { min-height: 30px; justify-self: end; padding: 0 9px; border-color: var(--forest); background: var(--forest); color: #fff; font-size: 9px; }
+.commerce-history-clear.button-outline:hover, .commerce-history-entry-delete.button-outline:hover { border-color: #254c3f; background: #254c3f; }
 .commerce-history-more { justify-self: start; }
 .commerce-private-thread { display: block; border: 1px solid #e2e8df; background: #fbfcf9; }
 .commerce-private-thread > .commerce-order-summary { padding: 10px 12px; }
