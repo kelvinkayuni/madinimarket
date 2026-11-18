@@ -1,6 +1,18 @@
 # Madinimarket
 
-Madinimarket is a marketplace concept for buying and selling minerals in Tanzania and beyond. The current frontend prototype includes searchable seller listings, buyer requests, account modals, and listing forms.
+Madinimarket is a full-stack marketplace for buying and selling minerals in Tanzania and beyond. The website combines a public mineral marketplace with buyer and seller accounts, order processing, subscriptions, private offers, and admin and staff workspaces. It is built with Next.js, React, TypeScript, and Supabase.
+
+## Current website features
+
+- **Public marketplace:** Browse approved mineral listings and buyer requests, search by mineral or location, and view market content when the admin-configured weekly schedule is open. The admin controls whether USD is available alongside TSh.
+- **Buyer and seller accounts:** Website accounts use generated `MM-####` usernames. Sellers manage their listings and buyer requests, submit dealer/broker licence documents, and manage subscriptions. Buyers can shop from listings, manage their orders, and receive or respond to private offers.
+- **Submissions and subscriptions:** Seller listings and buyer requests are reviewed before appearing publicly. Seller/buyer subscriptions are managed through payment instructions, payment-reference and receipt submission, and admin or authorized staff review.
+- **Orders and Cart:** Signed-in users can manage their cart, private offers, active buying and selling orders, and order history. The purchase workflow supports seller availability checks, manual payment verification, shipping details, delivery confirmation, buyer receipt, disputes, refunds, and seller payouts.
+- **Private offers:** Eligible sellers can make offers on buyer requests. Accepted offers continue through the standard order workflow without publishing the private mineral as a public listing.
+- **Help and support:** Website users can submit support requests and attachments and continue the conversation from their account. Admins and staff with Support Inbox access respond through the support workspace.
+- **Admin and staff workspaces:** Admins configure and review marketplace operations. Staff see only the workspaces allowed by their assigned roles; queue counts help identify pending tasks.
+
+The sections below describe local development, Supabase setup, the order lifecycle, private offers, and account data. This is a marketplace and accounting workflow, not an escrow service or automatic payment-transfer system.
 
 ## Run locally
 
@@ -92,3 +104,11 @@ Active subscription plan prices are readable through the public Data API. Subscr
 - Only the admin signs in through Supabase Auth. The server checks the profile's admin role before issuing a Supabase session.
 - Website users can submit and manage their own pending or rejected requests; the admin reviews submissions using the Supabase-backed queue.
 - Website users must submit an approved dealer or broker licence before they can list a mineral. Licence files are private and accept PDF, JPEG, or PNG up to 10 MB; admin rejection requires a reason before the user can replace and resubmit a licence.
+
+## Admin and staff workspaces
+
+- **Admin:** The admin manages seller/buyer accounts, listing and request reviews, subscription plans and payment decisions, buyer payment instructions, market hours, currencies, listing fees, order time limits, order processing, delivery confirmation, disputes, refunds, the sales ledger, translations, homepage content, staff roles, and support.
+- **Staff:** Staff access is role-based. The admin assigns permissions for seller/buyer accounts, submission reviews, subscriptions, marketplace order processing, delivery confirmation, order disputes, buyer refunds, support, translations, and homepage display. Separate permissions govern account activation/deactivation and permanent account deletion. Account creation, non-admin sign-in suspension, and sign-out-all controls remain admin-only.
+- **Separate queues:** Order processing, delivery confirmation, open disputes, and buyer refunds are separate staff workspaces. The staff menu shows each dispute or refund queue count only to staff assigned that permission, including `0` when the queue is empty. The admin menu is not changed by these staff-only counts.
+- **Task claims:** Where a staff action requires a claim, staff claim the task before acting. The interface shows who is handling a claimed task and enables the relevant action controls only for the staff member holding the claim. Staff can release a claim when finished or when another staff member should take over.
+- **Support:** Website users can create support requests with a category, subject, message, and optional PDF/JPEG/PNG attachments. Admins and staff with Support Inbox permission can reply; staff must claim a conversation before changing it. Conversation and message deletion by a user hides the content only from that user's view, while staff/admin deletion removes a conversation for everyone.
