@@ -1230,11 +1230,51 @@ export default function CommercePanel({ onNotice, onCounters }: {
           {selectedPrivateThread.request
             ? <div className="private-offer-comparison">
                 {selectedPrivateThread.side === "buyer"
-                  ? <div className="private-offer-compare-column"><span className="private-offer-compare-title">Your original request</span><strong>{selectedPrivateThread.request.mineral_name}</strong><span>{selectedPrivateThread.request.weight} {selectedPrivateThread.request.unit}</span><span>{selectedPrivateThread.request.color} · {selectedPrivateThread.request.shape} · {selectedPrivateThread.request.quality}</span><span>Location: {selectedPrivateThread.request.location}</span><strong className="private-offer-request-price">Your requested offer: {amount(selectedPrivateThread.request.offer, selectedPrivateThread.request.currency)}</strong></div>
-                  : <div className="private-offer-compare-column"><span className="private-offer-compare-title">Your offer</span><strong>{offer.mineral_name}</strong><span>{offer.weight} {offer.unit}</span><span>{offer.color} · {offer.shape} · {offer.quality}</span><span>Location: {offer.district}, {offer.region}, {offer.country}</span><strong className="private-offer-total-price">Seller’s offer — buyer should pay a total of: {amount(offer.total_price, offer.currency)}</strong></div>}
+                ? <div className="private-offer-compare-column">
+                    <span className="private-offer-compare-title">Your original request</span>
+                    <span><strong>Mineral name:</strong> {selectedPrivateThread.request.mineral_name}</span>
+                    <span><strong>Total weight:</strong> {selectedPrivateThread.request.weight} {selectedPrivateThread.request.unit}</span>
+                    <span><strong>Color:</strong> {selectedPrivateThread.request.color}</span>
+                    <span><strong>Shape:</strong> {selectedPrivateThread.request.shape}</span>
+                    <span><strong>Quality:</strong> {selectedPrivateThread.request.quality}</span>
+                    <span><strong>Location:</strong> {selectedPrivateThread.request.location}</span>
+                    <strong className="private-offer-request-price">Your requested offer: {amount(selectedPrivateThread.request.offer, selectedPrivateThread.request.currency)}</strong>
+                  </div>
+                : <div className="private-offer-compare-column">
+                    <span className="private-offer-compare-title">Your offer</span>
+                    <span><strong>Mineral name:</strong> {offer.mineral_name}</span>
+                    <span><strong>Total weight:</strong> {offer.weight} {offer.unit}</span>
+                    <span><strong>Color:</strong> {offer.color}</span>
+                    <span><strong>Shape:</strong> {offer.shape}</span>
+                    <span><strong>Quality:</strong> {offer.quality}</span>
+                    <span><strong>Country:</strong> {offer.country}</span>
+                    <span><strong>Region:</strong> {offer.region}</span>
+                    <span><strong>District:</strong> {offer.district}</span>
+                    <strong className="private-offer-total-price">Seller’s offer — buyer should pay a total of: {amount(offer.total_price, offer.currency)}</strong>
+                  </div>}
                 {selectedPrivateThread.side === "buyer"
-                  ? <div className="private-offer-compare-column"><span className="private-offer-compare-title">Seller’s offer</span><strong>{offer.mineral_name}</strong><span>{offer.weight} {offer.unit}</span><span>{offer.color} · {offer.shape} · {offer.quality}</span><span>Location: {offer.district}, {offer.region}, {offer.country}</span><strong className="private-offer-total-price">Seller’s offer — buyer should pay a total of: {amount(offer.total_price, offer.currency)}</strong></div>
-                  : <div className="private-offer-compare-column"><span className="private-offer-compare-title">Buyer’s original request</span><strong>{selectedPrivateThread.request.mineral_name}</strong><span>{selectedPrivateThread.request.weight} {selectedPrivateThread.request.unit}</span><span>{selectedPrivateThread.request.color} · {selectedPrivateThread.request.shape} · {selectedPrivateThread.request.quality}</span><span>Location: {selectedPrivateThread.request.location}</span><strong className="private-offer-request-price">Buyer’s requested offer: {amount(selectedPrivateThread.request.offer, selectedPrivateThread.request.currency)}</strong></div>}
+                ? <div className="private-offer-compare-column">
+                    <span className="private-offer-compare-title">Seller’s offer</span>
+                    <span><strong>Mineral name:</strong> {offer.mineral_name}</span>
+                    <span><strong>Total weight:</strong> {offer.weight} {offer.unit}</span>
+                    <span><strong>Color:</strong> {offer.color}</span>
+                    <span><strong>Shape:</strong> {offer.shape}</span>
+                    <span><strong>Quality:</strong> {offer.quality}</span>
+                    <span><strong>Country:</strong> {offer.country}</span>
+                    <span><strong>Region:</strong> {offer.region}</span>
+                    <span><strong>District:</strong> {offer.district}</span>
+                    <strong className="private-offer-total-price">Seller’s offer — buyer should pay a total of: {amount(offer.total_price, offer.currency)}</strong>
+                  </div>
+                : <div className="private-offer-compare-column">
+                    <span className="private-offer-compare-title">Buyer’s original request</span>
+                    <span><strong>Mineral name:</strong> {selectedPrivateThread.request.mineral_name}</span>
+                    <span><strong>Total weight:</strong> {selectedPrivateThread.request.weight} {selectedPrivateThread.request.unit}</span>
+                    <span><strong>Color:</strong> {selectedPrivateThread.request.color}</span>
+                    <span><strong>Shape:</strong> {selectedPrivateThread.request.shape}</span>
+                    <span><strong>Quality:</strong> {selectedPrivateThread.request.quality}</span>
+                    <span><strong>Location:</strong> {selectedPrivateThread.request.location}</span>
+                    <strong className="private-offer-request-price">Buyer’s requested offer: {amount(selectedPrivateThread.request.offer, selectedPrivateThread.request.currency)}</strong>
+                  </div>}
                 {selectedPrivateThread.request.currency === offer.currency && <p className="private-offer-difference">{offerDifference(selectedPrivateThread.request.offer, offer.total_price, offer.currency, selectedPrivateThread.side)}</p>}
               </div>
             : <p>Seller’s offer — buyer should pay a total of: <strong>{amount(offer.total_price, offer.currency)}</strong>{offer.seller_amount !== undefined && offer.platform_fee_amount !== undefined ? ` · Seller price ${amount(offer.seller_amount, offer.currency)} + Madinimarket fee ${amount(offer.platform_fee_amount, offer.currency)}` : ""}</p>}
