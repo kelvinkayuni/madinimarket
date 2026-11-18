@@ -851,7 +851,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
 
     return <details className="commerce-order" key={order.id}>
     <summary className="commerce-order-summary">
-      <span><strong>Order {order.control_number}</strong><small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small></span>
+      <span><strong>Order {order.control_number}</strong>{!history && <small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small>}</span>
       <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : buyerOrderStatusLabel(order)}</span>
       <strong className="commerce-order-summary-total">{amount(order.total_amount, order.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
