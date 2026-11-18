@@ -673,6 +673,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
 
   const performPrivateOffer = async (key: string, values: Record<string, unknown>) => {
     setBusy(key);
+    let actionSucceeded = false;
     try {
       const response = await fetchWithWebsiteSession("/api/marketplace-offers", {
         method: "POST",
@@ -681,6 +682,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "The private offer action could not be completed.");
+      actionSucceeded = true;
       await refresh();
       if (values.action === "checkout_offer" && result.order?.control_number) {
         setSelectedPrivateThreadId(null);
@@ -713,8 +715,10 @@ export default function CommercePanel({ onNotice, onCounters }: {
       } else {
         onNotice("Private offer sent. The buyer can review it in their account.");
       }
+      return true;
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "The private offer action could not be completed.");
+      return actionSucceeded;
     } finally {
       setBusy("");
     }
@@ -813,6 +817,13 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const visibleBuyerPrivateThreads = filteredPrivateThreads.filter((thread) => thread.side === "buyer");
   const visibleSellerPrivateThreads = filteredPrivateThreads.filter((thread) => thread.side === "seller");
   const selectedPrivateThread = data.privateOffers.threads.find((thread) => thread.id === selectedPrivateThreadId) ?? null;
+  const selectedCheckoutOffer = selectedPrivateThread?.offers[selectedPrivateThread.offers.length - 1] ?? null;
+  const checkoutOfferKey = selectedCheckoutOffer ? `checkout-offer-${selectedCheckoutOffer.id}` : "";
+  const cancelAcceptanceKey = selectedCheckoutOffer ? `cancel-acceptance-${selectedCheckoutOffer.id}` : "";
+  const checkoutBusy = checkoutOfferKey !== "" && busy === checkoutOfferKey;
+  const cancelAcceptanceBusy = cancelAcceptanceKey !== "" && busy === cancelAcceptanceKey;
+  const acceptOfferKey = acceptOffer ? `offer-${acceptOffer.id}` : "";
+  const acceptOfferBusy = acceptOfferKey !== "" && busy === acceptOfferKey;
   const buyerActivePageCount = Math.max(1, Math.ceil(filteredActiveBuyerOrders.length / orderPageSize));
   const buyerHistoryPageCount = Math.max(1, Math.ceil(filteredBuyerHistory.length / orderPageSize));
   const sellerActivePageCount = Math.max(1, Math.ceil(filteredActiveSellerItems.length / orderPageSize));
@@ -1289,21 +1300,20 @@ export default function CommercePanel({ onNotice, onCounters }: {
           {selectedPrivateThread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}<br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</p>}
           {selectedPrivateThread.side === "seller" && (offer.status === "accepted" || offer.status === "awaiting_buyer_checkout") && <p className="commerce-note"><strong>Buyer accepted your offer.</strong> The buyer can now enter delivery details.</p>}
         </PrivateOfferScrollPanel>)}
-        {selectedPrivateThread.side === "buyer" && selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => { event.preventDefault(); const offer = selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]; void performPrivateOffer(`checkout-offer-${offer.id}`, { action: "checkout_offer", offerId: offer.id, buyerName, buyerPhone, country, region, district, address }); }}>
+        {selectedPrivateThread.side === "buyer" && selectedCheckoutOffer?.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => { event.preventDefault(); if (busy !== "") return; void performPrivateOffer(checkoutOfferKey, { action: "checkout_offer", offerId: selectedCheckoutOffer.id, buyerName, buyerPhone, country, region, district, address }); }}>
           <h4>Confirm mineral and delivery details</h4>
-          <p className="commerce-note">{selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.availability_confirmed_at
+          <p className="commerce-note">{selectedCheckoutOffer.availability_confirmed_at
             ? "The seller confirmed availability when sending this offer. Confirm your delivery details to create the order; the payment deadline starts after checkout."
             : "Confirm your delivery details to create the order. The seller must confirm availability before the payment window begins."}</p>
           <label className="field-label">Buyer name<input className="text-input" required maxLength={120} value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></label>
           <label className="field-label">Phone number<input className="text-input" required maxLength={40} value={buyerPhone} onChange={(event) => setBuyerPhone(event.target.value)} /></label>
           <div className="field-row"><label className="field-label">Country<input className="text-input" required value={country} onChange={(event) => setCountry(event.target.value)} /></label><label className="field-label">Region<input className="text-input" required value={region} onChange={(event) => setRegion(event.target.value)} /></label><label className="field-label">District<input className="text-input" required value={district} onChange={(event) => setDistrict(event.target.value)} /></label><label className="field-label">Street / address<input className="text-input" required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} /></label></div>
-          <button className="button button-dark" type="submit">Confirm and continue</button>
-          <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => {
-            const offer = selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1];
+          <button className="button button-dark" type="submit" disabled={busy !== ""} aria-busy={checkoutBusy}>{checkoutBusy ? "Confirming…" : "Confirm and continue"}</button>
+          <button className="button button-outline" type="button" disabled={busy !== ""} aria-busy={cancelAcceptanceBusy} onClick={() => {
             if (window.confirm("Cancel this accepted offer and make your buyer request available for new offers again?")) {
-              void performPrivateOffer(`cancel-acceptance-${offer.id}`, { action: "cancel_offer_acceptance", offerId: offer.id });
+              void performPrivateOffer(cancelAcceptanceKey, { action: "cancel_offer_acceptance", offerId: selectedCheckoutOffer.id });
             }
-          }}>Cancel accepted offer</button>
+          }}>{cancelAcceptanceBusy ? "Cancelling…" : "Cancel accepted offer"}</button>
         </form>}
         {selectedPrivateThread.side === "seller" && selectedPrivateThread.state === "open" && ["declined", "closed"].includes(selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status ?? "") && selectedPrivateThread.attempt_count < 3 && selectedPrivateThread.request && data.privateOffers.feeRate !== null && <div className="commerce-revised-offer"><h4>{selectedPrivateThread.offers[selectedPrivateThread.offers.length - 1]?.status === "closed" ? "Send a new offer" : "Send a revised offer"} ({selectedPrivateThread.attempt_count}/3 used)</h4><PrivateOfferForm requestId={selectedPrivateThread.request_id} threadId={selectedPrivateThread.id} feeRate={data.privateOffers.feeRate} usdEnabled={data.privateOffers.usdEnabled} defaultCurrency={data.privateOffers.usdEnabled ? selectedPrivateThread.request.currency : "TZS"} submitting={busy === `revise-offer-${selectedPrivateThread.id}`} onSubmit={(details) => void performPrivateOffer(`revise-offer-${selectedPrivateThread.id}`, details)} /></div>}
         <div className="dialog-actions">
@@ -1316,13 +1326,13 @@ export default function CommercePanel({ onNotice, onCounters }: {
             }
           }}>{selectedPrivateThread.side === "seller" ? "Withdraw offer" : "Close offer"}</button>}
           {selectedPrivateThread.state === "closed" && <button className="button button-outline" type="button" disabled={busy !== ""} onClick={() => { if (window.confirm("Delete this closed private offer from your view?")) void performPrivateOffer(`delete-offer-${selectedPrivateThread.id}`, { action: "delete_closed_offer_thread", threadId: selectedPrivateThread.id }); }}>Delete closed offer</button>}
-          <button className="button button-dark" type="button" onClick={() => setSelectedPrivateThreadId(null)}>Close panel</button>
+          <button className="button button-dark" type="button" disabled={busy !== ""} onClick={() => setSelectedPrivateThreadId(null)}>Close panel</button>
         </div>
       </div>
     </div>}
     {!acceptOffer && !declineOffer && <CommerceDialogScrollIndicator />}
-    {(acceptOffer || declineOffer) && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) { setAcceptOffer(null); setDeclineOffer(null); } }}>
-      {acceptOffer && <div className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="accept-offer-title">
+    {(acceptOffer || declineOffer) && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target && busy === "") { setAcceptOffer(null); setDeclineOffer(null); } }}>
+      {acceptOffer && <div className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="accept-offer-title" aria-busy={acceptOfferBusy}>
         <div className="dialog-kicker">CONFIRM PURCHASE</div>
         <h2 id="accept-offer-title">Accept this offer to buy?</h2>
         {acceptRequestOffer !== null && <p><strong>Your requested offer:</strong> {amount(acceptRequestOffer, acceptRequestCurrency)}</p>}
@@ -1335,7 +1345,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           ? "The seller confirmed availability with this offer. Confirming your delivery details starts the payment window."
           : "The seller will confirm availability after checkout."}</p>
         <p className="commerce-warning">By clicking Accept to Buy, you agree to purchase this mineral at the seller’s offered total price of {amount(acceptOffer.total_price, acceptOffer.currency)}.</p>
-        <div className="dialog-actions"><button type="button" className="button button-outline" onClick={() => setAcceptOffer(null)}>Cancel</button><button type="button" className="button button-dark" disabled={busy !== ""} onClick={() => { const offer = acceptOffer; setAcceptOffer(null); void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: true }); }}>Accept to Buy</button></div>
+        <div className="dialog-actions"><button type="button" className="button button-outline" disabled={busy !== ""} onClick={() => setAcceptOffer(null)}>Cancel</button><button type="button" className="button button-dark" disabled={busy !== ""} aria-busy={acceptOfferBusy} onClick={async () => { const offer = acceptOffer; if (!offer || busy !== "") return; const succeeded = await performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: true }); if (succeeded) setAcceptOffer(null); }}>{acceptOfferBusy ? "Processing…" : "Accept to Buy"}</button></div>
       </div>}
       {declineOffer && <form className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="decline-offer-title" onSubmit={(event) => { event.preventDefault(); const offer = declineOffer; if (!declineReason) return; setDeclineOffer(null); void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: false, declineReason, declineExplanation }); }}>
         <div className="dialog-kicker">DECLINE OFFER</div>
