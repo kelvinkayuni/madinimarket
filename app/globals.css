@@ -918,9 +918,9 @@ h1, h2, h3, p { margin-top: 0; }
 .bank-information-error { color: #8e3d32; font-size: 11px; }
 .bank-information-form .text-input:disabled { background: #f5f6f3; color: #687368; }
 @media (max-width: 560px) {
-  .dialog-panel:has(.commerce-panel) { width: 100%; padding: 27px 50px 28px 17px; scrollbar-width: none; }
+  .dialog-panel:has(.commerce-panel) { width: 100%; padding: 27px 50px 28px 25px; scrollbar-width: none; }
   .dialog-panel:has(.commerce-panel)::-webkit-scrollbar { display: none; }
-  .commerce-dialog-scrollbar { position: fixed; z-index: 10; top: max(68px, env(safe-area-inset-top)); right: 10px; bottom: max(14px, env(safe-area-inset-bottom)); width: 34px; display: block; border: 0; border-radius: 999px; background: transparent; touch-action: none; user-select: none; visibility: hidden; }
+  .commerce-dialog-scrollbar { position: fixed; z-index: 10; top: max(68px, env(safe-area-inset-top)); right: 3px; bottom: max(14px, env(safe-area-inset-bottom)); width: 34px; display: block; border: 0; border-radius: 999px; background: transparent; touch-action: none; user-select: none; visibility: hidden; }
   .commerce-dialog-scrollbar[data-visible="true"] { visibility: visible; }
   .commerce-dialog-scrollbar:focus-visible { outline: 2px solid #58805e; outline-offset: 2px; }
   .commerce-dialog-scrollbar-thumb { right: 13px; left: 13px; width: auto; }
