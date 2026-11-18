@@ -1727,3 +1727,8 @@ h1, h2, h3, p { margin-top: 0; }
 .user-account-record { margin-bottom: 8px; padding: 0 10px; background: #fff; }
 .user-subscription-plan { background: #fff; }
 .commerce-order-section { border-color: var(--panel-outline); }
+
+.commerce-order-tools,
+.commerce-collection-tools {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
