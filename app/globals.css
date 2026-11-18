@@ -859,7 +859,7 @@ h1, h2, h3, p { margin-top: 0; }
   .commerce-cart-layout { grid-template-columns: minmax(0, 1fr); }
 }
 .commerce-order-search, .commerce-order-filter { display: grid; gap: 5px; margin: 0; color: #526052; font-size: 9px; font-weight: 650; }
-.commerce-order-search .text-input, .commerce-order-filter .text-input { height: 20px; min-height: 20px; padding: 0 7px; font-size: 9px; }
+.commerce-order-search .text-input, .commerce-order-filter .text-input { min-height: 36px; font-size: 10px; }
 .commerce-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #69766a; font-size: 9px; }
 .commerce-pagination > div { display: flex; align-items: center; gap: 8px; }
 .commerce-pagination .button { min-height: 30px; padding: 0 8px; font-size: 9px; }
