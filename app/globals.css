@@ -263,6 +263,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-subscription-pending { padding: 5px 8px; background: #f5eddc; color: #806131; font-size: 9px; font-weight: 700; }
 .admin-subscription-request-actions { margin-top: 12px; }
 .admin-subscription-request-actions .button { min-height: 34px; font-size: 10px; }
+.admin-subscription-request > .admin-staff-row-actions > .button-dark { min-height: 27px; }
 .user-subscription-status { display: grid; gap: 6px; margin: 14px 0; padding: 13px; border: 1px solid #dfe5dc; background: #f8faf6; }
 .user-subscription-status strong { color: #35553e; font-size: 12px; }
 .user-subscription-status span { color: #697369; font-size: 10px; line-height: 1.5; }
