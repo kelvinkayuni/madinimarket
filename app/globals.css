@@ -694,7 +694,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-history:has(> .commerce-history-clear) > summary { padding-right: 145px; }
 .commerce-history[open] > summary { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .commerce-history > .commerce-history-clear { position: absolute; top: 10px; right: 12px; }
-.commerce-history-clear, .commerce-history-entry-delete { min-height: 30px; justify-self: end; padding: 0 9px; border-color: var(--forest); background: var(--forest); color: #fff; font-size: 9px; }
+.commerce-history-clear, .commerce-history-entry-delete { min-height: 15px; justify-self: end; padding: 0 9px; border-color: var(--forest); background: var(--forest); color: #fff; font-size: 9px; }
 .commerce-history-clear.button-outline:hover, .commerce-history-entry-delete.button-outline:hover { border-color: #254c3f; background: #254c3f; }
 .commerce-history-more { justify-self: start; }
 .commerce-private-thread { display: block; border: 1px solid #e2e8df; background: #fbfcf9; }
