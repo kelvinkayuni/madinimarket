@@ -10,6 +10,7 @@
   --forest-deep: #112d26;
   --lime: #d2ee77;
   --red: #e56f50;
+  --panel-outline: #aebdaa;
 }
 
 @theme inline {
@@ -1697,3 +1698,32 @@ h1, h2, h3, p { margin-top: 0; }
   .market-intro-heading.is-overflowing .market-intro-heading-track { animation: none; }
   .market-intro-heading-group[aria-hidden="true"] { display: none; }
 }
+
+.admin-content > section,
+.admin-content > .admin-queues > .admin-queue {
+  border: 2px solid var(--panel-outline);
+  border-radius: 4px;
+  background: #fbfcf9;
+  padding: 20px;
+}
+.admin-content > section { margin-bottom: 18px; }
+.admin-review-item,
+.admin-staff-disclosure,
+.admin-staff-role-row,
+.admin-staff-row,
+.admin-account-disclosure,
+.user-account-record,
+.user-subscription-plan,
+.commerce-order-section {
+  border: 2px solid var(--panel-outline);
+  border-radius: 4px;
+}
+.admin-account-list-scroll {
+  border: 2px solid var(--panel-outline);
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+.admin-account-disclosure,
+.user-account-record { margin-bottom: 8px; padding: 0 10px; background: #fff; }
+.user-subscription-plan { background: #fff; }
+.commerce-order-section { border-color: var(--panel-outline); }
