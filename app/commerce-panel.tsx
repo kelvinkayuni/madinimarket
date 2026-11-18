@@ -862,7 +862,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
 
     return <details className="commerce-order" key={order.id}>
     <summary className="commerce-order-summary">
-      <span><strong>Order {order.control_number}</strong>{!history && <small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small>}</span>
+      <span><strong><span className="commerce-order-number">Order {order.control_number}</span></strong>{!history && <small>{(order.items ?? []).map((item) => item.mineral_name).join(", ") || "No items"}</small>}</span>
       <span className="commerce-order-summary-status">{history ? buyerOrderHistoryLabel(order) : buyerOrderStatusLabel(order)}</span>
       <strong className="commerce-order-summary-total">{amount(order.total_amount, order.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
@@ -946,7 +946,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
   };
   const renderSellerItem = (item: OrderItem, history = false) => <details className="commerce-seller-order-item" key={item.id}>
     <summary className="commerce-order-summary">
-      <span><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small>Order {item.order?.control_number}</small></span>
+      <span><strong>{item.mineral_name} · {item.weight} {item.unit}</strong><small><span className="commerce-order-number">Order {item.order?.control_number}</span></small></span>
       <span className="commerce-order-summary-status">{history && !["expired", "cancelled", "unavailable", "refunded", "payout_paid"].includes(item.status) ? "completed" : sellerOrderItemStatusLabel(item)}</span>
       <strong className="commerce-order-summary-total">{amount(item.seller_amount, item.currency)}</strong>
       <span className="commerce-disclosure-chevron" aria-hidden="true">⌄</span>
@@ -954,7 +954,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     <div className={`commerce-order-details${history ? " commerce-order-details-history" : ""}`}>
     <div className={`commerce-order-item${history ? " commerce-order-item-history" : ""}`}>
     <div><strong>{item.mineral_name} · {item.weight} {item.unit}</strong>
-      <small>Order {item.order?.control_number}</small>
+      <small><span className="commerce-order-number">Order {item.order?.control_number}</span></small>
       <small>You receive {amount(item.seller_amount, item.currency)} before any separately managed payout</small>
       {item.status === "payout_due" && <small className="commerce-payout-note">Your order is complete. Madini Market will send your payout to your registered bank account. This status will update once payment is sent, and the receipt will appear here.</small>}
       {item.payout_reference && !item.payout_group_key && <small>Seller payout reference: {item.payout_reference}</small>}
@@ -1177,7 +1177,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             const shipment = shipping[firstItem.id];
             return <div className="commerce-order-item" key={`shipment-${firstItem.order?.id}`}>
               <div>
-                <strong>Order {firstItem.order?.control_number}</strong>
+                <strong><span className="commerce-order-number">Order {firstItem.order?.control_number}</span></strong>
                 <small>Enter one carrier and tracking number for these {group.length} {group.length === 1 ? "item" : "items"} going to the same delivery address.</small>
                 {group.map((item) => <span key={item.id}>{item.mineral_name} · {item.weight} {item.unit}</span>)}
               </div>
@@ -1208,7 +1208,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             const firstItem = items[0];
             const sellerAmount = items.reduce((total, item) => total + Number(item.seller_amount), 0);
             return <div className="commerce-delivery-details commerce-seller-payout-group" key={payoutGroupKey}>
-              <strong>Order {firstItem.order?.control_number} · {items.length} {items.length === 1 ? "item" : "items"}</strong>
+              <strong><span className="commerce-order-number">Order {firstItem.order?.control_number}</span> · {items.length} {items.length === 1 ? "item" : "items"}</strong>
               {firstItem.shipping_carrier && firstItem.tracking_number && <span>Shipment: {firstItem.shipping_carrier} · Tracking {firstItem.tracking_number}</span>}
               <ul>{items.map((item) => <li key={item.id}>{item.mineral_name} · {item.weight} {item.unit}: {amount(item.seller_amount, item.currency)}</li>)}</ul>
               <strong>Total payout: {amount(sellerAmount, firstItem.currency)}</strong>

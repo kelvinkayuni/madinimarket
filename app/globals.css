@@ -800,6 +800,7 @@ h1, h2, h3, p { margin-top: 0; }
 .commerce-order-heading span { color: #68786a; font-size: 10px; text-transform: capitalize; }
 .commerce-order-summary { min-height: 62px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto 14px; align-items: center; gap: 10px; padding: 10px 12px; list-style: none; cursor: pointer; }
 .commerce-order-summary::-webkit-details-marker { display: none; }
+.commerce-order-number { font-size: 9px; }
 .commerce-order-summary > span:first-child { display: grid; gap: 4px; min-width: 0; }
 .commerce-order-summary > span:first-child strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .commerce-order-summary > span:first-child small { overflow: hidden; color: #788277; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
