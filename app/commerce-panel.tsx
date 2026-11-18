@@ -1,12 +1,138 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import PrivateOfferForm from "./private-offer-form";
 import { fetchWithWebsiteSession } from "@/lib/client-website-session";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+
+function CommerceDialogScrollIndicator() {
+  const indicatorRef = useRef<HTMLDivElement>(null);
+  const scrollRootRef = useRef<HTMLElement | null>(null);
+
+  const updateScrollIndicator = useCallback(() => {
+    const scrollRoot = scrollRootRef.current;
+    const track = indicatorRef.current;
+    const thumb = track?.querySelector<HTMLElement>(".commerce-dialog-scrollbar-thumb");
+    if (!scrollRoot || !track || !thumb) return;
+
+    const scrollRange = scrollRoot.scrollHeight - scrollRoot.clientHeight;
+    const trackHeight = track.clientHeight;
+    const canScroll = scrollRange > 1 && trackHeight > 0;
+    track.dataset.visible = String(canScroll);
+    track.setAttribute("aria-valuemax", String(Math.ceil(scrollRange)));
+    track.setAttribute("aria-valuenow", String(Math.round(scrollRoot.scrollTop)));
+    if (!canScroll) return;
+
+    const thumbHeight = Math.min(trackHeight, Math.max(44, trackHeight * scrollRoot.clientHeight / scrollRoot.scrollHeight));
+    const thumbTravel = trackHeight - thumbHeight;
+    thumb.style.height = `${thumbHeight}px`;
+    thumb.style.transform = `translateY(${scrollRoot.scrollTop / scrollRange * thumbTravel}px)`;
+  }, []);
+
+  useEffect(() => {
+    const indicator = indicatorRef.current;
+    const scrollRoot = indicator?.closest<HTMLElement>(".dialog-panel");
+    const content = scrollRoot?.querySelector(".commerce-panel");
+    if (!indicator || !scrollRoot || !content) return;
+
+    scrollRootRef.current = scrollRoot;
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateScrollIndicator);
+    observer?.observe(scrollRoot);
+    observer?.observe(content);
+    scrollRoot.addEventListener("scroll", updateScrollIndicator);
+    scrollRoot.addEventListener("load", updateScrollIndicator, true);
+    window.addEventListener("resize", updateScrollIndicator);
+    updateScrollIndicator();
+    return () => {
+      observer?.disconnect();
+      scrollRoot.removeEventListener("scroll", updateScrollIndicator);
+      scrollRoot.removeEventListener("load", updateScrollIndicator, true);
+      window.removeEventListener("resize", updateScrollIndicator);
+      scrollRootRef.current = null;
+    };
+  }, [updateScrollIndicator]);
+
+  const scrollToPointer = (clientY: number) => {
+    const scrollRoot = scrollRootRef.current;
+    const track = indicatorRef.current;
+    const thumb = track?.querySelector<HTMLElement>(".commerce-dialog-scrollbar-thumb");
+    if (!scrollRoot || !track || !thumb) return;
+
+    const scrollRange = scrollRoot.scrollHeight - scrollRoot.clientHeight;
+    const trackRect = track.getBoundingClientRect();
+    const thumbTravel = trackRect.height - thumb.offsetHeight;
+    if (scrollRange <= 0 || thumbTravel <= 0) return;
+
+    const position = Math.min(1, Math.max(0, (clientY - trackRect.top - thumb.offsetHeight / 2) / thumbTravel));
+    scrollRoot.scrollTop = position * scrollRange;
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const scrollRoot = scrollRootRef.current;
+    if (!scrollRoot) return;
+
+    const step = Math.max(40, scrollRoot.clientHeight * 0.1);
+    switch (event.key) {
+      case "ArrowDown":
+        scrollRoot.scrollTop += step;
+        break;
+      case "ArrowUp":
+        scrollRoot.scrollTop -= step;
+        break;
+      case "PageDown":
+        scrollRoot.scrollTop += scrollRoot.clientHeight * 0.9;
+        break;
+      case "PageUp":
+        scrollRoot.scrollTop -= scrollRoot.clientHeight * 0.9;
+        break;
+      case "Home":
+        scrollRoot.scrollTop = 0;
+        break;
+      case "End":
+        scrollRoot.scrollTop = scrollRoot.scrollHeight;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    updateScrollIndicator();
+  };
+
+  return <div
+    className="commerce-dialog-scrollbar"
+    ref={indicatorRef}
+    role="scrollbar"
+    aria-label="Orders and Cart panel scroll"
+    aria-controls="commerce-dialog-scroll-region"
+    aria-orientation="vertical"
+    aria-valuemin={0}
+    aria-valuemax={100}
+    aria-valuenow={0}
+    data-visible="false"
+    tabIndex={0}
+    onKeyDown={handleKeyDown}
+    onPointerDown={(event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      scrollToPointer(event.clientY);
+    }}
+    onPointerMove={(event) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) scrollToPointer(event.clientY);
+    }}
+    onPointerUp={(event) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    }}
+    onPointerCancel={(event) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    }}
+  >
+    <div className="commerce-dialog-scrollbar-thumb" aria-hidden="true" />
+  </div>;
+}
 
 function PrivateOfferScrollPanel({ children }: { children: ReactNode }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1152,6 +1278,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         </div>
       </div>
     </div>}
+    {!acceptOffer && !declineOffer && <CommerceDialogScrollIndicator />}
     {(acceptOffer || declineOffer) && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) { setAcceptOffer(null); setDeclineOffer(null); } }}>
       {acceptOffer && <div className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="accept-offer-title">
         <div className="dialog-kicker">CONFIRM PURCHASE</div>
