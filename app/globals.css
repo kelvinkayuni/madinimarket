@@ -1104,6 +1104,11 @@ h1, h2, h3, p { margin-top: 0; }
 .user-buying-request-summary > .submission-status { justify-self: start; }
 .user-account-record > summary strong { overflow: hidden; color: #304b39; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .user-account-record > summary small { overflow: hidden; color: #788277; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.user-buying-request-property-label,
+.user-buying-request-summary small > strong,
+.user-buying-request-details > p > strong { color: #355443; }
+.user-buying-request-summary small > strong { font-size: 9px; }
+.user-buying-request-property-value { color: var(--ink); }
 .user-account-record > summary > svg { color: #738071; transition: transform 160ms ease; }
 .user-account-record[open] > summary > svg { transform: rotate(180deg); }
 .user-account-record-details { display: grid; gap: 8px; padding: 0 0 13px; }
