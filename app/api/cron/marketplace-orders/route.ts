@@ -336,7 +336,7 @@ export async function GET(request: Request) {
         continue;
       }
       const orderItemLines = dispatchGroupItems.map((groupItem) =>
-        `- ${groupItem.mineral_name} (${groupItem.weight} ${groupItem.unit}) — seller payout ${groupItem.currency} ${Number(groupItem.seller_amount).toLocaleString()}`,
+        `- ${groupItem.mineral_name} (${groupItem.weight} ${groupItem.unit}) — You will be paid ${groupItem.currency} ${Number(groupItem.seller_amount).toLocaleString()}`,
       );
       const dispatchTotals = new Map<string, number>();
       for (const groupItem of dispatchGroupItems) {
@@ -349,8 +349,8 @@ export async function GET(request: Request) {
         await sendGmailEmail({
           to: item.seller_email,
           subject: `Payment verified: dispatch order ${order.control_number}`,
-          text: `Payment for order ${order.control_number} is verified. Dispatch all the following items and record courier tracking in My orders:\n${orderItemLines.join("\n")}\n\nBuyer: ${order.buyer_name}\nPhone: ${order.buyer_phone}\nDelivery: ${deliveryAddress}\nTotal seller payout (excluding Madinimarket fee): ${dispatchTotalsText}\n\nThe buyer email is intentionally not included. Sign in at ${getPublicAppUrl()}.`,
-          html: `<p>Payment for order <strong>${escapeHtml(order.control_number)}</strong> is verified. Dispatch all the following items and record courier tracking in My orders:</p><ul>${dispatchGroupItems.map((groupItem) => `<li>${escapeHtml(groupItem.mineral_name)} (${escapeHtml(String(groupItem.weight))} ${escapeHtml(groupItem.unit)}) — seller payout ${escapeHtml(groupItem.currency)} ${Number(groupItem.seller_amount).toLocaleString()}</li>`).join("")}</ul><p><strong>Buyer:</strong> ${escapeHtml(order.buyer_name)}<br><strong>Phone:</strong> ${escapeHtml(order.buyer_phone ?? "")}<br><strong>Delivery:</strong> ${escapeHtml(deliveryAddress)}</p><p><strong>Total seller payout (excluding Madinimarket fee):</strong> ${escapeHtml(dispatchTotalsText)}</p><p>The buyer email is intentionally not included. <a href="${escapeHtml(getPublicAppUrl().toString())}">Sign in to Madinimarket</a>.</p>`,
+          text: `Payment for order ${order.control_number} is verified. Dispatch all the following items and record courier tracking in My orders:\n${orderItemLines.join("\n")}\n\nBuyer: ${order.buyer_name}\nPhone: ${order.buyer_phone}\nDelivery: ${deliveryAddress}\nTotal payout (excluding Madinimarket fee): ${dispatchTotalsText}\n\nThe buyer email is intentionally not included. Sign in at ${getPublicAppUrl()}.`,
+          html: `<p>Payment for order <strong>${escapeHtml(order.control_number)}</strong> is verified. Dispatch all the following items and record courier tracking in My orders:</p><ul>${dispatchGroupItems.map((groupItem) => `<li>${escapeHtml(groupItem.mineral_name)} (${escapeHtml(String(groupItem.weight))} ${escapeHtml(groupItem.unit)}) — You will be paid ${escapeHtml(groupItem.currency)} ${Number(groupItem.seller_amount).toLocaleString()}</li>`).join("")}</ul><p><strong>Buyer:</strong> ${escapeHtml(order.buyer_name)}<br><strong>Phone:</strong> ${escapeHtml(order.buyer_phone ?? "")}<br><strong>Delivery:</strong> ${escapeHtml(deliveryAddress)}</p><p><strong>Total payout (excluding Madinimarket fee):</strong> ${escapeHtml(dispatchTotalsText)}</p><p>The buyer email is intentionally not included. <a href="${escapeHtml(getPublicAppUrl().toString())}">Sign in to Madinimarket</a>.</p>`,
         });
         const { error } = await admin.from("marketplace_order_items")
           .update({ dispatch_email_sent_at: new Date().toISOString() }).in("id", itemIds).is("dispatch_email_sent_at", null);
