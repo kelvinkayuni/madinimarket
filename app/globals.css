@@ -1455,12 +1455,58 @@ h1, h2, h3, p { margin-top: 0; }
   .market-welcome-status { right: 12px; bottom: 12px; padding: 8px 10px; font-size: 9px; }
   .market-welcome-carousel-controls { right: auto; bottom: 14px; left: 12px; }
   .admin-welcome-hero-editor { padding: 11px; }
+  .admin-welcome-hero-editor,
+  .admin-welcome-hero-editor > *,
+  .admin-welcome-hero-preview,
+  .admin-welcome-hero-fields,
+  .admin-welcome-hero-colors,
+  .admin-welcome-hero-images,
+  .admin-welcome-hero-image,
+  .admin-welcome-hero-image-controls,
+  .admin-welcome-hero-mobile-image,
+  .admin-welcome-hero-mobile-image-controls,
+  .admin-welcome-hero-save {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .admin-welcome-hero-header { flex-wrap: wrap; }
+  .admin-welcome-hero-color,
+  .admin-welcome-hero-color > span,
+  .admin-welcome-hero-image-controls label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .admin-welcome-hero-color input { flex: 0 0 29px; }
+  .admin-welcome-hero-preview .market-welcome-hero {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .admin-welcome-hero-preview .market-welcome-hero.is-preview:not(.is-preview-mobile) { padding: 20px; }
+  .admin-welcome-hero-preview .market-welcome-carousel-controls { right: auto; left: 12px; }
   .admin-welcome-hero-fields { grid-template-columns: minmax(0, 1fr); }
   .admin-welcome-hero-description { grid-column: auto; }
   .admin-welcome-hero-colors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-welcome-hero-image { grid-template-columns: minmax(0, 1fr); }
+  .admin-welcome-hero-mobile-image-controls { flex: 1 1 0; }
+  .admin-welcome-hero-mobile-image-controls label.admin-welcome-hero-upload,
+  .admin-welcome-hero-mobile-image-controls > button {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
   .admin-welcome-hero-image > img, .admin-welcome-hero-image-empty { height: 150px; }
   .admin-welcome-hero-save { align-items: flex-start; flex-direction: column; }
+  .admin-welcome-hero-save > span,
+  .admin-welcome-hero-save > div {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .admin-welcome-hero-save > div { width: 100%; }
   .market-intro { align-items: stretch; gap: 8px; padding: 8px 0 16px; }
   .market-intro-heading { order: 0; padding-right: 8px; }
   .market-intro-heading-item { font-size: min(var(--homepage-headline-font-size, 36px), clamp(16px, 6vw, 24px)); }
