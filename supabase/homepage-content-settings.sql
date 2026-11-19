@@ -4,21 +4,33 @@ alter table public.marketplace_settings
     check (homepage_headline_font_size between 24 and 72),
   add column if not exists welcome_hero_hidden boolean not null default false,
   add column if not exists welcome_hero_settings jsonb not null default
-    '{"eyebrow":"","headline":"","description":"","exploreLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","mobileActionsPosition":"top","slides":[]}'::jsonb;
+    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","mobileActionsPosition":"top","slides":[]}'::jsonb;
 
 alter table public.marketplace_settings
   alter column welcome_hero_settings set default
-    '{"eyebrow":"","headline":"","description":"","exploreLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","mobileActionsPosition":"top","slides":[]}'::jsonb;
+    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","mobileActionsPosition":"top","slides":[]}'::jsonb;
 
 update public.marketplace_settings
 set welcome_hero_settings =
-  '{"eyebrow":"","headline":"","description":"","exploreLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","slides":[]}'::jsonb
+  '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","slides":[]}'::jsonb
 where welcome_hero_settings =
   '{"eyebrow":"TANZANIA AND BEYOND","headline":"Discover the stones that move us.","description":"Explore mineral listings, connect with people looking to buy, and find your place in Tanzania’s mineral market.","exploreLabel":"Explore minerals","requestLabel":"Post a request","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"slides":[]}'::jsonb;
 
 update public.marketplace_settings
 set welcome_hero_settings = jsonb_set(welcome_hero_settings, '{heightMode}', '"default"'::jsonb, true)
 where not (welcome_hero_settings ? 'heightMode');
+
+update public.marketplace_settings
+set welcome_hero_settings = (welcome_hero_settings - 'exploreLabel') ||
+  jsonb_build_object(
+    'sellLabel',
+    case
+      when welcome_hero_settings->>'exploreLabel' = 'Explore minerals' then 'Sell a mineral'
+      else welcome_hero_settings->>'exploreLabel'
+    end
+  )
+where welcome_hero_settings ? 'exploreLabel'
+  and not (welcome_hero_settings ? 'sellLabel');
 
 update public.marketplace_settings
 set welcome_hero_settings = jsonb_set(welcome_hero_settings, '{mobileActionsPosition}', '"top"'::jsonb, true)

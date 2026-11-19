@@ -654,8 +654,9 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-actions .button-lime { border-color: var(--welcome-button-color, #d2ee77); background: var(--welcome-button-color, #d2ee77); color: var(--welcome-button-text-color, #18382e); }
 .market-welcome-post-button { border-color: var(--welcome-request-button-color, #f2ecdc); background: var(--welcome-request-button-color, #f2ecdc); color: var(--welcome-request-button-text-color, #18382e); }
 .market-welcome-post-button:hover { filter: brightness(.92); }
-.market-welcome-buyer-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 20px; color: var(--welcome-body-color, #cbd9ce); font-size: 11px; text-decoration: none; }
-.market-welcome-buyer-link:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.market-welcome-secondary-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 20px; }
+.market-welcome-secondary-link { display: inline-flex; align-items: center; gap: 6px; color: var(--welcome-body-color, #cbd9ce); font-size: 11px; text-decoration: none; }
+.market-welcome-secondary-link:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
 .market-welcome-status { position: absolute; right: 20px; bottom: 18px; z-index: 1; display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid #e4edda38; border-radius: 999px; background: #112e26b8; color: #f1f3e8; font-size: 10px; font-weight: 650; backdrop-filter: blur(8px); }
 .market-welcome-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #a7d86d; box-shadow: 0 0 0 3px #a7d86d24; }
 .market-welcome-status.is-closed .market-welcome-status-dot { background: #ddad70; box-shadow: 0 0 0 3px #ddad7024; }
@@ -1414,7 +1415,8 @@ h1, h2, h3, p { margin-top: 0; }
   .market-welcome-hero[data-mobile-actions-position="middle"] .market-welcome-actions { margin-block: auto; }
   .market-welcome-hero[data-mobile-actions-position="bottom"] .market-welcome-actions { margin-top: auto; }
   .market-welcome-actions .button { min-height: 43px; }
-  .market-welcome-buyer-link { margin-top: 15px; font-size: 10px; }
+  .market-welcome-secondary-links { margin-top: 15px; gap: 6px 12px; }
+  .market-welcome-secondary-link { font-size: 10px; }
   .market-welcome-status { right: 12px; bottom: 12px; padding: 8px 10px; font-size: 9px; }
   .market-welcome-carousel-controls { right: auto; bottom: 14px; left: 12px; }
   .admin-welcome-hero-editor { padding: 11px; }

@@ -308,7 +308,7 @@ export default function AdminWelcomeHeroEditor({
         {hidden ? "Show hero" : "Hide hero"}
       </button>
     </div>
-    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. Each background image can have its own headline and description, and both change with that image. Choose an image transition, set how often the slides change, and set how long each transition takes. The buttons keep their existing actions; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
+    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. Each background image can have its own headline and description, and both change with that image. Choose an image transition, set how often the slides change, and set how long each transition takes. Sell a mineral opens the seller listing form, and Post a request opens the buyer request form; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
 
     <div className="admin-welcome-hero-preview-heading">
       <strong><Eye size={15} aria-hidden="true" /> Live preview</strong>
@@ -327,7 +327,7 @@ export default function AdminWelcomeHeroEditor({
         <label className="field-label">Headline<input className="text-input" maxLength={100} value={draft.headline} onChange={(event) => update("headline", event.target.value)} /></label>
         <label className="field-label admin-welcome-hero-description">Description<textarea className="text-input" maxLength={320} rows={3} value={draft.description} onChange={(event) => update("description", event.target.value)} /></label>
       </>}
-      <label className="field-label">Explore button label<input className="text-input" maxLength={32} value={draft.exploreLabel} onChange={(event) => update("exploreLabel", event.target.value)} /></label>
+      <label className="field-label">Sell a mineral button label<input className="text-input" maxLength={32} value={draft.sellLabel} onChange={(event) => update("sellLabel", event.target.value)} /></label>
       <label className="field-label">Request button label<input className="text-input" maxLength={32} value={draft.requestLabel} onChange={(event) => update("requestLabel", event.target.value)} /></label>
       <label className="field-label">Hero height
         <select className="text-input" value={draft.heightMode} onChange={(event) => update("heightMode", event.target.value as WelcomeHeroSettings["heightMode"])}>
@@ -384,8 +384,8 @@ export default function AdminWelcomeHeroEditor({
         ["Headline", "headingColor"],
         ["Description", "bodyColor"],
         ["Accent", "accentColor"],
-        ["Explore button", "buttonColor"],
-        ["Explore button text", "buttonTextColor"],
+        ["Sell a mineral button", "buttonColor"],
+        ["Sell a mineral button text", "buttonTextColor"],
         ["Request button", "requestButtonColor"],
         ["Request button text", "requestButtonTextColor"],
       ] as const).map(([label, key]) => <label className="admin-welcome-hero-color" key={key}>

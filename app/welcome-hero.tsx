@@ -12,7 +12,9 @@ export default function WelcomeHero({
   marketHoursLoaded,
   marketHoursError,
   marketIsOpen,
+  onSellMineral,
   onPostRequest,
+  sellBusy = false,
   postRequestBusy = false,
   preview = false,
   previewMobile = false,
@@ -21,7 +23,9 @@ export default function WelcomeHero({
   marketHoursLoaded: boolean;
   marketHoursError: string;
   marketIsOpen: boolean;
+  onSellMineral?: () => void;
   onPostRequest?: () => void;
+  sellBusy?: boolean;
   postRequestBusy?: boolean;
   preview?: boolean;
   previewMobile?: boolean;
@@ -146,15 +150,24 @@ export default function WelcomeHero({
       </div>
       <div className="market-welcome-actions">
         {preview
-          ? <span className="button button-lime"><Gem size={17} aria-hidden="true" /> {settings.exploreLabel} <ArrowRight size={16} aria-hidden="true" /></span>
-          : <a className="button button-lime" href="#marketplace"><Gem size={17} aria-hidden="true" /> {settings.exploreLabel} <ArrowRight size={16} aria-hidden="true" /></a>}
+          ? <span className="button button-lime"><Gem size={17} aria-hidden="true" /> {settings.sellLabel} <ArrowRight size={16} aria-hidden="true" /></span>
+          : <button className="button button-lime" type="button" disabled={sellBusy} onClick={onSellMineral}>
+            {sellBusy ? "Opening…" : <><Gem size={17} aria-hidden="true" /> {settings.sellLabel} <ArrowRight size={16} aria-hidden="true" /></>}
+          </button>}
         <button className="button market-welcome-post-button" type="button" disabled={preview || postRequestBusy} onClick={onPostRequest}>
           {postRequestBusy ? "Opening…" : <><Plus size={16} aria-hidden="true" /> {settings.requestLabel}</>}
         </button>
       </div>
-      {!preview && <a className="market-welcome-buyer-link" href={marketHoursLoaded && !marketHoursError && marketIsOpen ? "#buyer-heading" : "#marketplace"}>
-        Or browse what buyers are looking for <ArrowRight size={14} aria-hidden="true" />
-      </a>}
+      <div className="market-welcome-secondary-links">
+        {preview
+          ? <span className="market-welcome-secondary-link">Explore minerals <ArrowRight size={14} aria-hidden="true" /></span>
+          : <a className="market-welcome-secondary-link" href="#marketplace">Explore minerals <ArrowRight size={14} aria-hidden="true" /></a>}
+        {preview
+          ? <span className="market-welcome-secondary-link">Or browse what buyers are looking for <ArrowRight size={14} aria-hidden="true" /></span>
+          : <a className="market-welcome-secondary-link" href={marketHoursLoaded && !marketHoursError && marketIsOpen ? "#buyer-heading" : "#marketplace"}>
+            Or browse what buyers are looking for <ArrowRight size={14} aria-hidden="true" />
+          </a>}
+      </div>
     </div>
     <div className={`market-welcome-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`} role={preview ? undefined : "status"}>
       <span className="market-welcome-status-dot" />

@@ -39,7 +39,7 @@ export type WelcomeHeroSettings = {
   eyebrow: string;
   headline: string;
   description: string;
-  exploreLabel: string;
+  sellLabel: string;
   requestLabel: string;
   backgroundColor: string;
   overlayColor: string;
@@ -73,6 +73,9 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const transitionDurationMs = settings.transitionDurationMs === undefined ? 1000 : settings.transitionDurationMs;
   const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
   const requestButtonTextColor = settings.requestButtonTextColor === undefined ? "#18382e" : settings.requestButtonTextColor;
+  const sellLabel = settings.sellLabel === undefined
+    ? settings.exploreLabel === "Explore minerals" ? "Sell a mineral" : settings.exploreLabel
+    : settings.sellLabel;
   const isHeightMode = (candidate: unknown): candidate is WelcomeHeroHeightMode =>
     candidate === "default" || candidate === "fit-screen" || candidate === "full-screen";
   const isMobileActionsPosition = (candidate: unknown): candidate is WelcomeHeroMobileActionsPosition =>
@@ -96,6 +99,10 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     typeof settings[key] === "string" &&
     (allowEmpty || settings[key].trim().length > 0) &&
     settings[key].length <= maximum;
+  const isTextValue = (candidate: unknown, maximum: number, allowEmpty = false) =>
+    typeof candidate === "string" &&
+    (allowEmpty || candidate.trim().length > 0) &&
+    candidate.length <= maximum;
   const isColorValue = (candidate: unknown) =>
     typeof candidate === "string" && /^#[\da-f]{6}$/i.test(candidate);
   const isColor = (key: string) => isColorValue(settings[key]);
@@ -108,7 +115,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   if (!isText("eyebrow", 36, allowEmptyCopy) ||
     !isText("headline", 100, allowEmptyCopy) ||
     !isText("description", 320, allowEmptyCopy) ||
-    !isText("exploreLabel", 32, allowEmptyCopy) ||
+    !isTextValue(sellLabel, 32, allowEmptyCopy) ||
     !isText("requestLabel", 32, allowEmptyCopy) ||
     !isColor("backgroundColor") ||
     !isColor("overlayColor") ||
@@ -180,7 +187,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     eyebrow: settings.eyebrow as string,
     headline: settings.headline as string,
     description: settings.description as string,
-    exploreLabel: settings.exploreLabel as string,
+    sellLabel: sellLabel as string,
     requestLabel: settings.requestLabel as string,
     backgroundColor: settings.backgroundColor as string,
     overlayColor: settings.overlayColor as string,
