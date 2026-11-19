@@ -363,6 +363,20 @@ export default function AdminWelcomeHeroEditor({
       <label className="field-label">Request button label<input className="text-input" maxLength={32} value={draft.requestLabel} onChange={(event) => update("requestLabel", event.target.value)} /></label>
       <label className="field-label">Explore minerals link label<input className="text-input" maxLength={80} value={draft.exploreLinkLabel} onChange={(event) => update("exploreLinkLabel", event.target.value)} /></label>
       <label className="field-label">Buyer browse link label<input className="text-input" maxLength={80} value={draft.buyerBrowseLinkLabel} onChange={(event) => update("buyerBrowseLinkLabel", event.target.value)} /></label>
+      <fieldset className="admin-welcome-hero-position-control admin-welcome-header-control">
+        <legend>Public marketplace header</legend>
+        <p>Changes the public logo only. Admin and staff headers stay the same.</p>
+        <label className="field-label admin-welcome-hero-range">
+          Horizontal position: {draft.publicHeaderHorizontalPosition === 50 ? "Current" : draft.publicHeaderHorizontalPosition < 50 ? "Left of current" : "Right of current"}
+          <input aria-label="Public header horizontal position" type="range" min={0} max={100} step={1} value={draft.publicHeaderHorizontalPosition} onChange={(event) => update("publicHeaderHorizontalPosition", Number(event.target.value))} />
+          <span className="admin-welcome-hero-range-labels"><span>Left</span><span>Current</span><span>Right</span></span>
+        </label>
+        <label className="field-label admin-welcome-hero-range">
+          Logo and text size: {draft.publicHeaderScale}%
+          <input aria-label="Public header logo and text size" type="range" min={70} max={150} step={1} value={draft.publicHeaderScale} onChange={(event) => update("publicHeaderScale", Number(event.target.value))} />
+          <span className="admin-welcome-hero-range-labels"><span>Smaller</span><span>Current</span><span>Larger</span></span>
+        </label>
+      </fieldset>
       <label className="field-label">Hero height
         <select className="text-input" value={draft.heightMode} onChange={(event) => update("heightMode", event.target.value as WelcomeHeroSettings["heightMode"])}>
           <option value="default">Default</option>

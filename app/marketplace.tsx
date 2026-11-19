@@ -46,6 +46,20 @@ function parseStaffRoleDetails(value: unknown): StaffRoleDetails[] {
     return [{ name: entry.name, permissions: entry.permissions }];
   });
 }
+function getPublicHeaderStyle(settings: WelcomeHeroSettings | null): CSSProperties & Record<`--site-header-brand-${string}`, string | number> {
+  const scale = (settings?.publicHeaderScale ?? 100) / 100;
+  const horizontalPosition = settings?.publicHeaderHorizontalPosition ?? 50;
+  return {
+    "--site-header-brand-shift": `${(horizontalPosition - 50) * 0.35}vw`,
+    "--site-header-brand-font-size": `${24 * scale}px`,
+    "--site-header-brand-icon-size": `${30 * scale}px`,
+    "--site-header-brand-gap": `${9 * scale}px`,
+    "--site-header-brand-tablet-font-size": `${21 * scale}px`,
+    "--site-header-brand-mobile-font-size": `${16 * scale}px`,
+    "--site-header-brand-mobile-icon-size": `${22 * scale}px`,
+    "--site-header-brand-mobile-gap": `${5 * scale}px`,
+  };
+}
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email?: string } };
 type Seller = { id: number; user_id?: string; is_own?: boolean; website_account_seller?: boolean; reservation_status?: string | null; marketplace_state?: string; is_active?: boolean; mineral: string; color?: string; comment?: string; listing_type?: ListingType; weight: string; unit: Unit; smallest_stone_weight?: string; largest_stone_weight?: string; stone_weight_unit?: StoneWeightUnit; seller_price?: string; platform_fee_rate?: number; platform_fee_amount?: string; price: string; currency: Currency; seller: string; location: string; country?: string; region?: string; district?: string; street?: string; email: string; phone: string; image: string; image_path?: string | null; image_gallery_paths?: string[]; image_gallery?: string[]; stone_certificate_path?: string | null; stone_certificate_url?: string | null; verified_seller?: boolean; accent: string; status: SubmissionStatus; review_message?: string | null };
@@ -5198,7 +5212,7 @@ export default function Marketplace() {
       <button type="button" onClick={() => window.location.reload()}>Reload to update</button>
     </div>}
     <div className="prototype-bar" style={{ display: 'none' }} aria-hidden="true" />
-    <header className="site-header">
+    <header className="site-header" style={getPublicHeaderStyle(welcomeHeroSettings)}>
       <div className="header-left"><div className="menu-wrap">
         <button className="icon-button menu-trigger" type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? <X size={21} /> : <Menu size={22} />}</button>
         {menuOpen && <>

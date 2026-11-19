@@ -546,8 +546,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .icon-button, .round-control, .photo-action, .buyer-card-bottom button, .dialog-close, .dismiss-username { display: inline-grid; place-items: center; border: 1px solid var(--line); background: transparent; cursor: pointer; }
 .icon-button { width: 38px; height: 38px; border-radius: 50%; transition: background .2s, border-color .2s; }
 .icon-button:hover, .round-control:hover { background: #eaf0e6; border-color: #b9c8b9; }
-.wordmark { gap: 9px; flex-shrink: 0; color: var(--ink); text-decoration: none; font-family: var(--font-display), Georgia, serif; font-size: 24px; font-weight: 700; }
-.wordmark img { display: block; width: 30px; height: 30px; object-fit: contain; }
+.site-header .wordmark { gap: var(--site-header-brand-gap, 9px); flex-shrink: 0; color: var(--ink); text-decoration: none; font-family: var(--font-display), Georgia, serif; font-size: var(--site-header-brand-font-size, 24px); font-weight: 700; transform: translateX(clamp(-42px, var(--site-header-brand-shift, 0px), 12vw)); }
+.site-header .wordmark img { display: block; width: var(--site-header-brand-icon-size, 30px); height: var(--site-header-brand-icon-size, 30px); object-fit: contain; }
 .wordmark-market { color: #82917f; font-weight: 400; }
 .header-search { display: flex; align-items: center; gap: 11px; width: min(370px, 34vw); height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; background: #f7f8f4; color: #81877f; }
 .site-header > .header-search { display: none; }
@@ -720,6 +720,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-welcome-hero-position-layout h4 { margin: 0; color: #405745; font-size: 10px; }
 .admin-welcome-hero-position-control { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 8px; border: 1px solid #e1e8de; background: #fff; }
 .admin-welcome-hero-position-control legend { padding: 0 3px; color: #536653; font-size: 9px; font-weight: 650; }
+.admin-welcome-header-control { grid-column: 1 / -1; }
+.admin-welcome-header-control > p { margin: 0; color: #69766a; font-size: 9px; line-height: 1.45; }
 .admin-welcome-hero-images { display: grid; gap: 10px; }
 .admin-welcome-hero-images > .admin-queue-heading { margin: 0; }
 .admin-welcome-hero-images .admin-queue-heading h4 { margin: 4px 0 0; color: #304b39; font-size: 14px; }
@@ -1330,7 +1332,7 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-header { padding-right: 24px; padding-left: 24px; }
   .site-header { gap: 18px; }
   .header-left { gap: 12px; }
-  .wordmark { font-size: 21px; }
+  .site-header .wordmark { font-size: var(--site-header-brand-tablet-font-size, 21px); }
   .header-search { width: min(290px, 31vw); }
   .header-actions { gap: 12px; }
   .market-content { padding-right: 24px; padding-left: 24px; }
@@ -1438,8 +1440,8 @@ h1, h2, h3, p { margin-top: 0; }
   .site-header { height: auto; min-height: 64px; padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
   .header-left { order: 1; gap: 8px; }
   .icon-button { width: 34px; height: 34px; }
-  .wordmark { gap: 5px; font-size: 16px; }
-  .wordmark img { width: 22px; height: 22px; }
+  .site-header .wordmark { gap: var(--site-header-brand-mobile-gap, 5px); font-size: var(--site-header-brand-mobile-font-size, 16px); }
+  .site-header .wordmark img { width: var(--site-header-brand-mobile-icon-size, 22px); height: var(--site-header-brand-mobile-icon-size, 22px); }
   .header-actions { order: 2; }
   .market-intro-tools { order: 1; width: 105px; flex: 0 0 105px; justify-content: flex-end; }
   .market-intro-tools { gap: 8px; }
