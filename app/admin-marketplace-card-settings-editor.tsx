@@ -4,9 +4,14 @@ import { ArrowDownRight, Gem } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import {
+  BUYER_CARD_POSITION_ITEMS,
   DEFAULT_MARKETPLACE_CARD_APPEARANCE,
+  getMarketplaceCardPositionProperties,
   getMarketplaceCardStyleProperties,
+  SELLER_CARD_POSITION_ITEMS,
   type MarketplaceCardAppearanceSettings,
+  type MarketplaceCardElementPosition,
+  type MarketplaceCardPositionKey,
   type MarketplaceCardStyleSettings,
 } from "@/lib/marketplace-card-settings";
 
@@ -58,6 +63,21 @@ export default function AdminMarketplaceCardSettingsEditor({ savedSettings, savi
   const updateSize = (key: SizeKey, value: number | null) => {
     setDraft((current) => ({ ...current, [kind]: { ...current[kind], [key]: value } }));
   };
+  const updatePosition = (key: MarketplaceCardPositionKey, axis: keyof MarketplaceCardElementPosition, value: number) => {
+    setDraft((current) => {
+      const currentPosition = current[kind].positions[key] ?? { desktopX: 0, desktopY: 0, phoneX: 0, phoneY: 0 };
+      return {
+        ...current,
+        [kind]: {
+          ...current[kind],
+          positions: {
+            ...current[kind].positions,
+            [key]: { ...currentPosition, [axis]: value },
+          },
+        },
+      };
+    });
+  };
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (await onSave(draft)) setDraft(copyAppearance(draft));
@@ -67,6 +87,9 @@ export default function AdminMarketplaceCardSettingsEditor({ savedSettings, savi
     setDraft(resetDraft);
     await onSave(resetDraft);
   };
+  const positionItems = kind === "seller" ? SELLER_CARD_POSITION_ITEMS : BUYER_CARD_POSITION_ITEMS;
+  const horizontalAxis = previewMode === "desktop" ? "desktopX" : "phoneX";
+  const verticalAxis = previewMode === "desktop" ? "desktopY" : "phoneY";
 
   return <section className="admin-marketplace-card-editor" aria-label="Marketplace card styling editor">
     <div className="admin-marketplace-card-editor-heading">
@@ -84,23 +107,29 @@ export default function AdminMarketplaceCardSettingsEditor({ savedSettings, savi
         <button type="button" className={previewMode === "phone" ? "is-active" : ""} aria-pressed={previewMode === "phone"} onClick={() => setPreviewMode("phone")}>Phone</button>
       </div>
     </div>
-    <div className={`admin-marketplace-card-preview-stage${previewMode === "phone" ? " is-phone" : ""}`}>
-      {kind === "seller"
-        ? <article className="seller-card" style={getMarketplaceCardStyleProperties(settings)}>
-          <div className="seller-photo admin-marketplace-card-preview-photo"><Gem size={38} strokeWidth={1.2} /></div>
-          <div className="seller-card-info">
-            <div className="seller-name-row"><div className="seller-name-color"><h3>Tanzanite</h3><span className="seller-color-tag">Deep blue</span></div><span className="weight-tag">12.5 ct</span></div>
-            <div className="seller-price-row"><div className="seller-price">TSh 2,450,000</div><span className="seller-comment">Genuine stone</span></div>
-            <div className="seller-meta"><span>Arusha, Tanzania</span><span>See certificate</span></div>
-            <button className="button button-dark add-to-cart-button" type="button" tabIndex={-1}>Add to cart</button>
+    <div className="admin-marketplace-card-preview-viewport">
+      <div className={`admin-marketplace-card-preview-stage is-${previewMode}`}>
+        {kind === "seller"
+          ? <div className="seller-rail admin-marketplace-card-preview-rail" style={{ gridTemplateRows: "repeat(1, max-content)" }}>
+            <article className="seller-card" style={getMarketplaceCardStyleProperties(settings)}>
+              <div className="seller-photo admin-marketplace-card-preview-photo"><Gem size={38} strokeWidth={1.2} /></div>
+              <div className="seller-card-info">
+                <div className="seller-name-row"><div className="seller-name-color"><h3 className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "mineralName")}>Tanzanite</h3><span className="seller-color-tag marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "color")}>Deep blue</span></div><span className="weight-tag marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "weight")}>12.5 ct</span></div>
+                <div className="seller-price-row"><div className="seller-price marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "price")}>TSh 2,450,000</div><span className="seller-comment marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "comment")}>Genuine stone</span></div>
+                <div className="seller-meta"><span className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "location")}>Arusha, Tanzania</span><span className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "certificate")}>See certificate</span></div>
+                <button className="button button-dark add-to-cart-button marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "action")} type="button" tabIndex={-1}>Add to cart</button>
+              </div>
+            </article>
           </div>
-        </article>
-        : <article className="buyer-card" style={getMarketplaceCardStyleProperties(settings)}>
-          <div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location">Dar es Salaam</span></div>
-          <h3><span>Tanzanite</span><span className="buyer-shape">Oval</span></h3>
-          <div className="buyer-specs"><div><span>WEIGHT</span><strong>10–15 ct</strong></div><div><span>COLOUR</span><strong>Blue</strong></div><div><span>QUALITY</span><strong>Eye clean</strong></div></div>
-          <div className="buyer-card-bottom"><div><span>OFFER</span><strong>TSh 3,000,000</strong></div><button className="private-offer-button" type="button" tabIndex={-1}>Send private offer</button></div>
-        </article>}
+          : <div className="buyer-rail admin-marketplace-card-preview-rail" style={{ gridTemplateRows: "repeat(1, max-content)" }}>
+            <article className="buyer-card" style={getMarketplaceCardStyleProperties(settings)}>
+              <div className="buyer-card-top"><span className="wanted-tag marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "wantedLabel")}><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "location")}>Dar es Salaam</span></div>
+              <h3><span className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "mineralName")}>Tanzanite</span><span className="buyer-shape marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "shape")}>Oval</span></h3>
+              <div className="buyer-specs"><div><span className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "weightLabel")}>WEIGHT</span><strong className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "weightValue")}>10–15 ct</strong></div><div><span className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "colorLabel")}>COLOUR</span><strong className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "colorValue")}>Blue</strong></div><div><span className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "qualityLabel")}>QUALITY</span><strong className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "qualityValue")}>Eye clean</strong></div></div>
+              <div className="buyer-card-bottom"><div><span className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "offerLabel")}>OFFER</span><strong className="marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "offerValue")}>TSh 3,000,000</strong></div><button className="private-offer-button marketplace-card-positioned" style={getMarketplaceCardPositionProperties(settings, "action")} type="button" tabIndex={-1}>Send private offer</button></div>
+            </article>
+          </div>}
+      </div>
     </div>
 
     <form className="admin-marketplace-card-controls" onSubmit={(event) => void save(event)}>
@@ -115,6 +144,28 @@ export default function AdminMarketplaceCardSettingsEditor({ savedSettings, savi
           ] as const).map(([value, label]) => <button key={value} type="button" className={settings.alignment === value ? "is-active" : ""} aria-pressed={settings.alignment === value} onClick={() => updateAlignment(value)}>{label}</button>)}
         </div>
       </fieldset>
+
+      <section className="admin-marketplace-card-position-controls" aria-labelledby="admin-marketplace-card-position-heading">
+        <div><h4 id="admin-marketplace-card-position-heading">Individual text positions</h4><p>Adjust each text item independently. Controls match the {previewMode} preview.</p></div>
+        <div className="admin-marketplace-card-position-list">
+          {positionItems.map((item) => {
+            const position = settings.positions[item.key] ?? { desktopX: 0, desktopY: 0, phoneX: 0, phoneY: 0 };
+            const horizontal = position[horizontalAxis];
+            const vertical = position[verticalAxis];
+            return <details className="admin-marketplace-card-position-item" key={item.key}>
+              <summary>{item.label}</summary>
+              <div>
+                <label className="field-label">Horizontal offset: {horizontal}px
+                  <input aria-label={`${kind} ${item.label} ${previewMode} horizontal offset`} type="range" min={-120} max={120} step={1} value={horizontal} onChange={(event) => updatePosition(item.key, horizontalAxis, Number(event.target.value))} />
+                </label>
+                <label className="field-label">Vertical offset: {vertical}px
+                  <input aria-label={`${kind} ${item.label} ${previewMode} vertical offset`} type="range" min={-180} max={180} step={1} value={vertical} onChange={(event) => updatePosition(item.key, verticalAxis, Number(event.target.value))} />
+                </label>
+              </div>
+            </details>;
+          })}
+        </div>
+      </section>
 
       <div className="admin-marketplace-card-colors">
         {COLOR_FIELDS.map(({ key, label, sellerDefault, buyerDefault }) => <label className="admin-marketplace-card-color" key={key}>

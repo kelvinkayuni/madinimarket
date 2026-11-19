@@ -721,19 +721,24 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-marketplace-card-tabs button, .admin-marketplace-card-preview-heading button, .admin-marketplace-card-alignment button { min-height: 28px; padding: 5px 9px; border: 0; background: transparent; color: #687568; font-size: 9px; cursor: pointer; }
 .admin-marketplace-card-tabs button.is-active, .admin-marketplace-card-preview-heading button.is-active, .admin-marketplace-card-alignment button.is-active { background: #e8efe3; color: #355641; font-weight: 700; }
 .admin-marketplace-card-preview-heading > span { color: #59695b; font-size: 9px; font-weight: 650; }
-.admin-marketplace-card-preview-stage { min-width: 0; min-height: 300px; display: flex; align-items: flex-start; padding: 14px; overflow: hidden; border: 1px solid #e1e6dd; background: #f3f5f0; }
-.admin-marketplace-card-preview-stage.is-phone { width: min(100%, 390px); min-height: 230px; justify-self: center; padding: 12px 14px; }
-.admin-marketplace-card-preview-stage > .seller-card, .admin-marketplace-card-preview-stage > .buyer-card { width: 240px; flex: 0 0 240px; }
-.admin-marketplace-card-preview-stage.is-phone > .seller-card, .admin-marketplace-card-preview-stage.is-phone > .buyer-card { width: clamp(168px, 58.5%, 240px); flex-basis: auto; }
+.admin-marketplace-card-preview-viewport { width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+.admin-marketplace-card-preview-stage { min-width: 0; min-height: 300px; padding: 14px; overflow: hidden; border: 1px solid #e1e6dd; background: #f3f5f0; }
+.admin-marketplace-card-preview-stage.is-phone { width: 390px; min-height: 230px; margin-inline: auto; padding: 12px 13px; box-sizing: border-box; }
+.admin-marketplace-card-preview-rail { width: 100%; min-height: 0; padding-bottom: 0; overflow: hidden; }
+.admin-marketplace-card-preview-stage.is-phone .admin-marketplace-card-preview-rail { grid-auto-columns: clamp(168px, 58.5%, 240px); }
 .admin-marketplace-card-preview-photo { background: linear-gradient(135deg, #6d8b7b, #b9cbb6 48%, #315847); }
+.marketplace-card-positioned { translate: var(--marketplace-card-position-desktop, 0 0); }
+.admin-marketplace-card-preview-stage.is-desktop .marketplace-card-positioned { translate: var(--marketplace-card-position-desktop, 0 0); }
+.admin-marketplace-card-preview-stage.is-phone .marketplace-card-positioned { translate: var(--marketplace-card-position-phone, 0 0); }
 .admin-marketplace-card-preview-stage.is-phone .seller-card-info { padding: 4px 7px 0; }
+.admin-marketplace-card-preview-stage.is-phone .seller-photo { aspect-ratio: 1.6; }
 .admin-marketplace-card-preview-stage.is-phone .seller-name-row h3 { font-size: var(--marketplace-card-title-phone-size, 13px); }
 .admin-marketplace-card-preview-stage.is-phone .seller-price-row { margin-top: 3px; }
 .admin-marketplace-card-preview-stage.is-phone .seller-price { font-size: var(--marketplace-card-price-phone-size, 13px); }
 .admin-marketplace-card-preview-stage.is-phone .seller-comment { font-size: var(--marketplace-card-details-phone-size, 9px); }
 .admin-marketplace-card-preview-stage.is-phone .seller-meta { margin-top: 4px; padding-top: 4px; font-size: var(--marketplace-card-details-phone-size, 9px); }
 .admin-marketplace-card-preview-stage.is-phone .add-to-cart-button { min-height: 27px; margin-top: 5px; }
-.admin-marketplace-card-preview-stage.is-phone > .buyer-card { height: 184px; min-height: 184px; padding: 6px 10px; }
+.admin-marketplace-card-preview-stage.is-phone .buyer-rail > .buyer-card { height: 184px; min-height: 184px; padding: 6px 10px; }
 .admin-marketplace-card-preview-stage.is-phone .buyer-card h3 { margin: 5px 0; font-size: var(--marketplace-card-title-phone-size, 17px); }
 .admin-marketplace-card-preview-stage.is-phone .buyer-location { font-size: var(--marketplace-card-details-phone-size, 9px); }
 .admin-marketplace-card-preview-stage.is-phone .buyer-shape,
@@ -744,6 +749,15 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-marketplace-card-preview-stage.is-phone .buyer-card-bottom div > strong { font-size: var(--marketplace-card-price-phone-size, 12px); }
 .admin-marketplace-card-preview-stage.is-phone .buyer-card-bottom .private-offer-button { min-height: 27px; }
 .admin-marketplace-card-controls { display: grid; gap: 12px; }
+.admin-marketplace-card-position-controls { display: grid; gap: 8px; padding: 10px; border: 1px solid #e1e8de; background: #f7f9f5; }
+.admin-marketplace-card-position-controls h4 { margin: 0; color: #405745; font-size: 10px; }
+.admin-marketplace-card-position-controls p { margin: 3px 0 0; color: #69766a; font-size: 9px; line-height: 1.45; }
+.admin-marketplace-card-position-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
+.admin-marketplace-card-position-item { min-width: 0; border: 1px solid #e1e8de; background: #fff; }
+.admin-marketplace-card-position-item summary { padding: 7px 8px; color: #536653; font-size: 9px; font-weight: 650; cursor: pointer; }
+.admin-marketplace-card-position-item > div { display: grid; gap: 8px; padding: 8px; border-top: 1px solid #e1e8de; }
+.admin-marketplace-card-position-item .field-label { min-width: 0; margin: 0; font-size: 8px; }
+.admin-marketplace-card-position-item input[type="range"] { width: 100%; margin: 5px 0 0; accent-color: #527250; }
 .admin-marketplace-card-alignment { display: grid; gap: 6px; margin: 0; padding: 9px; border: 1px solid #e1e8de; background: #fff; }
 .admin-marketplace-card-alignment legend { padding: 0 3px; color: #536653; font-size: 9px; font-weight: 650; }
 .admin-marketplace-card-alignment > div { width: fit-content; }
@@ -1514,7 +1528,8 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-marketplace-card-tabs { width: 100%; }
   .admin-marketplace-card-tabs button { flex: 1 1 0; }
   .admin-marketplace-card-preview-stage { min-height: 270px; padding: 10px; }
-  .admin-marketplace-card-preview-stage.is-phone { min-height: 210px; padding: 10px; }
+  .admin-marketplace-card-preview-stage.is-phone { width: calc(100vw - 26px); min-height: 210px; padding: 12px 0; }
+  .marketplace-card-positioned { translate: var(--marketplace-card-position-phone, 0 0); }
   .admin-marketplace-card-colors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-marketplace-card-sizes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-marketplace-card-actions > div { width: 100%; }
