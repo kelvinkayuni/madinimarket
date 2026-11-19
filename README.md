@@ -41,6 +41,7 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 10. Run `supabase/certificate-verification.sql`.
 11. Run `supabase/translation-dictionary.sql`.
 12. Run `supabase/homepage-content-settings.sql` to allow admin control of the Swahili switch, rotating homepage phrases, headline font size, and welcome-hero visibility and design. It also creates the public JPEG-only `homepage-hero` storage bucket; image uploads are authorized through the admin-only application API. Re-run this idempotent script on existing installations before deploying hero customization updates; it clears only the original, untouched welcome-hero copy defaults, adds the default height mode and button-position settings to existing settings, and preserves customized settings.
+    Before deploying the Marketplace Cards panel, run or re-run `supabase/marketplace-card-column-settings.sql`. It adds the seller/buyer card appearance settings alongside the existing card-column controls.
 13. Run `supabase/market-hours.sql` after the other scripts so public listing and request views enforce the weekly market schedule.
 14. Run `supabase/live-refresh.sql` to enable Realtime change notifications for public listing and buyer-request updates.
 15. Run `supabase/marketplace-orders.sql` to add the mineral cart, purchase orders, availability/payment/shipping workflows, and payout records. Re-run this idempotent script after updates so existing installations receive new order-notification fields.

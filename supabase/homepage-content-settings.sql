@@ -4,15 +4,15 @@ alter table public.marketplace_settings
     check (homepage_headline_font_size between 24 and 72),
   add column if not exists welcome_hero_hidden boolean not null default false,
   add column if not exists welcome_hero_settings jsonb not null default
-    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","exploreLinkLabel":"","buyerBrowseLinkLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"publicHeaderHorizontalPosition":50,"publicHeaderScale":100,"slides":[]}'::jsonb;
+    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","exploreLinkLabel":"","buyerBrowseLinkLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"publicHeaderPosition":0,"publicHeaderScale":100,"slides":[]}'::jsonb;
 
 alter table public.marketplace_settings
   alter column welcome_hero_settings set default
-    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","exploreLinkLabel":"","buyerBrowseLinkLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"publicHeaderHorizontalPosition":50,"publicHeaderScale":100,"slides":[]}'::jsonb;
+    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","exploreLinkLabel":"","buyerBrowseLinkLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"publicHeaderPosition":0,"publicHeaderScale":100,"slides":[]}'::jsonb;
 
 update public.marketplace_settings
 set welcome_hero_settings =
-  '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","actionsHorizontalPosition":0,"publicHeaderHorizontalPosition":50,"publicHeaderScale":100,"slides":[]}'::jsonb
+  '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","actionsHorizontalPosition":0,"publicHeaderPosition":0,"publicHeaderScale":100,"slides":[]}'::jsonb
 where welcome_hero_settings =
   '{"eyebrow":"TANZANIA AND BEYOND","headline":"Discover the stones that move us.","description":"Explore mineral listings, connect with people looking to buy, and find your place in Tanzania’s mineral market.","exploreLabel":"Explore minerals","requestLabel":"Post a request","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"slides":[]}'::jsonb;
 
@@ -74,7 +74,14 @@ set welcome_hero_settings = welcome_hero_settings || jsonb_build_object(
   'desktopLinksVerticalPosition', coalesce(nullif(welcome_hero_settings->'desktopLinksVerticalPosition', 'null'::jsonb), '100'::jsonb),
   'mobileLinksHorizontalPosition', coalesce(nullif(welcome_hero_settings->'mobileLinksHorizontalPosition', 'null'::jsonb), '0'::jsonb),
   'mobileLinksVerticalPosition', coalesce(nullif(welcome_hero_settings->'mobileLinksVerticalPosition', 'null'::jsonb), '100'::jsonb),
-  'publicHeaderHorizontalPosition', coalesce(nullif(welcome_hero_settings->'publicHeaderHorizontalPosition', 'null'::jsonb), '50'::jsonb),
+  'publicHeaderPosition', coalesce(
+    nullif(welcome_hero_settings->'publicHeaderPosition', 'null'::jsonb),
+    case
+      when welcome_hero_settings->>'publicHeaderHorizontalPosition' ~ '^(5[0-9]|[6-9][0-9]|100)$'
+        then to_jsonb(((welcome_hero_settings->>'publicHeaderHorizontalPosition')::integer - 50) * 2)
+      else '0'::jsonb
+    end
+  ),
   'publicHeaderScale', coalesce(nullif(welcome_hero_settings->'publicHeaderScale', 'null'::jsonb), '100'::jsonb)
 )
 where welcome_hero_settings->>'exploreLinkLabel' is null
@@ -93,7 +100,7 @@ where welcome_hero_settings->>'exploreLinkLabel' is null
    or welcome_hero_settings->>'desktopLinksVerticalPosition' is null
    or welcome_hero_settings->>'mobileLinksHorizontalPosition' is null
    or welcome_hero_settings->>'mobileLinksVerticalPosition' is null
-   or welcome_hero_settings->>'publicHeaderHorizontalPosition' is null
+   or welcome_hero_settings->>'publicHeaderPosition' is null
    or welcome_hero_settings->>'publicHeaderScale' is null;
 
 insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)

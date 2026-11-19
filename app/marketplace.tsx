@@ -17,6 +17,7 @@ import StaffTaskClaim from "./staff-task-claim";
 import StaffAdminChat from "./staff-admin-chat";
 import CommercePanel from "./commerce-panel";
 import PrivateOfferForm from "./private-offer-form";
+import AdminMarketplaceCardSettingsEditor from "./admin-marketplace-card-settings-editor";
 import AdminWelcomeHeroEditor from "./admin-welcome-hero-editor";
 import WelcomeHero from "./welcome-hero";
 import { getSupabaseBrowserClient, isSupabaseConfigured, SUPABASE_PASSWORD_RECOVERY_KEY, SUPABASE_PASSWORD_RECOVERY_LIFETIME } from "@/lib/supabase";
@@ -25,13 +26,14 @@ import { applyVisibleTranslations, type Language, type TranslationPair } from "@
 import { calculateListingPrice } from "@/lib/listing-pricing";
 import { MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
 import { isStaffPermission, STAFF_PERMISSION_OPTIONS, type StaffPermission } from "@/lib/staff-permissions";
+import { DEFAULT_MARKETPLACE_CARD_APPEARANCE, getMarketplaceCardStyleProperties, parseMarketplaceCardAppearanceSettings, type MarketplaceCardAppearanceSettings } from "@/lib/marketplace-card-settings";
 import { parsePublicWelcomeHeroSettings, type WelcomeHeroSettings } from "@/lib/welcome-hero";
 
 type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "seller-reviews" | "buyer-reviews" | "ledger" | "translations" | "homepage" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-disputes" | "buyer-refunds" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff" | "staff-chat";
+type AdminPanel = "review" | "seller-reviews" | "buyer-reviews" | "ledger" | "translations" | "homepage" | "marketplace-cards" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-disputes" | "buyer-refunds" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff" | "staff-chat";
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
@@ -48,9 +50,7 @@ function parseStaffRoleDetails(value: unknown): StaffRoleDetails[] {
 }
 function getPublicHeaderStyle(settings: WelcomeHeroSettings | null): CSSProperties & Record<`--site-header-brand-${string}`, string | number> {
   const scale = (settings?.publicHeaderScale ?? 100) / 100;
-  const horizontalPosition = settings?.publicHeaderHorizontalPosition ?? 50;
   return {
-    "--site-header-brand-shift": `${(horizontalPosition - 50) * 0.35}vw`,
     "--site-header-brand-font-size": `${24 * scale}px`,
     "--site-header-brand-icon-size": `${30 * scale}px`,
     "--site-header-brand-gap": `${9 * scale}px`,
@@ -59,6 +59,10 @@ function getPublicHeaderStyle(settings: WelcomeHeroSettings | null): CSSProperti
     "--site-header-brand-mobile-icon-size": `${22 * scale}px`,
     "--site-header-brand-mobile-gap": `${5 * scale}px`,
   };
+}
+function getPublicHeaderBrandPositionStyle(settings: WelcomeHeroSettings | null): CSSProperties {
+  const position = settings?.publicHeaderPosition ?? 0;
+  return { left: `${position}%`, transform: `translate(-${position}%, -50%)` };
 }
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email?: string } };
@@ -771,6 +775,7 @@ type HomepageSettingsContent = {
   headlineFontSize: number;
   sellerCardsPerColumn: number;
   buyerCardsPerColumn: number;
+  marketplaceCardAppearance: MarketplaceCardAppearanceSettings;
   homepageAnnouncement: string;
   welcomeHeroHidden: boolean;
   welcomeHero: WelcomeHeroSettings;
@@ -794,10 +799,11 @@ function hasHomepageSettings(value: Record<string, unknown>): value is Record<st
     value.sellerCardsPerColumn >= 1 &&
     typeof value.buyerCardsPerColumn === "number" && Number.isSafeInteger(value.buyerCardsPerColumn) &&
     value.buyerCardsPerColumn >= 1 &&
+    parseMarketplaceCardAppearanceSettings(value.marketplaceCardAppearance) !== null &&
     Array.isArray(value.headlines) && value.headlines.every(isHomepageHeadline);
 }
 
-async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; welcomeHeroHidden: boolean; welcomeHero: WelcomeHeroSettings; headlines: HomepageHeadline[] }> {
+async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; marketplaceCardAppearance: MarketplaceCardAppearanceSettings; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; welcomeHeroHidden: boolean; welcomeHero: WelcomeHeroSettings; headlines: HomepageHeadline[] }> {
   const result = await fetchAdminSiteContent(accessToken);
   if (typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" ||
     typeof result.nonAdminSignInDisabled !== "boolean" || !hasHomepageSettings(result)) {
@@ -808,6 +814,7 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
     headlineFontSize: result.headlineFontSize,
     sellerCardsPerColumn: result.sellerCardsPerColumn,
     buyerCardsPerColumn: result.buyerCardsPerColumn,
+    marketplaceCardAppearance: parseMarketplaceCardAppearanceSettings(result.marketplaceCardAppearance)!,
     accountCreationDisabled: result.accountCreationDisabled,
     nonAdminSignInDisabled: result.nonAdminSignInDisabled,
     homepageAnnouncement: result.homepageAnnouncement,
@@ -826,6 +833,7 @@ async function loadAdminHomepageContent(accessToken: string): Promise<HomepageSe
     headlineFontSize: result.headlineFontSize,
     sellerCardsPerColumn: result.sellerCardsPerColumn,
     buyerCardsPerColumn: result.buyerCardsPerColumn,
+    marketplaceCardAppearance: parseMarketplaceCardAppearanceSettings(result.marketplaceCardAppearance)!,
     homepageAnnouncement: result.homepageAnnouncement,
     welcomeHeroHidden: result.welcomeHeroHidden,
     welcomeHero: parsePublicWelcomeHeroSettings(result.welcomeHero)!,
@@ -856,6 +864,7 @@ export default function Marketplace() {
   const [marketplaceSearchLoading, setMarketplaceSearchLoading] = useState(false);
   const [sellerCardsPerColumn, setSellerCardsPerColumn] = useState(4);
   const [buyerCardsPerColumn, setBuyerCardsPerColumn] = useState(4);
+  const [marketplaceCardAppearance, setMarketplaceCardAppearance] = useState(DEFAULT_MARKETPLACE_CARD_APPEARANCE);
   const [websiteAccounts, setWebsiteAccounts] = useState<WebsiteAccount[]>([]);
   const [usdEnabled, setUsdEnabled] = useState(true);
   const [currencySettingsLoaded, setCurrencySettingsLoaded] = useState(!isSupabaseConfigured);
@@ -1833,9 +1842,10 @@ export default function Marketplace() {
         const response = await fetch("/api/site-content", { cache: "no-store" });
         const result = await response.json();
         const welcomeHero = parsePublicWelcomeHeroSettings(result.welcomeHero);
+        const cardAppearance = parseMarketplaceCardAppearanceSettings(result.marketplaceCardAppearance);
         if (!response.ok || typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || typeof result.welcomeHeroHidden !== "boolean" || !welcomeHero || !Number.isInteger(result.headlineFontSize) ||
           result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Number.isSafeInteger(result.sellerCardsPerColumn) || result.sellerCardsPerColumn < 1 ||
-          !Number.isSafeInteger(result.buyerCardsPerColumn) || result.buyerCardsPerColumn < 1 || !Array.isArray(result.headlines)) {
+          !Number.isSafeInteger(result.buyerCardsPerColumn) || result.buyerCardsPerColumn < 1 || !cardAppearance || !Array.isArray(result.headlines)) {
           throw new Error(result.error ?? "Could not load homepage and language settings.");
         }
         if (!active) return;
@@ -1851,6 +1861,7 @@ export default function Marketplace() {
         setSellerCardsPerColumnInput(String(result.sellerCardsPerColumn));
         setBuyerCardsPerColumn(result.buyerCardsPerColumn);
         setBuyerCardsPerColumnInput(String(result.buyerCardsPerColumn));
+        setMarketplaceCardAppearance(cardAppearance);
         setSiteContentLoaded(true);
         setHomepageHeadlines((current) => {
           const next = result.headlines as HomepageHeadline[];
@@ -2214,6 +2225,7 @@ export default function Marketplace() {
               setSellerCardsPerColumnInput(String(siteContent.sellerCardsPerColumn));
               setBuyerCardsPerColumn(siteContent.buyerCardsPerColumn);
               setBuyerCardsPerColumnInput(String(siteContent.buyerCardsPerColumn));
+              setMarketplaceCardAppearance(siteContent.marketplaceCardAppearance);
               setSiteContentLoaded(true);
               setHomepageHeadlines(siteContent.headlines);
             };
@@ -3183,6 +3195,7 @@ export default function Marketplace() {
     setSellerCardsPerColumnInput(String(content.sellerCardsPerColumn));
     setBuyerCardsPerColumn(content.buyerCardsPerColumn);
     setBuyerCardsPerColumnInput(String(content.buyerCardsPerColumn));
+    setMarketplaceCardAppearance(content.marketplaceCardAppearance);
     setSiteContentLoaded(true);
     setHomepageHeadlines(content.headlines);
   };
@@ -3274,6 +3287,32 @@ export default function Marketplace() {
         setNotice(error instanceof Error ? error.message : `Could not save the ${kind} cards-per-column setting.`);
       }
     });
+  };
+  const saveMarketplaceCardAppearance = async (appearance: MarketplaceCardAppearanceSettings): Promise<boolean> => {
+    let saved = false;
+    await withProgress("marketplace-card-appearance", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ marketplaceCardAppearance: appearance }),
+        });
+        const result = await response.json();
+        const savedAppearance = parseMarketplaceCardAppearanceSettings(result.marketplaceCardAppearance);
+        if (!response.ok || !savedAppearance) {
+          throw new Error(result.error ?? "Could not save marketplace card settings.");
+        }
+        setMarketplaceCardAppearance(savedAppearance);
+        setNotice("Marketplace card settings saved.");
+        saved = true;
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save marketplace card settings.");
+      }
+    });
+    return saved;
   };
   const updateSwahiliAvailability = async (enabled: boolean) => {
     await withProgress("swahili-setting", async () => {
@@ -4630,6 +4669,7 @@ export default function Marketplace() {
                 <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
                 <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">English–Swahili translations</span>{adminMenuRoleBadge(["translations"])}</button>
                 <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Homepage headlines</span>{adminMenuRoleBadge(["homepage_headlines"])}</button>
+                <button className={activeAdminPanel === "marketplace-cards" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("marketplace-cards"); setAdminMenuOpen(false); }}>Marketplace cards</button>
                 <button className={activeAdminPanel === "market-hours" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("market-hours"); setAdminMenuOpen(false); }}>Market hours</button>
                 <button className={activeAdminPanel === "orders" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("orders"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Marketplace orders</span>{adminMenuRoleBadge(["marketplace_orders"])}<span aria-label={`${marketplaceOrdersNeedingAction} orders needing admin action`}>{marketplaceOrdersNeedingAction}</span></button>
                 <button className={activeAdminPanel === "listing-fee" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("listing-fee"); setAdminMenuOpen(false); }}>New mineral listing fee</button>
@@ -5012,23 +5052,6 @@ export default function Marketplace() {
                 onSaved={(settings) => { setWelcomeHeroSettings(settings); setNotice("Welcome hero saved."); }}
               />
             : <p className="admin-translation-help">{siteContentLoaded ? "Welcome hero settings are unavailable." : "Loading welcome hero settings…"}</p>)}
-          {role === "admin" && <div className="admin-card-columns-settings">
-            <div className="admin-queue-heading"><div><span>MARKETPLACE LAYOUT</span><h3>Cards per column</h3></div></div>
-            <div className="admin-card-columns-forms">
-              <form className="admin-card-columns-form" onSubmit={(event) => void saveCardsPerColumn("seller", event)}>
-                <label className="field-label" htmlFor="admin-seller-cards-per-column">Seller cards per column
-                  <input className="text-input" id="admin-seller-cards-per-column" type="number" min={1} step={1} required value={sellerCardsPerColumnInput} onChange={(event) => setSellerCardsPerColumnInput(event.target.value)} />
-                </label>
-                <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("seller-cards-per-column") || Number(sellerCardsPerColumnInput) === sellerCardsPerColumn}>{busyActions.has("seller-cards-per-column") ? "Saving…" : "Save seller layout"}</button>
-              </form>
-              <form className="admin-card-columns-form" onSubmit={(event) => void saveCardsPerColumn("buyer", event)}>
-                <label className="field-label" htmlFor="admin-buyer-cards-per-column">Buyer cards per column
-                  <input className="text-input" id="admin-buyer-cards-per-column" type="number" min={1} step={1} required value={buyerCardsPerColumnInput} onChange={(event) => setBuyerCardsPerColumnInput(event.target.value)} />
-                </label>
-                <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("buyer-cards-per-column") || Number(buyerCardsPerColumnInput) === buyerCardsPerColumn}>{busyActions.has("buyer-cards-per-column") ? "Saving…" : "Save buyer layout"}</button>
-              </form>
-            </div>
-          </div>}
           <details className="admin-homepage-announcement-disclosure">
             <summary className="admin-homepage-announcement-toggle">
               <div><strong>Homepage announcement</strong><span>{!siteContentLoaded ? "Loading announcement settings…" : homepageAnnouncement ? "Message is currently displayed" : "No message is displayed"}</span></div>
@@ -5047,6 +5070,35 @@ export default function Marketplace() {
           </form>
           {homepageHeadlines.length ? <div className="admin-homepage-headline-list">{homepageHeadlines.map((headline) => <article className="admin-homepage-headline-row" key={headline.id}><div><span>{headline.main_phrase}</span>{headline.main_phrase && headline.accent_phrase ? " " : ""}<em>{headline.accent_phrase}</em></div><button className="button button-danger" type="button" disabled={!canAct || busyActions.has(`homepage-headline-delete-${headline.id}`)} onClick={() => void deleteHomepageHeadline(headline)}>{busyActions.has(`homepage-headline-delete-${headline.id}`) ? "Deleting…" : "Delete"}</button></article>)}</div> : <p className="admin-empty">No homepage phrases have been saved.</p>}
           </div>}</StaffTaskClaim>
+        </section>}
+        {activeAdminPanel === "marketplace-cards" && role === "admin" && <section className="admin-marketplace-cards-panel" aria-labelledby="admin-marketplace-cards-heading">
+          <div className="admin-queue-heading"><div><span>MARKETPLACE DESIGN</span><h2 id="admin-marketplace-cards-heading">Seller and buyer cards</h2></div></div>
+          {siteContentLoaded
+            ? <>
+              <div className="admin-card-columns-settings">
+                <div className="admin-queue-heading"><div><span>MARKETPLACE LAYOUT</span><h3>Cards per column</h3></div></div>
+                <div className="admin-card-columns-forms">
+                  <form className="admin-card-columns-form" onSubmit={(event) => void saveCardsPerColumn("seller", event)}>
+                    <label className="field-label" htmlFor="admin-seller-cards-per-column">Seller cards per column
+                      <input className="text-input" id="admin-seller-cards-per-column" type="number" min={1} step={1} required value={sellerCardsPerColumnInput} onChange={(event) => setSellerCardsPerColumnInput(event.target.value)} />
+                    </label>
+                    <button className="button button-dark" type="submit" disabled={busyActions.has("seller-cards-per-column") || Number(sellerCardsPerColumnInput) === sellerCardsPerColumn}>{busyActions.has("seller-cards-per-column") ? "Saving…" : "Save seller layout"}</button>
+                  </form>
+                  <form className="admin-card-columns-form" onSubmit={(event) => void saveCardsPerColumn("buyer", event)}>
+                    <label className="field-label" htmlFor="admin-buyer-cards-per-column">Buyer cards per column
+                      <input className="text-input" id="admin-buyer-cards-per-column" type="number" min={1} step={1} required value={buyerCardsPerColumnInput} onChange={(event) => setBuyerCardsPerColumnInput(event.target.value)} />
+                    </label>
+                    <button className="button button-dark" type="submit" disabled={busyActions.has("buyer-cards-per-column") || Number(buyerCardsPerColumnInput) === buyerCardsPerColumn}>{busyActions.has("buyer-cards-per-column") ? "Saving…" : "Save buyer layout"}</button>
+                  </form>
+                </div>
+              </div>
+              <AdminMarketplaceCardSettingsEditor
+                savedSettings={marketplaceCardAppearance}
+                saving={busyActions.has("marketplace-card-appearance")}
+                onSave={saveMarketplaceCardAppearance}
+              />
+            </>
+            : <p className="admin-translation-help">Loading marketplace card settings…</p>}
         </section>}
         {activeAdminPanel === "accounts" && (role === "admin" || staffCan("accounts")) && <section className="admin-accounts" aria-labelledby="admin-accounts-heading">
           <div className="admin-queue-heading"><div><span>WEBSITE USERS</span><h2 id="admin-accounts-heading">Accounts</h2></div><strong>{pendingLicenceAccountCount}</strong></div>
@@ -5273,7 +5325,7 @@ export default function Marketplace() {
             <div className="menu-foot"><ShieldCheck size={15} /> One account. Buy or sell.</div>
           </div>
         </>}
-      </div><a className="wordmark" href="#top" aria-label="Madinimarket home"><Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} priority /><span>madini<span className="wordmark-market">market</span></span></a></div>
+      </div><div className="site-header-brand-track"><a className="wordmark" href="#top" aria-label="Madinimarket home" style={getPublicHeaderBrandPositionStyle(welcomeHeroSettings)}><Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} priority /><span>madini<span className="wordmark-market">market</span></span></a></div></div>
       <MineralSearchInput id="desktop-mineral-search" options={mineralSearchOptions} value={query} onChange={setQuery} placeholder="Search minerals and places" label="Search minerals and locations" shortcut />
       {user && <div className="header-actions"><div className="user-chip" title={displayName}><span className="user-avatar">{displayName.slice(0, 2).toUpperCase()}</span><span className="user-chip-identity" data-no-translate>{displayName}</span></div><button className="text-button header-signout" type="button" onClick={() => openDialog("signout")}>Sign out</button></div>}
     </header>
@@ -5322,7 +5374,7 @@ export default function Marketplace() {
             : "Reserved for a buyer";
           const isInCart = role === "user" && cartListingAccountId === userId && cartListingIds.has(listing.id);
           const hasImage = Boolean(listing.image || listing.image_path) && !failedSellerImageIds.has(listing.id);
-          return <article className="seller-card" key={listing.id}>
+          return <article className="seller-card" key={listing.id} style={getMarketplaceCardStyleProperties(marketplaceCardAppearance.seller)}>
             <div className="seller-photo" style={{ backgroundColor: listing.accent }} role="group" aria-label={`${listing.mineral} photos`}>
               {!hasImage && <Gem size={38} strokeWidth={1.2} />}
               {hasImage && <LazySellerImage imagePath={listing.image_path ?? null} imageUrl={listing.image} mineral={listing.mineral} onError={() => setFailedSellerImageIds((current) => new Set(current).add(listing.id))} />}
@@ -5347,7 +5399,7 @@ export default function Marketplace() {
       <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">WANTED BY THE COMMUNITY</div><h2 id="buyer-heading">Buyers looking <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
         {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{marketplaceSearchLoading ? "Searching requests…" : `No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail} style={{ gridTemplateRows: `repeat(${buyerCardsPerColumn}, max-content)` }}>{visibleBuyers.map((request) => {
           const isOwnRequest = role === "user" && (request.is_own || request.user_id === userId);
-          return <article className="buyer-card" key={request.id}>
+          return <article className="buyer-card" key={request.id} style={getMarketplaceCardStyleProperties(marketplaceCardAppearance.buyer)}>
             <div className="buyer-card-top"><span className="wanted-tag"><ArrowDownRight size={14} /> WANTED</span><span className="buyer-location" data-no-translate>{request.location}</span></div>
             <h3><span data-no-translate>{request.mineral}</span><span className="buyer-shape" data-no-translate>{request.shape}</span></h3>
             <div className="buyer-specs"><div><span>WEIGHT</span><strong data-no-translate>{request.weight} {request.unit}</strong></div><div><span>COLOUR</span><strong data-no-translate>{request.color}</strong></div><div><span>QUALITY</span><strong data-no-translate>{request.quality}</strong></div></div>

@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Eye, EyeOff, FileUp, RotateCcw, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, EyeOff, FileUp, Menu, RotateCcw, Save, Trash2 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import {
@@ -352,6 +352,30 @@ export default function AdminWelcomeHeroEditor({
     <div className={`admin-welcome-hero-preview${previewMobile ? " is-mobile" : ""}`}>
       <WelcomeHero settings={previewSettings} marketHoursLoaded marketHoursError="" marketIsOpen preview previewMobile={previewMobile} />
     </div>
+    <div className="admin-public-header-preview-heading">
+      <strong>Public marketplace header preview</strong>
+      <span>Updates as you adjust the position and size below.</span>
+    </div>
+    <div
+      className={`admin-public-header-preview${previewMobile ? " is-mobile" : ""}`}
+      aria-label="Public marketplace header live preview"
+      style={{
+        "--admin-header-preview-font-size": `${(previewMobile ? 16 : 24) * draft.publicHeaderScale / 100}px`,
+        "--admin-header-preview-icon-size": `${(previewMobile ? 22 : 30) * draft.publicHeaderScale / 100}px`,
+        "--admin-header-preview-gap": `${(previewMobile ? 5 : 9) * draft.publicHeaderScale / 100}px`,
+      } as CSSProperties & Record<`--admin-header-preview-${string}`, string>}
+    >
+      <div className="admin-public-header-preview-menu" aria-hidden="true"><Menu size={previewMobile ? 20 : 22} /></div>
+      <div className="admin-public-header-preview-track">
+        <div className="admin-public-header-preview-brand" style={{
+          left: `${draft.publicHeaderPosition}%`,
+          transform: `translate(-${draft.publicHeaderPosition}%, -50%)`,
+        }}>
+          <Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} />
+          <span>madini<span className="wordmark-market">market</span></span>
+        </div>
+      </div>
+    </div>
 
     <div className="admin-welcome-hero-fields">
       <label className="field-label">Eyebrow<input className="text-input" maxLength={36} value={draft.eyebrow} onChange={(event) => update("eyebrow", event.target.value)} /></label>
@@ -367,9 +391,9 @@ export default function AdminWelcomeHeroEditor({
         <legend>Public marketplace header</legend>
         <p>Changes the public logo only. Admin and staff headers stay the same.</p>
         <label className="field-label admin-welcome-hero-range">
-          Horizontal position: {draft.publicHeaderHorizontalPosition === 50 ? "Current" : draft.publicHeaderHorizontalPosition < 50 ? "Left of current" : "Right of current"}
-          <input aria-label="Public header horizontal position" type="range" min={0} max={100} step={1} value={draft.publicHeaderHorizontalPosition} onChange={(event) => update("publicHeaderHorizontalPosition", Number(event.target.value))} />
-          <span className="admin-welcome-hero-range-labels"><span>Left</span><span>Current</span><span>Right</span></span>
+          Horizontal position: {draft.publicHeaderPosition === 0 ? "Current" : draft.publicHeaderPosition === 50 ? "Middle" : draft.publicHeaderPosition === 100 ? "Right" : `${draft.publicHeaderPosition}% right`}
+          <input aria-label="Public header horizontal position" type="range" min={0} max={100} step={1} value={draft.publicHeaderPosition} onChange={(event) => update("publicHeaderPosition", Number(event.target.value))} />
+          <span className="admin-welcome-hero-range-labels"><span>Current</span><span>Middle</span><span>Right</span></span>
         </label>
         <label className="field-label admin-welcome-hero-range">
           Logo and text size: {draft.publicHeaderScale}%

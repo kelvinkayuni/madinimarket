@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
+import { parseMarketplaceCardAppearanceSettings } from "@/lib/marketplace-card-settings";
 import { addWelcomeHeroImageUrls, parseWelcomeHeroSettings, WELCOME_HERO_BUCKET } from "@/lib/welcome-hero";
 
 function readObject(body: unknown): Record<string, unknown> | null {
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
     if (scope === "homepage") {
       const [settingsResult, headlinesResult] = await Promise.all([
         admin.from("marketplace_settings")
-          .select("homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
+          .select("homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, marketplace_card_appearance, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
           .eq("id", true).single(),
         admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
           .order("created_at", { ascending: true }).order("id", { ascending: true }),
@@ -65,10 +66,13 @@ export async function GET(request: Request) {
       if (headlinesResult.error) throw headlinesResult.error;
       const welcomeHero = parseWelcomeHeroSettings(settingsResult.data.welcome_hero_settings, true);
       if (!welcomeHero) throw new Error("Saved welcome hero settings are invalid.");
+      const marketplaceCardAppearance = parseMarketplaceCardAppearanceSettings(settingsResult.data.marketplace_card_appearance);
+      if (!marketplaceCardAppearance) throw new Error("Saved marketplace card settings are invalid.");
       return NextResponse.json({
         headlineFontSize: settingsResult.data.homepage_headline_font_size,
         sellerCardsPerColumn: settingsResult.data.seller_cards_per_column,
         buyerCardsPerColumn: settingsResult.data.buyer_cards_per_column,
+        marketplaceCardAppearance,
         homepageAnnouncement: settingsResult.data.homepage_announcement ?? "",
         welcomeHeroHidden: settingsResult.data.welcome_hero_hidden,
         welcomeHero: addWelcomeHeroImageUrls(
@@ -80,7 +84,7 @@ export async function GET(request: Request) {
     }
     const [settingsResult, headlinesResult] = await Promise.all([
       admin.from("marketplace_settings")
-        .select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
+        .select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, marketplace_card_appearance, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
         .eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
         .order("created_at", { ascending: true }).order("id", { ascending: true }),
@@ -89,11 +93,14 @@ export async function GET(request: Request) {
     if (headlinesResult.error) throw headlinesResult.error;
     const welcomeHero = parseWelcomeHeroSettings(settingsResult.data.welcome_hero_settings, true);
     if (!welcomeHero) throw new Error("Saved welcome hero settings are invalid.");
+    const marketplaceCardAppearance = parseMarketplaceCardAppearanceSettings(settingsResult.data.marketplace_card_appearance);
+    if (!marketplaceCardAppearance) throw new Error("Saved marketplace card settings are invalid.");
     return NextResponse.json({
       swahiliEnabled: settingsResult.data.swahili_enabled,
       headlineFontSize: settingsResult.data.homepage_headline_font_size,
       sellerCardsPerColumn: settingsResult.data.seller_cards_per_column,
       buyerCardsPerColumn: settingsResult.data.buyer_cards_per_column,
+      marketplaceCardAppearance,
       accountCreationDisabled: settingsResult.data.account_creation_disabled,
       nonAdminSignInDisabled: settingsResult.data.non_admin_sign_in_disabled ?? false,
       homepageAnnouncement: settingsResult.data.homepage_announcement ?? "",
@@ -131,6 +138,22 @@ export async function PATCH(request: Request) {
     const taskType = accountSettingsRequested ? "account_setting" : "homepage_setting";
     if (staff && !await ownsStaffTaskClaim(authorized, staff.staffId, taskType, "homepage")) {
       return NextResponse.json({ error: `Claim ${accountSettingsRequested ? "account" : "homepage"} settings before editing them.` }, { status: 409 });
+    }
+    if (values && "marketplaceCardAppearance" in values) {
+      if (Object.keys(values).length !== 1) {
+        return NextResponse.json({ error: "Save marketplace card settings separately from other site settings." }, { status: 400 });
+      }
+      const appearance = parseMarketplaceCardAppearanceSettings(values.marketplaceCardAppearance);
+      if (!appearance) return NextResponse.json({ error: "Marketplace card appearance settings are invalid." }, { status: 400 });
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ marketplace_card_appearance: appearance })
+        .eq("id", true)
+        .select("marketplace_card_appearance")
+        .single();
+      if (error) throw error;
+      const savedAppearance = parseMarketplaceCardAppearanceSettings(data.marketplace_card_appearance);
+      if (!savedAppearance) throw new Error("Saved marketplace card settings are invalid.");
+      return NextResponse.json({ marketplaceCardAppearance: savedAppearance }, { headers: { "Cache-Control": "no-store" } });
     }
     if (typeof values?.accountCreationDisabled === "boolean") {
       const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")

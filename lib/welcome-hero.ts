@@ -73,7 +73,7 @@ export type WelcomeHeroSettings = {
   desktopLinksVerticalPosition: number;
   mobileLinksHorizontalPosition: number;
   mobileLinksVerticalPosition: number;
-  publicHeaderHorizontalPosition: number;
+  publicHeaderPosition: number;
   publicHeaderScale: number;
   slides: WelcomeHeroSlide[];
 };
@@ -107,7 +107,13 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const desktopLinksVerticalPosition = settings.desktopLinksVerticalPosition === undefined ? 100 : settings.desktopLinksVerticalPosition;
   const mobileLinksHorizontalPosition = settings.mobileLinksHorizontalPosition === undefined ? 0 : settings.mobileLinksHorizontalPosition;
   const mobileLinksVerticalPosition = settings.mobileLinksVerticalPosition === undefined ? 100 : settings.mobileLinksVerticalPosition;
-  const publicHeaderHorizontalPosition = settings.publicHeaderHorizontalPosition === undefined ? 50 : settings.publicHeaderHorizontalPosition;
+  const legacyPublicHeaderPosition = settings.publicHeaderHorizontalPosition;
+  const publicHeaderPosition = settings.publicHeaderPosition === undefined
+    ? typeof legacyPublicHeaderPosition === "number" && Number.isSafeInteger(legacyPublicHeaderPosition) &&
+      legacyPublicHeaderPosition >= 50 && legacyPublicHeaderPosition <= 100
+      ? (legacyPublicHeaderPosition - 50) * 2
+      : 0
+    : settings.publicHeaderPosition;
   const publicHeaderScale = settings.publicHeaderScale === undefined ? 100 : settings.publicHeaderScale;
   const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
   const requestButtonTextColor = settings.requestButtonTextColor === undefined ? "#18382e" : settings.requestButtonTextColor;
@@ -187,7 +193,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isIntegerValueInRange(desktopLinksVerticalPosition, 0, 100) ||
     !isIntegerValueInRange(mobileLinksHorizontalPosition, 0, 100) ||
     !isIntegerValueInRange(mobileLinksVerticalPosition, 0, 100) ||
-    !isIntegerValueInRange(publicHeaderHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(publicHeaderPosition, 0, 100) ||
+    (legacyPublicHeaderPosition !== undefined && !isIntegerValueInRange(legacyPublicHeaderPosition, 0, 100)) ||
     !isIntegerValueInRange(publicHeaderScale, 70, 150) ||
     !isTransition(transition) ||
     !isSlideInterval(slideIntervalSeconds) ||
@@ -279,7 +286,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     desktopLinksVerticalPosition: desktopLinksVerticalPosition as number,
     mobileLinksHorizontalPosition: mobileLinksHorizontalPosition as number,
     mobileLinksVerticalPosition: mobileLinksVerticalPosition as number,
-    publicHeaderHorizontalPosition: publicHeaderHorizontalPosition as number,
+    publicHeaderPosition: publicHeaderPosition as number,
     publicHeaderScale: publicHeaderScale as number,
     slides,
   };
