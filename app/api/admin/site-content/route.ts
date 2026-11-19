@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { getStaffAccess } from "@/lib/staff-auth";
 import { ownsStaffTaskClaim } from "@/lib/staff-task-claims";
 import { recordStaffTaskCompletion } from "@/lib/staff-task-completions";
+import { addWelcomeHeroImageUrls, parseWelcomeHeroSettings, WELCOME_HERO_BUCKET } from "@/lib/welcome-hero";
 
 function readObject(body: unknown): Record<string, unknown> | null {
   return typeof body === "object" && body !== null && !Array.isArray(body)
@@ -55,31 +56,39 @@ export async function GET(request: Request) {
     if (scope === "homepage") {
       const [settingsResult, headlinesResult] = await Promise.all([
         admin.from("marketplace_settings")
-          .select("homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, homepage_announcement, welcome_hero_hidden")
+          .select("homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
           .eq("id", true).single(),
         admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
           .order("created_at", { ascending: true }).order("id", { ascending: true }),
       ]);
       if (settingsResult.error) throw settingsResult.error;
       if (headlinesResult.error) throw headlinesResult.error;
+      const welcomeHero = parseWelcomeHeroSettings(settingsResult.data.welcome_hero_settings);
+      if (!welcomeHero) throw new Error("Saved welcome hero settings are invalid.");
       return NextResponse.json({
         headlineFontSize: settingsResult.data.homepage_headline_font_size,
         sellerCardsPerColumn: settingsResult.data.seller_cards_per_column,
         buyerCardsPerColumn: settingsResult.data.buyer_cards_per_column,
         homepageAnnouncement: settingsResult.data.homepage_announcement ?? "",
         welcomeHeroHidden: settingsResult.data.welcome_hero_hidden,
+        welcomeHero: addWelcomeHeroImageUrls(
+          welcomeHero,
+          (path) => admin.storage.from(WELCOME_HERO_BUCKET).getPublicUrl(path).data.publicUrl,
+        ),
         headlines: headlinesResult.data ?? [],
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const [settingsResult, headlinesResult] = await Promise.all([
       admin.from("marketplace_settings")
-        .select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden")
+        .select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
         .eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
         .order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsResult.error) throw settingsResult.error;
     if (headlinesResult.error) throw headlinesResult.error;
+    const welcomeHero = parseWelcomeHeroSettings(settingsResult.data.welcome_hero_settings);
+    if (!welcomeHero) throw new Error("Saved welcome hero settings are invalid.");
     return NextResponse.json({
       swahiliEnabled: settingsResult.data.swahili_enabled,
       headlineFontSize: settingsResult.data.homepage_headline_font_size,
@@ -89,6 +98,10 @@ export async function GET(request: Request) {
       nonAdminSignInDisabled: settingsResult.data.non_admin_sign_in_disabled ?? false,
       homepageAnnouncement: settingsResult.data.homepage_announcement ?? "",
       welcomeHeroHidden: settingsResult.data.welcome_hero_hidden,
+      welcomeHero: addWelcomeHeroImageUrls(
+        welcomeHero,
+        (path) => admin.storage.from(WELCOME_HERO_BUCKET).getPublicUrl(path).data.publicUrl,
+      ),
       headlines: headlinesResult.data ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {

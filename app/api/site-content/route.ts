@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { addWelcomeHeroImageUrls, parseWelcomeHeroSettings, WELCOME_HERO_BUCKET } from "@/lib/welcome-hero";
 
 export async function GET(request: Request) {
   try {
@@ -14,11 +15,17 @@ export async function GET(request: Request) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden").eq("id", true).single(),
+      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden, welcome_hero_settings").eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsError) throw settingsError;
     if (headlinesError) throw headlinesError;
+    const welcomeHero = parseWelcomeHeroSettings(settings.welcome_hero_settings);
+    if (!welcomeHero) throw new Error("Saved welcome hero settings are invalid.");
+    const welcomeHeroWithUrls = addWelcomeHeroImageUrls(
+      welcomeHero,
+      (path) => admin.storage.from(WELCOME_HERO_BUCKET).getPublicUrl(path).data.publicUrl,
+    );
     return NextResponse.json({
       swahiliEnabled: settings.swahili_enabled,
       headlineFontSize: settings.homepage_headline_font_size,
@@ -28,6 +35,7 @@ export async function GET(request: Request) {
       nonAdminSignInDisabled: settings.non_admin_sign_in_disabled ?? false,
       homepageAnnouncement: settings.homepage_announcement ?? "",
       welcomeHeroHidden: settings.welcome_hero_hidden,
+      welcomeHero: welcomeHeroWithUrls,
       headlines: headlines ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {

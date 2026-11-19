@@ -2,7 +2,14 @@ alter table public.marketplace_settings
   add column if not exists swahili_enabled boolean not null default true,
   add column if not exists homepage_headline_font_size integer not null default 49
     check (homepage_headline_font_size between 24 and 72),
-  add column if not exists welcome_hero_hidden boolean not null default false;
+  add column if not exists welcome_hero_hidden boolean not null default false,
+  add column if not exists welcome_hero_settings jsonb not null default
+    '{"eyebrow":"TANZANIA AND BEYOND","headline":"Discover the stones that move us.","description":"Explore mineral listings, connect with people looking to buy, and find your place in Tanzania’s mineral market.","exploreLabel":"Explore minerals","requestLabel":"Post a request","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"slides":[]}'::jsonb;
+
+insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
+values ('homepage-hero', 'homepage-hero', true, array['image/jpeg'], 1258291)
+on conflict (id) do update
+set public = true, allowed_mime_types = excluded.allowed_mime_types, file_size_limit = excluded.file_size_limit;
 
 create table if not exists public.homepage_headlines (
   id uuid primary key default gen_random_uuid(),
