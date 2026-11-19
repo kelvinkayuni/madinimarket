@@ -59,8 +59,18 @@ export type WelcomeHeroSettings = {
   slideIntervalSeconds: WelcomeHeroSlideIntervalSeconds;
   transitionDurationMs: WelcomeHeroTransitionDurationMs;
   heightMode: WelcomeHeroHeightMode;
-  mobileActionsPosition: WelcomeHeroMobileActionsPosition;
-  actionsHorizontalPosition: number;
+  desktopCopyHorizontalPosition: number;
+  desktopCopyVerticalPosition: number;
+  mobileCopyHorizontalPosition: number;
+  mobileCopyVerticalPosition: number;
+  desktopActionsHorizontalPosition: number;
+  desktopActionsVerticalPosition: number;
+  mobileActionsHorizontalPosition: number;
+  mobileActionsVerticalPosition: number;
+  desktopLinksHorizontalPosition: number;
+  desktopLinksVerticalPosition: number;
+  mobileLinksHorizontalPosition: number;
+  mobileLinksVerticalPosition: number;
   slides: WelcomeHeroSlide[];
 };
 
@@ -72,7 +82,27 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const transition = settings.transition === undefined ? "fade" : settings.transition;
   const slideIntervalSeconds = settings.slideIntervalSeconds === undefined ? 10 : settings.slideIntervalSeconds;
   const transitionDurationMs = settings.transitionDurationMs === undefined ? 1000 : settings.transitionDurationMs;
-  const actionsHorizontalPosition = settings.actionsHorizontalPosition === undefined ? 0 : settings.actionsHorizontalPosition;
+  const legacyDesktopActionsPosition = settings.desktopActionsPosition;
+  const desktopCopyHorizontalPosition = settings.desktopCopyHorizontalPosition === undefined ? 0 : settings.desktopCopyHorizontalPosition;
+  const desktopCopyVerticalPosition = settings.desktopCopyVerticalPosition === undefined ? 0 : settings.desktopCopyVerticalPosition;
+  const mobileCopyHorizontalPosition = settings.mobileCopyHorizontalPosition === undefined ? 0 : settings.mobileCopyHorizontalPosition;
+  const mobileCopyVerticalPosition = settings.mobileCopyVerticalPosition === undefined ? 0 : settings.mobileCopyVerticalPosition;
+  const desktopActionsHorizontalPosition = settings.desktopActionsHorizontalPosition === undefined
+    ? settings.actionsHorizontalPosition === undefined ? 0 : settings.actionsHorizontalPosition
+    : settings.desktopActionsHorizontalPosition;
+  const desktopActionsVerticalPosition = settings.desktopActionsVerticalPosition === undefined
+    ? legacyDesktopActionsPosition === "middle" ? 50 : legacyDesktopActionsPosition === "bottom" ? 100 : 85
+    : settings.desktopActionsVerticalPosition;
+  const mobileActionsHorizontalPosition = settings.mobileActionsHorizontalPosition === undefined
+    ? settings.actionsHorizontalPosition === undefined ? 0 : settings.actionsHorizontalPosition
+    : settings.mobileActionsHorizontalPosition;
+  const mobileActionsVerticalPosition = settings.mobileActionsVerticalPosition === undefined
+    ? mobileActionsPosition === "middle" ? 75 : mobileActionsPosition === "bottom" ? 100 : 85
+    : settings.mobileActionsVerticalPosition;
+  const desktopLinksHorizontalPosition = settings.desktopLinksHorizontalPosition === undefined ? 0 : settings.desktopLinksHorizontalPosition;
+  const desktopLinksVerticalPosition = settings.desktopLinksVerticalPosition === undefined ? 100 : settings.desktopLinksVerticalPosition;
+  const mobileLinksHorizontalPosition = settings.mobileLinksHorizontalPosition === undefined ? 0 : settings.mobileLinksHorizontalPosition;
+  const mobileLinksVerticalPosition = settings.mobileLinksVerticalPosition === undefined ? 100 : settings.mobileLinksVerticalPosition;
   const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
   const requestButtonTextColor = settings.requestButtonTextColor === undefined ? "#18382e" : settings.requestButtonTextColor;
   const sellLabel = settings.sellLabel === undefined
@@ -133,10 +163,21 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
     !isIntegerInRange("desktopFontSize", 40, 78) ||
     !isIntegerInRange("mobileFontSize", 32, 56) ||
+    !isIntegerValueInRange(desktopCopyHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopCopyVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileCopyHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileCopyVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopActionsHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopActionsVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileActionsHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileActionsVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopLinksHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopLinksVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileLinksHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileLinksVerticalPosition, 0, 100) ||
     !isTransition(transition) ||
     !isSlideInterval(slideIntervalSeconds) ||
     !isTransitionDuration(transitionDurationMs) ||
-    !isIntegerValueInRange(actionsHorizontalPosition, 0, 100) ||
     !isHeightMode(heightMode) ||
     !isMobileActionsPosition(mobileActionsPosition) ||
     !Array.isArray(settings.slides) ||
@@ -210,8 +251,18 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     slideIntervalSeconds,
     transitionDurationMs,
     heightMode,
-    mobileActionsPosition,
-    actionsHorizontalPosition: actionsHorizontalPosition as number,
+    desktopCopyHorizontalPosition: desktopCopyHorizontalPosition as number,
+    desktopCopyVerticalPosition: desktopCopyVerticalPosition as number,
+    mobileCopyHorizontalPosition: mobileCopyHorizontalPosition as number,
+    mobileCopyVerticalPosition: mobileCopyVerticalPosition as number,
+    desktopActionsHorizontalPosition: desktopActionsHorizontalPosition as number,
+    desktopActionsVerticalPosition: desktopActionsVerticalPosition as number,
+    mobileActionsHorizontalPosition: mobileActionsHorizontalPosition as number,
+    mobileActionsVerticalPosition: mobileActionsVerticalPosition as number,
+    desktopLinksHorizontalPosition: desktopLinksHorizontalPosition as number,
+    desktopLinksVerticalPosition: desktopLinksVerticalPosition as number,
+    mobileLinksHorizontalPosition: mobileLinksHorizontalPosition as number,
+    mobileLinksVerticalPosition: mobileLinksVerticalPosition as number,
     slides,
   };
 }

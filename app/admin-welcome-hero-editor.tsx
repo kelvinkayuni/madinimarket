@@ -15,6 +15,41 @@ import WelcomeHero from "./welcome-hero";
 
 type DraftSlide = WelcomeHeroSlide & { file?: File; mobileFile?: File };
 
+function getPositionLabel(position: number, labels: [string, string, string]) {
+  if (position === 0) return labels[0];
+  if (position === 50) return labels[1];
+  if (position === 100) return labels[2];
+  return `${position}%`;
+}
+
+function HeroPositionControls({
+  title,
+  horizontalPosition,
+  verticalPosition,
+  onHorizontalPositionChange,
+  onVerticalPositionChange,
+}: {
+  title: string;
+  horizontalPosition: number;
+  verticalPosition: number;
+  onHorizontalPositionChange: (position: number) => void;
+  onVerticalPositionChange: (position: number) => void;
+}) {
+  return <fieldset className="admin-welcome-hero-position-control">
+    <legend>{title}</legend>
+    <label className="field-label admin-welcome-hero-range">
+      Horizontal position: {getPositionLabel(horizontalPosition, ["Left", "Middle", "Right"])}
+      <input aria-label={`${title} horizontal position`} type="range" min={0} max={100} step={1} value={horizontalPosition} onChange={(event) => onHorizontalPositionChange(Number(event.target.value))} />
+      <span className="admin-welcome-hero-range-labels"><span>Left</span><span>Middle</span><span>Right</span></span>
+    </label>
+    <label className="field-label admin-welcome-hero-range">
+      Vertical position: {getPositionLabel(verticalPosition, ["Top", "Middle", "Bottom"])}
+      <input aria-label={`${title} vertical position`} type="range" min={0} max={100} step={1} value={verticalPosition} onChange={(event) => onVerticalPositionChange(Number(event.target.value))} />
+      <span className="admin-welcome-hero-range-labels"><span>Top</span><span>Middle</span><span>Bottom</span></span>
+    </label>
+  </fieldset>;
+}
+
 function optimizeImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/") || file.size > 20_000_000) {
     throw new Error("Choose image files smaller than 20 MB.");
@@ -91,14 +126,6 @@ export default function AdminWelcomeHeroEditor({
     setDraft((current) => ({ ...current, [key]: value }));
     setMessage("");
   };
-  const horizontalPositionLabel = draft.actionsHorizontalPosition === 0
-    ? "Left"
-    : draft.actionsHorizontalPosition === 50
-      ? "Middle"
-      : draft.actionsHorizontalPosition === 100
-        ? "Right"
-        : `${draft.actionsHorizontalPosition}%`;
-
   const addImages = async (files: FileList | null) => {
     if (!files?.length) return;
     if (draft.slides.length + files.length > 3) {
@@ -341,18 +368,59 @@ export default function AdminWelcomeHeroEditor({
           <option value="full-screen">Full screen</option>
         </select>
       </label>
-      <label className="field-label">Phone button position
-        <select className="text-input" value={draft.mobileActionsPosition} onChange={(event) => update("mobileActionsPosition", event.target.value as WelcomeHeroSettings["mobileActionsPosition"])}>
-          <option value="top">Top</option>
-          <option value="middle">Middle</option>
-          <option value="bottom">Bottom</option>
-        </select>
-      </label>
-      <label className="field-label admin-welcome-hero-range">
-        Horizontal button position: {horizontalPositionLabel}
-        <input aria-label="Horizontal button position" type="range" min={0} max={100} step={1} value={draft.actionsHorizontalPosition} onChange={(event) => update("actionsHorizontalPosition", Number(event.target.value))} />
-        <span className="admin-welcome-hero-range-labels"><span>Left</span><span>Middle</span><span>Right</span></span>
-      </label>
+      <details className="admin-welcome-hero-position-panel" open>
+        <summary>Element positions <span>Adjust each group independently; use the live preview to avoid overlap.</span></summary>
+        <div className="admin-welcome-hero-position-layouts">
+          <section className="admin-welcome-hero-position-layout" aria-label="Desktop element positions">
+            <h4>Desktop</h4>
+            <HeroPositionControls
+              title="Headline and description"
+              horizontalPosition={draft.desktopCopyHorizontalPosition}
+              verticalPosition={draft.desktopCopyVerticalPosition}
+              onHorizontalPositionChange={(position) => update("desktopCopyHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("desktopCopyVerticalPosition", position)}
+            />
+            <HeroPositionControls
+              title="Sell and request buttons"
+              horizontalPosition={draft.desktopActionsHorizontalPosition}
+              verticalPosition={draft.desktopActionsVerticalPosition}
+              onHorizontalPositionChange={(position) => update("desktopActionsHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("desktopActionsVerticalPosition", position)}
+            />
+            <HeroPositionControls
+              title="Explore and browse links"
+              horizontalPosition={draft.desktopLinksHorizontalPosition}
+              verticalPosition={draft.desktopLinksVerticalPosition}
+              onHorizontalPositionChange={(position) => update("desktopLinksHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("desktopLinksVerticalPosition", position)}
+            />
+          </section>
+          <section className="admin-welcome-hero-position-layout" aria-label="Phone element positions">
+            <h4>Phone</h4>
+            <HeroPositionControls
+              title="Headline and description"
+              horizontalPosition={draft.mobileCopyHorizontalPosition}
+              verticalPosition={draft.mobileCopyVerticalPosition}
+              onHorizontalPositionChange={(position) => update("mobileCopyHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("mobileCopyVerticalPosition", position)}
+            />
+            <HeroPositionControls
+              title="Sell and request buttons"
+              horizontalPosition={draft.mobileActionsHorizontalPosition}
+              verticalPosition={draft.mobileActionsVerticalPosition}
+              onHorizontalPositionChange={(position) => update("mobileActionsHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("mobileActionsVerticalPosition", position)}
+            />
+            <HeroPositionControls
+              title="Explore and browse links"
+              horizontalPosition={draft.mobileLinksHorizontalPosition}
+              verticalPosition={draft.mobileLinksVerticalPosition}
+              onHorizontalPositionChange={(position) => update("mobileLinksHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("mobileLinksVerticalPosition", position)}
+            />
+          </section>
+        </div>
+      </details>
       <label className="field-label">Slide animation
         <select className="text-input" value={draft.transition} onChange={(event) => update("transition", event.target.value as WelcomeHeroSettings["transition"])}>
           <option value="appear">Appear</option>

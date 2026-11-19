@@ -51,8 +51,18 @@ export default function WelcomeHero({
     "--welcome-button-text-color": settings.buttonTextColor,
     "--welcome-request-button-color": settings.requestButtonColor,
     "--welcome-request-button-text-color": settings.requestButtonTextColor,
-    "--welcome-actions-left": `${settings.actionsHorizontalPosition}%`,
-    "--welcome-actions-shift": `-${settings.actionsHorizontalPosition}%`,
+    "--welcome-desktop-copy-x": `${settings.desktopCopyHorizontalPosition}%`,
+    "--welcome-desktop-copy-y": `${settings.desktopCopyVerticalPosition}%`,
+    "--welcome-mobile-copy-x": `${settings.mobileCopyHorizontalPosition}%`,
+    "--welcome-mobile-copy-y": `${settings.mobileCopyVerticalPosition}%`,
+    "--welcome-desktop-actions-x": `${settings.desktopActionsHorizontalPosition}%`,
+    "--welcome-desktop-actions-y": `${settings.desktopActionsVerticalPosition}%`,
+    "--welcome-mobile-actions-x": `${settings.mobileActionsHorizontalPosition}%`,
+    "--welcome-mobile-actions-y": `${settings.mobileActionsVerticalPosition}%`,
+    "--welcome-desktop-links-x": `${settings.desktopLinksHorizontalPosition}%`,
+    "--welcome-desktop-links-y": `${settings.desktopLinksVerticalPosition}%`,
+    "--welcome-mobile-links-x": `${settings.mobileLinksHorizontalPosition}%`,
+    "--welcome-mobile-links-y": `${settings.mobileLinksVerticalPosition}%`,
     "--welcome-font-family": fontFamily,
     "--welcome-font-weight": settings.fontWeight,
     "--welcome-desktop-font-size": `${settings.desktopFontSize}px`,
@@ -112,7 +122,6 @@ export default function WelcomeHero({
     ref={heroRef}
     className={`market-welcome-hero${slides.length > 0 ? " has-slides" : ""}${preview ? " is-preview" : ""}${previewMobile ? " is-preview-mobile" : ""}`}
     data-height-mode={settings.heightMode}
-    data-mobile-actions-position={settings.mobileActionsPosition}
     data-transition={settings.transition}
     aria-labelledby={preview ? undefined : "market-welcome-heading"}
     style={style}
@@ -145,10 +154,12 @@ export default function WelcomeHero({
     </div>}
     <div className="market-welcome-overlay" aria-hidden="true" />
     <div className="market-welcome-copy">
-      <span className="market-welcome-eyebrow"><span /> {settings.eyebrow}</span>
-      <div className="market-welcome-phrase" key={activeIndex}>
-        <h1 id={preview ? undefined : "market-welcome-heading"}>{headline}</h1>
-        <p>{description}</p>
+      <div className="market-welcome-main-copy">
+        <span className="market-welcome-eyebrow"><span /> {settings.eyebrow}</span>
+        <div className="market-welcome-phrase" key={activeIndex}>
+          <h1 id={preview ? undefined : "market-welcome-heading"}>{headline}</h1>
+          <p>{description}</p>
+        </div>
       </div>
       <div className="market-welcome-actions">
         {preview

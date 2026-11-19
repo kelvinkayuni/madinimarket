@@ -4,11 +4,11 @@ alter table public.marketplace_settings
     check (homepage_headline_font_size between 24 and 72),
   add column if not exists welcome_hero_hidden boolean not null default false,
   add column if not exists welcome_hero_settings jsonb not null default
-    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","mobileActionsPosition":"top","actionsHorizontalPosition":0,"slides":[]}'::jsonb;
+    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"slides":[]}'::jsonb;
 
 alter table public.marketplace_settings
   alter column welcome_hero_settings set default
-    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","mobileActionsPosition":"top","actionsHorizontalPosition":0,"slides":[]}'::jsonb;
+    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"slides":[]}'::jsonb;
 
 update public.marketplace_settings
 set welcome_hero_settings =
@@ -35,6 +35,48 @@ where welcome_hero_settings ? 'exploreLabel'
 update public.marketplace_settings
 set welcome_hero_settings = jsonb_set(welcome_hero_settings, '{mobileActionsPosition}', '"top"'::jsonb, true)
 where welcome_hero_settings->>'mobileActionsPosition' is null;
+
+update public.marketplace_settings
+set welcome_hero_settings = welcome_hero_settings || jsonb_build_object(
+  'desktopCopyHorizontalPosition', coalesce(nullif(welcome_hero_settings->'desktopCopyHorizontalPosition', 'null'::jsonb), '0'::jsonb),
+  'desktopCopyVerticalPosition', coalesce(nullif(welcome_hero_settings->'desktopCopyVerticalPosition', 'null'::jsonb), '0'::jsonb),
+  'mobileCopyHorizontalPosition', coalesce(nullif(welcome_hero_settings->'mobileCopyHorizontalPosition', 'null'::jsonb), '0'::jsonb),
+  'mobileCopyVerticalPosition', coalesce(nullif(welcome_hero_settings->'mobileCopyVerticalPosition', 'null'::jsonb), '0'::jsonb),
+  'desktopActionsHorizontalPosition', coalesce(nullif(welcome_hero_settings->'desktopActionsHorizontalPosition', 'null'::jsonb), nullif(welcome_hero_settings->'actionsHorizontalPosition', 'null'::jsonb), '0'::jsonb),
+  'desktopActionsVerticalPosition', coalesce(
+    nullif(welcome_hero_settings->'desktopActionsVerticalPosition', 'null'::jsonb),
+    case welcome_hero_settings->>'desktopActionsPosition'
+      when 'middle' then '50'::jsonb
+      when 'bottom' then '100'::jsonb
+      else '85'::jsonb
+    end
+  ),
+  'mobileActionsHorizontalPosition', coalesce(nullif(welcome_hero_settings->'mobileActionsHorizontalPosition', 'null'::jsonb), nullif(welcome_hero_settings->'actionsHorizontalPosition', 'null'::jsonb), '0'::jsonb),
+  'mobileActionsVerticalPosition', coalesce(
+    nullif(welcome_hero_settings->'mobileActionsVerticalPosition', 'null'::jsonb),
+    case welcome_hero_settings->>'mobileActionsPosition'
+      when 'middle' then '75'::jsonb
+      when 'bottom' then '100'::jsonb
+      else '85'::jsonb
+    end
+  ),
+  'desktopLinksHorizontalPosition', coalesce(nullif(welcome_hero_settings->'desktopLinksHorizontalPosition', 'null'::jsonb), '0'::jsonb),
+  'desktopLinksVerticalPosition', coalesce(nullif(welcome_hero_settings->'desktopLinksVerticalPosition', 'null'::jsonb), '100'::jsonb),
+  'mobileLinksHorizontalPosition', coalesce(nullif(welcome_hero_settings->'mobileLinksHorizontalPosition', 'null'::jsonb), '0'::jsonb),
+  'mobileLinksVerticalPosition', coalesce(nullif(welcome_hero_settings->'mobileLinksVerticalPosition', 'null'::jsonb), '100'::jsonb)
+)
+where welcome_hero_settings->>'desktopCopyHorizontalPosition' is null
+   or welcome_hero_settings->>'desktopCopyVerticalPosition' is null
+   or welcome_hero_settings->>'mobileCopyHorizontalPosition' is null
+   or welcome_hero_settings->>'mobileCopyVerticalPosition' is null
+   or welcome_hero_settings->>'desktopActionsHorizontalPosition' is null
+   or welcome_hero_settings->>'desktopActionsVerticalPosition' is null
+   or welcome_hero_settings->>'mobileActionsHorizontalPosition' is null
+   or welcome_hero_settings->>'mobileActionsVerticalPosition' is null
+   or welcome_hero_settings->>'desktopLinksHorizontalPosition' is null
+   or welcome_hero_settings->>'desktopLinksVerticalPosition' is null
+   or welcome_hero_settings->>'mobileLinksHorizontalPosition' is null
+   or welcome_hero_settings->>'mobileLinksVerticalPosition' is null;
 
 insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
 values ('homepage-hero', 'homepage-hero', true, array['image/jpeg'], 1258291)

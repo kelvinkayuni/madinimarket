@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePaths = [
   path.join(root, "app", "marketplace.tsx"),
   path.join(root, "app", "commerce-panel.tsx"),
+  path.join(root, "app", "welcome-hero.tsx"),
 ];
 const outputPath = path.join(root, "lib", "public-translation-catalog.ts");
 let sourcePath = "";
@@ -43,6 +44,16 @@ function findRootByClass(node, tagName, className) {
   let result;
   ts.forEachChild(node, (child) => {
     result ??= findRootByClass(child, tagName, className);
+  });
+  return result;
+}
+
+function findFunctionByName(node, functionName) {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === functionName) return node;
+
+  let result;
+  ts.forEachChild(node, (child) => {
+    result ??= findFunctionByName(child, functionName);
   });
   return result;
 }
@@ -140,9 +151,23 @@ for (const [index, currentPath] of sourcePaths.entries()) {
   sourceFile = ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const interfaceRoot = index === 0
     ? findPublicRoot(sourceFile)
-    : findRootByClass(sourceFile, "div", "commerce-panel");
+    : index === 1
+      ? findRootByClass(sourceFile, "div", "commerce-panel")
+      : findFunctionByName(sourceFile, "WelcomeHero");
   if (!interfaceRoot) throw new Error(`Could not locate the public interface in ${path.relative(root, sourcePath)}.`);
-  visitJsx(interfaceRoot);
+  if (ts.isFunctionDeclaration(interfaceRoot) && interfaceRoot.body) {
+    for (const statement of interfaceRoot.body.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === "statusText") {
+          visitExpression(declaration.initializer);
+        }
+      }
+    }
+    visitStatements(interfaceRoot.body.statements);
+  } else {
+    visitJsx(interfaceRoot);
+  }
 }
 
 const output = `export const publicTranslationPhrases = ${JSON.stringify([...phrases].sort(), null, 2)} as const;\n`;
