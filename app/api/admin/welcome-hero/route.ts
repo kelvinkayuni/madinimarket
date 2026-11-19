@@ -16,6 +16,8 @@ import {
 type DraftSlide = {
   path?: string;
   uploadIndex?: number;
+  headline?: string;
+  description?: string;
   focusX: number;
   focusY: number;
   scale: number;
@@ -46,6 +48,12 @@ function parseDraftSlides(value: unknown): DraftSlide[] | null {
     const mobileFocusX = slide.mobileFocusX === undefined ? slide.focusX : slide.mobileFocusX;
     const mobileFocusY = slide.mobileFocusY === undefined ? slide.focusY : slide.mobileFocusY;
     const mobileScale = slide.mobileScale === undefined ? scale : slide.mobileScale;
+    if ((slide.headline !== undefined &&
+      (typeof slide.headline !== "string" || !slide.headline.trim() || slide.headline.length > 100)) ||
+      (slide.description !== undefined &&
+        (typeof slide.description !== "string" || !slide.description.trim() || slide.description.length > 320))) {
+      return null;
+    }
     if (typeof slide.focusX !== "number" || !Number.isSafeInteger(slide.focusX) || slide.focusX < 0 || slide.focusX > 100 ||
       typeof slide.focusY !== "number" || !Number.isSafeInteger(slide.focusY) || slide.focusY < 0 || slide.focusY > 100 ||
       typeof scale !== "number" || !Number.isSafeInteger(scale) || scale < 70 || scale > 160 ||
@@ -54,7 +62,16 @@ function parseDraftSlides(value: unknown): DraftSlide[] | null {
       typeof mobileScale !== "number" || !Number.isSafeInteger(mobileScale) || mobileScale < 70 || mobileScale > 160) {
       return null;
     }
-    const draft: DraftSlide = { focusX: slide.focusX, focusY: slide.focusY, scale, mobileFocusX, mobileFocusY, mobileScale };
+    const draft: DraftSlide = {
+      ...(typeof slide.headline === "string" ? { headline: slide.headline } : {}),
+      ...(typeof slide.description === "string" ? { description: slide.description } : {}),
+      focusX: slide.focusX,
+      focusY: slide.focusY,
+      scale,
+      mobileFocusX,
+      mobileFocusY,
+      mobileScale,
+    };
     if (typeof slide.path === "string" && slide.uploadIndex === undefined &&
       /^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(slide.path) && !paths.has(slide.path)) {
       paths.add(slide.path);
@@ -214,6 +231,8 @@ export async function POST(request: Request) {
 
       slides.push({
         path,
+        headline: slide.headline ?? design.headline,
+        description: slide.description ?? design.description,
         focusX: slide.focusX,
         focusY: slide.focusY,
         scale: slide.scale,

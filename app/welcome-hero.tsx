@@ -28,6 +28,9 @@ export default function WelcomeHero({
   const [rotationPaused, setRotationPaused] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
   const slides = settings.slides;
+  const activeSlide = slides.length > 0 ? slides[activeIndex % slides.length] : undefined;
+  const headline = activeSlide?.headline.trim() ? activeSlide.headline : settings.headline;
+  const description = activeSlide?.description.trim() ? activeSlide.description : settings.description;
   const fontFamily = settings.fontFamily === "serif"
     ? "var(--font-display), Georgia, serif"
     : "var(--font-body), Arial, sans-serif";
@@ -96,9 +99,10 @@ export default function WelcomeHero({
 
   return <section
     ref={heroRef}
-    className={`market-welcome-hero${preview ? " is-preview" : ""}${previewMobile ? " is-preview-mobile" : ""}`}
+    className={`market-welcome-hero${slides.length > 0 ? " has-slides" : ""}${preview ? " is-preview" : ""}${previewMobile ? " is-preview-mobile" : ""}`}
     data-height-mode={settings.heightMode}
     data-mobile-actions-position={settings.mobileActionsPosition}
+    data-transition={settings.transition}
     aria-labelledby={preview ? undefined : "market-welcome-heading"}
     style={style}
   >
@@ -121,8 +125,10 @@ export default function WelcomeHero({
     <div className="market-welcome-overlay" aria-hidden="true" />
     <div className="market-welcome-copy">
       <span className="market-welcome-eyebrow"><span /> {settings.eyebrow}</span>
-      <h1 id={preview ? undefined : "market-welcome-heading"}>{settings.headline}</h1>
-      <p>{settings.description}</p>
+      <div className="market-welcome-phrase" key={activeIndex}>
+        <h1 id={preview ? undefined : "market-welcome-heading"}>{headline}</h1>
+        <p>{description}</p>
+      </div>
       <div className="market-welcome-actions">
         {preview
           ? <span className="button button-lime"><Gem size={17} aria-hidden="true" /> {settings.exploreLabel} <ArrowRight size={16} aria-hidden="true" /></span>

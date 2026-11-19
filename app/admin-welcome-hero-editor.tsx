@@ -107,6 +107,8 @@ export default function AdminWelcomeHeroEditor({
         objectUrls.current.add(url);
         return {
           path: "",
+          headline: "",
+          description: "",
           focusX: 50,
           focusY: 50,
           scale: 100,
@@ -207,6 +209,10 @@ export default function AdminWelcomeHeroEditor({
   };
 
   const save = async () => {
+    if (draft.slides.some((slide) => !slide.headline.trim() || !slide.description.trim())) {
+      setMessage("Add a headline and description for each background image before saving.");
+      return;
+    }
     const newImageBytes = draft.slides.reduce((total, slide) => {
       const draftSlide = slide as DraftSlide;
       return total + (draftSlide.file?.size ?? 0) + (draftSlide.mobileFile?.size ?? 0);
@@ -232,6 +238,8 @@ export default function AdminWelcomeHeroEditor({
           ...(draftSlide.mobileFile
             ? { mobileUploadIndex: index }
             : slide.mobilePath ? { mobilePath: slide.mobilePath } : {}),
+          headline: slide.headline,
+          description: slide.description,
           focusX: slide.focusX,
           focusY: slide.focusY,
           scale: slide.scale,
@@ -240,7 +248,13 @@ export default function AdminWelcomeHeroEditor({
           mobileScale: slide.mobileScale,
         };
       });
-      form.append("settings", JSON.stringify({ ...draft, slides }));
+      const firstSlide = draft.slides[0];
+      form.append("settings", JSON.stringify({
+        ...draft,
+        headline: firstSlide?.headline ?? draft.headline,
+        description: firstSlide?.description ?? draft.description,
+        slides,
+      }));
       const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
       if (sessionError) throw sessionError;
       if (!session) throw new Error("Admin session expired. Sign in again to save.");
@@ -294,7 +308,7 @@ export default function AdminWelcomeHeroEditor({
         {hidden ? "Show hero" : "Hide hero"}
       </button>
     </div>
-    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. The buttons keep their existing actions; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
+    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. Each background image can have its own headline and description, and both change with that image. Choose a fade, slide, or zoom transition. The buttons keep their existing actions; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
 
     <div className="admin-welcome-hero-preview-heading">
       <strong><Eye size={15} aria-hidden="true" /> Live preview</strong>
@@ -309,8 +323,10 @@ export default function AdminWelcomeHeroEditor({
 
     <div className="admin-welcome-hero-fields">
       <label className="field-label">Eyebrow<input className="text-input" maxLength={36} value={draft.eyebrow} onChange={(event) => update("eyebrow", event.target.value)} /></label>
-      <label className="field-label">Headline<input className="text-input" maxLength={100} value={draft.headline} onChange={(event) => update("headline", event.target.value)} /></label>
-      <label className="field-label admin-welcome-hero-description">Description<textarea className="text-input" maxLength={320} rows={3} value={draft.description} onChange={(event) => update("description", event.target.value)} /></label>
+      {draft.slides.length === 0 && <>
+        <label className="field-label">Headline<input className="text-input" maxLength={100} value={draft.headline} onChange={(event) => update("headline", event.target.value)} /></label>
+        <label className="field-label admin-welcome-hero-description">Description<textarea className="text-input" maxLength={320} rows={3} value={draft.description} onChange={(event) => update("description", event.target.value)} /></label>
+      </>}
       <label className="field-label">Explore button label<input className="text-input" maxLength={32} value={draft.exploreLabel} onChange={(event) => update("exploreLabel", event.target.value)} /></label>
       <label className="field-label">Request button label<input className="text-input" maxLength={32} value={draft.requestLabel} onChange={(event) => update("requestLabel", event.target.value)} /></label>
       <label className="field-label">Hero height
@@ -325,6 +341,13 @@ export default function AdminWelcomeHeroEditor({
           <option value="top">Top</option>
           <option value="middle">Middle</option>
           <option value="bottom">Bottom</option>
+        </select>
+      </label>
+      <label className="field-label">Slide animation
+        <select className="text-input" value={draft.transition} onChange={(event) => update("transition", event.target.value as WelcomeHeroSettings["transition"])}>
+          <option value="fade">Fade</option>
+          <option value="slide">Slide</option>
+          <option value="zoom">Zoom</option>
         </select>
       </label>
     </div>
@@ -365,7 +388,7 @@ export default function AdminWelcomeHeroEditor({
 
     <div className="admin-welcome-hero-images">
       <div className="admin-queue-heading"><div><span>BACKGROUND IMAGES</span><h4>{draft.slides.length} of 3 desktop slides</h4></div></div>
-      <p className="admin-translation-help">Desktop images and optional phone images are optimized as JPEGs and rotate together every five seconds. Each version has independent focal-point and size controls; when no phone image is set, the desktop image uses the phone crop settings. New uploads in one save must total 3.6 MB or less. The existing gemstone artwork remains the fallback when no desktop images are selected.</p>
+      <p className="admin-translation-help">Each desktop image has a matching headline and description; add up to three image-and-copy slides. Desktop images and optional phone images are optimized as JPEGs and rotate together every five seconds. Each version has independent focal-point and size controls; when no phone image is set, the desktop image uses the phone crop settings. New uploads in one save must total 3.6 MB or less. The existing gemstone artwork remains the fallback when no desktop images are selected.</p>
       {draft.slides.map((slide, index) => {
         const draftSlide = slide as DraftSlide;
         const hasMobileImage = Boolean(draftSlide.mobilePath || draftSlide.mobileFile);
@@ -378,6 +401,12 @@ export default function AdminWelcomeHeroEditor({
               <button type="button" aria-label={`Move image ${index + 1} down`} disabled={isPreparingImages || index === draft.slides.length - 1} onClick={() => moveSlide(index, 1)}><ArrowDown size={15} /></button>
               <button type="button" aria-label={`Remove image ${index + 1}`} disabled={isPreparingImages} onClick={() => removeSlide(index)}><Trash2 size={15} /></button>
             </div>
+            <label>Headline for image {index + 1}
+              <input className="text-input" maxLength={100} value={slide.headline} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, headline: event.target.value } : current))} />
+            </label>
+            <label>Description for image {index + 1}
+              <textarea className="text-input" maxLength={320} rows={3} value={slide.description} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, description: event.target.value } : current))} />
+            </label>
             <label>Desktop horizontal focal point: {slide.focusX}%
               <input type="range" min={0} max={100} step={1} value={slide.focusX} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, focusX: Number(event.target.value) } : current))} />
             </label>

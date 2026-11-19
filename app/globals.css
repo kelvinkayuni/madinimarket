@@ -592,6 +592,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .user-chip-identity small { color: #718071; font-size: 9px; }
 .market-content { width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0 clamp(18px, 3vw, 48px); }
 .market-welcome-hero { --welcome-stable-viewport-height: 100vh; position: relative; min-height: clamp(360px, 39vw, 470px); display: flex; align-items: center; overflow: hidden; margin: 18px 0 24px; padding: clamp(32px, 5vw, 68px); border: 1px solid #264a3b; border-radius: 5px; background-color: var(--welcome-background-color, #112e26); background-image: url("/welcome-gemstones.svg"); background-position: right 42%; background-repeat: no-repeat; background-size: min(78vw, 980px) auto; color: #f7f5eb; }
+.market-welcome-hero:not(.is-preview) { margin: 18px calc(0px - clamp(18px, 3vw, 48px)) 24px; border: 0; border-radius: 0; }
+.market-welcome-hero.has-slides { background-image: none; }
 .market-welcome-hero[data-height-mode="fit-screen"]:not(.is-preview) { min-height: max(360px, calc(var(--welcome-stable-viewport-height) - var(--welcome-fit-offset, 118px))); }
 .market-welcome-hero[data-height-mode="full-screen"]:not(.is-preview) { min-height: var(--welcome-stable-viewport-height); }
 @supports (height: 100svh) {
@@ -601,12 +603,23 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-slides { z-index: 0; }
 .market-welcome-slide { position: absolute; inset: 0; background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); background-repeat: no-repeat; background-size: cover; opacity: 0; transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); transition: opacity .7s ease, transform .2s ease; }
 .market-welcome-slide.is-active { opacity: 1; }
+.market-welcome-hero[data-transition="slide"] .market-welcome-slide { translate: 4% 0; transition: opacity .7s ease, translate .7s ease; }
+.market-welcome-hero[data-transition="slide"] .market-welcome-slide.is-active { translate: 0; }
+.market-welcome-hero[data-transition="zoom"] .market-welcome-slide { scale: .94; transition: opacity .7s ease, scale .7s ease; }
+.market-welcome-hero[data-transition="zoom"] .market-welcome-slide.is-active { scale: 1; }
 .market-welcome-overlay { z-index: 0; background: linear-gradient(90deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 31%, transparent 100%); opacity: var(--welcome-overlay-opacity, .92); }
 .market-welcome-copy { position: relative; z-index: 1; width: min(100%, 590px); }
+.market-welcome-phrase { position: relative; }
+@keyframes welcome-phrase-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes welcome-phrase-slide { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes welcome-phrase-zoom { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+.market-welcome-hero[data-transition="fade"] .market-welcome-phrase { animation: welcome-phrase-fade .7s ease both; }
+.market-welcome-hero[data-transition="slide"] .market-welcome-phrase { animation: welcome-phrase-slide .7s ease both; }
+.market-welcome-hero[data-transition="zoom"] .market-welcome-phrase { animation: welcome-phrase-zoom .7s ease both; }
 .market-welcome-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 20px; color: var(--welcome-accent-color, #d8c99e); font-size: 10px; font-weight: 750; letter-spacing: .19em; }
 .market-welcome-eyebrow > span { width: 22px; height: 1px; background: currentColor; }
 .market-welcome-copy h1 { max-width: 580px; margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; text-wrap: balance; }
-.market-welcome-copy > p { max-width: 440px; margin: 21px 0 25px; color: var(--welcome-body-color, #d0ddd4); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; }
+.market-welcome-copy .market-welcome-phrase > p { max-width: 440px; margin: 21px 0 25px; color: var(--welcome-body-color, #d0ddd4); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; }
 .market-welcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .market-welcome-actions .button { min-height: 46px; padding: 0 17px; font-size: 12px; }
 .market-welcome-actions .button-lime { border-color: var(--welcome-button-color, #d2ee77); background: var(--welcome-button-color, #d2ee77); color: var(--welcome-button-text-color, #18382e); }
@@ -622,7 +635,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-carousel-controls button:focus-visible { outline: 2px solid #d2ee77; outline-offset: 2px; }
 .market-welcome-carousel-controls .market-welcome-carousel-dot { width: 8px; height: 8px; border: 0; background: #fff9; }
 .market-welcome-carousel-controls .market-welcome-carousel-dot.is-active { background: #d2ee77; }
-.market-welcome-hero.is-preview { min-height: 300px; margin: 0; padding: 32px; border-radius: 4px; }
+.market-welcome-hero.is-preview { min-height: 300px; margin: 0; padding: 32px; border: 1px solid #264a3b; border-radius: 4px; }
 .market-welcome-hero.is-preview-mobile { min-height: 340px; align-items: stretch; padding: 22px 18px 58px; background-size: min(145vw, 680px) auto; }
 .market-welcome-hero.is-preview[data-height-mode="fit-screen"] { min-height: 340px; }
 .market-welcome-hero.is-preview[data-height-mode="full-screen"] { min-height: 430px; }
@@ -634,7 +647,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-hero.is-preview-mobile[data-mobile-actions-position="middle"] .market-welcome-actions { margin-block: auto; }
 .market-welcome-hero.is-preview-mobile[data-mobile-actions-position="bottom"] .market-welcome-actions { margin-top: auto; }
 .market-welcome-hero.is-preview-mobile .market-welcome-copy h1 { font-size: min(var(--welcome-mobile-font-size, 46px), 11vw); }
-.market-welcome-hero.is-preview-mobile .market-welcome-copy > p { margin: 12px 0 16px; }
+.market-welcome-hero.is-preview-mobile .market-welcome-copy .market-welcome-phrase > p { margin: 12px 0 16px; }
 .market-welcome-hero.is-preview-mobile .market-welcome-actions { align-items: stretch; flex-direction: column; }
 .market-welcome-hero.is-preview-mobile .market-welcome-status { right: 10px; bottom: 10px; }
 .market-welcome-hero.is-preview-mobile .market-welcome-carousel-controls { right: auto; bottom: 14px; left: 12px; }
@@ -1357,6 +1370,7 @@ h1, h2, h3, p { margin-top: 0; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
   .market-welcome-hero { min-height: 464px; align-items: stretch; margin: 9px 0 18px; padding: 28px 20px 82px; background-color: var(--welcome-background-color, #112e26); background-image: url("/welcome-gemstones.svg"); background-position: right 42%; background-size: min(145vw, 680px) auto; }
+  .market-welcome-hero:not(.is-preview) { margin: 9px -14px 18px; }
   .market-welcome-slide { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
   .market-welcome-hero[data-height-mode="fit-screen"]:not(.is-preview) { min-height: max(464px, calc(var(--welcome-stable-viewport-height) - var(--welcome-fit-offset, 135px))); }
   .market-welcome-hero[data-height-mode="full-screen"]:not(.is-preview) { min-height: var(--welcome-stable-viewport-height); }
@@ -1364,7 +1378,7 @@ h1, h2, h3, p { margin-top: 0; }
   .market-welcome-eyebrow { margin-bottom: 15px; font-size: 9px; }
   .market-welcome-copy { display: flex; flex-direction: column; }
   .market-welcome-copy h1 { max-width: 430px; font-size: min(var(--welcome-mobile-font-size, 46px), clamp(32px, 11vw, 56px)); }
-  .market-welcome-copy > p { max-width: 410px; margin: 14px 0 19px; font-size: 13px; line-height: 1.6; }
+  .market-welcome-copy .market-welcome-phrase > p { max-width: 410px; margin: 14px 0 19px; font-size: 13px; line-height: 1.6; }
   .market-welcome-actions { max-width: 290px; align-items: stretch; flex-direction: column; gap: 8px; }
   .market-welcome-hero[data-mobile-actions-position="middle"] .market-welcome-actions { margin-block: auto; }
   .market-welcome-hero[data-mobile-actions-position="bottom"] .market-welcome-actions { margin-top: auto; }

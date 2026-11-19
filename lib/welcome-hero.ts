@@ -6,9 +6,12 @@ export type WelcomeHeroFontFamily = "serif" | "sans";
 export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
 export type WelcomeHeroHeightMode = "default" | "fit-screen" | "full-screen";
 export type WelcomeHeroMobileActionsPosition = "top" | "middle" | "bottom";
+export type WelcomeHeroTransition = "fade" | "slide" | "zoom";
 
 export type WelcomeHeroSlide = {
   path: string;
+  headline: string;
+  description: string;
   focusX: number;
   focusY: number;
   scale: number;
@@ -38,6 +41,7 @@ export type WelcomeHeroSettings = {
   fontWeight: WelcomeHeroFontWeight;
   desktopFontSize: number;
   mobileFontSize: number;
+  transition: WelcomeHeroTransition;
   heightMode: WelcomeHeroHeightMode;
   mobileActionsPosition: WelcomeHeroMobileActionsPosition;
   slides: WelcomeHeroSlide[];
@@ -48,10 +52,13 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const settings = value as Record<string, unknown>;
   const heightMode = settings.heightMode === undefined ? "default" : settings.heightMode;
   const mobileActionsPosition = settings.mobileActionsPosition === undefined ? "top" : settings.mobileActionsPosition;
+  const transition = settings.transition === undefined ? "fade" : settings.transition;
   const isHeightMode = (candidate: unknown): candidate is WelcomeHeroHeightMode =>
     candidate === "default" || candidate === "fit-screen" || candidate === "full-screen";
   const isMobileActionsPosition = (candidate: unknown): candidate is WelcomeHeroMobileActionsPosition =>
     candidate === "top" || candidate === "middle" || candidate === "bottom";
+  const isTransition = (candidate: unknown): candidate is WelcomeHeroTransition =>
+    candidate === "fade" || candidate === "slide" || candidate === "zoom";
   const isText = (key: string, maximum: number, allowEmpty = false) =>
     typeof settings[key] === "string" &&
     (allowEmpty || settings[key].trim().length > 0) &&
@@ -79,6 +86,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
     !isIntegerInRange("desktopFontSize", 40, 78) ||
     !isIntegerInRange("mobileFontSize", 32, 56) ||
+    !isTransition(transition) ||
     !isHeightMode(heightMode) ||
     !isMobileActionsPosition(mobileActionsPosition) ||
     !Array.isArray(settings.slides) ||
@@ -95,9 +103,13 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     const mobileFocusX = slide.mobileFocusX === undefined ? slide.focusX : slide.mobileFocusX;
     const mobileFocusY = slide.mobileFocusY === undefined ? slide.focusY : slide.mobileFocusY;
     const mobileScale = slide.mobileScale === undefined ? scale : slide.mobileScale;
+    const headline = slide.headline === undefined ? settings.headline : slide.headline;
+    const description = slide.description === undefined ? settings.description : slide.description;
     const mobilePath = slide.mobilePath;
     if (typeof slide.path !== "string" ||
       !/^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(slide.path) ||
+      typeof headline !== "string" || (!allowEmptyCopy && headline.trim().length === 0) || headline.length > 100 ||
+      typeof description !== "string" || (!allowEmptyCopy && description.trim().length === 0) || description.length > 320 ||
       typeof slide.focusX !== "number" || !Number.isSafeInteger(slide.focusX) || slide.focusX < 0 || slide.focusX > 100 ||
       typeof slide.focusY !== "number" || !Number.isSafeInteger(slide.focusY) || slide.focusY < 0 || slide.focusY > 100 ||
       typeof scale !== "number" || !Number.isSafeInteger(scale) || scale < 70 || scale > 160 ||
@@ -112,6 +124,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     if (typeof mobilePath === "string") paths.add(mobilePath);
     slides.push({
       path: slide.path,
+      headline,
+      description,
       focusX: slide.focusX,
       focusY: slide.focusY,
       scale,
@@ -140,6 +154,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     fontWeight: settings.fontWeight as WelcomeHeroFontWeight,
     desktopFontSize: settings.desktopFontSize as number,
     mobileFontSize: settings.mobileFontSize as number,
+    transition,
     heightMode,
     mobileActionsPosition,
     slides,
