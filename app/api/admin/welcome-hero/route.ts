@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     const draftSlides = parseDraftSlides(values.slides);
     const design = parseWelcomeHeroSettings({ ...values, slides: [] });
     if (!draftSlides || !design) {
-      return NextResponse.json({ error: "Check the welcome hero text, colors, font sizes, and images." }, { status: 400 });
+      return NextResponse.json({ error: "Check the welcome hero text, colors, font sizes, layout options, and images." }, { status: 400 });
     }
 
     const oldSettingsResult = await admin.from("marketplace_settings")

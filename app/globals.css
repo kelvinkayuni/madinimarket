@@ -620,11 +620,14 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-carousel-controls .market-welcome-carousel-dot { width: 8px; height: 8px; border: 0; background: #fff9; }
 .market-welcome-carousel-controls .market-welcome-carousel-dot.is-active { background: #d2ee77; }
 .market-welcome-hero.is-preview { min-height: 300px; margin: 0; padding: 32px; border-radius: 4px; }
-.market-welcome-hero.is-preview-mobile { min-height: 340px; align-items: flex-start; padding: 22px 18px 58px; background-size: min(145vw, 680px) auto; }
+.market-welcome-hero.is-preview-mobile { min-height: 340px; align-items: stretch; padding: 22px 18px 58px; background-size: min(145vw, 680px) auto; }
 .market-welcome-hero.is-preview[data-height-mode="fit-screen"] { min-height: 340px; }
 .market-welcome-hero.is-preview[data-height-mode="full-screen"] { min-height: 430px; }
 .market-welcome-hero.is-preview-mobile[data-height-mode="fit-screen"] { min-height: 420px; }
 .market-welcome-hero.is-preview-mobile[data-height-mode="full-screen"] { min-height: 520px; }
+.market-welcome-hero.is-preview-mobile .market-welcome-copy { display: flex; flex-direction: column; }
+.market-welcome-hero.is-preview-mobile[data-mobile-actions-position="middle"] .market-welcome-actions { margin-block: auto; }
+.market-welcome-hero.is-preview-mobile[data-mobile-actions-position="bottom"] .market-welcome-actions { margin-top: auto; }
 .market-welcome-hero.is-preview-mobile .market-welcome-copy h1 { font-size: min(var(--welcome-mobile-font-size, 46px), 11vw); }
 .market-welcome-hero.is-preview-mobile .market-welcome-copy > p { margin: 12px 0 16px; }
 .market-welcome-hero.is-preview-mobile .market-welcome-actions { align-items: stretch; flex-direction: column; }
@@ -1341,14 +1344,17 @@ h1, h2, h3, p { margin-top: 0; }
   .header-actions { gap: 6px; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
-  .market-welcome-hero { min-height: 464px; align-items: flex-start; margin: 9px 0 18px; padding: 28px 20px 82px; background-color: var(--welcome-background-color, #112e26); background-image: url("/welcome-gemstones.svg"); background-position: right 42%; background-size: min(145vw, 680px) auto; }
+  .market-welcome-hero { min-height: 464px; align-items: stretch; margin: 9px 0 18px; padding: 28px 20px 82px; background-color: var(--welcome-background-color, #112e26); background-image: url("/welcome-gemstones.svg"); background-position: right 42%; background-size: min(145vw, 680px) auto; }
   .market-welcome-hero[data-height-mode="fit-screen"]:not(.is-preview) { min-height: max(464px, var(--welcome-fit-height, calc(100dvh - 135px))); }
   .market-welcome-hero[data-height-mode="full-screen"]:not(.is-preview) { min-height: 100vh; min-height: 100dvh; }
   .market-welcome-overlay { background: linear-gradient(180deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 37%, transparent 100%); }
   .market-welcome-eyebrow { margin-bottom: 15px; font-size: 9px; }
+  .market-welcome-copy { display: flex; flex-direction: column; }
   .market-welcome-copy h1 { max-width: 430px; font-size: min(var(--welcome-mobile-font-size, 46px), clamp(32px, 11vw, 56px)); }
   .market-welcome-copy > p { max-width: 410px; margin: 14px 0 19px; font-size: 13px; line-height: 1.6; }
   .market-welcome-actions { max-width: 290px; align-items: stretch; flex-direction: column; gap: 8px; }
+  .market-welcome-hero[data-mobile-actions-position="middle"] .market-welcome-actions { margin-block: auto; }
+  .market-welcome-hero[data-mobile-actions-position="bottom"] .market-welcome-actions { margin-top: auto; }
   .market-welcome-actions .button { min-height: 43px; }
   .market-welcome-buyer-link { margin-top: 15px; font-size: 10px; }
   .market-welcome-status { right: 12px; bottom: 12px; padding: 8px 10px; font-size: 9px; }

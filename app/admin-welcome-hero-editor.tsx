@@ -208,7 +208,7 @@ export default function AdminWelcomeHeroEditor({
         {hidden ? "Show hero" : "Hide hero"}
       </button>
     </div>
-    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. The buttons keep their existing actions; only their labels are editable.</p>
+    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. The buttons keep their existing actions; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
 
     <div className="admin-welcome-hero-preview-heading">
       <strong><Eye size={15} aria-hidden="true" /> Live preview</strong>
@@ -232,6 +232,13 @@ export default function AdminWelcomeHeroEditor({
           <option value="default">Default</option>
           <option value="fit-screen">Fit available screen</option>
           <option value="full-screen">Full screen</option>
+        </select>
+      </label>
+      <label className="field-label">Phone button position
+        <select className="text-input" value={draft.mobileActionsPosition} onChange={(event) => update("mobileActionsPosition", event.target.value as WelcomeHeroSettings["mobileActionsPosition"])}>
+          <option value="top">Top</option>
+          <option value="middle">Middle</option>
+          <option value="bottom">Bottom</option>
         </select>
       </label>
     </div>

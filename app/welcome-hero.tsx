@@ -101,6 +101,7 @@ export default function WelcomeHero({
     ref={heroRef}
     className={`market-welcome-hero${preview ? " is-preview" : ""}${previewMobile ? " is-preview-mobile" : ""}`}
     data-height-mode={settings.heightMode}
+    data-mobile-actions-position={settings.mobileActionsPosition}
     aria-labelledby={preview ? undefined : "market-welcome-heading"}
     style={style}
   >

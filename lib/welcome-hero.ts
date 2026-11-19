@@ -3,6 +3,7 @@ export const WELCOME_HERO_BUCKET = "homepage-hero";
 export type WelcomeHeroFontFamily = "serif" | "sans";
 export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
 export type WelcomeHeroHeightMode = "default" | "fit-screen" | "full-screen";
+export type WelcomeHeroMobileActionsPosition = "top" | "middle" | "bottom";
 
 export type WelcomeHeroSlide = {
   path: string;
@@ -31,6 +32,7 @@ export type WelcomeHeroSettings = {
   desktopFontSize: number;
   mobileFontSize: number;
   heightMode: WelcomeHeroHeightMode;
+  mobileActionsPosition: WelcomeHeroMobileActionsPosition;
   slides: WelcomeHeroSlide[];
 };
 
@@ -38,8 +40,11 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const settings = value as Record<string, unknown>;
   const heightMode = settings.heightMode === undefined ? "default" : settings.heightMode;
+  const mobileActionsPosition = settings.mobileActionsPosition === undefined ? "top" : settings.mobileActionsPosition;
   const isHeightMode = (candidate: unknown): candidate is WelcomeHeroHeightMode =>
     candidate === "default" || candidate === "fit-screen" || candidate === "full-screen";
+  const isMobileActionsPosition = (candidate: unknown): candidate is WelcomeHeroMobileActionsPosition =>
+    candidate === "top" || candidate === "middle" || candidate === "bottom";
   const isText = (key: string, maximum: number, allowEmpty = false) =>
     typeof settings[key] === "string" &&
     (allowEmpty || settings[key].trim().length > 0) &&
@@ -68,6 +73,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isIntegerInRange("desktopFontSize", 40, 78) ||
     !isIntegerInRange("mobileFontSize", 32, 56) ||
     !isHeightMode(heightMode) ||
+    !isMobileActionsPosition(mobileActionsPosition) ||
     !Array.isArray(settings.slides) ||
     settings.slides.length > 3) {
     return null;
@@ -109,6 +115,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     desktopFontSize: settings.desktopFontSize as number,
     mobileFontSize: settings.mobileFontSize as number,
     heightMode,
+    mobileActionsPosition,
     slides,
   };
 }
