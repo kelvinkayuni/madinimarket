@@ -652,8 +652,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .market-welcome-actions .button { min-height: 46px; padding: 0 17px; font-size: 12px; }
 .market-welcome-actions .button-lime { border-color: var(--welcome-button-color, #d2ee77); background: var(--welcome-button-color, #d2ee77); color: var(--welcome-button-text-color, #18382e); }
-.market-welcome-post-button { border-color: #f2ecdc66; background: #ffffff10; color: var(--welcome-heading-color, #fffdf6); }
-.market-welcome-post-button:hover { border-color: #e6d4a0; background: #ffffff20; }
+.market-welcome-post-button { border-color: var(--welcome-request-button-border, #f2ecdc66); background: var(--welcome-request-button-background, #ffffff10); color: var(--welcome-request-button-text-color, var(--welcome-heading-color, #fffdf6)); }
+.market-welcome-post-button:hover { border-color: var(--welcome-request-button-hover-border, #e6d4a0); background: var(--welcome-request-button-hover-background, #ffffff20); }
 .market-welcome-buyer-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 20px; color: var(--welcome-body-color, #cbd9ce); font-size: 11px; text-decoration: none; }
 .market-welcome-buyer-link:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
 .market-welcome-status { position: absolute; right: 20px; bottom: 18px; z-index: 1; display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid #e4edda38; border-radius: 999px; background: #112e26b8; color: #f1f3e8; font-size: 10px; font-weight: 650; backdrop-filter: blur(8px); }
@@ -664,12 +664,12 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-carousel-controls button:focus-visible { outline: 2px solid #d2ee77; outline-offset: 2px; }
 .market-welcome-carousel-controls .market-welcome-carousel-dot { width: 8px; height: 8px; border: 0; background: #fff9; }
 .market-welcome-carousel-controls .market-welcome-carousel-dot.is-active { background: #d2ee77; }
-.market-welcome-hero.is-preview { min-height: 300px; margin: 0; padding: 32px; border: 1px solid #264a3b; border-radius: 4px; }
-.market-welcome-hero.is-preview-mobile { min-height: 340px; align-items: stretch; padding: 22px 18px 58px; background-size: min(145vw, 680px) auto; }
-.market-welcome-hero.is-preview[data-height-mode="fit-screen"] { min-height: 340px; }
-.market-welcome-hero.is-preview[data-height-mode="full-screen"] { min-height: 430px; }
-.market-welcome-hero.is-preview-mobile[data-height-mode="fit-screen"] { min-height: 420px; }
-.market-welcome-hero.is-preview-mobile[data-height-mode="full-screen"] { min-height: 520px; }
+.market-welcome-hero.is-preview { min-height: clamp(360px, 39vw, 470px); margin: 0; padding: 32px; border: 1px solid #264a3b; border-radius: 4px; }
+.market-welcome-hero.is-preview-mobile { --welcome-stable-viewport-height: 844px; min-height: 464px; align-items: stretch; padding: 22px 18px 58px; background-size: min(145vw, 680px) auto; }
+.market-welcome-hero.is-preview[data-height-mode="fit-screen"] { min-height: max(360px, calc(var(--welcome-stable-viewport-height) - 118px)); }
+.market-welcome-hero.is-preview[data-height-mode="full-screen"] { min-height: var(--welcome-stable-viewport-height); }
+.market-welcome-hero.is-preview-mobile[data-height-mode="fit-screen"] { min-height: max(464px, calc(var(--welcome-stable-viewport-height) - 135px)); }
+.market-welcome-hero.is-preview-mobile[data-height-mode="full-screen"] { min-height: var(--welcome-stable-viewport-height); }
 .market-welcome-hero.is-preview-mobile .market-welcome-slide { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
 .market-welcome-hero.is-preview-mobile .market-welcome-bar { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
 .market-welcome-hero.is-preview:not(.is-preview-mobile) .market-welcome-slide { background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); }

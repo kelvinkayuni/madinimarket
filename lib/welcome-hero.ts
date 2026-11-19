@@ -49,6 +49,9 @@ export type WelcomeHeroSettings = {
   accentColor: string;
   buttonColor: string;
   buttonTextColor: string;
+  requestButtonColor: string;
+  requestButtonTextColor: string;
+  requestButtonOpacity: number;
   fontFamily: WelcomeHeroFontFamily;
   fontWeight: WelcomeHeroFontWeight;
   desktopFontSize: number;
@@ -69,6 +72,9 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const transition = settings.transition === undefined ? "fade" : settings.transition;
   const slideIntervalSeconds = settings.slideIntervalSeconds === undefined ? 10 : settings.slideIntervalSeconds;
   const transitionDurationMs = settings.transitionDurationMs === undefined ? 1000 : settings.transitionDurationMs;
+  const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
+  const requestButtonTextColor = settings.requestButtonTextColor === undefined ? settings.headingColor : settings.requestButtonTextColor;
+  const requestButtonOpacity = settings.requestButtonOpacity === undefined ? 6 : settings.requestButtonOpacity;
   const isHeightMode = (candidate: unknown): candidate is WelcomeHeroHeightMode =>
     candidate === "default" || candidate === "fit-screen" || candidate === "full-screen";
   const isMobileActionsPosition = (candidate: unknown): candidate is WelcomeHeroMobileActionsPosition =>
@@ -92,11 +98,14 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     typeof settings[key] === "string" &&
     (allowEmpty || settings[key].trim().length > 0) &&
     settings[key].length <= maximum;
-  const isColor = (key: string) =>
-    typeof settings[key] === "string" && /^#[\da-f]{6}$/i.test(settings[key]);
+  const isColorValue = (candidate: unknown) =>
+    typeof candidate === "string" && /^#[\da-f]{6}$/i.test(candidate);
+  const isColor = (key: string) => isColorValue(settings[key]);
+  const isIntegerValueInRange = (candidate: unknown, minimum: number, maximum: number) =>
+    typeof candidate === "number" && Number.isSafeInteger(candidate) &&
+    candidate >= minimum && candidate <= maximum;
   const isIntegerInRange = (key: string, minimum: number, maximum: number) =>
-    typeof settings[key] === "number" && Number.isSafeInteger(settings[key]) &&
-    settings[key] >= minimum && settings[key] <= maximum;
+    isIntegerValueInRange(settings[key], minimum, maximum);
 
   if (!isText("eyebrow", 36, allowEmptyCopy) ||
     !isText("headline", 100, allowEmptyCopy) ||
@@ -111,6 +120,9 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isColor("accentColor") ||
     !isColor("buttonColor") ||
     !isColor("buttonTextColor") ||
+    !isColorValue(requestButtonColor) ||
+    !isColorValue(requestButtonTextColor) ||
+    !isIntegerValueInRange(requestButtonOpacity, 0, 100) ||
     (settings.fontFamily !== "serif" && settings.fontFamily !== "sans") ||
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
     !isIntegerInRange("desktopFontSize", 40, 78) ||
@@ -181,6 +193,9 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     accentColor: settings.accentColor as string,
     buttonColor: settings.buttonColor as string,
     buttonTextColor: settings.buttonTextColor as string,
+    requestButtonColor: requestButtonColor as string,
+    requestButtonTextColor: requestButtonTextColor as string,
+    requestButtonOpacity: requestButtonOpacity as number,
     fontFamily: settings.fontFamily,
     fontWeight: settings.fontWeight as WelcomeHeroFontWeight,
     desktopFontSize: settings.desktopFontSize as number,

@@ -386,12 +386,17 @@ export default function AdminWelcomeHeroEditor({
         ["Accent", "accentColor"],
         ["Button", "buttonColor"],
         ["Button text", "buttonTextColor"],
+        ["Request button", "requestButtonColor"],
+        ["Request button text", "requestButtonTextColor"],
       ] as const).map(([label, key]) => <label className="admin-welcome-hero-color" key={key}>
         <span>{label}</span>
         <input aria-label={`${label} color`} type="color" value={draft[key]} onChange={(event) => update(key, event.target.value)} />
       </label>)}
       <label className="field-label admin-welcome-hero-range">Overlay strength: {draft.overlayOpacity}%
         <input type="range" min={0} max={100} step={1} value={draft.overlayOpacity} onChange={(event) => update("overlayOpacity", Number(event.target.value))} />
+      </label>
+      <label className="field-label admin-welcome-hero-range">Request button opacity: {draft.requestButtonOpacity}%
+        <input type="range" min={0} max={100} step={1} value={draft.requestButtonOpacity} onChange={(event) => update("requestButtonOpacity", Number(event.target.value))} />
       </label>
       <label className="field-label">Font family
         <select className="text-input" value={draft.fontFamily} onChange={(event) => update("fontFamily", event.target.value as WelcomeHeroSettings["fontFamily"])}>
