@@ -14,7 +14,7 @@ export async function GET(request: Request) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement").eq("id", true).single(),
+      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden").eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsError) throw settingsError;
@@ -27,6 +27,7 @@ export async function GET(request: Request) {
       accountCreationDisabled: settings.account_creation_disabled,
       nonAdminSignInDisabled: settings.non_admin_sign_in_disabled ?? false,
       homepageAnnouncement: settings.homepage_announcement ?? "",
+      welcomeHeroHidden: settings.welcome_hero_hidden,
       headlines: headlines ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {

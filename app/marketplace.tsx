@@ -755,6 +755,7 @@ type HomepageSettingsContent = {
   sellerCardsPerColumn: number;
   buyerCardsPerColumn: number;
   homepageAnnouncement: string;
+  welcomeHeroHidden: boolean;
   headlines: HomepageHeadline[];
 };
 
@@ -767,6 +768,7 @@ function isHomepageHeadline(value: unknown): value is HomepageHeadline {
 
 function hasHomepageSettings(value: Record<string, unknown>): value is Record<string, unknown> & HomepageSettingsContent {
   return typeof value.homepageAnnouncement === "string" &&
+    typeof value.welcomeHeroHidden === "boolean" &&
     typeof value.headlineFontSize === "number" && Number.isInteger(value.headlineFontSize) &&
     value.headlineFontSize >= 24 && value.headlineFontSize <= 72 &&
     typeof value.sellerCardsPerColumn === "number" && Number.isSafeInteger(value.sellerCardsPerColumn) &&
@@ -776,7 +778,7 @@ function hasHomepageSettings(value: Record<string, unknown>): value is Record<st
     Array.isArray(value.headlines) && value.headlines.every(isHomepageHeadline);
 }
 
-async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; headlines: HomepageHeadline[] }> {
+async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; welcomeHeroHidden: boolean; headlines: HomepageHeadline[] }> {
   const result = await fetchAdminSiteContent(accessToken);
   if (typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" ||
     typeof result.nonAdminSignInDisabled !== "boolean" || !hasHomepageSettings(result)) {
@@ -790,6 +792,7 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
     accountCreationDisabled: result.accountCreationDisabled,
     nonAdminSignInDisabled: result.nonAdminSignInDisabled,
     homepageAnnouncement: result.homepageAnnouncement,
+    welcomeHeroHidden: result.welcomeHeroHidden,
     headlines: result.headlines,
   };
 }
@@ -804,6 +807,7 @@ async function loadAdminHomepageContent(accessToken: string): Promise<HomepageSe
     sellerCardsPerColumn: result.sellerCardsPerColumn,
     buyerCardsPerColumn: result.buyerCardsPerColumn,
     homepageAnnouncement: result.homepageAnnouncement,
+    welcomeHeroHidden: result.welcomeHeroHidden,
     headlines: result.headlines,
   };
 }
@@ -874,6 +878,7 @@ export default function Marketplace() {
   const [currentYear, setCurrentYear] = useState<number | null>(null);
   const [siteContentLoaded, setSiteContentLoaded] = useState(false);
   const [homepageHeadlines, setHomepageHeadlines] = useState<HomepageHeadline[]>([]);
+  const [welcomeHeroHidden, setWelcomeHeroHidden] = useState(false);
   const [homepageHeadlineFontSize, setHomepageHeadlineFontSize] = useState(49);
   const [homepageHeadlineFontSizeInput, setHomepageHeadlineFontSizeInput] = useState("49");
   const [sellerCardsPerColumnInput, setSellerCardsPerColumnInput] = useState("4");
@@ -1805,7 +1810,7 @@ export default function Marketplace() {
       try {
         const response = await fetch("/api/site-content", { cache: "no-store" });
         const result = await response.json();
-        if (!response.ok || typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || !Number.isInteger(result.headlineFontSize) ||
+        if (!response.ok || typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || typeof result.welcomeHeroHidden !== "boolean" || !Number.isInteger(result.headlineFontSize) ||
           result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Number.isSafeInteger(result.sellerCardsPerColumn) || result.sellerCardsPerColumn < 1 ||
           !Number.isSafeInteger(result.buyerCardsPerColumn) || result.buyerCardsPerColumn < 1 || !Array.isArray(result.headlines)) {
           throw new Error(result.error ?? "Could not load homepage and language settings.");
@@ -1815,6 +1820,7 @@ export default function Marketplace() {
         setAccountCreationDisabled(Boolean(result.accountCreationDisabled));
         setNonAdminSignInDisabled(Boolean(result.nonAdminSignInDisabled));
         setHomepageAnnouncement(typeof result.homepageAnnouncement === "string" ? result.homepageAnnouncement : "");
+        setWelcomeHeroHidden(result.welcomeHeroHidden);
         setHomepageHeadlineFontSize(result.headlineFontSize);
         setHomepageHeadlineFontSizeInput(String(result.headlineFontSize));
         setSellerCardsPerColumn(result.sellerCardsPerColumn);
@@ -2176,6 +2182,7 @@ export default function Marketplace() {
             const applyHomepageContent = (siteContent: HomepageSettingsContent) => {
               setHomepageAnnouncement(siteContent.homepageAnnouncement);
               if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(siteContent.homepageAnnouncement);
+              setWelcomeHeroHidden(siteContent.welcomeHeroHidden);
               setHomepageHeadlineFontSize(siteContent.headlineFontSize);
               setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
               setSellerCardsPerColumn(siteContent.sellerCardsPerColumn);
@@ -3143,6 +3150,7 @@ export default function Marketplace() {
     setAccountSettingsLoaded(true);
     setHomepageAnnouncement(content.homepageAnnouncement);
     if (!homepageAnnouncementDirty.current) setHomepageAnnouncementDraft(content.homepageAnnouncement);
+    setWelcomeHeroHidden(content.welcomeHeroHidden);
     setHomepageHeadlineFontSize(content.headlineFontSize);
     setHomepageHeadlineFontSizeInput(String(content.headlineFontSize));
     setSellerCardsPerColumn(content.sellerCardsPerColumn);
@@ -3151,6 +3159,28 @@ export default function Marketplace() {
     setBuyerCardsPerColumnInput(String(content.buyerCardsPerColumn));
     setSiteContentLoaded(true);
     setHomepageHeadlines(content.headlines);
+  };
+  const updateWelcomeHeroVisibility = async (hidden: boolean) => {
+    await withProgress("welcome-hero-visibility", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "PATCH",
+          headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
+          body: JSON.stringify({ welcomeHeroHidden: hidden }),
+        });
+        const result = await response.json();
+        if (!response.ok || typeof result.welcomeHeroHidden !== "boolean") {
+          throw new Error(result.error ?? "Could not update welcome hero visibility.");
+        }
+        setWelcomeHeroHidden(result.welcomeHeroHidden);
+        setNotice(result.welcomeHeroHidden ? "Welcome hero hidden." : "Welcome hero visible.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update welcome hero visibility.");
+      }
+    });
   };
   const saveHomepageHeadlineFontSize = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -4942,6 +4972,10 @@ export default function Marketplace() {
           <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
           <StaffTaskClaim type="homepage_setting" taskId="homepage" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <div>
           <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases scroll continuously across the homepage; if all are deleted, the homepage shows no headline.</p>
+          <div className="admin-homepage-hero-setting admin-account-control-row">
+            <div><strong>Hide welcome hero</strong><span>{welcomeHeroHidden ? "Visitors see the marketplace without the welcome hero." : "Visitors see the welcome hero above the marketplace."}</span></div>
+            <button className={`admin-currency-switch${welcomeHeroHidden ? " is-on" : ""}`} type="button" role="switch" aria-checked={welcomeHeroHidden} aria-label="Hide welcome hero" disabled={!canAct || !siteContentLoaded || busyActions.has("welcome-hero-visibility")} onClick={() => void updateWelcomeHeroVisibility(!welcomeHeroHidden)}><span /></button>
+          </div>
           <form className="admin-homepage-font-size" onSubmit={(event) => void saveHomepageHeadlineFontSize(event)}>
             <label className="field-label" htmlFor="admin-homepage-headline-font-size">Headline font size (pixels)
               <input className="text-input" id="admin-homepage-headline-font-size" type="number" min={24} max={72} step={1} required value={homepageHeadlineFontSizeInput} onChange={(event) => setHomepageHeadlineFontSizeInput(event.target.value)} />
@@ -5218,7 +5252,23 @@ export default function Marketplace() {
 
     <div className="market-content" id="top">
       {homepageAnnouncement && <div className="market-announcement" role="status"><span>{homepageAnnouncement}</span></div>}
-      <section className="market-intro">
+      {!welcomeHeroHidden && <section className="market-welcome-hero" aria-labelledby="market-welcome-heading">
+        <div className="market-welcome-copy">
+          <span className="market-welcome-eyebrow"><span /> TANZANIA AND BEYOND</span>
+          <h1 id="market-welcome-heading">Discover the stones that move us.</h1>
+          <p>Explore mineral listings, connect with people looking to buy, and find your place in Tanzania’s mineral market.</p>
+          <div className="market-welcome-actions">
+            <a className="button button-lime" href="#marketplace"><Gem size={17} aria-hidden="true" /> Explore minerals <ArrowRight size={16} aria-hidden="true" /></a>
+            <button className="button market-welcome-post-button" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={16} aria-hidden="true" /> Post a request</>}</button>
+          </div>
+          <a className="market-welcome-buyer-link" href={marketHoursLoaded && !marketHoursError && marketIsOpen ? "#buyer-heading" : "#marketplace"}>Or browse what buyers are looking for <ArrowRight size={14} aria-hidden="true" /></a>
+        </div>
+        <div className={`market-welcome-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`} role="status">
+          <span className="market-welcome-status-dot" />
+          {!marketHoursLoaded ? "Checking market hours" : marketHoursError ? "Market schedule unavailable" : marketIsOpen ? "Market open now" : "Market currently closed"}
+        </div>
+      </section>}
+      <section className="market-intro" id="marketplace">
         <div className={`market-intro-heading${homepageHeadlineOverflowing ? " is-overflowing" : ""}`} ref={homepageHeadlineWindowRef}>
           <div
             className="market-intro-heading-track"

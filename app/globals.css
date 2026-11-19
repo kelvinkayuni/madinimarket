@@ -423,6 +423,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-account-control-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .admin-account-control-row > div { display: grid; gap: 3px; }
 .admin-account-control-row span { color: #738075; font-size: 11px; }
+.admin-homepage-hero-setting { margin: 0 0 16px; padding: 13px 14px; border: 1px solid #e1e5dd; border-radius: 5px; background: #fbfcf9; }
+.admin-homepage-hero-setting strong { color: #354b39; font-size: 11px; }
+.admin-homepage-hero-setting.admin-account-control-row { align-items: center; }
 .admin-homepage-announcement-disclosure { border-top: 1px solid #e1e5dd; }
 .admin-homepage-announcement-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; cursor: pointer; list-style: none; }
 .admin-homepage-announcement-toggle::-webkit-details-marker { display: none; }
@@ -591,6 +594,21 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .user-chip-identity { display: grid; gap: 2px; }
 .user-chip-identity small { color: #718071; font-size: 9px; }
 .market-content { width: 100%; flex: 1; display: flex; flex-direction: column; padding: 0 clamp(18px, 3vw, 48px); }
+.market-welcome-hero { position: relative; min-height: clamp(360px, 39vw, 470px); display: flex; align-items: center; overflow: hidden; margin: 18px 0 24px; padding: clamp(32px, 5vw, 68px); border: 1px solid #264a3b; border-radius: 5px; background-color: #112e26; background-image: linear-gradient(90deg, #112e26 0%, #112e26 31%, rgb(17 46 38 / 94%) 43%, rgb(17 46 38 / 65%) 61%, rgb(17 46 38 / 10%) 100%), url("/welcome-gemstones.svg"); background-position: center, right 42%; background-repeat: no-repeat; background-size: cover, min(78vw, 980px) auto; color: #f7f5eb; }
+.market-welcome-copy { position: relative; z-index: 1; width: min(100%, 590px); }
+.market-welcome-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 20px; color: #d8c99e; font-size: 10px; font-weight: 750; letter-spacing: .19em; }
+.market-welcome-eyebrow > span { width: 22px; height: 1px; background: #d5ad48; }
+.market-welcome-copy h1 { max-width: 580px; margin: 0; color: #fffdf6; font-family: var(--font-display), Georgia, serif; font-size: clamp(42px, 5.3vw, 72px); font-weight: 500; letter-spacing: -.035em; line-height: .99; text-wrap: balance; }
+.market-welcome-copy > p { max-width: 440px; margin: 21px 0 25px; color: #d0ddd4; font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; }
+.market-welcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.market-welcome-actions .button { min-height: 46px; padding: 0 17px; font-size: 12px; }
+.market-welcome-post-button { border-color: #f2ecdc66; background: #ffffff10; color: #fffdf6; }
+.market-welcome-post-button:hover { border-color: #e6d4a0; background: #ffffff20; }
+.market-welcome-buyer-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 20px; color: #cbd9ce; font-size: 11px; text-decoration: none; }
+.market-welcome-buyer-link:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.market-welcome-status { position: absolute; right: 20px; bottom: 18px; z-index: 1; display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid #e4edda38; border-radius: 999px; background: #112e26b8; color: #f1f3e8; font-size: 10px; font-weight: 650; backdrop-filter: blur(8px); }
+.market-welcome-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #a7d86d; box-shadow: 0 0 0 3px #a7d86d24; }
+.market-welcome-status.is-closed .market-welcome-status-dot { background: #ddad70; box-shadow: 0 0 0 3px #ddad7024; }
 .market-announcement { flex: 0 0 auto; margin-top: 12px; border: 1px solid #d9a1a1; border-radius: 5px; background: #fff6f4; padding: 9px 12px; color: #b42318; font-size: 12px; font-weight: 800; line-height: 1.4; text-align: center; animation: madini-homepage-notice 1.2s ease-in-out infinite alternate; }
 @keyframes madini-homepage-notice { from { color: #b42318; border-color: #d9a1a1; background: #fff6f4; } to { color: #ef2b1f; border-color: #ef8b82; background: #fffafa; } }
 .market-intro { flex: 0 0 auto; padding: 12px 0 18px; display: flex; align-items: stretch; justify-content: flex-start; gap: 12px; }
@@ -1253,6 +1271,14 @@ h1, h2, h3, p { margin-top: 0; }
   .header-actions { gap: 6px; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
+  .market-welcome-hero { min-height: 464px; align-items: flex-start; margin: 9px 0 18px; padding: 28px 20px 82px; background-image: linear-gradient(180deg, #112e26 0%, rgb(17 46 38 / 97%) 37%, rgb(17 46 38 / 80%) 62%, rgb(17 46 38 / 22%) 100%), url("/welcome-gemstones.svg"); background-position: center, 60% bottom; background-size: cover, min(145vw, 680px) auto; }
+  .market-welcome-eyebrow { margin-bottom: 15px; font-size: 9px; }
+  .market-welcome-copy h1 { max-width: 430px; font-size: clamp(40px, 11vw, 54px); }
+  .market-welcome-copy > p { max-width: 410px; margin: 14px 0 19px; font-size: 13px; line-height: 1.6; }
+  .market-welcome-actions { max-width: 290px; align-items: stretch; flex-direction: column; gap: 8px; }
+  .market-welcome-actions .button { min-height: 43px; }
+  .market-welcome-buyer-link { margin-top: 15px; font-size: 10px; }
+  .market-welcome-status { right: 12px; bottom: 12px; padding: 8px 10px; font-size: 9px; }
   .market-intro { align-items: stretch; gap: 8px; padding: 8px 0 16px; }
   .market-intro-heading { order: 0; padding-right: 8px; }
   .market-intro-heading-item { font-size: min(var(--homepage-headline-font-size, 36px), clamp(16px, 6vw, 24px)); }
@@ -1310,6 +1336,7 @@ h1, h2, h3, p { margin-top: 0; }
   .field-row { gap: 8px; }
   .dialog-panel { padding-right: 17px; padding-left: 17px; }
   .user-subscription-actions { grid-template-columns: 1fr; }
+  .admin-homepage-hero-setting.admin-account-control-row { align-items: center; flex-direction: row; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

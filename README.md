@@ -4,7 +4,7 @@ Madinimarket is a full-stack marketplace for buying and selling minerals in Tanz
 
 ## Current website features
 
-- **Public marketplace:** Browse approved mineral listings and buyer requests, search by mineral or location, and view market content when the admin-configured weekly schedule is open. The admin controls whether USD is available alongside TSh.
+- **Public marketplace:** Browse approved mineral listings and buyer requests, search by mineral or location, and view market content when the admin-configured weekly schedule is open. The homepage welcome hero links visitors directly to mineral listings and buyer requests; admins and authorized Homepage Display staff can hide it to restore the previous marketplace-first layout. The admin controls whether USD is available alongside TSh.
 - **Buyer and seller accounts:** Website accounts use generated `MM-####` usernames. Sellers manage their listings and buyer requests, submit dealer/broker licence documents, and manage subscriptions. Buyers can shop from listings, manage their orders, and receive or respond to private offers.
 - **Submissions and subscriptions:** Seller listings and buyer requests are reviewed before appearing publicly. Seller/buyer subscriptions are managed through payment instructions, payment-reference and receipt submission, and admin or authorized staff review.
 - **Orders and Cart:** Signed-in users can manage their cart, private offers, active buying and selling orders, and order history. The purchase workflow supports seller availability checks, manual payment verification, shipping details, delivery confirmation, buyer receipt, disputes, refunds, and seller payouts.
@@ -40,7 +40,7 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 9. Run `supabase/subscription-payment-proof.sql` after `subscription-control.sql`; if `subscription-no-renew.sql` has been run, apply this migration afterward. It adds private PDF/JPEG/PNG receipt storage (up to 4 MB), payment references, and admin rejection reasons. It also prevents requesting or approving another subscription while an account has an active or scheduled term. Re-run it after updates. Also run `supabase/marketplace-payment-instructions.sql` before users submit subscription payments.
 10. Run `supabase/certificate-verification.sql`.
 11. Run `supabase/translation-dictionary.sql`.
-12. Run `supabase/homepage-content-settings.sql` to allow admin control of the Swahili switch, rotating homepage phrases, and headline font size. Re-run this idempotent script when applying updates to an existing installation.
+12. Run `supabase/homepage-content-settings.sql` to allow admin control of the Swahili switch, rotating homepage phrases, headline font size, and welcome-hero visibility. Re-run this idempotent script when applying updates to an existing installation.
 13. Run `supabase/market-hours.sql` after the other scripts so public listing and request views enforce the weekly market schedule.
 14. Run `supabase/live-refresh.sql` to enable Realtime change notifications for public listing and buyer-request updates.
 15. Run `supabase/marketplace-orders.sql` to add the mineral cart, purchase orders, availability/payment/shipping workflows, and payout records. Re-run this idempotent script after updates so existing installations receive new order-notification fields.

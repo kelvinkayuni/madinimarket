@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="850" viewBox="0 0 1200 850" fill="none">
+  <defs>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientTransform="matrix(367 332 -326 361 782 432)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D6A94E" stop-opacity=".25"/>
+      <stop offset="1" stop-color="#D6A94E" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="emerald" x1="414" x2="743" y1="196" y2="692" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C9E9BF"/>
+      <stop offset=".23" stop-color="#3D9874"/>
+      <stop offset=".62" stop-color="#12604F"/>
+      <stop offset="1" stop-color="#0C3029"/>
+    </linearGradient>
+    <linearGradient id="emeraldLight" x1="521" x2="654" y1="230" y2="611" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4F6D0"/>
+      <stop offset=".48" stop-color="#83C89A"/>
+      <stop offset="1" stop-color="#28715B"/>
+    </linearGradient>
+    <linearGradient id="emeraldDark" x1="626" x2="820" y1="320" y2="636" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#61A984"/>
+      <stop offset="1" stop-color="#0A2823"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="846" x2="1051" y1="421" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF1AE"/>
+      <stop offset=".22" stop-color="#EFC45B"/>
+      <stop offset=".56" stop-color="#B97924"/>
+      <stop offset=".8" stop-color="#F1C14E"/>
+      <stop offset="1" stop-color="#81501E"/>
+    </linearGradient>
+    <linearGradient id="goldLight" x1="890" x2="1024" y1="460" y2="634" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF4C7"/>
+      <stop offset=".5" stop-color="#E9B846"/>
+      <stop offset="1" stop-color="#A56420"/>
+    </linearGradient>
+    <linearGradient id="citrine" x1="1001" x2="1121" y1="272" y2="581" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF1A8"/>
+      <stop offset=".3" stop-color="#E8B94A"/>
+      <stop offset=".68" stop-color="#A8742C"/>
+      <stop offset="1" stop-color="#5E472A"/>
+    </linearGradient>
+    <filter id="shadow" width="1.5" height="1.5" x="-.25" y="-.2" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="22"/>
+      <feOffset dy="18"/>
+      <feComponentTransfer><feFuncA slope=".45" type="linear"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow" width="1.6" height="1.6" x="-.3" y="-.3" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+  </defs>
+  <ellipse cx="784" cy="446" fill="url(#halo)" rx="405" ry="346"/>
+  <ellipse cx="823" cy="692" fill="#060F0C" opacity=".48" rx="340" ry="54" filter="url(#softGlow)"/>
+  <g opacity=".55">
+    <path d="m355 278 24-43 8 51-32-8ZM832 168l9-31 13 27-22 4ZM1084 356l26-19-4 31-22-12ZM693 113l5-25 16 22-21 3Z" fill="#E8C66D"/>
+    <path d="m316 493 17-11-3 20-14-9ZM964 194l16-25 2 32-18-7ZM1140 490l23-8-10 21-13-13Z" fill="#C5E6BE"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="m557 165 136 42 111 171-47 247-197 89-172-127-10-197 83-174 96-51Z" fill="url(#emerald)"/>
+    <path d="m557 165 73 175-242 50 83-174 86-51Z" fill="url(#emeraldLight)"/>
+    <path d="m630 340 63-133 111 171-174-38Z" fill="#B2E2B1" fill-opacity=".72"/>
+    <path d="m388 390 242-50-58 210-187 37-7-197Z" fill="#236D58"/>
+    <path d="m630 340 174 38-47 247-185-75 58-210Z" fill="url(#emeraldDark)"/>
+    <path d="m442 587 180-37 135 75-197 89-118-127Z" fill="#174A3B"/>
+    <path d="m630 340 58 210-58-210Z" fill="#E7F5D4" fill-opacity=".42"/>
+    <path d="m557 165 73 175-168-137 95-38Z" fill="#FFFCE0" fill-opacity=".62"/>
+    <path d="m462 203 168 137-242 50 74-187Z" fill="#68AC83" fill-opacity=".55"/>
+    <path d="m630 340 63-133-136-42 73 175Z" fill="#F6F5C9" fill-opacity=".46"/>
+    <path d="m630 340 174 38-111-171-63 133Z" fill="#5FA17A" fill-opacity=".62"/>
+    <path d="m630 340 58 210 69 75 47-247-174-38Z" fill="#062F29" fill-opacity=".37"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="m951 435 71-147 91 45 39 128-58 113-153-12-47-75 57-52Z" fill="url(#citrine)"/>
+    <path d="m951 435 71-147 20 183-91-36Z" fill="#FFF2B0" fill-opacity=".72"/>
+    <path d="m1022 288 91 45-71 138-20-183Z" fill="#D89B32" fill-opacity=".76"/>
+    <path d="m1042 471 71-138 39 128-58 113-52-103Z" fill="#795326" fill-opacity=".84"/>
+    <path d="m951 435 91 36 52 103-153-12-47-75 57-52Z" fill="#E6B84E" fill-opacity=".82"/>
+    <path d="m951 435 91 36-148 16 57-52Z" fill="#FFF3C5" fill-opacity=".65"/>
+    <path d="m994 572 100 2-153-12-47-75 100 85Z" fill="#684522" fill-opacity=".56"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="m790 552 54-91 70 33 67 83-36 110-88 46-107-44-31-68 71-69Z" fill="url(#gold)"/>
+    <path d="m790 552 54-91 42 76-96 15Z" fill="#FFF2BF" fill-opacity=".78"/>
+    <path d="m844 461 70 33-28 43-42-76Z" fill="#D69A35"/>
+    <path d="m886 537 28-43 67 83-71 25-24-65Z" fill="url(#goldLight)"/>
+    <path d="m790 552 96-15 24 65-79 88-107-44 66-94Z" fill="#BD7C26"/>
+    <path d="m831 690 79-88 71-25-36 110-88 46-26-43Z" fill="#F1C14F" fill-opacity=".83"/>
+    <path d="m724 646 66-94 41 138-107-44Z" fill="#81501E" fill-opacity=".74"/>
+    <path d="m790 552 54-91 42 76-96 15Z" fill="#FFF8D6" fill-opacity=".34"/>
+  </g>
+  <path d="m500 756 254-38 178 17-101 33-236 12-95-24Z" fill="#D19A3E" fill-opacity=".34"/>
+  <path d="m501 756 167 8 164-29-101 33-236 12 6-24Z" fill="#E8C375" fill-opacity=".35"/>
+  <g stroke="#F0D98F" stroke-linecap="round" stroke-opacity=".62">
+    <path d="m372 326 10-19M1086 232l8-16M763 196l5-12M1121 631l10-17"/>
+  </g>
+</svg>

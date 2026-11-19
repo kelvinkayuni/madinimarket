@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     if (scope === "homepage") {
       const [settingsResult, headlinesResult] = await Promise.all([
         admin.from("marketplace_settings")
-          .select("homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, homepage_announcement")
+          .select("homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, homepage_announcement, welcome_hero_hidden")
           .eq("id", true).single(),
         admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
           .order("created_at", { ascending: true }).order("id", { ascending: true }),
@@ -67,12 +67,13 @@ export async function GET(request: Request) {
         sellerCardsPerColumn: settingsResult.data.seller_cards_per_column,
         buyerCardsPerColumn: settingsResult.data.buyer_cards_per_column,
         homepageAnnouncement: settingsResult.data.homepage_announcement ?? "",
+        welcomeHeroHidden: settingsResult.data.welcome_hero_hidden,
         headlines: headlinesResult.data ?? [],
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const [settingsResult, headlinesResult] = await Promise.all([
       admin.from("marketplace_settings")
-        .select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement")
+        .select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden")
         .eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
         .order("created_at", { ascending: true }).order("id", { ascending: true }),
@@ -87,6 +88,7 @@ export async function GET(request: Request) {
       accountCreationDisabled: settingsResult.data.account_creation_disabled,
       nonAdminSignInDisabled: settingsResult.data.non_admin_sign_in_disabled ?? false,
       homepageAnnouncement: settingsResult.data.homepage_announcement ?? "",
+      welcomeHeroHidden: settingsResult.data.welcome_hero_hidden,
       headlines: headlinesResult.data ?? [],
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {
@@ -98,7 +100,7 @@ export async function PATCH(request: Request) {
   try {
     const values = await readBody(request);
     const accountSettingKeys = new Set(["accountCreationDisabled", "nonAdminSignInDisabled", "signOutAllUsers"]);
-    const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn", "homepageAnnouncement"]);
+    const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn", "homepageAnnouncement", "welcomeHeroHidden"]);
     const accountSettingsRequested = values !== null && Object.keys(values).some((key) => accountSettingKeys.has(key));
     const marketplaceLayoutRequested = values !== null &&
       Object.keys(values).some((key) => key === "sellerCardsPerColumn" || key === "buyerCardsPerColumn");
@@ -166,6 +168,16 @@ export async function PATCH(request: Request) {
       if (error) throw error;
       await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "update_announcement");
       return NextResponse.json({ homepageAnnouncement: data.homepage_announcement ?? "" }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (typeof values?.welcomeHeroHidden === "boolean") {
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ welcome_hero_hidden: values.welcomeHeroHidden })
+        .eq("id", true)
+        .select("welcome_hero_hidden")
+        .single();
+      if (error) throw error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "update_welcome_hero_visibility");
+      return NextResponse.json({ welcomeHeroHidden: data.welcome_hero_hidden }, { headers: { "Cache-Control": "no-store" } });
     }
     if (typeof values?.swahiliEnabled === "boolean") {
       const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
