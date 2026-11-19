@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { WelcomeHeroSettings } from "@/lib/welcome-hero";
 
+const barStaggerOrder = [3, 0, 6, 2, 7, 1, 5, 4];
+
 export default function WelcomeHero({
   settings,
   marketHoursLoaded,
@@ -121,7 +123,17 @@ export default function WelcomeHero({
           "--welcome-mobile-slide-scale": slide.mobileScale / 100,
           "--welcome-mobile-slide-origin": `${slide.mobileFocusX}% ${slide.mobileFocusY}%`,
         } as CSSProperties & Record<`--welcome-${string}`, string | number>}
-      />)}
+      >
+        {settings.transition === "random-bars" && barStaggerOrder.map((order, barIndex) => <span
+          className="market-welcome-bar"
+          key={barIndex}
+          style={{
+            "--welcome-bar-left": `${barIndex * 12.5}%`,
+            "--welcome-bar-right": `${100 - (barIndex + 1) * 12.5}%`,
+            "--welcome-bar-delay": `${order * settings.transitionDurationMs / 12}ms`,
+          } as CSSProperties & Record<`--welcome-${string}`, string | number>}
+        />)}
+      </div>)}
     </div>}
     <div className="market-welcome-overlay" aria-hidden="true" />
     <div className="market-welcome-copy">

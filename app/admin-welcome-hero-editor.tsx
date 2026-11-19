@@ -308,7 +308,7 @@ export default function AdminWelcomeHeroEditor({
         {hidden ? "Show hero" : "Hide hero"}
       </button>
     </div>
-    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. Each background image can have its own headline and description, and both change with that image. Choose a fade, slide, or zoom transition, set how often the slides change, and set how long each transition takes. The buttons keep their existing actions; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
+    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. Each background image can have its own headline and description, and both change with that image. Choose an image transition, set how often the slides change, and set how long each transition takes. The buttons keep their existing actions; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
 
     <div className="admin-welcome-hero-preview-heading">
       <strong><Eye size={15} aria-hidden="true" /> Live preview</strong>
@@ -345,8 +345,15 @@ export default function AdminWelcomeHeroEditor({
       </label>
       <label className="field-label">Slide animation
         <select className="text-input" value={draft.transition} onChange={(event) => update("transition", event.target.value as WelcomeHeroSettings["transition"])}>
+          <option value="appear">Appear</option>
           <option value="fade">Fade</option>
+          <option value="fly-in">Fly in</option>
           <option value="slide">Slide</option>
+          <option value="split">Split</option>
+          <option value="shape-wipe">Shape wipe</option>
+          <option value="wheel">Wheel</option>
+          <option value="random-bars">Random bars</option>
+          <option value="grow-turn">Grow and turn</option>
           <option value="zoom">Zoom</option>
         </select>
       </label>

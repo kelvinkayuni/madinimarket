@@ -6,7 +6,17 @@ export type WelcomeHeroFontFamily = "serif" | "sans";
 export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
 export type WelcomeHeroHeightMode = "default" | "fit-screen" | "full-screen";
 export type WelcomeHeroMobileActionsPosition = "top" | "middle" | "bottom";
-export type WelcomeHeroTransition = "fade" | "slide" | "zoom";
+export type WelcomeHeroTransition =
+  | "appear"
+  | "fade"
+  | "fly-in"
+  | "slide"
+  | "split"
+  | "shape-wipe"
+  | "wheel"
+  | "random-bars"
+  | "grow-turn"
+  | "zoom";
 export type WelcomeHeroSlideIntervalSeconds = 5 | 10 | 15 | 20 | 30;
 export type WelcomeHeroTransitionDurationMs = 500 | 1000 | 1500 | 2000 | 3000;
 
@@ -64,7 +74,16 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const isMobileActionsPosition = (candidate: unknown): candidate is WelcomeHeroMobileActionsPosition =>
     candidate === "top" || candidate === "middle" || candidate === "bottom";
   const isTransition = (candidate: unknown): candidate is WelcomeHeroTransition =>
-    candidate === "fade" || candidate === "slide" || candidate === "zoom";
+    candidate === "appear" ||
+    candidate === "fade" ||
+    candidate === "fly-in" ||
+    candidate === "slide" ||
+    candidate === "split" ||
+    candidate === "shape-wipe" ||
+    candidate === "wheel" ||
+    candidate === "random-bars" ||
+    candidate === "grow-turn" ||
+    candidate === "zoom";
   const isSlideInterval = (candidate: unknown): candidate is WelcomeHeroSlideIntervalSeconds =>
     typeof candidate === "number" && Number.isSafeInteger(candidate) && [5, 10, 15, 20, 30].includes(candidate);
   const isTransitionDuration = (candidate: unknown): candidate is WelcomeHeroTransitionDurationMs =>

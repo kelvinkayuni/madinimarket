@@ -603,10 +603,32 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-slides { z-index: 0; }
 .market-welcome-slide { position: absolute; inset: 0; background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); background-repeat: no-repeat; background-size: cover; opacity: 0; transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); transition: opacity var(--welcome-transition-duration, 1000ms) ease, transform .2s ease; }
 .market-welcome-slide.is-active { opacity: 1; }
+.market-welcome-hero[data-transition="appear"] .market-welcome-slide { transition: none; }
 .market-welcome-hero[data-transition="slide"] .market-welcome-slide { translate: 4% 0; transition: opacity var(--welcome-transition-duration, 1000ms) ease, translate var(--welcome-transition-duration, 1000ms) ease; }
 .market-welcome-hero[data-transition="slide"] .market-welcome-slide.is-active { translate: 0; }
+.market-welcome-hero[data-transition="fly-in"] .market-welcome-slide { translate: 100% 0; transition: opacity var(--welcome-transition-duration, 1000ms) ease, translate var(--welcome-transition-duration, 1000ms) ease; }
+.market-welcome-hero[data-transition="fly-in"] .market-welcome-slide.is-active { translate: 0; }
 .market-welcome-hero[data-transition="zoom"] .market-welcome-slide { scale: .94; transition: opacity var(--welcome-transition-duration, 1000ms) ease, scale var(--welcome-transition-duration, 1000ms) ease; }
 .market-welcome-hero[data-transition="zoom"] .market-welcome-slide.is-active { scale: 1; }
+.market-welcome-hero[data-transition="grow-turn"] .market-welcome-slide { scale: .88; rotate: -7deg; transition: opacity var(--welcome-transition-duration, 1000ms) ease, scale var(--welcome-transition-duration, 1000ms) ease, rotate var(--welcome-transition-duration, 1000ms) ease; }
+.market-welcome-hero[data-transition="grow-turn"] .market-welcome-slide.is-active { scale: 1; rotate: 0deg; }
+.market-welcome-hero[data-transition="split"] .market-welcome-slide.is-active { animation: welcome-split-reveal var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="shape-wipe"] .market-welcome-slide.is-active { animation: welcome-shape-wipe var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="wheel"] .market-welcome-slide.is-active { animation: welcome-wheel-reveal var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="random-bars"] .market-welcome-slide { background-image: none; }
+.market-welcome-bar { position: absolute; inset: 0; background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); background-repeat: no-repeat; background-size: cover; clip-path: inset(0 var(--welcome-bar-right) 0 var(--welcome-bar-left)); opacity: 0; transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); translate: 0 8px; }
+.market-welcome-hero[data-transition="random-bars"] .market-welcome-slide.is-active .market-welcome-bar { animation: welcome-bar-reveal var(--welcome-transition-duration, 1000ms) ease both; animation-delay: var(--welcome-bar-delay); }
+@keyframes welcome-bar-reveal { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0; } }
+@keyframes welcome-split-reveal { from { clip-path: inset(50% 0); } to { clip-path: inset(0); } }
+@keyframes welcome-shape-wipe { from { clip-path: circle(0 at 50% 50%); } to { clip-path: circle(75% at 50% 50%); } }
+@keyframes welcome-wheel-reveal {
+  0% { clip-path: polygon(50% 50%, 50% 0, 50% 0, 50% 0, 50% 0, 50% 0, 50% 0, 50% 0, 50% 0); }
+  20% { clip-path: polygon(50% 50%, 50% 0, 85% 15%, 85% 15%, 85% 15%, 85% 15%, 85% 15%, 85% 15%, 85% 15%); }
+  40% { clip-path: polygon(50% 50%, 50% 0, 85% 15%, 100% 50%, 85% 85%, 85% 85%, 85% 85%, 85% 85%, 85% 85%); }
+  60% { clip-path: polygon(50% 50%, 50% 0, 85% 15%, 100% 50%, 85% 85%, 50% 100%, 15% 85%, 15% 85%, 15% 85%); }
+  80% { clip-path: polygon(50% 50%, 50% 0, 85% 15%, 100% 50%, 85% 85%, 50% 100%, 15% 85%, 0 50%, 0 50%); }
+  100% { clip-path: polygon(50% 50%, 50% 0, 85% 15%, 100% 50%, 85% 85%, 50% 100%, 15% 85%, 0 50%, 15% 15%); }
+}
 .market-welcome-overlay { z-index: 0; background: linear-gradient(90deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 31%, transparent 100%); opacity: var(--welcome-overlay-opacity, .92); }
 .market-welcome-copy { position: relative; z-index: 1; width: min(100%, 590px); }
 .market-welcome-phrase { position: relative; }
@@ -615,7 +637,14 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 @keyframes welcome-phrase-zoom { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 .market-welcome-hero[data-transition="fade"] .market-welcome-phrase { animation: welcome-phrase-fade var(--welcome-transition-duration, 1000ms) ease both; }
 .market-welcome-hero[data-transition="slide"] .market-welcome-phrase { animation: welcome-phrase-slide var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="fly-in"] .market-welcome-phrase { animation: welcome-phrase-slide var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="split"] .market-welcome-phrase,
+.market-welcome-hero[data-transition="random-bars"] .market-welcome-phrase { animation: welcome-phrase-fade var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="shape-wipe"] .market-welcome-phrase { animation: welcome-shape-wipe var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="wheel"] .market-welcome-phrase { animation: welcome-wheel-reveal var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="grow-turn"] .market-welcome-phrase { animation: welcome-phrase-grow-turn var(--welcome-transition-duration, 1000ms) ease both; }
 .market-welcome-hero[data-transition="zoom"] .market-welcome-phrase { animation: welcome-phrase-zoom var(--welcome-transition-duration, 1000ms) ease both; }
+@keyframes welcome-phrase-grow-turn { from { opacity: 0; transform: scale(.94) rotate(-3deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
 .market-welcome-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 20px; color: var(--welcome-accent-color, #d8c99e); font-size: 10px; font-weight: 750; letter-spacing: .19em; }
 .market-welcome-eyebrow > span { width: 22px; height: 1px; background: currentColor; }
 .market-welcome-copy h1 { max-width: 580px; margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; text-wrap: balance; }
@@ -642,6 +671,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-hero.is-preview-mobile[data-height-mode="fit-screen"] { min-height: 420px; }
 .market-welcome-hero.is-preview-mobile[data-height-mode="full-screen"] { min-height: 520px; }
 .market-welcome-hero.is-preview-mobile .market-welcome-slide { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
+.market-welcome-hero.is-preview-mobile .market-welcome-bar { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
 .market-welcome-hero.is-preview:not(.is-preview-mobile) .market-welcome-slide { background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); }
 .market-welcome-hero.is-preview-mobile .market-welcome-copy { display: flex; flex-direction: column; }
 .market-welcome-hero.is-preview-mobile[data-mobile-actions-position="middle"] .market-welcome-actions { margin-block: auto; }
@@ -1372,6 +1402,7 @@ h1, h2, h3, p { margin-top: 0; }
   .market-welcome-hero { min-height: 464px; align-items: stretch; margin: 9px 0 18px; padding: 28px 20px 82px; background-color: var(--welcome-background-color, #112e26); background-image: url("/welcome-gemstones.svg"); background-position: right 42%; background-size: min(145vw, 680px) auto; }
   .market-welcome-hero:not(.is-preview) { margin: 9px -14px 18px; }
   .market-welcome-slide { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
+  .market-welcome-bar { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
   .market-welcome-hero[data-height-mode="fit-screen"]:not(.is-preview) { min-height: max(464px, calc(var(--welcome-stable-viewport-height) - var(--welcome-fit-offset, 135px))); }
   .market-welcome-hero[data-height-mode="full-screen"]:not(.is-preview) { min-height: var(--welcome-stable-viewport-height); }
   .market-welcome-overlay { background: linear-gradient(180deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 37%, transparent 100%); }
