@@ -75,10 +75,9 @@ export default function WelcomeHero({
     if (!hero) return;
 
     const updateAvailableHeight = () => {
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
       const documentTop = hero.getBoundingClientRect().top + window.scrollY;
       const bottomMargin = Number.parseFloat(window.getComputedStyle(hero).marginBottom) || 0;
-      hero.style.setProperty("--welcome-fit-height", `${Math.max(0, viewportHeight - documentTop - bottomMargin)}px`);
+      hero.style.setProperty("--welcome-fit-offset", `${documentTop + bottomMargin}px`);
     };
 
     updateAvailableHeight();
@@ -89,11 +88,9 @@ export default function WelcomeHero({
     if (header) observer.observe(header);
     if (announcement) observer.observe(announcement);
     window.addEventListener("resize", updateAvailableHeight);
-    window.visualViewport?.addEventListener("resize", updateAvailableHeight);
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", updateAvailableHeight);
-      window.visualViewport?.removeEventListener("resize", updateAvailableHeight);
     };
   }, [preview, settings.heightMode]);
 
