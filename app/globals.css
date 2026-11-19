@@ -627,8 +627,13 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-hero.is-preview-mobile .market-welcome-actions { align-items: stretch; flex-direction: column; }
 .market-welcome-hero.is-preview-mobile .market-welcome-status { right: 10px; bottom: 10px; }
 .market-welcome-hero.is-preview-mobile .market-welcome-carousel-controls { right: auto; bottom: 14px; left: 12px; }
-.admin-welcome-hero-editor { display: grid; gap: 14px; padding: 15px; border: 1px solid #dce5d8; background: #f8faf6; }
-.admin-welcome-hero-editor > .admin-queue-heading { margin: 0; }
+.admin-welcome-hero-editor { display: grid; gap: 14px; margin-bottom: 12px; padding: 15px; border: 1px solid #b9c9b5; border-radius: 5px; background: #fff; box-shadow: 0 0 0 2px #edf2ea; }
+.admin-welcome-hero-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.admin-welcome-hero-header > .admin-queue-heading { margin: 0; }
+.admin-welcome-hero-visibility { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; gap: 6px; flex: 0 0 auto; padding: 0 9px; border: 1px solid #cbd6c7; border-radius: 4px; background: #fbfcf9; color: #536653; font-size: 9px; font-weight: 650; cursor: pointer; }
+.admin-welcome-hero-visibility:hover:not(:disabled) { border-color: #9bab97; background: #f0f4ed; }
+.admin-welcome-hero-visibility:focus-visible { outline: 2px solid #638161; outline-offset: 2px; }
+.admin-welcome-hero-visibility:disabled { opacity: .55; cursor: not-allowed; }
 .admin-welcome-hero-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .admin-welcome-hero-preview-heading > strong { display: inline-flex; align-items: center; gap: 7px; color: #405745; font-size: 11px; }
 .admin-welcome-hero-preview-heading > div { display: flex; gap: 4px; padding: 3px; border: 1px solid #dce4d8; background: #fff; }

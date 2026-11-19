@@ -4984,10 +4984,10 @@ export default function Marketplace() {
           <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
           <StaffTaskClaim type="homepage_setting" taskId="homepage" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <div>
           <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases scroll continuously across the homepage; if all are deleted, the homepage shows no headline.</p>
-          <div className="admin-homepage-hero-setting admin-account-control-row">
+          {role === "staff" && <div className="admin-homepage-hero-setting admin-account-control-row">
             <div><strong>Hide welcome hero</strong><span>{welcomeHeroHidden ? "Visitors see the marketplace without the welcome hero." : "Visitors see the welcome hero above the marketplace."}</span></div>
             <button className={`admin-currency-switch${welcomeHeroHidden ? " is-on" : ""}`} type="button" role="switch" aria-checked={welcomeHeroHidden} aria-label="Hide welcome hero" disabled={!canAct || !siteContentLoaded || busyActions.has("welcome-hero-visibility")} onClick={() => void updateWelcomeHeroVisibility(!welcomeHeroHidden)}><span /></button>
-          </div>
+          </div>}
           <form className="admin-homepage-font-size" onSubmit={(event) => void saveHomepageHeadlineFontSize(event)}>
             <label className="field-label" htmlFor="admin-homepage-headline-font-size">Headline font size (pixels)
               <input className="text-input" id="admin-homepage-headline-font-size" type="number" min={24} max={72} step={1} required value={homepageHeadlineFontSizeInput} onChange={(event) => setHomepageHeadlineFontSizeInput(event.target.value)} />
@@ -4996,7 +4996,13 @@ export default function Marketplace() {
             <span>Choose from 24–72 px. On narrow screens, the headline scales down to fit.</span>
           </form>
           {role === "admin" && (siteContentLoaded
-            ? <AdminWelcomeHeroEditor savedSettings={welcomeHeroSettings} onSaved={(settings) => { setWelcomeHeroSettings(settings); setNotice("Welcome hero saved."); }} />
+            ? <AdminWelcomeHeroEditor
+                savedSettings={welcomeHeroSettings}
+                hidden={welcomeHeroHidden}
+                visibilityDisabled={!siteContentLoaded || busyActions.has("welcome-hero-visibility")}
+                onToggleVisibility={(hidden) => void updateWelcomeHeroVisibility(hidden)}
+                onSaved={(settings) => { setWelcomeHeroSettings(settings); setNotice("Welcome hero saved."); }}
+              />
             : <p className="admin-translation-help">Loading welcome hero settings…</p>)}
           {role === "admin" && <div className="admin-card-columns-settings">
             <div className="admin-queue-heading"><div><span>MARKETPLACE LAYOUT</span><h3>Cards per column</h3></div></div>

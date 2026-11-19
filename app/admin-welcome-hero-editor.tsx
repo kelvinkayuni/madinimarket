@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Eye, FileUp, RotateCcw, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, EyeOff, FileUp, RotateCcw, Save, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
@@ -50,9 +50,15 @@ function copySettings(settings: WelcomeHeroSettings): WelcomeHeroSettings {
 
 export default function AdminWelcomeHeroEditor({
   savedSettings,
+  hidden,
+  visibilityDisabled,
+  onToggleVisibility,
   onSaved,
 }: {
   savedSettings: WelcomeHeroSettings;
+  hidden: boolean;
+  visibilityDisabled: boolean;
+  onToggleVisibility: (hidden: boolean) => void;
   onSaved: (settings: WelcomeHeroSettings) => void;
 }) {
   const [draft, setDraft] = useState<WelcomeHeroSettings>(() => copySettings(savedSettings));
@@ -185,8 +191,22 @@ export default function AdminWelcomeHeroEditor({
   const statusText = message || (hasDraftChanges ? "Unsaved changes" : "Changes are saved");
 
   return <section className="admin-welcome-hero-editor" aria-labelledby="admin-welcome-hero-heading">
-    <div className="admin-queue-heading">
-      <div><span>WELCOME HERO</span><h3 id="admin-welcome-hero-heading">Hero content and design</h3></div>
+    <div className="admin-welcome-hero-header">
+      <div className="admin-queue-heading">
+        <div><span>WELCOME HERO</span><h3 id="admin-welcome-hero-heading">Hero content and design</h3></div>
+      </div>
+      <button
+        className="admin-welcome-hero-visibility"
+        type="button"
+        role="switch"
+        aria-checked={hidden}
+        aria-label={hidden ? "Show welcome hero" : "Hide welcome hero"}
+        disabled={visibilityDisabled}
+        onClick={() => onToggleVisibility(!hidden)}
+      >
+        {hidden ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+        {hidden ? "Show hero" : "Hide hero"}
+      </button>
     </div>
     <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. The two buttons keep their existing actions; only their labels are editable.</p>
 
