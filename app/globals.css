@@ -1386,6 +1386,43 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-account { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .prototype-bar { min-height: 31px; padding-right: 14px; padding-left: 14px; font-size: 8px; }
   .prototype-note { display: none; }
+  .admin-content > section.admin-homepage-panel {
+    min-width: 0;
+    padding: 12px;
+  }
+  .admin-homepage-panel > *,
+  .admin-homepage-panel .admin-homepage-font-size,
+  .admin-homepage-panel .admin-homepage-headline-form,
+  .admin-homepage-panel .admin-card-columns-settings,
+  .admin-homepage-panel .admin-card-columns-forms,
+  .admin-homepage-panel .admin-card-columns-form,
+  .admin-homepage-panel .admin-welcome-hero-editor {
+    min-width: 0;
+  }
+  .admin-homepage-panel .admin-homepage-font-size {
+    margin: 14px 0 18px;
+    padding: 10px;
+  }
+  .admin-homepage-panel .admin-homepage-font-size label,
+  .admin-homepage-panel .admin-homepage-font-size .button,
+  .admin-homepage-panel .admin-homepage-headline-form > * {
+    width: 100%;
+  }
+  .admin-homepage-panel .admin-homepage-headline-form,
+  .admin-homepage-panel .admin-card-columns-forms,
+  .admin-homepage-panel .admin-card-columns-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-homepage-panel .admin-card-columns-settings,
+  .admin-homepage-panel .admin-welcome-hero-editor {
+    padding: 10px;
+  }
+  .admin-homepage-panel .admin-card-columns-form .button {
+    width: 100%;
+  }
+  .admin-homepage-panel .admin-welcome-hero-preview-heading {
+    flex-wrap: wrap;
+  }
   .site-header { height: auto; min-height: 64px; padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
   .header-left { order: 1; gap: 8px; }
   .icon-button { width: 34px; height: 34px; }
