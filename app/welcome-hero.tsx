@@ -47,6 +47,7 @@ export default function WelcomeHero({
     "--welcome-font-weight": settings.fontWeight,
     "--welcome-desktop-font-size": `${settings.desktopFontSize}px`,
     "--welcome-mobile-font-size": `${settings.mobileFontSize}px`,
+    "--welcome-transition-duration": `${settings.transitionDurationMs}ms`,
   } as CSSProperties & Record<`--welcome-${string}`, string | number>;
   const statusText = !marketHoursLoaded
     ? "Checking market hours"
@@ -68,9 +69,9 @@ export default function WelcomeHero({
       if (document.visibilityState === "visible") {
         setActiveIndex((index) => (index + 1) % slides.length);
       }
-    }, 5000);
+    }, settings.slideIntervalSeconds * 1000);
     return () => window.clearInterval(interval);
-  }, [rotationPaused, slides.length]);
+  }, [rotationPaused, settings.slideIntervalSeconds, slides.length]);
 
   useEffect(() => {
     if (preview || settings.heightMode !== "fit-screen") return;

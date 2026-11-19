@@ -308,7 +308,7 @@ export default function AdminWelcomeHeroEditor({
         {hidden ? "Show hero" : "Hide hero"}
       </button>
     </div>
-    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. Each background image can have its own headline and description, and both change with that image. Choose a fade, slide, or zoom transition. The buttons keep their existing actions; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
+    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. Each background image can have its own headline and description, and both change with that image. Choose a fade, slide, or zoom transition, set how often the slides change, and set how long each transition takes. The buttons keep their existing actions; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
 
     <div className="admin-welcome-hero-preview-heading">
       <strong><Eye size={15} aria-hidden="true" /> Live preview</strong>
@@ -348,6 +348,24 @@ export default function AdminWelcomeHeroEditor({
           <option value="fade">Fade</option>
           <option value="slide">Slide</option>
           <option value="zoom">Zoom</option>
+        </select>
+      </label>
+      <label className="field-label">Change slides every
+        <select className="text-input" value={draft.slideIntervalSeconds} onChange={(event) => update("slideIntervalSeconds", Number(event.target.value) as WelcomeHeroSettings["slideIntervalSeconds"])}>
+          <option value={5}>5 seconds</option>
+          <option value={10}>10 seconds</option>
+          <option value={15}>15 seconds</option>
+          <option value={20}>20 seconds</option>
+          <option value={30}>30 seconds</option>
+        </select>
+      </label>
+      <label className="field-label">Transition duration
+        <select className="text-input" value={draft.transitionDurationMs} onChange={(event) => update("transitionDurationMs", Number(event.target.value) as WelcomeHeroSettings["transitionDurationMs"])}>
+          <option value={500}>0.5 seconds</option>
+          <option value={1000}>1 second</option>
+          <option value={1500}>1.5 seconds</option>
+          <option value={2000}>2 seconds</option>
+          <option value={3000}>3 seconds</option>
         </select>
       </label>
     </div>

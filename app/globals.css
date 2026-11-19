@@ -601,11 +601,11 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 }
 .market-welcome-slides, .market-welcome-overlay { position: absolute; inset: 0; pointer-events: none; }
 .market-welcome-slides { z-index: 0; }
-.market-welcome-slide { position: absolute; inset: 0; background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); background-repeat: no-repeat; background-size: cover; opacity: 0; transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); transition: opacity .7s ease, transform .2s ease; }
+.market-welcome-slide { position: absolute; inset: 0; background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); background-repeat: no-repeat; background-size: cover; opacity: 0; transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); transition: opacity var(--welcome-transition-duration, 1000ms) ease, transform .2s ease; }
 .market-welcome-slide.is-active { opacity: 1; }
-.market-welcome-hero[data-transition="slide"] .market-welcome-slide { translate: 4% 0; transition: opacity .7s ease, translate .7s ease; }
+.market-welcome-hero[data-transition="slide"] .market-welcome-slide { translate: 4% 0; transition: opacity var(--welcome-transition-duration, 1000ms) ease, translate var(--welcome-transition-duration, 1000ms) ease; }
 .market-welcome-hero[data-transition="slide"] .market-welcome-slide.is-active { translate: 0; }
-.market-welcome-hero[data-transition="zoom"] .market-welcome-slide { scale: .94; transition: opacity .7s ease, scale .7s ease; }
+.market-welcome-hero[data-transition="zoom"] .market-welcome-slide { scale: .94; transition: opacity var(--welcome-transition-duration, 1000ms) ease, scale var(--welcome-transition-duration, 1000ms) ease; }
 .market-welcome-hero[data-transition="zoom"] .market-welcome-slide.is-active { scale: 1; }
 .market-welcome-overlay { z-index: 0; background: linear-gradient(90deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 31%, transparent 100%); opacity: var(--welcome-overlay-opacity, .92); }
 .market-welcome-copy { position: relative; z-index: 1; width: min(100%, 590px); }
@@ -613,9 +613,9 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 @keyframes welcome-phrase-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes welcome-phrase-slide { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes welcome-phrase-zoom { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
-.market-welcome-hero[data-transition="fade"] .market-welcome-phrase { animation: welcome-phrase-fade .7s ease both; }
-.market-welcome-hero[data-transition="slide"] .market-welcome-phrase { animation: welcome-phrase-slide .7s ease both; }
-.market-welcome-hero[data-transition="zoom"] .market-welcome-phrase { animation: welcome-phrase-zoom .7s ease both; }
+.market-welcome-hero[data-transition="fade"] .market-welcome-phrase { animation: welcome-phrase-fade var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="slide"] .market-welcome-phrase { animation: welcome-phrase-slide var(--welcome-transition-duration, 1000ms) ease both; }
+.market-welcome-hero[data-transition="zoom"] .market-welcome-phrase { animation: welcome-phrase-zoom var(--welcome-transition-duration, 1000ms) ease both; }
 .market-welcome-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 20px; color: var(--welcome-accent-color, #d8c99e); font-size: 10px; font-weight: 750; letter-spacing: .19em; }
 .market-welcome-eyebrow > span { width: 22px; height: 1px; background: currentColor; }
 .market-welcome-copy h1 { max-width: 580px; margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; text-wrap: balance; }

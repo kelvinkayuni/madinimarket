@@ -7,6 +7,8 @@ export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
 export type WelcomeHeroHeightMode = "default" | "fit-screen" | "full-screen";
 export type WelcomeHeroMobileActionsPosition = "top" | "middle" | "bottom";
 export type WelcomeHeroTransition = "fade" | "slide" | "zoom";
+export type WelcomeHeroSlideIntervalSeconds = 5 | 10 | 15 | 20 | 30;
+export type WelcomeHeroTransitionDurationMs = 500 | 1000 | 1500 | 2000 | 3000;
 
 export type WelcomeHeroSlide = {
   path: string;
@@ -42,6 +44,8 @@ export type WelcomeHeroSettings = {
   desktopFontSize: number;
   mobileFontSize: number;
   transition: WelcomeHeroTransition;
+  slideIntervalSeconds: WelcomeHeroSlideIntervalSeconds;
+  transitionDurationMs: WelcomeHeroTransitionDurationMs;
   heightMode: WelcomeHeroHeightMode;
   mobileActionsPosition: WelcomeHeroMobileActionsPosition;
   slides: WelcomeHeroSlide[];
@@ -53,12 +57,18 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const heightMode = settings.heightMode === undefined ? "default" : settings.heightMode;
   const mobileActionsPosition = settings.mobileActionsPosition === undefined ? "top" : settings.mobileActionsPosition;
   const transition = settings.transition === undefined ? "fade" : settings.transition;
+  const slideIntervalSeconds = settings.slideIntervalSeconds === undefined ? 10 : settings.slideIntervalSeconds;
+  const transitionDurationMs = settings.transitionDurationMs === undefined ? 1000 : settings.transitionDurationMs;
   const isHeightMode = (candidate: unknown): candidate is WelcomeHeroHeightMode =>
     candidate === "default" || candidate === "fit-screen" || candidate === "full-screen";
   const isMobileActionsPosition = (candidate: unknown): candidate is WelcomeHeroMobileActionsPosition =>
     candidate === "top" || candidate === "middle" || candidate === "bottom";
   const isTransition = (candidate: unknown): candidate is WelcomeHeroTransition =>
     candidate === "fade" || candidate === "slide" || candidate === "zoom";
+  const isSlideInterval = (candidate: unknown): candidate is WelcomeHeroSlideIntervalSeconds =>
+    typeof candidate === "number" && Number.isSafeInteger(candidate) && [5, 10, 15, 20, 30].includes(candidate);
+  const isTransitionDuration = (candidate: unknown): candidate is WelcomeHeroTransitionDurationMs =>
+    typeof candidate === "number" && Number.isSafeInteger(candidate) && [500, 1000, 1500, 2000, 3000].includes(candidate);
   const isText = (key: string, maximum: number, allowEmpty = false) =>
     typeof settings[key] === "string" &&
     (allowEmpty || settings[key].trim().length > 0) &&
@@ -87,6 +97,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isIntegerInRange("desktopFontSize", 40, 78) ||
     !isIntegerInRange("mobileFontSize", 32, 56) ||
     !isTransition(transition) ||
+    !isSlideInterval(slideIntervalSeconds) ||
+    !isTransitionDuration(transitionDurationMs) ||
     !isHeightMode(heightMode) ||
     !isMobileActionsPosition(mobileActionsPosition) ||
     !Array.isArray(settings.slides) ||
@@ -155,6 +167,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     desktopFontSize: settings.desktopFontSize as number,
     mobileFontSize: settings.mobileFontSize as number,
     transition,
+    slideIntervalSeconds,
+    transitionDurationMs,
     heightMode,
     mobileActionsPosition,
     slides,
