@@ -41,6 +41,8 @@ export type WelcomeHeroSettings = {
   description: string;
   sellLabel: string;
   requestLabel: string;
+  exploreLinkLabel: string;
+  buyerBrowseLinkLabel: string;
   backgroundColor: string;
   overlayColor: string;
   overlayOpacity: number;
@@ -105,6 +107,10 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const mobileLinksVerticalPosition = settings.mobileLinksVerticalPosition === undefined ? 100 : settings.mobileLinksVerticalPosition;
   const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
   const requestButtonTextColor = settings.requestButtonTextColor === undefined ? "#18382e" : settings.requestButtonTextColor;
+  const exploreLinkLabel = settings.exploreLinkLabel === undefined ? "" : settings.exploreLinkLabel;
+  const buyerBrowseLinkLabel = settings.buyerBrowseLinkLabel === undefined
+    ? ""
+    : settings.buyerBrowseLinkLabel;
   const sellLabel = settings.sellLabel === undefined
     ? settings.exploreLabel === "Explore minerals" ? "Sell a mineral" : settings.exploreLabel
     : settings.sellLabel;
@@ -149,6 +155,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isText("description", 320, allowEmptyCopy) ||
     !isTextValue(sellLabel, 32, allowEmptyCopy) ||
     !isText("requestLabel", 32, allowEmptyCopy) ||
+    !isTextValue(exploreLinkLabel, 80, true) ||
+    !isTextValue(buyerBrowseLinkLabel, 80, true) ||
     !isColor("backgroundColor") ||
     !isColor("overlayColor") ||
     !isIntegerInRange("overlayOpacity", 0, 100) ||
@@ -233,6 +241,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     description: settings.description as string,
     sellLabel: sellLabel as string,
     requestLabel: settings.requestLabel as string,
+    exploreLinkLabel: exploreLinkLabel as string,
+    buyerBrowseLinkLabel: buyerBrowseLinkLabel as string,
     backgroundColor: settings.backgroundColor as string,
     overlayColor: settings.overlayColor as string,
     overlayOpacity: settings.overlayOpacity as number,

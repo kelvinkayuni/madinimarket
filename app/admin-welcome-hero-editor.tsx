@@ -361,6 +361,8 @@ export default function AdminWelcomeHeroEditor({
       </>}
       <label className="field-label">Sell a mineral button label<input className="text-input" maxLength={32} value={draft.sellLabel} onChange={(event) => update("sellLabel", event.target.value)} /></label>
       <label className="field-label">Request button label<input className="text-input" maxLength={32} value={draft.requestLabel} onChange={(event) => update("requestLabel", event.target.value)} /></label>
+      <label className="field-label">Explore minerals link label<input className="text-input" maxLength={80} value={draft.exploreLinkLabel} onChange={(event) => update("exploreLinkLabel", event.target.value)} /></label>
+      <label className="field-label">Buyer browse link label<input className="text-input" maxLength={80} value={draft.buyerBrowseLinkLabel} onChange={(event) => update("buyerBrowseLinkLabel", event.target.value)} /></label>
       <label className="field-label">Hero height
         <select className="text-input" value={draft.heightMode} onChange={(event) => update("heightMode", event.target.value as WelcomeHeroSettings["heightMode"])}>
           <option value="default">Default</option>

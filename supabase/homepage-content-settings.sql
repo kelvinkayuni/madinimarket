@@ -4,11 +4,11 @@ alter table public.marketplace_settings
     check (homepage_headline_font_size between 24 and 72),
   add column if not exists welcome_hero_hidden boolean not null default false,
   add column if not exists welcome_hero_settings jsonb not null default
-    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"slides":[]}'::jsonb;
+    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","exploreLinkLabel":"","buyerBrowseLinkLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"slides":[]}'::jsonb;
 
 alter table public.marketplace_settings
   alter column welcome_hero_settings set default
-    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"slides":[]}'::jsonb;
+    '{"eyebrow":"","headline":"","description":"","sellLabel":"","requestLabel":"","exploreLinkLabel":"","buyerBrowseLinkLabel":"","backgroundColor":"#112e26","overlayColor":"#112e26","overlayOpacity":92,"headingColor":"#fffdf6","bodyColor":"#d0ddd4","accentColor":"#d8c99e","buttonColor":"#d2ee77","buttonTextColor":"#18382e","fontFamily":"serif","fontWeight":500,"desktopFontSize":72,"mobileFontSize":46,"heightMode":"default","desktopCopyHorizontalPosition":0,"desktopCopyVerticalPosition":0,"mobileCopyHorizontalPosition":0,"mobileCopyVerticalPosition":0,"desktopActionsHorizontalPosition":0,"desktopActionsVerticalPosition":85,"mobileActionsHorizontalPosition":0,"mobileActionsVerticalPosition":85,"desktopLinksHorizontalPosition":0,"desktopLinksVerticalPosition":100,"mobileLinksHorizontalPosition":0,"mobileLinksVerticalPosition":100,"slides":[]}'::jsonb;
 
 update public.marketplace_settings
 set welcome_hero_settings =
@@ -38,6 +38,16 @@ where welcome_hero_settings->>'mobileActionsPosition' is null;
 
 update public.marketplace_settings
 set welcome_hero_settings = welcome_hero_settings || jsonb_build_object(
+  'exploreLinkLabel', case
+    when welcome_hero_settings->>'exploreLinkLabel' is null or welcome_hero_settings->>'exploreLinkLabel' = 'Explore minerals'
+      then '""'::jsonb
+    else welcome_hero_settings->'exploreLinkLabel'
+  end,
+  'buyerBrowseLinkLabel', case
+    when welcome_hero_settings->>'buyerBrowseLinkLabel' is null or welcome_hero_settings->>'buyerBrowseLinkLabel' = 'Or browse what buyers are looking for'
+      then '""'::jsonb
+    else welcome_hero_settings->'buyerBrowseLinkLabel'
+  end,
   'desktopCopyHorizontalPosition', coalesce(nullif(welcome_hero_settings->'desktopCopyHorizontalPosition', 'null'::jsonb), '0'::jsonb),
   'desktopCopyVerticalPosition', coalesce(nullif(welcome_hero_settings->'desktopCopyVerticalPosition', 'null'::jsonb), '0'::jsonb),
   'mobileCopyHorizontalPosition', coalesce(nullif(welcome_hero_settings->'mobileCopyHorizontalPosition', 'null'::jsonb), '0'::jsonb),
@@ -65,7 +75,11 @@ set welcome_hero_settings = welcome_hero_settings || jsonb_build_object(
   'mobileLinksHorizontalPosition', coalesce(nullif(welcome_hero_settings->'mobileLinksHorizontalPosition', 'null'::jsonb), '0'::jsonb),
   'mobileLinksVerticalPosition', coalesce(nullif(welcome_hero_settings->'mobileLinksVerticalPosition', 'null'::jsonb), '100'::jsonb)
 )
-where welcome_hero_settings->>'desktopCopyHorizontalPosition' is null
+where welcome_hero_settings->>'exploreLinkLabel' is null
+   or welcome_hero_settings->>'buyerBrowseLinkLabel' is null
+   or welcome_hero_settings->>'exploreLinkLabel' = 'Explore minerals'
+   or welcome_hero_settings->>'buyerBrowseLinkLabel' = 'Or browse what buyers are looking for'
+   or welcome_hero_settings->>'desktopCopyHorizontalPosition' is null
    or welcome_hero_settings->>'desktopCopyVerticalPosition' is null
    or welcome_hero_settings->>'mobileCopyHorizontalPosition' is null
    or welcome_hero_settings->>'mobileCopyVerticalPosition' is null

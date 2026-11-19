@@ -172,14 +172,14 @@ export default function WelcomeHero({
         </button>
       </div>
       <div className="market-welcome-secondary-links">
-        {preview
-          ? <span className="market-welcome-secondary-link">Explore minerals <ArrowRight size={14} aria-hidden="true" /></span>
-          : <a className="market-welcome-secondary-link" href="#marketplace">Explore minerals <ArrowRight size={14} aria-hidden="true" /></a>}
-        {preview
-          ? <span className="market-welcome-secondary-link">Or browse what buyers are looking for <ArrowRight size={14} aria-hidden="true" /></span>
+        {settings.exploreLinkLabel.trim() && (preview
+          ? <span className="market-welcome-secondary-link">{settings.exploreLinkLabel} <ArrowRight size={14} aria-hidden="true" /></span>
+          : <a className="market-welcome-secondary-link" href="#marketplace">{settings.exploreLinkLabel} <ArrowRight size={14} aria-hidden="true" /></a>)}
+        {settings.buyerBrowseLinkLabel.trim() && (preview
+          ? <span className="market-welcome-secondary-link">{settings.buyerBrowseLinkLabel} <ArrowRight size={14} aria-hidden="true" /></span>
           : <a className="market-welcome-secondary-link" href={marketHoursLoaded && !marketHoursError && marketIsOpen ? "#buyer-heading" : "#marketplace"}>
-            Or browse what buyers are looking for <ArrowRight size={14} aria-hidden="true" />
-          </a>}
+            {settings.buyerBrowseLinkLabel} <ArrowRight size={14} aria-hidden="true" />
+          </a>)}
       </div>
     </div>
     <div className={`market-welcome-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`} role={preview ? undefined : "status"}>
