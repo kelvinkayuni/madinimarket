@@ -4983,13 +4983,11 @@ export default function Marketplace() {
         {activeAdminPanel === "homepage" && (role === "admin" || staffCan("homepage_headlines")) && <section className="admin-homepage-panel" aria-labelledby="admin-homepage-headlines-heading">
           <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>
           <StaffTaskClaim type="homepage_setting" taskId="homepage" enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <div>
-          <p className="admin-translation-help">Add the regular and highlighted parts separately. The highlighted part uses the homepage’s green accent. Saved phrases scroll continuously across the homepage; if all are deleted, the homepage shows no headline.</p>
           <form className="admin-homepage-font-size" onSubmit={(event) => void saveHomepageHeadlineFontSize(event)}>
             <label className="field-label" htmlFor="admin-homepage-headline-font-size">Headline font size (pixels)
               <input className="text-input" id="admin-homepage-headline-font-size" type="number" min={24} max={72} step={1} required value={homepageHeadlineFontSizeInput} onChange={(event) => setHomepageHeadlineFontSizeInput(event.target.value)} />
             </label>
             <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-headline-font-size") || Number(homepageHeadlineFontSizeInput) === homepageHeadlineFontSize}>{busyActions.has("homepage-headline-font-size") ? "Saving…" : "Save font size"}</button>
-            <span>Choose from 24–72 px. On narrow screens, the headline scales down to fit.</span>
           </form>
           {role === "admin" && (siteContentLoaded && welcomeHeroSettings
             ? <AdminWelcomeHeroEditor
@@ -5002,7 +5000,6 @@ export default function Marketplace() {
             : <p className="admin-translation-help">{siteContentLoaded ? "Welcome hero settings are unavailable." : "Loading welcome hero settings…"}</p>)}
           {role === "admin" && <div className="admin-card-columns-settings">
             <div className="admin-queue-heading"><div><span>MARKETPLACE LAYOUT</span><h3>Cards per column</h3></div></div>
-            <p className="admin-translation-help">Set seller and buyer panels independently. Each column displays the selected number of cards before continuing into the next column. The minimum is one card.</p>
             <div className="admin-card-columns-forms">
               <form className="admin-card-columns-form" onSubmit={(event) => void saveCardsPerColumn("seller", event)}>
                 <label className="field-label" htmlFor="admin-seller-cards-per-column">Seller cards per column

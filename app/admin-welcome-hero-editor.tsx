@@ -308,8 +308,6 @@ export default function AdminWelcomeHeroEditor({
         {hidden ? "Show hero" : "Hide hero"}
       </button>
     </div>
-    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. Each background image can have its own headline and description, and both change with that image. Choose an image transition, set how often the slides change, and set how long each transition takes. Sell a mineral opens the seller listing form, and Post a request opens the buyer request form; only their labels are editable. On phones, you can position the button group at the top, middle, or bottom.</p>
-
     <div className="admin-welcome-hero-preview-heading">
       <strong><Eye size={15} aria-hidden="true" /> Live preview</strong>
       <div role="group" aria-label="Preview size">
@@ -415,7 +413,6 @@ export default function AdminWelcomeHeroEditor({
 
     <div className="admin-welcome-hero-images">
       <div className="admin-queue-heading"><div><span>BACKGROUND IMAGES</span><h4>{draft.slides.length} of 3 desktop slides</h4></div></div>
-      <p className="admin-translation-help">Each desktop image has a matching headline and description; add up to three image-and-copy slides. Desktop images and optional phone images are optimized as JPEGs and rotate together every five seconds. Each version has independent focal-point and size controls; when no phone image is set, the desktop image uses the phone crop settings. New uploads in one save must total 3.6 MB or less. The existing gemstone artwork remains the fallback when no desktop images are selected.</p>
       {draft.slides.map((slide, index) => {
         const draftSlide = slide as DraftSlide;
         const hasMobileImage = Boolean(draftSlide.mobilePath || draftSlide.mobileFile);
