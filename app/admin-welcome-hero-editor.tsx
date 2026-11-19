@@ -100,7 +100,7 @@ export default function AdminWelcomeHeroEditor({
       const slides: DraftSlide[] = prepared.map((file) => {
         const url = URL.createObjectURL(file);
         objectUrls.current.add(url);
-        return { path: "", focusX: 50, focusY: 50, url, file };
+        return { path: "", focusX: 50, focusY: 50, scale: 100, url, file };
       });
       dirty.current = true;
       setHasDraftChanges(true);
@@ -150,9 +150,9 @@ export default function AdminWelcomeHeroEditor({
         const draftSlide = slide as DraftSlide;
         if (draftSlide.file) {
           form.append(`image-${index}`, draftSlide.file);
-          return { uploadIndex: index, focusX: slide.focusX, focusY: slide.focusY };
+          return { uploadIndex: index, focusX: slide.focusX, focusY: slide.focusY, scale: slide.scale };
         }
-        return { path: slide.path, focusX: slide.focusX, focusY: slide.focusY };
+        return { path: slide.path, focusX: slide.focusX, focusY: slide.focusY, scale: slide.scale };
       });
       form.append("settings", JSON.stringify({ ...draft, slides }));
       const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
@@ -208,7 +208,7 @@ export default function AdminWelcomeHeroEditor({
         {hidden ? "Show hero" : "Hide hero"}
       </button>
     </div>
-    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. The two buttons keep their existing actions; only their labels are editable.</p>
+    <p className="admin-translation-help">Changes affect the welcome panel shown above the marketplace. Default keeps its current size; Fit available screen fills the remaining viewport space; Full screen fills a viewport. The buttons keep their existing actions; only their labels are editable.</p>
 
     <div className="admin-welcome-hero-preview-heading">
       <strong><Eye size={15} aria-hidden="true" /> Live preview</strong>
@@ -227,6 +227,13 @@ export default function AdminWelcomeHeroEditor({
       <label className="field-label admin-welcome-hero-description">Description<textarea className="text-input" maxLength={320} rows={3} value={draft.description} onChange={(event) => update("description", event.target.value)} /></label>
       <label className="field-label">Explore button label<input className="text-input" maxLength={32} value={draft.exploreLabel} onChange={(event) => update("exploreLabel", event.target.value)} /></label>
       <label className="field-label">Request button label<input className="text-input" maxLength={32} value={draft.requestLabel} onChange={(event) => update("requestLabel", event.target.value)} /></label>
+      <label className="field-label">Hero height
+        <select className="text-input" value={draft.heightMode} onChange={(event) => update("heightMode", event.target.value as WelcomeHeroSettings["heightMode"])}>
+          <option value="default">Default</option>
+          <option value="fit-screen">Fit available screen</option>
+          <option value="full-screen">Full screen</option>
+        </select>
+      </label>
     </div>
 
     <div className="admin-welcome-hero-colors">
@@ -265,7 +272,7 @@ export default function AdminWelcomeHeroEditor({
 
     <div className="admin-welcome-hero-images">
       <div className="admin-queue-heading"><div><span>BACKGROUND IMAGES</span><h4>{draft.slides.length} of 3 images</h4></div></div>
-      <p className="admin-translation-help">Images are optimized as JPEGs before upload, then rotate every five seconds. The existing gemstone artwork remains the fallback when no images are selected.</p>
+      <p className="admin-translation-help">Images are optimized as JPEGs before upload, then rotate every five seconds. Set each image’s size and focal point independently. The existing gemstone artwork remains the fallback when no images are selected.</p>
       {draft.slides.map((slide, index) => <article className="admin-welcome-hero-image" key={slide.path || slide.url || index}>
         {slide.url ? <Image src={slide.url} alt={`Welcome hero background ${index + 1}`} width={360} height={180} unoptimized /> : <div className="admin-welcome-hero-image-empty">Image preview</div>}
         <div className="admin-welcome-hero-image-controls">
@@ -280,6 +287,9 @@ export default function AdminWelcomeHeroEditor({
           </label>
           <label>Vertical focal point: {slide.focusY}%
             <input type="range" min={0} max={100} step={1} value={slide.focusY} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, focusY: Number(event.target.value) } : current))} />
+          </label>
+          <label>Image size: {slide.scale}%
+            <input type="range" min={70} max={160} step={1} value={slide.scale} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, scale: Number(event.target.value) } : current))} />
           </label>
         </div>
       </article>)}

@@ -19,6 +19,7 @@ type DraftSlide = {
   uploadIndex?: number;
   focusX: number;
   focusY: number;
+  scale: number;
 };
 
 function isJpeg(bytes: Buffer) {
@@ -36,18 +37,20 @@ function parseDraftSlides(value: unknown): DraftSlide[] | null {
     const candidate = value[index];
     if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) return null;
     const slide = candidate as Record<string, unknown>;
+    const scale = slide.scale === undefined ? 100 : slide.scale;
     if (typeof slide.focusX !== "number" || !Number.isSafeInteger(slide.focusX) || slide.focusX < 0 || slide.focusX > 100 ||
-      typeof slide.focusY !== "number" || !Number.isSafeInteger(slide.focusY) || slide.focusY < 0 || slide.focusY > 100) {
+      typeof slide.focusY !== "number" || !Number.isSafeInteger(slide.focusY) || slide.focusY < 0 || slide.focusY > 100 ||
+      typeof scale !== "number" || !Number.isSafeInteger(scale) || scale < 70 || scale > 160) {
       return null;
     }
     if (typeof slide.path === "string" && slide.uploadIndex === undefined &&
       /^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(slide.path) && !paths.has(slide.path)) {
       paths.add(slide.path);
-      slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY });
+      slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY, scale });
     } else if (slide.path === undefined && typeof slide.uploadIndex === "number" &&
       Number.isSafeInteger(slide.uploadIndex) && slide.uploadIndex === index && !uploadIndices.has(slide.uploadIndex)) {
       uploadIndices.add(slide.uploadIndex);
-      slides.push({ uploadIndex: slide.uploadIndex, focusX: slide.focusX, focusY: slide.focusY });
+      slides.push({ uploadIndex: slide.uploadIndex, focusX: slide.focusX, focusY: slide.focusY, scale });
     } else {
       return null;
     }
@@ -112,7 +115,7 @@ export async function POST(request: Request) {
           await removeUploadedImages(admin, uploadedPaths);
           return NextResponse.json({ error: "Only currently saved welcome hero images can be reused." }, { status: 400 });
         }
-        slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY });
+        slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY, scale: slide.scale });
         continue;
       }
 
@@ -143,7 +146,7 @@ export async function POST(request: Request) {
         throw uploadError;
       }
       uploadedPaths.push(path);
-      slides.push({ path, focusX: slide.focusX, focusY: slide.focusY });
+      slides.push({ path, focusX: slide.focusX, focusY: slide.focusY, scale: slide.scale });
     }
 
     const savedSettings: WelcomeHeroSettings = { ...design, slides };

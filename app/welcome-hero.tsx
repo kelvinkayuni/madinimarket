@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Gem, Pause, Play, Plus } from "lucide-react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { WelcomeHeroSettings } from "@/lib/welcome-hero";
 
@@ -26,6 +26,7 @@ export default function WelcomeHero({
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [rotationPaused, setRotationPaused] = useState(false);
+  const heroRef = useRef<HTMLElement>(null);
   const slides = settings.slides;
   const fontFamily = settings.fontFamily === "serif"
     ? "var(--font-display), Georgia, serif"
@@ -68,8 +69,38 @@ export default function WelcomeHero({
     return () => window.clearInterval(interval);
   }, [rotationPaused, slides.length]);
 
+  useEffect(() => {
+    if (preview || settings.heightMode !== "fit-screen") return;
+    const hero = heroRef.current;
+    if (!hero) return;
+
+    const updateAvailableHeight = () => {
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const documentTop = hero.getBoundingClientRect().top + window.scrollY;
+      const bottomMargin = Number.parseFloat(window.getComputedStyle(hero).marginBottom) || 0;
+      hero.style.setProperty("--welcome-fit-height", `${Math.max(0, viewportHeight - documentTop - bottomMargin)}px`);
+    };
+
+    updateAvailableHeight();
+    const observer = new ResizeObserver(updateAvailableHeight);
+    const shell = hero.closest(".market-shell");
+    const header = shell?.querySelector(".site-header");
+    const announcement = shell?.querySelector(".market-announcement");
+    if (header) observer.observe(header);
+    if (announcement) observer.observe(announcement);
+    window.addEventListener("resize", updateAvailableHeight);
+    window.visualViewport?.addEventListener("resize", updateAvailableHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateAvailableHeight);
+      window.visualViewport?.removeEventListener("resize", updateAvailableHeight);
+    };
+  }, [preview, settings.heightMode]);
+
   return <section
+    ref={heroRef}
     className={`market-welcome-hero${preview ? " is-preview" : ""}${previewMobile ? " is-preview-mobile" : ""}`}
+    data-height-mode={settings.heightMode}
     aria-labelledby={preview ? undefined : "market-welcome-heading"}
     style={style}
   >
@@ -80,6 +111,8 @@ export default function WelcomeHero({
         style={{
           backgroundImage: `url("${slide.url}")`,
           backgroundPosition: `${slide.focusX}% ${slide.focusY}%`,
+          transform: `scale(${slide.scale / 100})`,
+          transformOrigin: `${slide.focusX}% ${slide.focusY}%`,
         }}
       />)}
     </div>}

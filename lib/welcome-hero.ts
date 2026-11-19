@@ -2,11 +2,13 @@ export const WELCOME_HERO_BUCKET = "homepage-hero";
 
 export type WelcomeHeroFontFamily = "serif" | "sans";
 export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
+export type WelcomeHeroHeightMode = "default" | "fit-screen" | "full-screen";
 
 export type WelcomeHeroSlide = {
   path: string;
   focusX: number;
   focusY: number;
+  scale: number;
   url?: string;
 };
 
@@ -28,12 +30,16 @@ export type WelcomeHeroSettings = {
   fontWeight: WelcomeHeroFontWeight;
   desktopFontSize: number;
   mobileFontSize: number;
+  heightMode: WelcomeHeroHeightMode;
   slides: WelcomeHeroSlide[];
 };
 
 export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false): WelcomeHeroSettings | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const settings = value as Record<string, unknown>;
+  const heightMode = settings.heightMode === undefined ? "default" : settings.heightMode;
+  const isHeightMode = (candidate: unknown): candidate is WelcomeHeroHeightMode =>
+    candidate === "default" || candidate === "fit-screen" || candidate === "full-screen";
   const isText = (key: string, maximum: number, allowEmpty = false) =>
     typeof settings[key] === "string" &&
     (allowEmpty || settings[key].trim().length > 0) &&
@@ -61,6 +67,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
     !isIntegerInRange("desktopFontSize", 40, 78) ||
     !isIntegerInRange("mobileFontSize", 32, 56) ||
+    !isHeightMode(heightMode) ||
     !Array.isArray(settings.slides) ||
     settings.slides.length > 3) {
     return null;
@@ -70,13 +77,15 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   for (const value of settings.slides) {
     if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
     const slide = value as Record<string, unknown>;
+    const scale = slide.scale === undefined ? 100 : slide.scale;
     if (typeof slide.path !== "string" ||
       !/^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(slide.path) ||
       typeof slide.focusX !== "number" || !Number.isSafeInteger(slide.focusX) || slide.focusX < 0 || slide.focusX > 100 ||
-      typeof slide.focusY !== "number" || !Number.isSafeInteger(slide.focusY) || slide.focusY < 0 || slide.focusY > 100) {
+      typeof slide.focusY !== "number" || !Number.isSafeInteger(slide.focusY) || slide.focusY < 0 || slide.focusY > 100 ||
+      typeof scale !== "number" || !Number.isSafeInteger(scale) || scale < 70 || scale > 160) {
       return null;
     }
-    slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY });
+    slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY, scale });
   }
 
   if (new Set(slides.map((slide) => slide.path)).size !== slides.length) return null;
@@ -99,6 +108,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     fontWeight: settings.fontWeight as WelcomeHeroFontWeight,
     desktopFontSize: settings.desktopFontSize as number,
     mobileFontSize: settings.mobileFontSize as number,
+    heightMode,
     slides,
   };
 }
