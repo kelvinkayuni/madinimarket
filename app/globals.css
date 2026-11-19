@@ -411,12 +411,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-homepage-font-size { display: flex; align-items: end; gap: 12px; margin: 20px 0 24px; padding: 14px; border: 1px solid #e1e5dd; background: #fff; }
 .admin-homepage-font-size label { width: min(100%, 240px); }
 .admin-homepage-font-size .button { min-height: 40px; }
-.admin-card-columns-settings { margin: 0 0 24px; padding: 14px; border: 1px solid #e1e5dd; background: #fbfcf9; }
+.admin-card-columns-settings { margin: 0 0 24px; padding: 10px; border: 1px solid #e1e5dd; background: #fbfcf9; }
 .admin-card-columns-settings .admin-queue-heading { margin-bottom: 6px; }
-.admin-card-columns-settings .admin-queue-heading h3 { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: 20px; font-weight: 500; }
-.admin-card-columns-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.admin-card-columns-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; padding: 12px; border: 1px solid #e1e5dd; background: #fff; }
-.admin-card-columns-form .button { min-height: 40px; }
+.admin-card-columns-settings .admin-queue-heading h3 { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: 17px; font-weight: 500; }
+.admin-card-columns-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.admin-card-columns-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; padding: 8px; border: 1px solid #e1e5dd; background: #fff; }
+.admin-card-columns-form .field-label { min-width: 0; margin: 0; font-size: 9px; }
+.admin-card-columns-form .text-input { height: 32px; min-height: 32px; padding: 0 8px; font-size: 10px; }
+.admin-card-columns-form .button { min-height: 32px; justify-self: start; padding: 0 10px; font-size: 9px; }
 .admin-account-controls { display: grid; gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid #e1e5dd; border-radius: 8px; background: #fbfcf9; }
 .admin-account-control-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .admin-account-control-row > div { display: grid; gap: 3px; }
@@ -1418,9 +1420,7 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-homepage-panel .admin-welcome-hero-editor {
     padding: 10px;
   }
-  .admin-homepage-panel .admin-card-columns-form .button {
-    width: 100%;
-  }
+  .admin-homepage-panel .admin-card-columns-form .button { width: auto; }
   .admin-homepage-panel .admin-welcome-hero-preview-heading {
     flex-wrap: wrap;
   }
