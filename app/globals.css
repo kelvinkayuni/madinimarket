@@ -596,7 +596,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-hero[data-height-mode="full-screen"]:not(.is-preview) { min-height: 100vh; min-height: 100dvh; }
 .market-welcome-slides, .market-welcome-overlay { position: absolute; inset: 0; pointer-events: none; }
 .market-welcome-slides { z-index: 0; }
-.market-welcome-slide { position: absolute; inset: 0; background-position: center; background-repeat: no-repeat; background-size: cover; opacity: 0; transition: opacity .7s ease, transform .2s ease; }
+.market-welcome-slide { position: absolute; inset: 0; background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); background-repeat: no-repeat; background-size: cover; opacity: 0; transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); transition: opacity .7s ease, transform .2s ease; }
 .market-welcome-slide.is-active { opacity: 1; }
 .market-welcome-overlay { z-index: 0; background: linear-gradient(90deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 31%, transparent 100%); opacity: var(--welcome-overlay-opacity, .92); }
 .market-welcome-copy { position: relative; z-index: 1; width: min(100%, 590px); }
@@ -625,6 +625,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-hero.is-preview[data-height-mode="full-screen"] { min-height: 430px; }
 .market-welcome-hero.is-preview-mobile[data-height-mode="fit-screen"] { min-height: 420px; }
 .market-welcome-hero.is-preview-mobile[data-height-mode="full-screen"] { min-height: 520px; }
+.market-welcome-hero.is-preview-mobile .market-welcome-slide { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
+.market-welcome-hero.is-preview:not(.is-preview-mobile) .market-welcome-slide { background-image: var(--welcome-slide-image); background-position: var(--welcome-slide-position); transform: scale(var(--welcome-slide-scale)); transform-origin: var(--welcome-slide-origin); }
 .market-welcome-hero.is-preview-mobile .market-welcome-copy { display: flex; flex-direction: column; }
 .market-welcome-hero.is-preview-mobile[data-mobile-actions-position="middle"] .market-welcome-actions { margin-block: auto; }
 .market-welcome-hero.is-preview-mobile[data-mobile-actions-position="bottom"] .market-welcome-actions { margin-top: auto; }
@@ -667,6 +669,13 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-welcome-hero-image-empty { display: grid; place-items: center; color: #7a8677; font-size: 10px; }
 .admin-welcome-hero-image-controls { display: grid; align-content: start; gap: 8px; }
 .admin-welcome-hero-image-controls > strong { color: #405745; font-size: 10px; }
+.admin-welcome-hero-mobile-image { display: flex; align-items: flex-start; gap: 8px; margin-top: 3px; padding: 8px; border: 1px solid #e6ebe2; background: #fafbf9; }
+.admin-welcome-hero-mobile-image > img, .admin-welcome-hero-mobile-image-empty { width: 64px; height: 76px; flex: 0 0 64px; object-fit: cover; background: #edf1e9; }
+.admin-welcome-hero-mobile-image-empty { display: grid; place-items: center; padding: 5px; color: #7a8677; font-size: 8px; text-align: center; }
+.admin-welcome-hero-mobile-image-controls { display: grid; align-content: start; gap: 6px; }
+.admin-welcome-hero-mobile-image-controls > strong { color: #405745; font-size: 9px; }
+.admin-welcome-hero-image-controls label.admin-welcome-hero-upload { display: inline-flex; width: fit-content; align-items: center; gap: 6px; color: var(--ink); font-size: 9px; }
+.admin-welcome-hero-mobile-image-controls > button { justify-self: start; min-height: 28px; padding: 0 8px; font-size: 9px; }
 .admin-welcome-hero-image-actions { display: flex; gap: 5px; }
 .admin-welcome-hero-image-actions button { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid #dce4d8; background: #fff; color: #526452; cursor: pointer; }
 .admin-welcome-hero-image-actions button:disabled { opacity: .4; cursor: not-allowed; }
@@ -1345,6 +1354,7 @@ h1, h2, h3, p { margin-top: 0; }
   .user-chip > span:not(.user-avatar) { display: none; }
   .market-content { padding: 0 14px; }
   .market-welcome-hero { min-height: 464px; align-items: stretch; margin: 9px 0 18px; padding: 28px 20px 82px; background-color: var(--welcome-background-color, #112e26); background-image: url("/welcome-gemstones.svg"); background-position: right 42%; background-size: min(145vw, 680px) auto; }
+  .market-welcome-slide { background-image: var(--welcome-mobile-slide-image); background-position: var(--welcome-mobile-slide-position); transform: scale(var(--welcome-mobile-slide-scale)); transform-origin: var(--welcome-mobile-slide-origin); }
   .market-welcome-hero[data-height-mode="fit-screen"]:not(.is-preview) { min-height: max(464px, var(--welcome-fit-height, calc(100dvh - 135px))); }
   .market-welcome-hero[data-height-mode="full-screen"]:not(.is-preview) { min-height: 100vh; min-height: 100dvh; }
   .market-welcome-overlay { background: linear-gradient(180deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 37%, transparent 100%); }

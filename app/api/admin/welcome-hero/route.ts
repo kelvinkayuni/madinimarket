@@ -6,13 +6,12 @@ import { getAdminClient } from "@/lib/admin-auth";
 import {
   addWelcomeHeroImageUrls,
   parseWelcomeHeroSettings,
+  WELCOME_HERO_MAX_IMAGE_BYTES,
+  WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES,
   WELCOME_HERO_BUCKET,
   type WelcomeHeroSettings,
   type WelcomeHeroSlide,
 } from "@/lib/welcome-hero";
-
-const MAX_IMAGE_BYTES = 1_200_000;
-const MAX_TOTAL_IMAGE_BYTES = 3_600_000;
 
 type DraftSlide = {
   path?: string;
@@ -20,6 +19,11 @@ type DraftSlide = {
   focusX: number;
   focusY: number;
   scale: number;
+  mobilePath?: string;
+  mobileUploadIndex?: number;
+  mobileFocusX: number;
+  mobileFocusY: number;
+  mobileScale: number;
 };
 
 function isJpeg(bytes: Buffer) {
@@ -33,27 +37,51 @@ function parseDraftSlides(value: unknown): DraftSlide[] | null {
   const slides: DraftSlide[] = [];
   const paths = new Set<string>();
   const uploadIndices = new Set<number>();
+  const mobileUploadIndices = new Set<number>();
   for (let index = 0; index < value.length; index += 1) {
     const candidate = value[index];
     if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) return null;
     const slide = candidate as Record<string, unknown>;
     const scale = slide.scale === undefined ? 100 : slide.scale;
+    const mobileFocusX = slide.mobileFocusX === undefined ? slide.focusX : slide.mobileFocusX;
+    const mobileFocusY = slide.mobileFocusY === undefined ? slide.focusY : slide.mobileFocusY;
+    const mobileScale = slide.mobileScale === undefined ? scale : slide.mobileScale;
     if (typeof slide.focusX !== "number" || !Number.isSafeInteger(slide.focusX) || slide.focusX < 0 || slide.focusX > 100 ||
       typeof slide.focusY !== "number" || !Number.isSafeInteger(slide.focusY) || slide.focusY < 0 || slide.focusY > 100 ||
-      typeof scale !== "number" || !Number.isSafeInteger(scale) || scale < 70 || scale > 160) {
+      typeof scale !== "number" || !Number.isSafeInteger(scale) || scale < 70 || scale > 160 ||
+      typeof mobileFocusX !== "number" || !Number.isSafeInteger(mobileFocusX) || mobileFocusX < 0 || mobileFocusX > 100 ||
+      typeof mobileFocusY !== "number" || !Number.isSafeInteger(mobileFocusY) || mobileFocusY < 0 || mobileFocusY > 100 ||
+      typeof mobileScale !== "number" || !Number.isSafeInteger(mobileScale) || mobileScale < 70 || mobileScale > 160) {
       return null;
     }
+    const draft: DraftSlide = { focusX: slide.focusX, focusY: slide.focusY, scale, mobileFocusX, mobileFocusY, mobileScale };
     if (typeof slide.path === "string" && slide.uploadIndex === undefined &&
       /^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(slide.path) && !paths.has(slide.path)) {
       paths.add(slide.path);
-      slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY, scale });
+      draft.path = slide.path;
     } else if (slide.path === undefined && typeof slide.uploadIndex === "number" &&
       Number.isSafeInteger(slide.uploadIndex) && slide.uploadIndex === index && !uploadIndices.has(slide.uploadIndex)) {
       uploadIndices.add(slide.uploadIndex);
-      slides.push({ uploadIndex: slide.uploadIndex, focusX: slide.focusX, focusY: slide.focusY, scale });
+      draft.uploadIndex = slide.uploadIndex;
     } else {
       return null;
     }
+
+    if (slide.mobilePath !== undefined && slide.mobileUploadIndex !== undefined) return null;
+    if (typeof slide.mobilePath === "string" &&
+      /^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(slide.mobilePath) && !paths.has(slide.mobilePath)) {
+      paths.add(slide.mobilePath);
+      draft.mobilePath = slide.mobilePath;
+    } else if (slide.mobilePath === undefined && typeof slide.mobileUploadIndex === "number" &&
+      Number.isSafeInteger(slide.mobileUploadIndex) && slide.mobileUploadIndex === index &&
+      !mobileUploadIndices.has(slide.mobileUploadIndex)) {
+      mobileUploadIndices.add(slide.mobileUploadIndex);
+      draft.mobileUploadIndex = slide.mobileUploadIndex;
+    } else if (slide.mobilePath !== undefined || slide.mobileUploadIndex !== undefined) {
+      return null;
+    }
+
+    slides.push(draft);
   }
   return slides;
 }
@@ -103,50 +131,97 @@ export async function POST(request: Request) {
     if (oldSettingsResult.error) throw oldSettingsResult.error;
     const oldSettings = parseWelcomeHeroSettings(oldSettingsResult.data.welcome_hero_settings, true);
     if (!oldSettings) throw new Error("Saved welcome hero settings are invalid.");
-    const oldPaths = new Set(oldSettings.slides.map((slide) => slide.path));
+    const oldPaths = new Set(oldSettings.slides.flatMap((slide) => slide.mobilePath ? [slide.path, slide.mobilePath] : [slide.path]));
     const uploadedPaths: string[] = [];
     const slides: WelcomeHeroSlide[] = [];
     let totalImageBytes = 0;
 
     for (let index = 0; index < draftSlides.length; index += 1) {
       const slide = draftSlides[index];
+      let path: string;
       if (slide.path) {
         if (!oldPaths.has(slide.path)) {
           await removeUploadedImages(admin, uploadedPaths);
           return NextResponse.json({ error: "Only currently saved welcome hero images can be reused." }, { status: 400 });
         }
-        slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY, scale: slide.scale });
-        continue;
+        path = slide.path;
+      } else {
+        const fileEntry = form.get(`image-${slide.uploadIndex}`);
+        if (!(fileEntry instanceof File) || fileEntry.type !== "image/jpeg" ||
+          fileEntry.size < 1 || fileEntry.size > WELCOME_HERO_MAX_IMAGE_BYTES) {
+          await removeUploadedImages(admin, uploadedPaths);
+          return NextResponse.json({ error: "Each hero image must be an optimized JPEG up to 1.2 MB." }, { status: 400 });
+        }
+        totalImageBytes += fileEntry.size;
+        if (totalImageBytes > WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES) {
+          await removeUploadedImages(admin, uploadedPaths);
+          return NextResponse.json({ error: "New welcome hero image uploads must total 3.6 MB or less. Save them in smaller batches." }, { status: 400 });
+        }
+        const bytes = Buffer.from(await fileEntry.arrayBuffer());
+        if (!isJpeg(bytes)) {
+          await removeUploadedImages(admin, uploadedPaths);
+          return NextResponse.json({ error: "A welcome hero image is not a valid JPEG." }, { status: 400 });
+        }
+
+        path = `homepage-hero/${randomUUID()}.jpg`;
+        const { error: uploadError } = await admin.storage.from(WELCOME_HERO_BUCKET).upload(path, bytes, {
+          contentType: "image/jpeg",
+          upsert: false,
+        });
+        if (uploadError) {
+          await removeUploadedImages(admin, uploadedPaths);
+          throw uploadError;
+        }
+        uploadedPaths.push(path);
       }
 
-      const fileEntry = form.get(`image-${slide.uploadIndex}`);
-      if (!(fileEntry instanceof File) || fileEntry.type !== "image/jpeg" ||
-        fileEntry.size < 1 || fileEntry.size > MAX_IMAGE_BYTES) {
-        await removeUploadedImages(admin, uploadedPaths);
-        return NextResponse.json({ error: "Each hero image must be an optimized JPEG up to 1.2 MB." }, { status: 400 });
-      }
-      totalImageBytes += fileEntry.size;
-      if (totalImageBytes > MAX_TOTAL_IMAGE_BYTES) {
-        await removeUploadedImages(admin, uploadedPaths);
-        return NextResponse.json({ error: "The combined welcome hero images must be 3.6 MB or smaller." }, { status: 400 });
-      }
-      const bytes = Buffer.from(await fileEntry.arrayBuffer());
-      if (!isJpeg(bytes)) {
-        await removeUploadedImages(admin, uploadedPaths);
-        return NextResponse.json({ error: "A welcome hero image is not a valid JPEG." }, { status: 400 });
+      let mobilePath: string | undefined;
+      if (slide.mobilePath) {
+        if (!oldPaths.has(slide.mobilePath)) {
+          await removeUploadedImages(admin, uploadedPaths);
+          return NextResponse.json({ error: "Only currently saved welcome hero images can be reused." }, { status: 400 });
+        }
+        mobilePath = slide.mobilePath;
+      } else if (slide.mobileUploadIndex !== undefined) {
+        const fileEntry = form.get(`mobile-image-${slide.mobileUploadIndex}`);
+        if (!(fileEntry instanceof File) || fileEntry.type !== "image/jpeg" ||
+          fileEntry.size < 1 || fileEntry.size > WELCOME_HERO_MAX_IMAGE_BYTES) {
+          await removeUploadedImages(admin, uploadedPaths);
+          return NextResponse.json({ error: "Each phone hero image must be an optimized JPEG up to 1.2 MB." }, { status: 400 });
+        }
+        totalImageBytes += fileEntry.size;
+        if (totalImageBytes > WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES) {
+          await removeUploadedImages(admin, uploadedPaths);
+          return NextResponse.json({ error: "New welcome hero image uploads must total 3.6 MB or less. Save them in smaller batches." }, { status: 400 });
+        }
+        const bytes = Buffer.from(await fileEntry.arrayBuffer());
+        if (!isJpeg(bytes)) {
+          await removeUploadedImages(admin, uploadedPaths);
+          return NextResponse.json({ error: "A phone welcome hero image is not a valid JPEG." }, { status: 400 });
+        }
+
+        mobilePath = `homepage-hero/${randomUUID()}.jpg`;
+        const { error: uploadError } = await admin.storage.from(WELCOME_HERO_BUCKET).upload(mobilePath, bytes, {
+          contentType: "image/jpeg",
+          upsert: false,
+        });
+        if (uploadError) {
+          await removeUploadedImages(admin, uploadedPaths);
+          throw uploadError;
+        }
+        uploadedPaths.push(mobilePath);
       }
 
-      const path = `homepage-hero/${randomUUID()}.jpg`;
-      const { error: uploadError } = await admin.storage.from(WELCOME_HERO_BUCKET).upload(path, bytes, {
-        contentType: "image/jpeg",
-        upsert: false,
+      slides.push({
+        path,
+        focusX: slide.focusX,
+        focusY: slide.focusY,
+        scale: slide.scale,
+        ...(mobilePath ? { mobilePath } : {}),
+        mobileFocusX: slide.mobileFocusX,
+        mobileFocusY: slide.mobileFocusY,
+        mobileScale: slide.mobileScale,
       });
-      if (uploadError) {
-        await removeUploadedImages(admin, uploadedPaths);
-        throw uploadError;
-      }
-      uploadedPaths.push(path);
-      slides.push({ path, focusX: slide.focusX, focusY: slide.focusY, scale: slide.scale });
     }
 
     const savedSettings: WelcomeHeroSettings = { ...design, slides };
@@ -162,8 +237,10 @@ export async function POST(request: Request) {
     const saved = parseWelcomeHeroSettings(savedRow.welcome_hero_settings);
     if (!saved) throw new Error("Saved welcome hero settings are invalid.");
 
-    const retainedPaths = new Set(saved.slides.map((slide) => slide.path));
-    const removedPaths = oldSettings.slides.map((slide) => slide.path).filter((path) => !retainedPaths.has(path));
+    const retainedPaths = new Set(saved.slides.flatMap((slide) => slide.mobilePath ? [slide.path, slide.mobilePath] : [slide.path]));
+    const removedPaths = oldSettings.slides
+      .flatMap((slide) => slide.mobilePath ? [slide.path, slide.mobilePath] : [slide.path])
+      .filter((path) => !retainedPaths.has(path));
     let cleanupWarning = false;
     if (removedPaths.length) {
       const { error: cleanupError } = await admin.storage.from(WELCOME_HERO_BUCKET).remove(removedPaths);

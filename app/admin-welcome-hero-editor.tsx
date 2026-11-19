@@ -5,17 +5,22 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase";
-import type { WelcomeHeroSettings, WelcomeHeroSlide } from "@/lib/welcome-hero";
+import {
+  WELCOME_HERO_MAX_IMAGE_BYTES,
+  WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES,
+  type WelcomeHeroSettings,
+  type WelcomeHeroSlide,
+} from "@/lib/welcome-hero";
 import WelcomeHero from "./welcome-hero";
 
-type DraftSlide = WelcomeHeroSlide & { file?: File };
+type DraftSlide = WelcomeHeroSlide & { file?: File; mobileFile?: File };
 
 function optimizeImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/") || file.size > 20_000_000) {
     throw new Error("Choose image files smaller than 20 MB.");
   }
   return createImageBitmap(file).then((bitmap) => {
-    const scale = Math.min(1, 2200 / bitmap.width, 1400 / bitmap.height);
+    const scale = Math.min(1, 2200 / bitmap.width, 2200 / bitmap.height);
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -33,11 +38,11 @@ function optimizeImage(file: File): Promise<File> {
     const compress = async () => {
       let quality = 0.88;
       let blob = await encode(quality);
-      while (blob.size > 1_200_000 && quality > 0.42) {
+      while (blob.size > WELCOME_HERO_MAX_IMAGE_BYTES && quality > 0.42) {
         quality -= 0.1;
         blob = await encode(quality);
       }
-      if (blob.size > 1_200_000) throw new Error(`${file.name} is too large to optimize. Choose a smaller image.`);
+      if (blob.size > WELCOME_HERO_MAX_IMAGE_BYTES) throw new Error(`${file.name} is too large to optimize. Choose a smaller image.`);
       return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "hero-image"}.jpg`, { type: "image/jpeg" });
     };
     return compress();
@@ -100,7 +105,17 @@ export default function AdminWelcomeHeroEditor({
       const slides: DraftSlide[] = prepared.map((file) => {
         const url = URL.createObjectURL(file);
         objectUrls.current.add(url);
-        return { path: "", focusX: 50, focusY: 50, scale: 100, url, file };
+        return {
+          path: "",
+          focusX: 50,
+          focusY: 50,
+          scale: 100,
+          mobileFocusX: 50,
+          mobileFocusY: 50,
+          mobileScale: 100,
+          url,
+          file,
+        };
       });
       dirty.current = true;
       setHasDraftChanges(true);
@@ -113,11 +128,61 @@ export default function AdminWelcomeHeroEditor({
     }
   };
 
+  const replaceMobileImage = async (index: number, file: File | null) => {
+    if (!file) return;
+    setIsPreparingImages(true);
+    setMessage("");
+    try {
+      const prepared = await optimizeImage(file);
+      const url = URL.createObjectURL(prepared);
+      objectUrls.current.add(url);
+      const current = draft.slides[index] as DraftSlide | undefined;
+      if (!current) {
+        URL.revokeObjectURL(url);
+        objectUrls.current.delete(url);
+        return;
+      }
+      if (current.mobileUrl && objectUrls.current.has(current.mobileUrl)) {
+        URL.revokeObjectURL(current.mobileUrl);
+        objectUrls.current.delete(current.mobileUrl);
+      }
+      const updated: DraftSlide = { ...current, mobileUrl: url, mobileFile: prepared };
+      delete updated.mobilePath;
+      const slides = [...draft.slides];
+      slides[index] = updated;
+      dirty.current = true;
+      setHasDraftChanges(true);
+      setDraft((saved) => ({ ...saved, slides }));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not prepare the selected phone image.");
+    } finally {
+      setIsPreparingImages(false);
+    }
+  };
+
+  const removeMobileImage = (index: number) => {
+    const slide = draft.slides[index] as DraftSlide | undefined;
+    if (!slide) return;
+    if (slide.mobileUrl && objectUrls.current.has(slide.mobileUrl)) {
+      URL.revokeObjectURL(slide.mobileUrl);
+      objectUrls.current.delete(slide.mobileUrl);
+    }
+    const updated: DraftSlide = { ...slide };
+    delete updated.mobilePath;
+    delete updated.mobileUrl;
+    delete updated.mobileFile;
+    const slides = [...draft.slides];
+    slides[index] = updated;
+    update("slides", slides);
+  };
+
   const removeSlide = (index: number) => {
     const slide = draft.slides[index] as DraftSlide | undefined;
-    if (slide?.url && objectUrls.current.has(slide.url)) {
-      URL.revokeObjectURL(slide.url);
-      objectUrls.current.delete(slide.url);
+    for (const url of [slide?.url, slide?.mobileUrl]) {
+      if (url && objectUrls.current.has(url)) {
+        URL.revokeObjectURL(url);
+        objectUrls.current.delete(url);
+      }
     }
     dirty.current = true;
     setHasDraftChanges(true);
@@ -142,6 +207,14 @@ export default function AdminWelcomeHeroEditor({
   };
 
   const save = async () => {
+    const newImageBytes = draft.slides.reduce((total, slide) => {
+      const draftSlide = slide as DraftSlide;
+      return total + (draftSlide.file?.size ?? 0) + (draftSlide.mobileFile?.size ?? 0);
+    }, 0);
+    if (newImageBytes > WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES) {
+      setMessage("New image uploads must total 3.6 MB or less. Save them in smaller batches.");
+      return;
+    }
     setIsSaving(true);
     setMessage("");
     try {
@@ -150,9 +223,22 @@ export default function AdminWelcomeHeroEditor({
         const draftSlide = slide as DraftSlide;
         if (draftSlide.file) {
           form.append(`image-${index}`, draftSlide.file);
-          return { uploadIndex: index, focusX: slide.focusX, focusY: slide.focusY, scale: slide.scale };
         }
-        return { path: slide.path, focusX: slide.focusX, focusY: slide.focusY, scale: slide.scale };
+        if (draftSlide.mobileFile) {
+          form.append(`mobile-image-${index}`, draftSlide.mobileFile);
+        }
+        return {
+          ...(draftSlide.file ? { uploadIndex: index } : { path: slide.path }),
+          ...(draftSlide.mobileFile
+            ? { mobileUploadIndex: index }
+            : slide.mobilePath ? { mobilePath: slide.mobilePath } : {}),
+          focusX: slide.focusX,
+          focusY: slide.focusY,
+          scale: slide.scale,
+          mobileFocusX: slide.mobileFocusX,
+          mobileFocusY: slide.mobileFocusY,
+          mobileScale: slide.mobileScale,
+        };
       });
       form.append("settings", JSON.stringify({ ...draft, slides }));
       const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
@@ -175,7 +261,7 @@ export default function AdminWelcomeHeroEditor({
       setDraft(copySettings(saved));
       onSaved(saved);
       setMessage(result.cleanupWarning
-        ? "Hero saved, but an unused old image could not be removed."
+        ? "Hero saved, but one or more unused old images could not be removed."
         : "Welcome hero saved.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save the welcome hero.");
@@ -278,28 +364,65 @@ export default function AdminWelcomeHeroEditor({
     </div>
 
     <div className="admin-welcome-hero-images">
-      <div className="admin-queue-heading"><div><span>BACKGROUND IMAGES</span><h4>{draft.slides.length} of 3 images</h4></div></div>
-      <p className="admin-translation-help">Images are optimized as JPEGs before upload, then rotate every five seconds. Set each image’s size and focal point independently. The existing gemstone artwork remains the fallback when no images are selected.</p>
-      {draft.slides.map((slide, index) => <article className="admin-welcome-hero-image" key={slide.path || slide.url || index}>
-        {slide.url ? <Image src={slide.url} alt={`Welcome hero background ${index + 1}`} width={360} height={180} unoptimized /> : <div className="admin-welcome-hero-image-empty">Image preview</div>}
-        <div className="admin-welcome-hero-image-controls">
-          <strong>Image {index + 1}</strong>
-          <div className="admin-welcome-hero-image-actions">
-            <button type="button" aria-label={`Move image ${index + 1} up`} disabled={index === 0} onClick={() => moveSlide(index, -1)}><ArrowUp size={15} /></button>
-            <button type="button" aria-label={`Move image ${index + 1} down`} disabled={index === draft.slides.length - 1} onClick={() => moveSlide(index, 1)}><ArrowDown size={15} /></button>
-            <button type="button" aria-label={`Remove image ${index + 1}`} onClick={() => removeSlide(index)}><Trash2 size={15} /></button>
+      <div className="admin-queue-heading"><div><span>BACKGROUND IMAGES</span><h4>{draft.slides.length} of 3 desktop slides</h4></div></div>
+      <p className="admin-translation-help">Desktop images and optional phone images are optimized as JPEGs and rotate together every five seconds. Each version has independent focal-point and size controls; when no phone image is set, the desktop image uses the phone crop settings. New uploads in one save must total 3.6 MB or less. The existing gemstone artwork remains the fallback when no desktop images are selected.</p>
+      {draft.slides.map((slide, index) => {
+        const draftSlide = slide as DraftSlide;
+        const hasMobileImage = Boolean(draftSlide.mobilePath || draftSlide.mobileFile);
+        return <article className="admin-welcome-hero-image" key={slide.path || slide.url || index}>
+          {slide.url ? <Image src={slide.url} alt={`Desktop welcome hero background ${index + 1}`} width={360} height={180} unoptimized /> : <div className="admin-welcome-hero-image-empty">Desktop preview</div>}
+          <div className="admin-welcome-hero-image-controls">
+            <strong>Desktop image {index + 1}</strong>
+            <div className="admin-welcome-hero-image-actions">
+              <button type="button" aria-label={`Move image ${index + 1} up`} disabled={isPreparingImages || index === 0} onClick={() => moveSlide(index, -1)}><ArrowUp size={15} /></button>
+              <button type="button" aria-label={`Move image ${index + 1} down`} disabled={isPreparingImages || index === draft.slides.length - 1} onClick={() => moveSlide(index, 1)}><ArrowDown size={15} /></button>
+              <button type="button" aria-label={`Remove image ${index + 1}`} disabled={isPreparingImages} onClick={() => removeSlide(index)}><Trash2 size={15} /></button>
+            </div>
+            <label>Desktop horizontal focal point: {slide.focusX}%
+              <input type="range" min={0} max={100} step={1} value={slide.focusX} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, focusX: Number(event.target.value) } : current))} />
+            </label>
+            <label>Desktop vertical focal point: {slide.focusY}%
+              <input type="range" min={0} max={100} step={1} value={slide.focusY} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, focusY: Number(event.target.value) } : current))} />
+            </label>
+            <label>Desktop image size: {slide.scale}%
+              <input type="range" min={70} max={160} step={1} value={slide.scale} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, scale: Number(event.target.value) } : current))} />
+            </label>
+            <div className="admin-welcome-hero-mobile-image">
+              {hasMobileImage
+                ? draftSlide.mobileUrl
+                  ? <Image src={draftSlide.mobileUrl} alt={`Phone welcome hero background ${index + 1}`} width={80} height={100} unoptimized />
+                  : <div className="admin-welcome-hero-mobile-image-empty">Phone preview</div>
+                : <div className="admin-welcome-hero-mobile-image-empty">Using desktop image</div>}
+              <div className="admin-welcome-hero-mobile-image-controls">
+                <strong>Phone image</strong>
+                <label className={`button button-outline admin-welcome-hero-upload${isPreparingImages ? " is-disabled" : ""}`}>
+                  <FileUp size={14} aria-hidden="true" /> {hasMobileImage ? "Replace phone image" : "Add phone image"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isPreparingImages}
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0] ?? null;
+                      event.currentTarget.value = "";
+                      if (file) void replaceMobileImage(index, file);
+                    }}
+                  />
+                </label>
+                {hasMobileImage && <button className="button button-outline" type="button" disabled={isPreparingImages} onClick={() => removeMobileImage(index)}>Use desktop image</button>}
+              </div>
+            </div>
+            <label>Phone horizontal focal point: {slide.mobileFocusX}%
+              <input type="range" min={0} max={100} step={1} value={slide.mobileFocusX} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, mobileFocusX: Number(event.target.value) } : current))} />
+            </label>
+            <label>Phone vertical focal point: {slide.mobileFocusY}%
+              <input type="range" min={0} max={100} step={1} value={slide.mobileFocusY} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, mobileFocusY: Number(event.target.value) } : current))} />
+            </label>
+            <label>Phone image size: {slide.mobileScale}%
+              <input type="range" min={70} max={160} step={1} value={slide.mobileScale} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, mobileScale: Number(event.target.value) } : current))} />
+            </label>
           </div>
-          <label>Horizontal focal point: {slide.focusX}%
-            <input type="range" min={0} max={100} step={1} value={slide.focusX} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, focusX: Number(event.target.value) } : current))} />
-          </label>
-          <label>Vertical focal point: {slide.focusY}%
-            <input type="range" min={0} max={100} step={1} value={slide.focusY} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, focusY: Number(event.target.value) } : current))} />
-          </label>
-          <label>Image size: {slide.scale}%
-            <input type="range" min={70} max={160} step={1} value={slide.scale} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, scale: Number(event.target.value) } : current))} />
-          </label>
-        </div>
-      </article>)}
+        </article>;
+      })}
       {draft.slides.length < 3 && <label className={`button button-outline admin-welcome-hero-upload${isPreparingImages ? " is-disabled" : ""}`}>
         <FileUp size={15} aria-hidden="true" /> {isPreparingImages ? "Preparing images…" : "Add background images"}
         <input ref={fileInput} type="file" accept="image/*" multiple disabled={isPreparingImages} onChange={(event) => void addImages(event.target.files)} />

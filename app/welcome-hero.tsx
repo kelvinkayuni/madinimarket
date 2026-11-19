@@ -110,11 +110,15 @@ export default function WelcomeHero({
         className={`market-welcome-slide${index === activeIndex % slides.length ? " is-active" : ""}`}
         key={slide.path}
         style={{
-          backgroundImage: `url("${slide.url}")`,
-          backgroundPosition: `${slide.focusX}% ${slide.focusY}%`,
-          transform: `scale(${slide.scale / 100})`,
-          transformOrigin: `${slide.focusX}% ${slide.focusY}%`,
-        }}
+          "--welcome-slide-image": `url("${slide.url}")`,
+          "--welcome-slide-position": `${slide.focusX}% ${slide.focusY}%`,
+          "--welcome-slide-scale": slide.scale / 100,
+          "--welcome-slide-origin": `${slide.focusX}% ${slide.focusY}%`,
+          "--welcome-mobile-slide-image": `url("${slide.mobileUrl ?? slide.url}")`,
+          "--welcome-mobile-slide-position": `${slide.mobileFocusX}% ${slide.mobileFocusY}%`,
+          "--welcome-mobile-slide-scale": slide.mobileScale / 100,
+          "--welcome-mobile-slide-origin": `${slide.mobileFocusX}% ${slide.mobileFocusY}%`,
+        } as CSSProperties & Record<`--welcome-${string}`, string | number>}
       />)}
     </div>}
     <div className="market-welcome-overlay" aria-hidden="true" />

@@ -1,4 +1,6 @@
 export const WELCOME_HERO_BUCKET = "homepage-hero";
+export const WELCOME_HERO_MAX_IMAGE_BYTES = 1_200_000;
+export const WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES = 3_600_000;
 
 export type WelcomeHeroFontFamily = "serif" | "sans";
 export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
@@ -10,7 +12,12 @@ export type WelcomeHeroSlide = {
   focusX: number;
   focusY: number;
   scale: number;
+  mobilePath?: string;
+  mobileFocusX: number;
+  mobileFocusY: number;
+  mobileScale: number;
   url?: string;
+  mobileUrl?: string;
 };
 
 export type WelcomeHeroSettings = {
@@ -80,21 +87,40 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   }
 
   const slides: WelcomeHeroSlide[] = [];
+  const paths = new Set<string>();
   for (const value of settings.slides) {
     if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
     const slide = value as Record<string, unknown>;
     const scale = slide.scale === undefined ? 100 : slide.scale;
+    const mobileFocusX = slide.mobileFocusX === undefined ? slide.focusX : slide.mobileFocusX;
+    const mobileFocusY = slide.mobileFocusY === undefined ? slide.focusY : slide.mobileFocusY;
+    const mobileScale = slide.mobileScale === undefined ? scale : slide.mobileScale;
+    const mobilePath = slide.mobilePath;
     if (typeof slide.path !== "string" ||
       !/^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(slide.path) ||
       typeof slide.focusX !== "number" || !Number.isSafeInteger(slide.focusX) || slide.focusX < 0 || slide.focusX > 100 ||
       typeof slide.focusY !== "number" || !Number.isSafeInteger(slide.focusY) || slide.focusY < 0 || slide.focusY > 100 ||
-      typeof scale !== "number" || !Number.isSafeInteger(scale) || scale < 70 || scale > 160) {
+      typeof scale !== "number" || !Number.isSafeInteger(scale) || scale < 70 || scale > 160 ||
+      typeof mobileFocusX !== "number" || !Number.isSafeInteger(mobileFocusX) || mobileFocusX < 0 || mobileFocusX > 100 ||
+      typeof mobileFocusY !== "number" || !Number.isSafeInteger(mobileFocusY) || mobileFocusY < 0 || mobileFocusY > 100 ||
+      typeof mobileScale !== "number" || !Number.isSafeInteger(mobileScale) || mobileScale < 70 || mobileScale > 160 ||
+      (mobilePath !== undefined && (typeof mobilePath !== "string" || !/^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(mobilePath)))) {
       return null;
     }
-    slides.push({ path: slide.path, focusX: slide.focusX, focusY: slide.focusY, scale });
+    if (paths.has(slide.path) || (typeof mobilePath === "string" && paths.has(mobilePath))) return null;
+    paths.add(slide.path);
+    if (typeof mobilePath === "string") paths.add(mobilePath);
+    slides.push({
+      path: slide.path,
+      focusX: slide.focusX,
+      focusY: slide.focusY,
+      scale,
+      ...(typeof mobilePath === "string" ? { mobilePath } : {}),
+      mobileFocusX,
+      mobileFocusY,
+      mobileScale,
+    });
   }
-
-  if (new Set(slides.map((slide) => slide.path)).size !== slides.length) return null;
 
   return {
     eyebrow: settings.eyebrow as string,
@@ -126,7 +152,11 @@ export function addWelcomeHeroImageUrls(
 ): WelcomeHeroSettings {
   return {
     ...settings,
-    slides: settings.slides.map((slide) => ({ ...slide, url: getPublicUrl(slide.path) })),
+    slides: settings.slides.map((slide) => ({
+      ...slide,
+      url: getPublicUrl(slide.path),
+      mobileUrl: getPublicUrl(slide.mobilePath ?? slide.path),
+    })),
   };
 }
 
@@ -140,8 +170,11 @@ export function parsePublicWelcomeHeroSettings(value: unknown): WelcomeHeroSetti
     const rawSlide = rawSlides[index];
     if (typeof rawSlide !== "object" || rawSlide === null || Array.isArray(rawSlide)) return null;
     const url = (rawSlide as Record<string, unknown>).url;
-    if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return null;
-    slides.push({ ...settings.slides[index], url });
+    const rawMobileUrl = (rawSlide as Record<string, unknown>).mobileUrl;
+    const mobileUrl = rawMobileUrl === undefined ? url : rawMobileUrl;
+    if (typeof url !== "string" || !/^https?:\/\//i.test(url) ||
+      typeof mobileUrl !== "string" || !/^https?:\/\//i.test(mobileUrl)) return null;
+    slides.push({ ...settings.slides[index], url, mobileUrl });
   }
   return { ...settings, slides };
 }
