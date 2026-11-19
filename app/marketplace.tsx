@@ -25,7 +25,7 @@ import { applyVisibleTranslations, type Language, type TranslationPair } from "@
 import { calculateListingPrice } from "@/lib/listing-pricing";
 import { MARKET_TIME_ZONE, type MarketHoursSchedule } from "@/lib/market-hours";
 import { isStaffPermission, STAFF_PERMISSION_OPTIONS, type StaffPermission } from "@/lib/staff-permissions";
-import { DEFAULT_WELCOME_HERO_SETTINGS, parsePublicWelcomeHeroSettings, type WelcomeHeroSettings } from "@/lib/welcome-hero";
+import { parsePublicWelcomeHeroSettings, type WelcomeHeroSettings } from "@/lib/welcome-hero";
 
 type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
@@ -886,7 +886,7 @@ export default function Marketplace() {
   const [siteContentLoaded, setSiteContentLoaded] = useState(false);
   const [homepageHeadlines, setHomepageHeadlines] = useState<HomepageHeadline[]>([]);
   const [welcomeHeroHidden, setWelcomeHeroHidden] = useState(false);
-  const [welcomeHeroSettings, setWelcomeHeroSettings] = useState<WelcomeHeroSettings>(DEFAULT_WELCOME_HERO_SETTINGS);
+  const [welcomeHeroSettings, setWelcomeHeroSettings] = useState<WelcomeHeroSettings | null>(null);
   const [homepageHeadlineFontSize, setHomepageHeadlineFontSize] = useState(49);
   const [homepageHeadlineFontSizeInput, setHomepageHeadlineFontSizeInput] = useState("49");
   const [sellerCardsPerColumnInput, setSellerCardsPerColumnInput] = useState("4");
@@ -4991,7 +4991,7 @@ export default function Marketplace() {
             <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-headline-font-size") || Number(homepageHeadlineFontSizeInput) === homepageHeadlineFontSize}>{busyActions.has("homepage-headline-font-size") ? "Saving…" : "Save font size"}</button>
             <span>Choose from 24–72 px. On narrow screens, the headline scales down to fit.</span>
           </form>
-          {role === "admin" && (siteContentLoaded
+          {role === "admin" && (siteContentLoaded && welcomeHeroSettings
             ? <AdminWelcomeHeroEditor
                 savedSettings={welcomeHeroSettings}
                 hidden={welcomeHeroHidden}
@@ -4999,7 +4999,7 @@ export default function Marketplace() {
                 onToggleVisibility={(hidden) => void updateWelcomeHeroVisibility(hidden)}
                 onSaved={(settings) => { setWelcomeHeroSettings(settings); setNotice("Welcome hero saved."); }}
               />
-            : <p className="admin-translation-help">Loading welcome hero settings…</p>)}
+            : <p className="admin-translation-help">{siteContentLoaded ? "Welcome hero settings are unavailable." : "Loading welcome hero settings…"}</p>)}
           {role === "admin" && <div className="admin-card-columns-settings">
             <div className="admin-queue-heading"><div><span>MARKETPLACE LAYOUT</span><h3>Cards per column</h3></div></div>
             <p className="admin-translation-help">Set seller and buyer panels independently. Each column displays the selected number of cards before continuing into the next column. The minimum is one card.</p>
@@ -5269,7 +5269,7 @@ export default function Marketplace() {
 
     <div className="market-content" id="top">
       {homepageAnnouncement && <div className="market-announcement" role="status"><span>{homepageAnnouncement}</span></div>}
-      {!welcomeHeroHidden && <WelcomeHero settings={welcomeHeroSettings} marketHoursLoaded={marketHoursLoaded} marketHoursError={marketHoursError} marketIsOpen={marketIsOpen} postRequestBusy={busyActions.has("open-buy")} onPostRequest={() => void openListing("buy")} />}
+      {siteContentLoaded && welcomeHeroSettings?.headline.trim() && !welcomeHeroHidden && <WelcomeHero settings={welcomeHeroSettings} marketHoursLoaded={marketHoursLoaded} marketHoursError={marketHoursError} marketIsOpen={marketIsOpen} postRequestBusy={busyActions.has("open-buy")} onPostRequest={() => void openListing("buy")} />}
       <section className="market-intro" id="marketplace">
         <div className={`market-intro-heading${homepageHeadlineOverflowing ? " is-overflowing" : ""}`} ref={homepageHeadlineWindowRef}>
           <div

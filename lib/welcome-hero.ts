@@ -31,28 +31,7 @@ export type WelcomeHeroSettings = {
   slides: WelcomeHeroSlide[];
 };
 
-export const DEFAULT_WELCOME_HERO_SETTINGS: WelcomeHeroSettings = {
-  eyebrow: "TANZANIA AND BEYOND",
-  headline: "Discover the stones that move us.",
-  description: "Explore mineral listings, connect with people looking to buy, and find your place in Tanzania’s mineral market.",
-  exploreLabel: "Explore minerals",
-  requestLabel: "Post a request",
-  backgroundColor: "#112e26",
-  overlayColor: "#112e26",
-  overlayOpacity: 92,
-  headingColor: "#fffdf6",
-  bodyColor: "#d0ddd4",
-  accentColor: "#d8c99e",
-  buttonColor: "#d2ee77",
-  buttonTextColor: "#18382e",
-  fontFamily: "serif",
-  fontWeight: 500,
-  desktopFontSize: 72,
-  mobileFontSize: 46,
-  slides: [],
-};
-
-export function parseWelcomeHeroSettings(value: unknown): WelcomeHeroSettings | null {
+export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false): WelcomeHeroSettings | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const settings = value as Record<string, unknown>;
   const isText = (key: string, maximum: number, allowEmpty = false) =>
@@ -65,11 +44,11 @@ export function parseWelcomeHeroSettings(value: unknown): WelcomeHeroSettings | 
     typeof settings[key] === "number" && Number.isSafeInteger(settings[key]) &&
     settings[key] >= minimum && settings[key] <= maximum;
 
-  if (!isText("eyebrow", 36) ||
-    !isText("headline", 100) ||
-    !isText("description", 320) ||
-    !isText("exploreLabel", 32) ||
-    !isText("requestLabel", 32) ||
+  if (!isText("eyebrow", 36, allowEmptyCopy) ||
+    !isText("headline", 100, allowEmptyCopy) ||
+    !isText("description", 320, allowEmptyCopy) ||
+    !isText("exploreLabel", 32, allowEmptyCopy) ||
+    !isText("requestLabel", 32, allowEmptyCopy) ||
     !isColor("backgroundColor") ||
     !isColor("overlayColor") ||
     !isIntegerInRange("overlayOpacity", 0, 100) ||
@@ -135,7 +114,7 @@ export function addWelcomeHeroImageUrls(
 }
 
 export function parsePublicWelcomeHeroSettings(value: unknown): WelcomeHeroSettings | null {
-  const settings = parseWelcomeHeroSettings(value);
+  const settings = parseWelcomeHeroSettings(value, true);
   if (!settings || typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const rawSlides = (value as Record<string, unknown>).slides;
   if (!Array.isArray(rawSlides)) return null;

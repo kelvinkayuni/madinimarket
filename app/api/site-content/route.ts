@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     ]);
     if (settingsError) throw settingsError;
     if (headlinesError) throw headlinesError;
-    const welcomeHero = parseWelcomeHeroSettings(settings.welcome_hero_settings);
+    const welcomeHero = parseWelcomeHeroSettings(settings.welcome_hero_settings, true);
     if (!welcomeHero) throw new Error("Saved welcome hero settings are invalid.");
     const welcomeHeroWithUrls = addWelcomeHeroImageUrls(
       welcomeHero,

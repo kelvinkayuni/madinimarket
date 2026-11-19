@@ -63,7 +63,7 @@ export async function GET(request: Request) {
       ]);
       if (settingsResult.error) throw settingsResult.error;
       if (headlinesResult.error) throw headlinesResult.error;
-      const welcomeHero = parseWelcomeHeroSettings(settingsResult.data.welcome_hero_settings);
+      const welcomeHero = parseWelcomeHeroSettings(settingsResult.data.welcome_hero_settings, true);
       if (!welcomeHero) throw new Error("Saved welcome hero settings are invalid.");
       return NextResponse.json({
         headlineFontSize: settingsResult.data.homepage_headline_font_size,
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
     ]);
     if (settingsResult.error) throw settingsResult.error;
     if (headlinesResult.error) throw headlinesResult.error;
-    const welcomeHero = parseWelcomeHeroSettings(settingsResult.data.welcome_hero_settings);
+    const welcomeHero = parseWelcomeHeroSettings(settingsResult.data.welcome_hero_settings, true);
     if (!welcomeHero) throw new Error("Saved welcome hero settings are invalid.");
     return NextResponse.json({
       swahiliEnabled: settingsResult.data.swahili_enabled,

@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       .eq("id", true)
       .single();
     if (oldSettingsResult.error) throw oldSettingsResult.error;
-    const oldSettings = parseWelcomeHeroSettings(oldSettingsResult.data.welcome_hero_settings);
+    const oldSettings = parseWelcomeHeroSettings(oldSettingsResult.data.welcome_hero_settings, true);
     if (!oldSettings) throw new Error("Saved welcome hero settings are invalid.");
     const oldPaths = new Set(oldSettings.slides.map((slide) => slide.path));
     const uploadedPaths: string[] = [];
