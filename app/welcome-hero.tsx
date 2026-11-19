@@ -100,17 +100,16 @@ export default function WelcomeHero({
 
     const updateAvailableHeight = () => {
       const documentTop = hero.getBoundingClientRect().top + window.scrollY;
-      const bottomMargin = Number.parseFloat(window.getComputedStyle(hero).marginBottom) || 0;
-      hero.style.setProperty("--welcome-fit-offset", `${documentTop + bottomMargin}px`);
+      hero.style.setProperty("--welcome-fit-offset", `${documentTop}px`);
     };
 
     updateAvailableHeight();
     const observer = new ResizeObserver(updateAvailableHeight);
     const shell = hero.closest(".market-shell");
     const header = shell?.querySelector(".site-header");
-    const announcement = shell?.querySelector(".market-announcement");
+    const content = hero.parentElement;
     if (header) observer.observe(header);
-    if (announcement) observer.observe(announcement);
+    if (content) observer.observe(content);
     window.addEventListener("resize", updateAvailableHeight);
     return () => {
       observer.disconnect();
