@@ -33,7 +33,6 @@ export default function WelcomeHero({
   const activeSlide = slides.length > 0 ? slides[activeIndex % slides.length] : undefined;
   const headline = activeSlide?.headline.trim() ? activeSlide.headline : settings.headline;
   const description = activeSlide?.description.trim() ? activeSlide.description : settings.description;
-  const requestButtonAlpha = Math.round(settings.requestButtonOpacity * 255 / 100).toString(16).padStart(2, "0");
   const fontFamily = settings.fontFamily === "serif"
     ? "var(--font-display), Georgia, serif"
     : "var(--font-body), Arial, sans-serif";
@@ -48,10 +47,6 @@ export default function WelcomeHero({
     "--welcome-button-text-color": settings.buttonTextColor,
     "--welcome-request-button-color": settings.requestButtonColor,
     "--welcome-request-button-text-color": settings.requestButtonTextColor,
-    "--welcome-request-button-background": `${settings.requestButtonColor}${requestButtonAlpha}`,
-    "--welcome-request-button-border": `${settings.requestButtonColor}66`,
-    "--welcome-request-button-hover-background": `${settings.requestButtonColor}20`,
-    "--welcome-request-button-hover-border": `${settings.requestButtonColor}aa`,
     "--welcome-font-family": fontFamily,
     "--welcome-font-weight": settings.fontWeight,
     "--welcome-desktop-font-size": `${settings.desktopFontSize}px`,

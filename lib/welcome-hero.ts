@@ -51,7 +51,6 @@ export type WelcomeHeroSettings = {
   buttonTextColor: string;
   requestButtonColor: string;
   requestButtonTextColor: string;
-  requestButtonOpacity: number;
   fontFamily: WelcomeHeroFontFamily;
   fontWeight: WelcomeHeroFontWeight;
   desktopFontSize: number;
@@ -73,8 +72,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const slideIntervalSeconds = settings.slideIntervalSeconds === undefined ? 10 : settings.slideIntervalSeconds;
   const transitionDurationMs = settings.transitionDurationMs === undefined ? 1000 : settings.transitionDurationMs;
   const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
-  const requestButtonTextColor = settings.requestButtonTextColor === undefined ? settings.headingColor : settings.requestButtonTextColor;
-  const requestButtonOpacity = settings.requestButtonOpacity === undefined ? 6 : settings.requestButtonOpacity;
+  const requestButtonTextColor = settings.requestButtonTextColor === undefined ? "#18382e" : settings.requestButtonTextColor;
   const isHeightMode = (candidate: unknown): candidate is WelcomeHeroHeightMode =>
     candidate === "default" || candidate === "fit-screen" || candidate === "full-screen";
   const isMobileActionsPosition = (candidate: unknown): candidate is WelcomeHeroMobileActionsPosition =>
@@ -122,7 +120,6 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isColor("buttonTextColor") ||
     !isColorValue(requestButtonColor) ||
     !isColorValue(requestButtonTextColor) ||
-    !isIntegerValueInRange(requestButtonOpacity, 0, 100) ||
     (settings.fontFamily !== "serif" && settings.fontFamily !== "sans") ||
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
     !isIntegerInRange("desktopFontSize", 40, 78) ||
@@ -195,7 +192,6 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     buttonTextColor: settings.buttonTextColor as string,
     requestButtonColor: requestButtonColor as string,
     requestButtonTextColor: requestButtonTextColor as string,
-    requestButtonOpacity: requestButtonOpacity as number,
     fontFamily: settings.fontFamily,
     fontWeight: settings.fontWeight as WelcomeHeroFontWeight,
     desktopFontSize: settings.desktopFontSize as number,
