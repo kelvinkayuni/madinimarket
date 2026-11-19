@@ -604,8 +604,6 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-eyebrow > span { width: 22px; height: 1px; background: currentColor; }
 .market-welcome-copy h1 { max-width: 580px; margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; text-wrap: balance; }
 .market-welcome-copy > p { max-width: 440px; margin: 21px 0 25px; color: var(--welcome-body-color, #d0ddd4); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; }
-.homepage-scroll-indicator { display: none; }
-.homepage-scroll-indicator-thumb { position: absolute; top: 0; left: 0; width: 100%; min-height: 36px; border-radius: 999px; background: #315b3b; }
 .market-welcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .market-welcome-actions .button { min-height: 46px; padding: 0 17px; font-size: 12px; }
 .market-welcome-actions .button-lime { border-color: var(--welcome-button-color, #d2ee77); background: var(--welcome-button-color, #d2ee77); color: var(--welcome-button-text-color, #18382e); }
@@ -1302,8 +1300,6 @@ h1, h2, h3, p { margin-top: 0; }
   .listing-section { min-height: auto; display: block; flex: none; }
   .seller-rail, .buyer-rail, .empty-search { min-height: auto; flex: initial; }
   .admin-header { min-height: 60px; padding-right: 14px; padding-left: 14px; }
-  .admin-header:not(.admin-header-staff)   .homepage-scroll-indicator { position: fixed; top: max(72px, env(safe-area-inset-top)); right: 3px; bottom: max(14px, env(safe-area-inset-bottom)); z-index: 20; width: 6px; border-radius: 999px; background: #dce7d7b8; visibility: hidden; pointer-events: none; }
-  .homepage-scroll-indicator[data-visible="true"] { visibility: visible; }
   .admin-header:not(.admin-header-staff) .admin-brand > span:not(.admin-brand-name) { display: none; }
   .admin-account .admin-mobile-role { display: block; max-width: 26vw; }
   .admin-header-staff .admin-brand span.staff-role-badge { display: none; }
