@@ -631,7 +631,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 }
 .market-welcome-overlay { z-index: 0; background: linear-gradient(90deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 31%, transparent 100%); opacity: var(--welcome-overlay-opacity, .92); }
 .market-welcome-copy { position: absolute; z-index: 1; inset: clamp(32px, 5vw, 68px); }
-.market-welcome-main-copy { position: absolute; left: var(--welcome-desktop-copy-x, 0%); top: var(--welcome-desktop-copy-y, 0%); width: max-content; max-width: 100%; transform: translate(calc(0% - var(--welcome-desktop-copy-x, 0%)), calc(0% - var(--welcome-desktop-copy-y, 0%))); transition: left .2s ease, top .2s ease, transform .2s ease; }
+.market-welcome-main-copy { position: absolute; left: var(--welcome-desktop-copy-x, 0%); top: var(--welcome-desktop-copy-y, 0%); width: max-content; max-width: 100%; min-width: 0; transform: translate(calc(0% - var(--welcome-desktop-copy-x, 0%)), calc(0% - var(--welcome-desktop-copy-y, 0%))); transition: left .2s ease, top .2s ease, transform .2s ease; }
 .market-welcome-phrase { position: relative; }
 @keyframes welcome-phrase-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes welcome-phrase-slide { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
@@ -648,8 +648,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 @keyframes welcome-phrase-grow-turn { from { opacity: 0; transform: scale(.94) rotate(-3deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
 .market-welcome-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 20px; color: var(--welcome-accent-color, #d8c99e); font-size: 10px; font-weight: 750; letter-spacing: .19em; }
 .market-welcome-eyebrow > span { width: 22px; height: 1px; background: currentColor; }
-.market-welcome-copy h1 { max-width: 580px; margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; text-wrap: balance; }
-.market-welcome-copy .market-welcome-phrase > p { max-width: 440px; margin: 21px 0 25px; color: var(--welcome-body-color, #d0ddd4); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; }
+.market-welcome-copy h1 { max-width: min(100%, 580px); margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; overflow-wrap: anywhere; text-wrap: balance; }
+.market-welcome-copy .market-welcome-phrase > p { max-width: min(100%, 440px); margin: 21px 0 25px; color: var(--welcome-body-color, #d0ddd4); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; overflow-wrap: anywhere; }
 .market-welcome-actions { position: absolute; left: var(--welcome-desktop-actions-x, 0%); top: var(--welcome-desktop-actions-y, 85%); display: flex; width: max-content; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 10px; transform: translate(calc(0% - var(--welcome-desktop-actions-x, 0%)), calc(0% - var(--welcome-desktop-actions-y, 85%))); transition: left .2s ease, top .2s ease, transform .2s ease; }
 .market-welcome-actions .button { min-height: 46px; padding: 0 17px; font-size: 12px; }
 .market-welcome-actions .button-lime { border-color: var(--welcome-button-color, #d2ee77); background: var(--welcome-button-color, #d2ee77); color: var(--welcome-button-text-color, #18382e); }
@@ -1455,8 +1455,8 @@ h1, h2, h3, p { margin-top: 0; }
   .market-welcome-overlay { background: linear-gradient(180deg, var(--welcome-overlay-color, #112e26) 0%, var(--welcome-overlay-color, #112e26) 37%, transparent 100%); }
   .market-welcome-eyebrow { margin-bottom: 15px; font-size: 9px; }
   .market-welcome-copy { inset: 28px 20px 82px; }
-  .market-welcome-copy h1 { max-width: 430px; font-size: min(var(--welcome-mobile-font-size, 46px), clamp(32px, 11vw, 56px)); }
-  .market-welcome-copy .market-welcome-phrase > p { max-width: 410px; margin: 14px 0 19px; font-size: 13px; line-height: 1.6; }
+  .market-welcome-copy h1 { max-width: min(100%, 430px); font-size: min(var(--welcome-mobile-font-size, 46px), clamp(32px, 11vw, 56px)); }
+  .market-welcome-copy .market-welcome-phrase > p { max-width: min(100%, 410px); margin: 14px 0 19px; font-size: 13px; line-height: 1.6; }
   .market-welcome-main-copy { left: var(--welcome-mobile-copy-x, 0%); top: var(--welcome-mobile-copy-y, 0%); transform: translate(calc(0% - var(--welcome-mobile-copy-x, 0%)), calc(0% - var(--welcome-mobile-copy-y, 0%))); }
   .market-welcome-actions { left: var(--welcome-mobile-actions-x, 0%); top: var(--welcome-mobile-actions-y, 85%); max-width: min(100%, 290px); align-items: stretch; flex-direction: column; gap: 8px; transform: translate(calc(0% - var(--welcome-mobile-actions-x, 0%)), calc(0% - var(--welcome-mobile-actions-y, 85%))); }
   .market-welcome-actions .button { min-height: 43px; }
