@@ -113,7 +113,7 @@ export async function PATCH(request: Request) {
   try {
     const values = await readBody(request);
     const accountSettingKeys = new Set(["accountCreationDisabled", "nonAdminSignInDisabled", "signOutAllUsers"]);
-    const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn", "homepageAnnouncement", "welcomeHeroHidden"]);
+    const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn", "homepageAnnouncement"]);
     const accountSettingsRequested = values !== null && Object.keys(values).some((key) => accountSettingKeys.has(key));
     const marketplaceLayoutRequested = values !== null &&
       Object.keys(values).some((key) => key === "sellerCardsPerColumn" || key === "buyerCardsPerColumn");

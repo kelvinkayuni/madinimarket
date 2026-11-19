@@ -423,9 +423,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-account-control-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .admin-account-control-row > div { display: grid; gap: 3px; }
 .admin-account-control-row span { color: #738075; font-size: 11px; }
-.admin-homepage-hero-setting { margin: 0 0 16px; padding: 13px 14px; border: 1px solid #e1e5dd; border-radius: 5px; background: #fbfcf9; }
-.admin-homepage-hero-setting strong { color: #354b39; font-size: 11px; }
-.admin-homepage-hero-setting.admin-account-control-row { align-items: center; }
 .admin-homepage-announcement-disclosure { border-top: 1px solid #e1e5dd; }
 .admin-homepage-announcement-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; cursor: pointer; list-style: none; }
 .admin-homepage-announcement-toggle::-webkit-details-marker { display: none; }
@@ -1412,7 +1409,6 @@ h1, h2, h3, p { margin-top: 0; }
   .field-row { gap: 8px; }
   .dialog-panel { padding-right: 17px; padding-left: 17px; }
   .user-subscription-actions { grid-template-columns: 1fr; }
-  .admin-homepage-hero-setting.admin-account-control-row { align-items: center; flex-direction: row; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
