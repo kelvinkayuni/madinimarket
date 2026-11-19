@@ -60,6 +60,7 @@ export type WelcomeHeroSettings = {
   transitionDurationMs: WelcomeHeroTransitionDurationMs;
   heightMode: WelcomeHeroHeightMode;
   mobileActionsPosition: WelcomeHeroMobileActionsPosition;
+  actionsHorizontalPosition: number;
   slides: WelcomeHeroSlide[];
 };
 
@@ -71,6 +72,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const transition = settings.transition === undefined ? "fade" : settings.transition;
   const slideIntervalSeconds = settings.slideIntervalSeconds === undefined ? 10 : settings.slideIntervalSeconds;
   const transitionDurationMs = settings.transitionDurationMs === undefined ? 1000 : settings.transitionDurationMs;
+  const actionsHorizontalPosition = settings.actionsHorizontalPosition === undefined ? 0 : settings.actionsHorizontalPosition;
   const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
   const requestButtonTextColor = settings.requestButtonTextColor === undefined ? "#18382e" : settings.requestButtonTextColor;
   const sellLabel = settings.sellLabel === undefined
@@ -134,6 +136,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isTransition(transition) ||
     !isSlideInterval(slideIntervalSeconds) ||
     !isTransitionDuration(transitionDurationMs) ||
+    !isIntegerValueInRange(actionsHorizontalPosition, 0, 100) ||
     !isHeightMode(heightMode) ||
     !isMobileActionsPosition(mobileActionsPosition) ||
     !Array.isArray(settings.slides) ||
@@ -208,6 +211,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     transitionDurationMs,
     heightMode,
     mobileActionsPosition,
+    actionsHorizontalPosition: actionsHorizontalPosition as number,
     slides,
   };
 }

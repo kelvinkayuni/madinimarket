@@ -51,6 +51,8 @@ export default function WelcomeHero({
     "--welcome-button-text-color": settings.buttonTextColor,
     "--welcome-request-button-color": settings.requestButtonColor,
     "--welcome-request-button-text-color": settings.requestButtonTextColor,
+    "--welcome-actions-left": `${settings.actionsHorizontalPosition}%`,
+    "--welcome-actions-shift": `-${settings.actionsHorizontalPosition}%`,
     "--welcome-font-family": fontFamily,
     "--welcome-font-weight": settings.fontWeight,
     "--welcome-desktop-font-size": `${settings.desktopFontSize}px`,

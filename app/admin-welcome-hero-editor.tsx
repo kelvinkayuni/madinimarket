@@ -91,6 +91,13 @@ export default function AdminWelcomeHeroEditor({
     setDraft((current) => ({ ...current, [key]: value }));
     setMessage("");
   };
+  const horizontalPositionLabel = draft.actionsHorizontalPosition === 0
+    ? "Left"
+    : draft.actionsHorizontalPosition === 50
+      ? "Middle"
+      : draft.actionsHorizontalPosition === 100
+        ? "Right"
+        : `${draft.actionsHorizontalPosition}%`;
 
   const addImages = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -340,6 +347,11 @@ export default function AdminWelcomeHeroEditor({
           <option value="middle">Middle</option>
           <option value="bottom">Bottom</option>
         </select>
+      </label>
+      <label className="field-label admin-welcome-hero-range">
+        Horizontal button position: {horizontalPositionLabel}
+        <input aria-label="Horizontal button position" type="range" min={0} max={100} step={1} value={draft.actionsHorizontalPosition} onChange={(event) => update("actionsHorizontalPosition", Number(event.target.value))} />
+        <span className="admin-welcome-hero-range-labels"><span>Left</span><span>Middle</span><span>Right</span></span>
       </label>
       <label className="field-label">Slide animation
         <select className="text-input" value={draft.transition} onChange={(event) => update("transition", event.target.value as WelcomeHeroSettings["transition"])}>

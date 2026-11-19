@@ -647,7 +647,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-eyebrow > span { width: 22px; height: 1px; background: currentColor; }
 .market-welcome-copy h1 { max-width: 580px; margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; text-wrap: balance; }
 .market-welcome-copy .market-welcome-phrase > p { max-width: 440px; margin: 21px 0 25px; color: var(--welcome-body-color, #d0ddd4); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; }
-.market-welcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.market-welcome-actions { position: relative; left: var(--welcome-actions-left, 0%); display: flex; width: max-content; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 10px; transform: translateX(var(--welcome-actions-shift, 0%)); transition: left .2s ease, transform .2s ease; }
 .market-welcome-actions .button { min-height: 46px; padding: 0 17px; font-size: 12px; }
 .market-welcome-actions .button-lime { border-color: var(--welcome-button-color, #d2ee77); background: var(--welcome-button-color, #d2ee77); color: var(--welcome-button-text-color, #18382e); }
 .market-welcome-post-button { border-color: var(--welcome-request-button-color, #f2ecdc); background: var(--welcome-request-button-color, #f2ecdc); color: var(--welcome-request-button-text-color, #18382e); }
@@ -705,6 +705,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-welcome-hero-colors .field-label { margin: 0; font-size: 9px; }
 .admin-welcome-hero-colors .text-input { min-height: 34px; font-size: 10px; }
 .admin-welcome-hero-range { display: grid; gap: 7px; }
+.admin-welcome-hero-range-labels { display: flex; justify-content: space-between; color: #778075; font-size: 8px; font-weight: 400; }
 .admin-welcome-hero-range input, .admin-welcome-hero-image-controls input { width: 100%; accent-color: #527452; }
 .admin-welcome-hero-images { display: grid; gap: 10px; }
 .admin-welcome-hero-images > .admin-queue-heading { margin: 0; }
@@ -1446,7 +1447,7 @@ h1, h2, h3, p { margin-top: 0; }
   .market-welcome-copy { display: flex; flex-direction: column; }
   .market-welcome-copy h1 { max-width: 430px; font-size: min(var(--welcome-mobile-font-size, 46px), clamp(32px, 11vw, 56px)); }
   .market-welcome-copy .market-welcome-phrase > p { max-width: 410px; margin: 14px 0 19px; font-size: 13px; line-height: 1.6; }
-  .market-welcome-actions { max-width: 290px; align-items: stretch; flex-direction: column; gap: 8px; }
+  .market-welcome-actions { max-width: min(100%, 290px); align-items: stretch; flex-direction: column; gap: 8px; }
   .market-welcome-hero[data-mobile-actions-position="middle"] .market-welcome-actions { margin-block: auto; }
   .market-welcome-hero[data-mobile-actions-position="bottom"] .market-welcome-actions { margin-top: auto; }
   .market-welcome-actions .button { min-height: 43px; }
