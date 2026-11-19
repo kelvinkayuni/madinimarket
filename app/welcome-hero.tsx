@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Gem, Pause, Play, Plus } from "lucide-react";
+import { ArrowRight, Pause, Play, Plus } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { WelcomeHeroSettings } from "@/lib/welcome-hero";
@@ -163,9 +163,9 @@ export default function WelcomeHero({
       </div>
       <div className="market-welcome-actions">
         {preview
-          ? <span className="button button-lime"><Gem size={17} aria-hidden="true" /> {settings.sellLabel} <ArrowRight size={16} aria-hidden="true" /></span>
+          ? <span className="button button-lime">{settings.sellLabel} <ArrowRight size={16} aria-hidden="true" /></span>
           : <button className="button button-lime" type="button" disabled={sellBusy} onClick={onSellMineral}>
-            {sellBusy ? "Opening…" : <><Gem size={17} aria-hidden="true" /> {settings.sellLabel} <ArrowRight size={16} aria-hidden="true" /></>}
+            {sellBusy ? "Opening…" : <>{settings.sellLabel} <ArrowRight size={16} aria-hidden="true" /></>}
           </button>}
         <button className="button market-welcome-post-button" type="button" disabled={preview || postRequestBusy} onClick={onPostRequest}>
           {postRequestBusy ? "Opening…" : <><Plus size={16} aria-hidden="true" /> {settings.requestLabel}</>}
