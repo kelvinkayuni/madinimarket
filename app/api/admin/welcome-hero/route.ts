@@ -4,10 +4,10 @@ import { getAdminClient } from "@/lib/admin-auth";
 import {
   addWelcomeHeroImageUrls,
   getWelcomeHeroImageMimeType,
+  getWelcomeHeroSlideStoragePaths,
   parseWelcomeHeroSettings,
   WELCOME_HERO_IMAGE_PATH_PATTERN,
   WELCOME_HERO_MAX_IMAGE_BYTES,
-  WELCOME_HERO_ORIGINAL_IMAGE_PATH_PATTERN,
   WELCOME_HERO_BUCKET,
   type WelcomeHeroSettings,
   type WelcomeHeroSlide,
@@ -21,6 +21,8 @@ type DraftSlide = {
   focusY: number;
   scale: number;
   mobilePath?: string;
+  desktopCropPath?: string;
+  mobileCropPath?: string;
   mobileFocusX: number;
   mobileFocusY: number;
   mobileScale: number;
@@ -74,6 +76,20 @@ function parseDraftSlides(value: unknown): DraftSlide[] | null {
     } else if (slide.mobilePath !== undefined) {
       return null;
     }
+    if (typeof slide.desktopCropPath === "string" &&
+      WELCOME_HERO_IMAGE_PATH_PATTERN.test(slide.desktopCropPath) && !paths.has(slide.desktopCropPath)) {
+      paths.add(slide.desktopCropPath);
+      draft.desktopCropPath = slide.desktopCropPath;
+    } else if (slide.desktopCropPath !== undefined) {
+      return null;
+    }
+    if (typeof slide.mobileCropPath === "string" &&
+      WELCOME_HERO_IMAGE_PATH_PATTERN.test(slide.mobileCropPath) && !paths.has(slide.mobileCropPath)) {
+      paths.add(slide.mobileCropPath);
+      draft.mobileCropPath = slide.mobileCropPath;
+    } else if (slide.mobileCropPath !== undefined) {
+      return null;
+    }
 
     slides.push(draft);
   }
@@ -86,8 +102,8 @@ function getNewUploadPaths(value: unknown, oldPaths: Set<string>) {
   for (const candidate of value) {
     if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) continue;
     const slide = candidate as Record<string, unknown>;
-    for (const path of [slide.path, slide.mobilePath]) {
-      if (typeof path === "string" && WELCOME_HERO_ORIGINAL_IMAGE_PATH_PATTERN.test(path) && !oldPaths.has(path)) {
+    for (const path of [slide.path, slide.mobilePath, slide.desktopCropPath, slide.mobileCropPath]) {
+      if (typeof path === "string" && WELCOME_HERO_IMAGE_PATH_PATTERN.test(path) && !oldPaths.has(path)) {
         paths.add(path);
       }
     }
@@ -145,7 +161,7 @@ export async function POST(request: Request) {
     if (oldSettingsResult.error) throw oldSettingsResult.error;
     const oldSettings = parseWelcomeHeroSettings(oldSettingsResult.data.welcome_hero_settings, true);
     if (!oldSettings) throw new Error("Saved welcome hero settings are invalid.");
-    const oldPaths = new Set(oldSettings.slides.flatMap((slide) => slide.mobilePath ? [slide.path, slide.mobilePath] : [slide.path]));
+    const oldPaths = new Set(oldSettings.slides.flatMap(getWelcomeHeroSlideStoragePaths));
     uploadedPaths = getNewUploadPaths(values.slides, oldPaths);
 
     const draftSlides = parseDraftSlides(values.slides);
@@ -153,8 +169,8 @@ export async function POST(request: Request) {
     if (!draftSlides || !design) {
       return NextResponse.json({ error: "Check the welcome hero text, colors, font sizes, layout options, and images." }, { status: 400 });
     }
-    const requestedPaths = draftSlides.flatMap((slide) => slide.mobilePath ? [slide.path, slide.mobilePath] : [slide.path]);
-    if (requestedPaths.some((path) => !oldPaths.has(path) && !WELCOME_HERO_ORIGINAL_IMAGE_PATH_PATTERN.test(path))) {
+    const requestedPaths = draftSlides.flatMap(getWelcomeHeroSlideStoragePaths);
+    if (requestedPaths.some((path) => !oldPaths.has(path) && !WELCOME_HERO_IMAGE_PATH_PATTERN.test(path))) {
       return NextResponse.json({ error: "Only uploaded hero images can be added." }, { status: 400 });
     }
     for (const path of uploadedPaths) {
@@ -173,6 +189,8 @@ export async function POST(request: Request) {
         focusY: slide.focusY,
         scale: slide.scale,
         ...(slide.mobilePath ? { mobilePath: slide.mobilePath } : {}),
+        ...(slide.desktopCropPath ? { desktopCropPath: slide.desktopCropPath } : {}),
+        ...(slide.mobileCropPath ? { mobileCropPath: slide.mobileCropPath } : {}),
         mobileFocusX: slide.mobileFocusX,
         mobileFocusY: slide.mobileFocusY,
         mobileScale: slide.mobileScale,
@@ -190,9 +208,9 @@ export async function POST(request: Request) {
     const saved = parseWelcomeHeroSettings(savedRow.welcome_hero_settings);
     if (!saved) throw new Error("Saved welcome hero settings are invalid.");
 
-    const retainedPaths = new Set(saved.slides.flatMap((slide) => slide.mobilePath ? [slide.path, slide.mobilePath] : [slide.path]));
+    const retainedPaths = new Set(saved.slides.flatMap(getWelcomeHeroSlideStoragePaths));
     const removedPaths = oldSettings.slides
-      .flatMap((slide) => slide.mobilePath ? [slide.path, slide.mobilePath] : [slide.path])
+      .flatMap(getWelcomeHeroSlideStoragePaths)
       .filter((path) => !retainedPaths.has(path));
     const heroStorage = admin.storage.from(WELCOME_HERO_BUCKET);
     let cleanupWarning = false;

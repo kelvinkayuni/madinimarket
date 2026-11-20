@@ -7,8 +7,9 @@ import {
   parseWelcomeHeroSettings,
   WELCOME_HERO_BUCKET,
   WELCOME_HERO_IMAGE_EXTENSION_BY_MIME,
+  WELCOME_HERO_IMAGE_PATH_PATTERN,
   WELCOME_HERO_MAX_IMAGE_BYTES,
-  WELCOME_HERO_ORIGINAL_IMAGE_PATH_PATTERN,
+  getWelcomeHeroSlideStoragePaths,
 } from "@/lib/welcome-hero";
 
 export async function POST(request: Request) {
@@ -28,12 +29,17 @@ export async function POST(request: Request) {
     const values = body as Record<string, unknown>;
     const contentType = values.contentType;
     const size = values.size;
+    const assetType = values.assetType;
     if (!isWelcomeHeroImageMimeType(contentType) || typeof size !== "number" ||
-      !Number.isSafeInteger(size) || size < 1 || size > WELCOME_HERO_MAX_IMAGE_BYTES) {
+      !Number.isSafeInteger(size) || size < 1 || size > WELCOME_HERO_MAX_IMAGE_BYTES ||
+      (assetType !== "original" && assetType !== "desktop-crop" && assetType !== "phone-crop")) {
       return NextResponse.json({ error: "Choose a supported hero image up to 20 MB." }, { status: 400 });
     }
 
-    const path = `${WELCOME_HERO_BUCKET}/original/${randomUUID()}.${WELCOME_HERO_IMAGE_EXTENSION_BY_MIME[contentType]}`;
+    const directory = assetType === "original"
+      ? "original"
+      : `crops/${assetType === "desktop-crop" ? "desktop" : "phone"}`;
+    const path = `${WELCOME_HERO_BUCKET}/${directory}/${randomUUID()}.${WELCOME_HERO_IMAGE_EXTENSION_BY_MIME[contentType]}`;
     const { data, error } = await admin.storage.from(WELCOME_HERO_BUCKET).createSignedUploadUrl(path, { upsert: false });
     if (error) throw error;
     return NextResponse.json({ path, token: data.token }, { headers: { "Cache-Control": "no-store" } });
@@ -58,12 +64,12 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Hero image paths are invalid." }, { status: 400 });
     }
     const values = body as Record<string, unknown>;
-    if (!Array.isArray(values.paths) || values.paths.length > 6) {
+    if (!Array.isArray(values.paths) || values.paths.length > 24) {
       return NextResponse.json({ error: "Hero image paths are invalid." }, { status: 400 });
     }
     const paths: string[] = [];
     for (const path of values.paths) {
-      if (typeof path !== "string" || !WELCOME_HERO_ORIGINAL_IMAGE_PATH_PATTERN.test(path) || paths.includes(path)) {
+      if (typeof path !== "string" || !WELCOME_HERO_IMAGE_PATH_PATTERN.test(path) || paths.includes(path)) {
         return NextResponse.json({ error: "Hero image paths are invalid." }, { status: 400 });
       }
       paths.push(path);
@@ -77,7 +83,7 @@ export async function DELETE(request: Request) {
     if (error) throw error;
     const settings = parseWelcomeHeroSettings(data.welcome_hero_settings, true);
     if (!settings) throw new Error("Saved welcome hero settings are invalid.");
-    const activePaths = new Set(settings.slides.flatMap((slide) => slide.mobilePath ? [slide.path, slide.mobilePath] : [slide.path]));
+    const activePaths = new Set(settings.slides.flatMap(getWelcomeHeroSlideStoragePaths));
     const unusedPaths = paths.filter((path) => !activePaths.has(path));
     if (!unusedPaths.length) return NextResponse.json({ removed: 0 }, { headers: { "Cache-Control": "no-store" } });
 

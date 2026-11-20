@@ -8,8 +8,14 @@ export const WELCOME_HERO_IMAGE_EXTENSION_BY_MIME: Record<WelcomeHeroImageMimeTy
   "image/webp": "webp",
   "image/avif": "avif",
 };
-export const WELCOME_HERO_IMAGE_PATH_PATTERN = /^homepage-hero\/(?:original\/)?[0-9a-f-]{36}\.(?:jpe?g|png|webp|avif)$/i;
+export const WELCOME_HERO_CROP_TARGETS = {
+  desktop: { width: 3840, height: 940 },
+  phone: { width: 1080, height: 1165 },
+} as const;
+export const WELCOME_HERO_IMAGE_PATH_PATTERN = /^homepage-hero\/(?:(?:original|crops\/(?:desktop|phone))\/)?[0-9a-f-]{36}\.(?:jpe?g|png|webp|avif)$/i;
 export const WELCOME_HERO_ORIGINAL_IMAGE_PATH_PATTERN = /^homepage-hero\/original\/[0-9a-f-]{36}\.(?:jpe?g|png|webp|avif)$/i;
+export const WELCOME_HERO_DESKTOP_CROP_PATH_PATTERN = /^homepage-hero\/crops\/desktop\/[0-9a-f-]{36}\.(?:jpe?g|png|webp|avif)$/i;
+export const WELCOME_HERO_PHONE_CROP_PATH_PATTERN = /^homepage-hero\/crops\/phone\/[0-9a-f-]{36}\.(?:jpe?g|png|webp|avif)$/i;
 
 export function isWelcomeHeroImageMimeType(value: unknown): value is WelcomeHeroImageMimeType {
   return typeof value === "string" && WELCOME_HERO_IMAGE_MIME_TYPES.some((mimeType) => mimeType === value);
@@ -58,11 +64,15 @@ export type WelcomeHeroSlide = {
   focusY: number;
   scale: number;
   mobilePath?: string;
+  desktopCropPath?: string;
+  mobileCropPath?: string;
   mobileFocusX: number;
   mobileFocusY: number;
   mobileScale: number;
   url?: string;
   mobileUrl?: string;
+  originalUrl?: string;
+  mobileOriginalUrl?: string;
 };
 
 export type WelcomeHeroSettings = {
@@ -264,6 +274,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     const headline = slide.headline === undefined ? settings.headline : slide.headline;
     const description = slide.description === undefined ? settings.description : slide.description;
     const mobilePath = slide.mobilePath;
+    const desktopCropPath = slide.desktopCropPath;
+    const mobileCropPath = slide.mobileCropPath;
     if (typeof slide.path !== "string" ||
       !WELCOME_HERO_IMAGE_PATH_PATTERN.test(slide.path) ||
       typeof headline !== "string" || (!allowEmptyCopy && headline.trim().length === 0) || headline.length > 100 ||
@@ -274,12 +286,14 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
       typeof mobileFocusX !== "number" || !Number.isSafeInteger(mobileFocusX) || mobileFocusX < 0 || mobileFocusX > 100 ||
       typeof mobileFocusY !== "number" || !Number.isSafeInteger(mobileFocusY) || mobileFocusY < 0 || mobileFocusY > 100 ||
       typeof mobileScale !== "number" || !Number.isSafeInteger(mobileScale) || mobileScale < 70 || mobileScale > 160 ||
-      (mobilePath !== undefined && (typeof mobilePath !== "string" || !WELCOME_HERO_IMAGE_PATH_PATTERN.test(mobilePath)))) {
+      (mobilePath !== undefined && (typeof mobilePath !== "string" || !WELCOME_HERO_IMAGE_PATH_PATTERN.test(mobilePath))) ||
+      (desktopCropPath !== undefined && (typeof desktopCropPath !== "string" || !WELCOME_HERO_DESKTOP_CROP_PATH_PATTERN.test(desktopCropPath))) ||
+      (mobileCropPath !== undefined && (typeof mobileCropPath !== "string" || !WELCOME_HERO_PHONE_CROP_PATH_PATTERN.test(mobileCropPath)))) {
       return null;
     }
-    if (paths.has(slide.path) || (typeof mobilePath === "string" && paths.has(mobilePath))) return null;
-    paths.add(slide.path);
-    if (typeof mobilePath === "string") paths.add(mobilePath);
+    const slidePaths = [slide.path, mobilePath, desktopCropPath, mobileCropPath].filter((path): path is string => typeof path === "string");
+    if (slidePaths.some((path) => paths.has(path))) return null;
+    for (const path of slidePaths) paths.add(path);
     slides.push({
       path: slide.path,
       headline,
@@ -288,6 +302,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
       focusY: slide.focusY,
       scale,
       ...(typeof mobilePath === "string" ? { mobilePath } : {}),
+      ...(typeof desktopCropPath === "string" ? { desktopCropPath } : {}),
+      ...(typeof mobileCropPath === "string" ? { mobileCropPath } : {}),
       mobileFocusX,
       mobileFocusY,
       mobileScale,
@@ -348,10 +364,17 @@ export function addWelcomeHeroImageUrls(
     ...settings,
     slides: settings.slides.map((slide) => ({
       ...slide,
-      url: getPublicUrl(slide.path),
-      mobileUrl: getPublicUrl(slide.mobilePath ?? slide.path),
+      url: getPublicUrl(slide.desktopCropPath ?? slide.path),
+      mobileUrl: getPublicUrl(slide.mobileCropPath ?? slide.mobilePath ?? slide.path),
+      originalUrl: getPublicUrl(slide.path),
+      mobileOriginalUrl: getPublicUrl(slide.mobilePath ?? slide.path),
     })),
   };
+}
+
+export function getWelcomeHeroSlideStoragePaths(slide: Pick<WelcomeHeroSlide, "path" | "mobilePath" | "desktopCropPath" | "mobileCropPath">) {
+  return [slide.path, slide.mobilePath, slide.desktopCropPath, slide.mobileCropPath]
+    .filter((path): path is string => typeof path === "string");
 }
 
 export function parsePublicWelcomeHeroSettings(value: unknown): WelcomeHeroSettings | null {
@@ -366,9 +389,19 @@ export function parsePublicWelcomeHeroSettings(value: unknown): WelcomeHeroSetti
     const url = (rawSlide as Record<string, unknown>).url;
     const rawMobileUrl = (rawSlide as Record<string, unknown>).mobileUrl;
     const mobileUrl = rawMobileUrl === undefined ? url : rawMobileUrl;
+    const originalUrl = (rawSlide as Record<string, unknown>).originalUrl;
+    const mobileOriginalUrl = (rawSlide as Record<string, unknown>).mobileOriginalUrl;
     if (typeof url !== "string" || !/^https?:\/\//i.test(url) ||
-      typeof mobileUrl !== "string" || !/^https?:\/\//i.test(mobileUrl)) return null;
-    slides.push({ ...settings.slides[index], url, mobileUrl });
+      typeof mobileUrl !== "string" || !/^https?:\/\//i.test(mobileUrl) ||
+      (originalUrl !== undefined && (typeof originalUrl !== "string" || !/^https?:\/\//i.test(originalUrl))) ||
+      (mobileOriginalUrl !== undefined && (typeof mobileOriginalUrl !== "string" || !/^https?:\/\//i.test(mobileOriginalUrl)))) return null;
+    slides.push({
+      ...settings.slides[index],
+      url,
+      mobileUrl,
+      ...(typeof originalUrl === "string" ? { originalUrl } : {}),
+      ...(typeof mobileOriginalUrl === "string" ? { mobileOriginalUrl } : {}),
+    });
   }
   return { ...settings, slides };
 }
