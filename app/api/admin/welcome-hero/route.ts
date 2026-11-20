@@ -21,8 +21,6 @@ type DraftSlide = {
   focusY: number;
   scale: number;
   mobilePath?: string;
-  desktopCropPath?: string;
-  mobileCropPath?: string;
   mobileFocusX: number;
   mobileFocusY: number;
   mobileScale: number;
@@ -39,6 +37,7 @@ function parseDraftSlides(value: unknown): DraftSlide[] | null {
     const mobileFocusX = slide.mobileFocusX === undefined ? slide.focusX : slide.mobileFocusX;
     const mobileFocusY = slide.mobileFocusY === undefined ? slide.focusY : slide.mobileFocusY;
     const mobileScale = slide.mobileScale === undefined ? scale : slide.mobileScale;
+    if (slide.desktopCropPath !== undefined || slide.mobileCropPath !== undefined) return null;
     if ((slide.headline !== undefined &&
       (typeof slide.headline !== "string" || !slide.headline.trim() || slide.headline.length > 100)) ||
       (slide.description !== undefined &&
@@ -76,21 +75,6 @@ function parseDraftSlides(value: unknown): DraftSlide[] | null {
     } else if (slide.mobilePath !== undefined) {
       return null;
     }
-    if (typeof slide.desktopCropPath === "string" &&
-      WELCOME_HERO_IMAGE_PATH_PATTERN.test(slide.desktopCropPath) && !paths.has(slide.desktopCropPath)) {
-      paths.add(slide.desktopCropPath);
-      draft.desktopCropPath = slide.desktopCropPath;
-    } else if (slide.desktopCropPath !== undefined) {
-      return null;
-    }
-    if (typeof slide.mobileCropPath === "string" &&
-      WELCOME_HERO_IMAGE_PATH_PATTERN.test(slide.mobileCropPath) && !paths.has(slide.mobileCropPath)) {
-      paths.add(slide.mobileCropPath);
-      draft.mobileCropPath = slide.mobileCropPath;
-    } else if (slide.mobileCropPath !== undefined) {
-      return null;
-    }
-
     slides.push(draft);
   }
   return slides;
@@ -189,8 +173,6 @@ export async function POST(request: Request) {
         focusY: slide.focusY,
         scale: slide.scale,
         ...(slide.mobilePath ? { mobilePath: slide.mobilePath } : {}),
-        ...(slide.desktopCropPath ? { desktopCropPath: slide.desktopCropPath } : {}),
-        ...(slide.mobileCropPath ? { mobileCropPath: slide.mobileCropPath } : {}),
         mobileFocusX: slide.mobileFocusX,
         mobileFocusY: slide.mobileFocusY,
         mobileScale: slide.mobileScale,

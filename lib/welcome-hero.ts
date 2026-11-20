@@ -8,7 +8,7 @@ export const WELCOME_HERO_IMAGE_EXTENSION_BY_MIME: Record<WelcomeHeroImageMimeTy
   "image/webp": "webp",
   "image/avif": "avif",
 };
-export const WELCOME_HERO_CROP_TARGETS = {
+export const WELCOME_HERO_RESOLUTION_TARGETS = {
   desktop: { width: 3840, height: 940 },
   phone: { width: 1080, height: 1165 },
 } as const;
@@ -64,6 +64,7 @@ export type WelcomeHeroSlide = {
   focusY: number;
   scale: number;
   mobilePath?: string;
+  // Legacy display-crop paths are parsed so the next settings save can remove them safely.
   desktopCropPath?: string;
   mobileCropPath?: string;
   mobileFocusX: number;
@@ -71,8 +72,6 @@ export type WelcomeHeroSlide = {
   mobileScale: number;
   url?: string;
   mobileUrl?: string;
-  originalUrl?: string;
-  mobileOriginalUrl?: string;
 };
 
 export type WelcomeHeroSettings = {
@@ -364,10 +363,8 @@ export function addWelcomeHeroImageUrls(
     ...settings,
     slides: settings.slides.map((slide) => ({
       ...slide,
-      url: getPublicUrl(slide.desktopCropPath ?? slide.path),
-      mobileUrl: getPublicUrl(slide.mobileCropPath ?? slide.mobilePath ?? slide.path),
-      originalUrl: getPublicUrl(slide.path),
-      mobileOriginalUrl: getPublicUrl(slide.mobilePath ?? slide.path),
+      url: getPublicUrl(slide.path),
+      mobileUrl: getPublicUrl(slide.mobilePath ?? slide.path),
     })),
   };
 }
@@ -389,19 +386,9 @@ export function parsePublicWelcomeHeroSettings(value: unknown): WelcomeHeroSetti
     const url = (rawSlide as Record<string, unknown>).url;
     const rawMobileUrl = (rawSlide as Record<string, unknown>).mobileUrl;
     const mobileUrl = rawMobileUrl === undefined ? url : rawMobileUrl;
-    const originalUrl = (rawSlide as Record<string, unknown>).originalUrl;
-    const mobileOriginalUrl = (rawSlide as Record<string, unknown>).mobileOriginalUrl;
     if (typeof url !== "string" || !/^https?:\/\//i.test(url) ||
-      typeof mobileUrl !== "string" || !/^https?:\/\//i.test(mobileUrl) ||
-      (originalUrl !== undefined && (typeof originalUrl !== "string" || !/^https?:\/\//i.test(originalUrl))) ||
-      (mobileOriginalUrl !== undefined && (typeof mobileOriginalUrl !== "string" || !/^https?:\/\//i.test(mobileOriginalUrl)))) return null;
-    slides.push({
-      ...settings.slides[index],
-      url,
-      mobileUrl,
-      ...(typeof originalUrl === "string" ? { originalUrl } : {}),
-      ...(typeof mobileOriginalUrl === "string" ? { mobileOriginalUrl } : {}),
-    });
+      typeof mobileUrl !== "string" || !/^https?:\/\//i.test(mobileUrl)) return null;
+    slides.push({ ...settings.slides[index], url, mobileUrl });
   }
   return { ...settings, slides };
 }

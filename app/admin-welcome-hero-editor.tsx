@@ -6,10 +6,8 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import {
-  getWelcomeHeroImageMimeType,
   WELCOME_HERO_BUCKET,
-  WELCOME_HERO_CROP_TARGETS,
-  WELCOME_HERO_IMAGE_EXTENSION_BY_MIME,
+  WELCOME_HERO_RESOLUTION_TARGETS,
   WELCOME_HERO_MAX_IMAGE_BYTES,
   isWelcomeHeroImageMimeType,
   type WelcomeHeroSettings,
@@ -22,10 +20,10 @@ type ImageDimensions = { width: number; height: number };
 
 function getImageResolutionNote(
   dimensions: ImageDimensions,
-  device: keyof typeof WELCOME_HERO_CROP_TARGETS,
+  device: keyof typeof WELCOME_HERO_RESOLUTION_TARGETS,
   zoom: number,
 ) {
-  const target = WELCOME_HERO_CROP_TARGETS[device];
+  const target = WELCOME_HERO_RESOLUTION_TARGETS[device];
   const targetAspectRatio = target.width / target.height;
   const imageAspectRatio = dimensions.width / dimensions.height;
   const cropWidth = imageAspectRatio > targetAspectRatio
@@ -44,52 +42,6 @@ function getImageResolutionNote(
     return `Source: ${imageSize}. At a standard ${heroSize} ${device} hero, it must enlarge to about ${Math.round(enlargement * 100)}% to fill and may look pixelated. Use a higher-resolution original.`;
   }
   return `Source: ${imageSize}. No enlargement expected at a standard ${heroSize} ${device} hero; larger originals look sharper on high-density screens.`;
-}
-
-async function createHeroCrop(
-  file: File,
-  device: keyof typeof WELCOME_HERO_CROP_TARGETS,
-  focusX: number,
-  focusY: number,
-): Promise<File> {
-  const target = WELCOME_HERO_CROP_TARGETS[device];
-  const bitmap = await createImageBitmap(file);
-  try {
-    const targetAspectRatio = target.width / target.height;
-    const imageAspectRatio = bitmap.width / bitmap.height;
-    const sourceWidth = imageAspectRatio > targetAspectRatio ? bitmap.height * targetAspectRatio : bitmap.width;
-    const sourceHeight = imageAspectRatio > targetAspectRatio ? bitmap.height : bitmap.width / targetAspectRatio;
-    const sourceX = (bitmap.width - sourceWidth) * focusX / 100;
-    const sourceY = (bitmap.height - sourceHeight) * focusY / 100;
-    const outputScale = Math.min(1, target.width / sourceWidth, target.height / sourceHeight);
-    const width = Math.max(1, Math.round(sourceWidth * outputScale));
-    const height = Math.max(1, Math.round(sourceHeight * outputScale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Could not prepare the hero image crop.");
-    context.drawImage(bitmap, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
-
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((result) => {
-        if (result) resolve(result);
-        else reject(new Error("Could not export the hero image crop."));
-      }, file.type, 0.98);
-    });
-    const mimeType = isWelcomeHeroImageMimeType(blob.type) ? blob.type : null;
-    if (!mimeType) throw new Error("Your browser could not export a supported hero image format.");
-    if (blob.size < 1 || blob.size > WELCOME_HERO_MAX_IMAGE_BYTES) {
-      throw new Error("The generated hero crop exceeds the 20 MB storage limit.");
-    }
-    return new File(
-      [blob],
-      `${device}-hero-crop.${WELCOME_HERO_IMAGE_EXTENSION_BY_MIME[mimeType]}`,
-      { type: mimeType },
-    );
-  } finally {
-    bitmap.close();
-  }
 }
 
 function getPositionLabel(position: number, labels: [string, string, string]) {
@@ -255,8 +207,6 @@ export default function AdminWelcomeHeroEditor({
           mobileFocusY: 50,
           mobileScale: 100,
           url,
-          originalUrl: url,
-          mobileOriginalUrl: url,
           file,
         };
       });
@@ -289,7 +239,7 @@ export default function AdminWelcomeHeroEditor({
         URL.revokeObjectURL(current.url);
         objectUrls.current.delete(current.url);
       }
-      const updated: DraftSlide = { ...current, path: "", url, originalUrl: url, file: prepared };
+      const updated: DraftSlide = { ...current, path: "", url, file: prepared };
       delete updated.desktopCropPath;
       const slides = [...draft.slides];
       slides[index] = updated;
@@ -321,7 +271,7 @@ export default function AdminWelcomeHeroEditor({
         URL.revokeObjectURL(current.mobileUrl);
         objectUrls.current.delete(current.mobileUrl);
       }
-      const updated: DraftSlide = { ...current, mobileUrl: url, mobileOriginalUrl: url, mobileFile: prepared };
+      const updated: DraftSlide = { ...current, mobileUrl: url, mobileFile: prepared };
       delete updated.mobilePath;
       delete updated.mobileCropPath;
       const slides = [...draft.slides];
@@ -346,7 +296,6 @@ export default function AdminWelcomeHeroEditor({
     const updated: DraftSlide = { ...slide };
     delete updated.mobilePath;
     delete updated.mobileUrl;
-    delete updated.mobileOriginalUrl;
     delete updated.mobileFile;
     delete updated.mobileCropPath;
     const slides = [...draft.slides];
@@ -401,17 +350,14 @@ export default function AdminWelcomeHeroEditor({
       if (!session) throw new Error("Admin session expired. Sign in again to save.");
       accessToken = session.access_token;
 
-      const uploadImage = async (
-        file: File,
-        assetType: "original" | "desktop-crop" | "phone-crop",
-      ) => {
+      const uploadImage = async (file: File) => {
         const uploadResponse = await fetch("/api/admin/welcome-hero/upload", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ contentType: file.type, size: file.size, assetType }),
+          body: JSON.stringify({ contentType: file.type, size: file.size }),
         });
         const ticket: unknown = await uploadResponse.json();
         const ticketRecord = typeof ticket === "object" && ticket !== null && !Array.isArray(ticket)
@@ -433,33 +379,14 @@ export default function AdminWelcomeHeroEditor({
         if (error) throw error;
         return path;
       };
-      const downloadOriginal = async (path: string) => {
-        const { data, error } = await supabase.storage.from(WELCOME_HERO_BUCKET).download(path);
-        if (error) throw new Error(`Could not read the original hero image: ${error.message}`);
-        const mimeType = isWelcomeHeroImageMimeType(data.type) ? data.type : getWelcomeHeroImageMimeType(path);
-        if (!mimeType || !isWelcomeHeroImageMimeType(mimeType)) {
-          throw new Error("The saved hero image has an unsupported file format.");
-        }
-        return new File([data], path.slice(path.lastIndexOf("/") + 1), { type: mimeType });
-      };
-
       const slides: WelcomeHeroSlide[] = [];
       for (const slide of draft.slides) {
         const draftSlide = slide as DraftSlide;
-        const desktopSource = draftSlide.file ?? await downloadOriginal(slide.path);
-        const phoneSource = draftSlide.mobileFile ??
-          (slide.mobilePath ? await downloadOriginal(slide.mobilePath) : desktopSource);
-        const desktopCrop = await createHeroCrop(desktopSource, "desktop", slide.focusX, slide.focusY);
-        const phoneCrop = await createHeroCrop(phoneSource, "phone", slide.mobileFocusX, slide.mobileFocusY);
-        const path = draftSlide.file ? await uploadImage(draftSlide.file, "original") : slide.path;
-        const mobilePath = draftSlide.mobileFile ? await uploadImage(draftSlide.mobileFile, "original") : slide.mobilePath;
-        const desktopCropPath = await uploadImage(desktopCrop, "desktop-crop");
-        const mobileCropPath = await uploadImage(phoneCrop, "phone-crop");
+        const path = draftSlide.file ? await uploadImage(draftSlide.file) : slide.path;
+        const mobilePath = draftSlide.mobileFile ? await uploadImage(draftSlide.mobileFile) : slide.mobilePath;
         slides.push({
           path,
           ...(mobilePath ? { mobilePath } : {}),
-          desktopCropPath,
-          mobileCropPath,
           headline: slide.headline,
           description: slide.description,
           focusX: slide.focusX,
@@ -531,13 +458,7 @@ export default function AdminWelcomeHeroEditor({
 
   const previewSettings = {
     ...draft,
-    slides: draft.slides.map((slide) => ({
-      ...slide,
-      desktopCropPath: undefined,
-      mobileCropPath: undefined,
-      url: slide.originalUrl ?? slide.url,
-      mobileUrl: slide.mobileOriginalUrl ?? slide.originalUrl ?? slide.mobileUrl ?? slide.url,
-    })),
+    slides: draft.slides.map((slide) => ({ ...slide, url: slide.url })),
   };
   const publicHeaderPosition = headerPreviewMobile ? draft.publicHeaderMobilePosition : draft.publicHeaderDesktopPosition;
   const publicHeaderScale = headerPreviewMobile ? draft.publicHeaderMobileScale : draft.publicHeaderDesktopScale;
@@ -738,13 +659,13 @@ export default function AdminWelcomeHeroEditor({
 
     <div className="admin-welcome-hero-images">
       <div className="admin-queue-heading"><div><span>BACKGROUND IMAGES</span><h4>{draft.slides.length} of 3 desktop slides</h4></div></div>
-      <p className="admin-welcome-hero-image-note">Uploads keep the original file and create separate desktop and phone crops when saved. Crops never upscale the source. Full-width display can still enlarge low-resolution images, so check the source warning and live preview; the zoom controls cannot add detail.</p>
+      <p className="admin-welcome-hero-image-note">The homepage displays each uploaded original directly—no generated crop or re-encoded display copy is used. Desktop and phone focal points affect how the original is shown, not the file. Check the resolution warning because a full-width hero can still enlarge a low-resolution image.</p>
       {draft.slides.map((slide, index) => {
         const draftSlide = slide as DraftSlide;
         const hasMobileImage = Boolean(draftSlide.mobilePath || draftSlide.mobileFile);
-        const desktopSourceUrl = slide.originalUrl ?? slide.url;
+        const desktopSourceUrl = slide.url;
         const phoneSourceUrl = hasMobileImage
-          ? draftSlide.mobileOriginalUrl ?? draftSlide.mobileUrl
+          ? draftSlide.mobileUrl
           : desktopSourceUrl;
         const desktopDimensions = desktopSourceUrl ? imageDimensions[desktopSourceUrl] : undefined;
         const phoneDimensions = phoneSourceUrl ? imageDimensions[phoneSourceUrl] : undefined;
@@ -755,10 +676,7 @@ export default function AdminWelcomeHeroEditor({
           ? getImageResolutionNote(phoneDimensions, "phone", slide.mobileScale)
           : null;
         return <article className="admin-welcome-hero-image" key={slide.path || slide.url || index}>
-          {slide.url ? <>
-            <Image src={slide.url} alt={`Desktop welcome hero background ${index + 1}`} width={360} height={180} unoptimized />
-            {desktopSourceUrl && <Image className="admin-welcome-hero-source-dimensions" src={desktopSourceUrl} alt="" width={1} height={1} unoptimized onLoad={(event) => rememberImageDimensions(desktopSourceUrl, event.currentTarget)} />}
-          </> : <div className="admin-welcome-hero-image-empty">Desktop preview</div>}
+          {slide.url ? <Image src={slide.url} alt={`Desktop welcome hero background ${index + 1}`} width={360} height={180} unoptimized onLoad={(event) => rememberImageDimensions(slide.url!, event.currentTarget)} /> : <div className="admin-welcome-hero-image-empty">Desktop preview</div>}
           <div className="admin-welcome-hero-image-controls">
             <strong>Desktop image {index + 1}</strong>
             {slide.url && <small className={`admin-welcome-hero-resolution${desktopResolutionNote?.includes("may look pixelated") ? " is-warning" : ""}`}>
@@ -800,10 +718,9 @@ export default function AdminWelcomeHeroEditor({
             <div className="admin-welcome-hero-mobile-image">
               {hasMobileImage
                 ? draftSlide.mobileUrl
-                  ? <Image src={draftSlide.mobileUrl} alt={`Phone welcome hero background ${index + 1}`} width={80} height={100} unoptimized />
+                  ? <Image src={draftSlide.mobileUrl} alt={`Phone welcome hero background ${index + 1}`} width={80} height={100} unoptimized onLoad={(event) => rememberImageDimensions(draftSlide.mobileUrl!, event.currentTarget)} />
                   : <div className="admin-welcome-hero-mobile-image-empty">Phone preview</div>
                 : <div className="admin-welcome-hero-mobile-image-empty">Using desktop image</div>}
-              {hasMobileImage && draftSlide.mobileOriginalUrl && <Image className="admin-welcome-hero-source-dimensions" src={draftSlide.mobileOriginalUrl} alt="" width={1} height={1} unoptimized onLoad={(event) => rememberImageDimensions(draftSlide.mobileOriginalUrl!, event.currentTarget)} />}
               <div className="admin-welcome-hero-mobile-image-controls">
                 <strong>Phone image</strong>
                 {phoneResolutionNote && <small className={`admin-welcome-hero-resolution${phoneResolutionNote.includes("may look pixelated") ? " is-warning" : ""}`}>

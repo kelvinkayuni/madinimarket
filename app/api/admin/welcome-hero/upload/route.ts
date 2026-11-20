@@ -29,17 +29,12 @@ export async function POST(request: Request) {
     const values = body as Record<string, unknown>;
     const contentType = values.contentType;
     const size = values.size;
-    const assetType = values.assetType;
     if (!isWelcomeHeroImageMimeType(contentType) || typeof size !== "number" ||
-      !Number.isSafeInteger(size) || size < 1 || size > WELCOME_HERO_MAX_IMAGE_BYTES ||
-      (assetType !== "original" && assetType !== "desktop-crop" && assetType !== "phone-crop")) {
+      !Number.isSafeInteger(size) || size < 1 || size > WELCOME_HERO_MAX_IMAGE_BYTES) {
       return NextResponse.json({ error: "Choose a supported hero image up to 20 MB." }, { status: 400 });
     }
 
-    const directory = assetType === "original"
-      ? "original"
-      : `crops/${assetType === "desktop-crop" ? "desktop" : "phone"}`;
-    const path = `${WELCOME_HERO_BUCKET}/${directory}/${randomUUID()}.${WELCOME_HERO_IMAGE_EXTENSION_BY_MIME[contentType]}`;
+    const path = `${WELCOME_HERO_BUCKET}/original/${randomUUID()}.${WELCOME_HERO_IMAGE_EXTENSION_BY_MIME[contentType]}`;
     const { data, error } = await admin.storage.from(WELCOME_HERO_BUCKET).createSignedUploadUrl(path, { upsert: false });
     if (error) throw error;
     return NextResponse.json({ path, token: data.token }, { headers: { "Cache-Control": "no-store" } });

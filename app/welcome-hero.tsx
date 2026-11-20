@@ -139,11 +139,11 @@ export default function WelcomeHero({
         key={slide.path}
         style={{
           "--welcome-slide-image": `url("${slide.url}")`,
-          "--welcome-slide-position": slide.desktopCropPath ? "50% 50%" : `${slide.focusX}% ${slide.focusY}%`,
+          "--welcome-slide-position": `${slide.focusX}% ${slide.focusY}%`,
           "--welcome-slide-scale": slide.scale / 100,
           "--welcome-slide-origin": `${slide.focusX}% ${slide.focusY}%`,
           "--welcome-mobile-slide-image": `url("${slide.mobileUrl ?? slide.url}")`,
-          "--welcome-mobile-slide-position": slide.mobileCropPath ? "50% 50%" : `${slide.mobileFocusX}% ${slide.mobileFocusY}%`,
+          "--welcome-mobile-slide-position": `${slide.mobileFocusX}% ${slide.mobileFocusY}%`,
           "--welcome-mobile-slide-scale": slide.mobileScale / 100,
           "--welcome-mobile-slide-origin": `${slide.mobileFocusX}% ${slide.mobileFocusY}%`,
         } as CSSProperties & Record<`--welcome-${string}`, string | number>}
