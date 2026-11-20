@@ -15,6 +15,30 @@ import {
 import WelcomeHero from "./welcome-hero";
 
 type DraftSlide = WelcomeHeroSlide & { file?: File; mobileFile?: File };
+type ImageDimensions = { width: number; height: number };
+
+const HERO_RESOLUTION_TARGETS = {
+  desktop: { width: 1920, height: 470 },
+  phone: { width: 430, height: 464 },
+} as const;
+
+function getImageResolutionNote(
+  dimensions: ImageDimensions,
+  device: keyof typeof HERO_RESOLUTION_TARGETS,
+  zoom: number,
+) {
+  const target = HERO_RESOLUTION_TARGETS[device];
+  const enlargement = Math.max(
+    target.width * zoom / 100 / dimensions.width,
+    target.height * zoom / 100 / dimensions.height,
+  );
+  const imageSize = `${dimensions.width} x ${dimensions.height} px`;
+  const heroSize = `${target.width} x ${target.height}`;
+  if (enlargement > 1.02) {
+    return `Source: ${imageSize}. At a standard ${heroSize} ${device} hero, it must enlarge to about ${Math.round(enlargement * 100)}% to fill and may look pixelated. Use a higher-resolution original.`;
+  }
+  return `Source: ${imageSize}. No enlargement expected at a standard ${heroSize} ${device} hero; larger originals look sharper on high-density screens.`;
+}
 
 function getPositionLabel(position: number, labels: [string, string, string]) {
   if (position === 0) return labels[0];
@@ -127,6 +151,7 @@ export default function AdminWelcomeHeroEditor({
   const [isPreparingImages, setIsPreparingImages] = useState(false);
   const [hasDraftChanges, setHasDraftChanges] = useState(false);
   const [message, setMessage] = useState("");
+  const [imageDimensions, setImageDimensions] = useState<Record<string, ImageDimensions>>({});
   const fileInput = useRef<HTMLInputElement>(null);
   const objectUrls = useRef(new Set<string>());
   const dirty = useRef(false);
@@ -145,6 +170,14 @@ export default function AdminWelcomeHeroEditor({
     setHasDraftChanges(true);
     setDraft((current) => ({ ...current, [key]: value }));
     setMessage("");
+  };
+  const rememberImageDimensions = (url: string, image: HTMLImageElement) => {
+    const dimensions = { width: image.naturalWidth, height: image.naturalHeight };
+    setImageDimensions((current) => {
+      const previous = current[url];
+      if (previous?.width === dimensions.width && previous.height === dimensions.height) return current;
+      return { ...current, [url]: dimensions };
+    });
   };
   const addImages = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -181,6 +214,37 @@ export default function AdminWelcomeHeroEditor({
     } finally {
       setIsPreparingImages(false);
       if (fileInput.current) fileInput.current.value = "";
+    }
+  };
+
+  const replaceDesktopImage = async (index: number, file: File | null) => {
+    if (!file) return;
+    setIsPreparingImages(true);
+    setMessage("");
+    try {
+      const prepared = prepareImage(file);
+      const url = URL.createObjectURL(prepared);
+      objectUrls.current.add(url);
+      const current = draft.slides[index] as DraftSlide | undefined;
+      if (!current) {
+        URL.revokeObjectURL(url);
+        objectUrls.current.delete(url);
+        return;
+      }
+      if (current.url && objectUrls.current.has(current.url)) {
+        URL.revokeObjectURL(current.url);
+        objectUrls.current.delete(current.url);
+      }
+      const updated: DraftSlide = { ...current, path: "", url, file: prepared };
+      const slides = [...draft.slides];
+      slides[index] = updated;
+      dirty.current = true;
+      setHasDraftChanges(true);
+      setDraft((saved) => ({ ...saved, slides }));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not prepare the selected desktop image.");
+    } finally {
+      setIsPreparingImages(false);
     }
   };
 
@@ -589,19 +653,44 @@ export default function AdminWelcomeHeroEditor({
 
     <div className="admin-welcome-hero-images">
       <div className="admin-queue-heading"><div><span>BACKGROUND IMAGES</span><h4>{draft.slides.length} of 3 desktop slides</h4></div></div>
-      <p className="admin-welcome-hero-image-note">Original quality is preserved. Use JPEG, PNG, WebP, or AVIF images up to 20 MB each.</p>
+      <p className="admin-welcome-hero-image-note">Uploads keep the original file. Full-width display can enlarge low-resolution images, which may look pixelated. Replace an image with a higher-resolution original and check the live preview; the size controls only zoom and crop, they cannot add detail.</p>
       {draft.slides.map((slide, index) => {
         const draftSlide = slide as DraftSlide;
         const hasMobileImage = Boolean(draftSlide.mobilePath || draftSlide.mobileFile);
+        const phoneImageUrl = hasMobileImage ? draftSlide.mobileUrl : slide.url;
+        const desktopDimensions = slide.url ? imageDimensions[slide.url] : undefined;
+        const phoneDimensions = phoneImageUrl ? imageDimensions[phoneImageUrl] : undefined;
+        const desktopResolutionNote = desktopDimensions
+          ? getImageResolutionNote(desktopDimensions, "desktop", slide.scale)
+          : null;
+        const phoneResolutionNote = phoneDimensions
+          ? getImageResolutionNote(phoneDimensions, "phone", slide.mobileScale)
+          : null;
         return <article className="admin-welcome-hero-image" key={slide.path || slide.url || index}>
-          {slide.url ? <Image src={slide.url} alt={`Desktop welcome hero background ${index + 1}`} width={360} height={180} unoptimized /> : <div className="admin-welcome-hero-image-empty">Desktop preview</div>}
+          {slide.url ? <Image src={slide.url} alt={`Desktop welcome hero background ${index + 1}`} width={360} height={180} unoptimized onLoad={(event) => rememberImageDimensions(slide.url!, event.currentTarget)} /> : <div className="admin-welcome-hero-image-empty">Desktop preview</div>}
           <div className="admin-welcome-hero-image-controls">
             <strong>Desktop image {index + 1}</strong>
+            {slide.url && <small className={`admin-welcome-hero-resolution${desktopResolutionNote?.includes("may look pixelated") ? " is-warning" : ""}`}>
+              {desktopResolutionNote ?? "Reading desktop image dimensions…"}
+            </small>}
             <div className="admin-welcome-hero-image-actions">
               <button type="button" aria-label={`Move image ${index + 1} up`} disabled={isPreparingImages || index === 0} onClick={() => moveSlide(index, -1)}><ArrowUp size={15} /></button>
               <button type="button" aria-label={`Move image ${index + 1} down`} disabled={isPreparingImages || index === draft.slides.length - 1} onClick={() => moveSlide(index, 1)}><ArrowDown size={15} /></button>
               <button type="button" aria-label={`Remove image ${index + 1}`} disabled={isPreparingImages} onClick={() => removeSlide(index)}><Trash2 size={15} /></button>
             </div>
+            <label className={`button button-outline admin-welcome-hero-upload${isPreparingImages ? " is-disabled" : ""}`}>
+              <FileUp size={14} aria-hidden="true" /> Replace desktop image
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                disabled={isPreparingImages}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0] ?? null;
+                  event.currentTarget.value = "";
+                  if (file) void replaceDesktopImage(index, file);
+                }}
+              />
+            </label>
             <label>Headline for image {index + 1}
               <input className="text-input" maxLength={100} value={slide.headline} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, headline: event.target.value } : current))} />
             </label>
@@ -614,17 +703,20 @@ export default function AdminWelcomeHeroEditor({
             <label>Desktop vertical focal point: {slide.focusY}%
               <input type="range" min={0} max={100} step={1} value={slide.focusY} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, focusY: Number(event.target.value) } : current))} />
             </label>
-            <label>Desktop image size: {slide.scale}%
+            <label>Desktop image zoom: {slide.scale}%
               <input type="range" min={70} max={160} step={1} value={slide.scale} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, scale: Number(event.target.value) } : current))} />
             </label>
             <div className="admin-welcome-hero-mobile-image">
               {hasMobileImage
                 ? draftSlide.mobileUrl
-                  ? <Image src={draftSlide.mobileUrl} alt={`Phone welcome hero background ${index + 1}`} width={80} height={100} unoptimized />
+                  ? <Image src={draftSlide.mobileUrl} alt={`Phone welcome hero background ${index + 1}`} width={80} height={100} unoptimized onLoad={(event) => rememberImageDimensions(draftSlide.mobileUrl!, event.currentTarget)} />
                   : <div className="admin-welcome-hero-mobile-image-empty">Phone preview</div>
                 : <div className="admin-welcome-hero-mobile-image-empty">Using desktop image</div>}
               <div className="admin-welcome-hero-mobile-image-controls">
                 <strong>Phone image</strong>
+                {phoneResolutionNote && <small className={`admin-welcome-hero-resolution${phoneResolutionNote.includes("may look pixelated") ? " is-warning" : ""}`}>
+                  {phoneResolutionNote}
+                </small>}
                 <label className={`button button-outline admin-welcome-hero-upload${isPreparingImages ? " is-disabled" : ""}`}>
                   <FileUp size={14} aria-hidden="true" /> {hasMobileImage ? "Replace phone image" : "Add phone image"}
                   <input
@@ -647,7 +739,7 @@ export default function AdminWelcomeHeroEditor({
             <label>Phone vertical focal point: {slide.mobileFocusY}%
               <input type="range" min={0} max={100} step={1} value={slide.mobileFocusY} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, mobileFocusY: Number(event.target.value) } : current))} />
             </label>
-            <label>Phone image size: {slide.mobileScale}%
+            <label>Phone image zoom: {slide.mobileScale}%
               <input type="range" min={70} max={160} step={1} value={slide.mobileScale} disabled={isPreparingImages} onChange={(event) => update("slides", draft.slides.map((current, slideIndex) => slideIndex === index ? { ...current, mobileScale: Number(event.target.value) } : current))} />
             </label>
           </div>

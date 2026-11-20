@@ -638,7 +638,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 }
 .market-welcome-copy { position: absolute; z-index: 1; inset: clamp(32px, 5vw, 68px); }
 .market-welcome-main-copy { position: absolute; left: var(--welcome-desktop-copy-x, 0%); top: var(--welcome-desktop-copy-y, 0%); width: max-content; max-width: 100%; min-width: 0; transform: translate(calc(0% - var(--welcome-desktop-copy-x, 0%)), calc(0% - var(--welcome-desktop-copy-y, 0%))); transition: left .2s ease, top .2s ease, transform .2s ease; }
-.market-welcome-phrase { position: relative; }
+.market-welcome-phrase { position: relative; filter: drop-shadow(0 1px 5px var(--welcome-text-shadow-color, rgba(17, 46, 38, .92))); }
 @keyframes welcome-phrase-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes welcome-phrase-slide { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes welcome-phrase-zoom { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
@@ -654,7 +654,6 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 @keyframes welcome-phrase-grow-turn { from { opacity: 0; transform: scale(.94) rotate(-3deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
 .market-welcome-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 20px; color: var(--welcome-accent-color, #d8c99e); font-size: 10px; font-weight: 750; letter-spacing: .19em; }
 .market-welcome-eyebrow > span { width: 22px; height: 1px; background: currentColor; }
-.market-welcome-eyebrow, .market-welcome-copy h1, .market-welcome-copy .market-welcome-phrase > p, .market-welcome-secondary-link { text-shadow: 0 1px 5px var(--welcome-text-shadow-color, rgba(17, 46, 38, .92)); }
 .market-welcome-copy h1 { max-width: min(100%, 580px); margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; overflow-wrap: anywhere; text-wrap: balance; }
 .market-welcome-copy .market-welcome-phrase > p { max-width: min(100%, 440px); margin: 21px 0 25px; color: var(--welcome-body-color, #d0ddd4); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; overflow-wrap: anywhere; }
 .market-welcome-actions { position: absolute; left: var(--welcome-desktop-actions-x, 0%); top: var(--welcome-desktop-actions-y, 85%); display: flex; width: max-content; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 10px; transform: translate(calc(0% - var(--welcome-desktop-actions-x, 0%)), calc(0% - var(--welcome-desktop-actions-y, 85%))); transition: left .2s ease, top .2s ease, transform .2s ease; }
@@ -806,6 +805,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-welcome-hero-image-empty { display: grid; place-items: center; color: #7a8677; font-size: 10px; }
 .admin-welcome-hero-image-controls { display: grid; align-content: start; gap: 8px; }
 .admin-welcome-hero-image-controls > strong { color: #405745; font-size: 10px; }
+.admin-welcome-hero-resolution { margin: -4px 0 0; color: #69766a; font-size: 8px; line-height: 1.45; }
+.admin-welcome-hero-resolution.is-warning { color: #9a4639; }
 .admin-welcome-hero-mobile-image { display: flex; align-items: flex-start; gap: 8px; margin-top: 3px; padding: 8px; border: 1px solid #e6ebe2; background: #fafbf9; }
 .admin-welcome-hero-mobile-image > img, .admin-welcome-hero-mobile-image-empty { width: 64px; height: 76px; flex: 0 0 64px; object-fit: cover; background: #edf1e9; }
 .admin-welcome-hero-mobile-image-empty { display: grid; place-items: center; padding: 5px; color: #7a8677; font-size: 8px; text-align: center; }
@@ -817,6 +818,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-welcome-hero-image-actions button { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid #dce4d8; background: #fff; color: #526452; cursor: pointer; }
 .admin-welcome-hero-image-actions button:disabled { opacity: .4; cursor: not-allowed; }
 .admin-welcome-hero-image-controls label { display: grid; gap: 4px; color: #69766a; font-size: 9px; }
+.admin-welcome-hero-image-controls label.admin-welcome-hero-upload { display: inline-flex; width: fit-content; align-items: center; gap: 6px; color: var(--ink); }
 .admin-welcome-hero-upload { justify-self: start; position: relative; cursor: pointer; }
 .admin-welcome-hero-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .admin-welcome-hero-upload.is-disabled { opacity: .6; }
