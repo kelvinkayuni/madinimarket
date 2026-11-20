@@ -49,20 +49,23 @@ function parseStaffRoleDetails(value: unknown): StaffRoleDetails[] {
   });
 }
 function getPublicHeaderStyle(settings: WelcomeHeroSettings | null): CSSProperties & Record<`--site-header-brand-${string}`, string | number> {
-  const scale = (settings?.publicHeaderScale ?? 100) / 100;
+  const desktopScale = (settings?.publicHeaderDesktopScale ?? 100) / 100;
+  const mobileScale = (settings?.publicHeaderMobileScale ?? 100) / 100;
   return {
-    "--site-header-brand-font-size": `${24 * scale}px`,
-    "--site-header-brand-icon-size": `${30 * scale}px`,
-    "--site-header-brand-gap": `${9 * scale}px`,
-    "--site-header-brand-tablet-font-size": `${21 * scale}px`,
-    "--site-header-brand-mobile-font-size": `${16 * scale}px`,
-    "--site-header-brand-mobile-icon-size": `${22 * scale}px`,
-    "--site-header-brand-mobile-gap": `${5 * scale}px`,
+    "--site-header-brand-font-size": `${24 * desktopScale}px`,
+    "--site-header-brand-icon-size": `${30 * desktopScale}px`,
+    "--site-header-brand-gap": `${9 * desktopScale}px`,
+    "--site-header-brand-tablet-font-size": `${21 * desktopScale}px`,
+    "--site-header-brand-mobile-font-size": `${16 * mobileScale}px`,
+    "--site-header-brand-mobile-icon-size": `${22 * mobileScale}px`,
+    "--site-header-brand-mobile-gap": `${5 * mobileScale}px`,
   };
 }
-function getPublicHeaderBrandPositionStyle(settings: WelcomeHeroSettings | null): CSSProperties {
-  const position = settings?.publicHeaderPosition ?? 0;
-  return { left: `${position}%`, transform: `translate(-${position}%, -50%)` };
+function getPublicHeaderBrandPositionStyle(settings: WelcomeHeroSettings | null): CSSProperties & Record<`--site-header-brand-${string}`, string | number> {
+  return {
+    "--site-header-brand-desktop-position": `${settings?.publicHeaderDesktopPosition ?? 0}%`,
+    "--site-header-brand-mobile-position": `${settings?.publicHeaderMobilePosition ?? 0}%`,
+  };
 }
 type CertificateSubmission = { id: string; kind: CertificateKind; status: CertificateStatus; review_message: string | null; file_name: string; signed_url: string; created_at: string };
 type AdminCertificate = CertificateSubmission & { website_user_id: string; account?: { username: string; display_name: string; email?: string } };

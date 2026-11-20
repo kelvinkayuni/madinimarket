@@ -549,7 +549,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .site-header .menu-trigger > svg, .admin-public-header-preview-menu > svg { transform: scale(.75); }
 .icon-button:hover, .round-control:hover { background: #eaf0e6; border-color: #b9c8b9; }
 .site-header-brand-track { position: relative; height: 100%; min-height: max(38px, var(--site-header-brand-icon-size, 30px)); min-width: 0; flex: 1 1 auto; }
-.site-header .wordmark { position: absolute; top: 50%; gap: var(--site-header-brand-gap, 9px); flex-shrink: 0; color: var(--ink); text-decoration: none; font-family: var(--font-display), Georgia, serif; font-size: var(--site-header-brand-font-size, 24px); font-weight: 700; white-space: nowrap; }
+.site-header .wordmark { position: absolute; top: 50%; left: var(--site-header-brand-desktop-position, 0%); transform: translate(calc(0% - var(--site-header-brand-desktop-position, 0%)), -50%); gap: var(--site-header-brand-gap, 9px); flex-shrink: 0; color: var(--ink); text-decoration: none; font-family: var(--font-display), Georgia, serif; font-size: var(--site-header-brand-font-size, 24px); font-weight: 700; white-space: nowrap; }
 .site-header .wordmark img { display: block; width: var(--site-header-brand-icon-size, 30px); height: var(--site-header-brand-icon-size, 30px); object-fit: contain; }
 .wordmark-market { color: #82917f; font-weight: 400; }
 .header-search { display: flex; align-items: center; gap: 11px; width: min(370px, 34vw); height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; background: #f7f8f4; color: #81877f; }
@@ -1539,7 +1539,7 @@ h1, h2, h3, p { margin-top: 0; }
   .header-left { order: 1; gap: 8px; }
   .site-header-brand-track { min-height: max(34px, var(--site-header-brand-mobile-icon-size, 22px)); }
   .icon-button { width: 34px; height: 34px; }
-  .site-header .wordmark { gap: var(--site-header-brand-mobile-gap, 5px); font-size: var(--site-header-brand-mobile-font-size, 16px); }
+  .site-header .wordmark { left: var(--site-header-brand-mobile-position, 0%); transform: translate(calc(0% - var(--site-header-brand-mobile-position, 0%)), -50%); gap: var(--site-header-brand-mobile-gap, 5px); font-size: var(--site-header-brand-mobile-font-size, 16px); }
   .site-header .wordmark img { width: var(--site-header-brand-mobile-icon-size, 22px); height: var(--site-header-brand-mobile-icon-size, 22px); }
   .header-actions { order: 2; }
   .market-intro-tools { order: 1; width: 105px; flex: 0 0 105px; justify-content: flex-end; }

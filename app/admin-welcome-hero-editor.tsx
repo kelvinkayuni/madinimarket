@@ -322,6 +322,8 @@ export default function AdminWelcomeHeroEditor({
     ...draft,
     slides: draft.slides.map((slide) => ({ ...slide, url: slide.url })),
   };
+  const publicHeaderPosition = previewMobile ? draft.publicHeaderMobilePosition : draft.publicHeaderDesktopPosition;
+  const publicHeaderScale = previewMobile ? draft.publicHeaderMobileScale : draft.publicHeaderDesktopScale;
   const statusText = message || (hasDraftChanges ? "Unsaved changes" : "Changes are saved");
 
   return <section className="admin-welcome-hero-editor" aria-labelledby="admin-welcome-hero-heading">
@@ -373,16 +375,16 @@ export default function AdminWelcomeHeroEditor({
           className={`admin-public-header-preview${previewMobile ? " is-mobile" : ""}`}
           aria-label="Public marketplace header live preview"
           style={{
-            "--admin-header-preview-font-size": `${(previewMobile ? 16 : 24) * draft.publicHeaderScale / 100}px`,
-            "--admin-header-preview-icon-size": `${(previewMobile ? 22 : 30) * draft.publicHeaderScale / 100}px`,
-            "--admin-header-preview-gap": `${(previewMobile ? 5 : 9) * draft.publicHeaderScale / 100}px`,
+            "--admin-header-preview-font-size": `${(previewMobile ? 16 : 24) * publicHeaderScale / 100}px`,
+            "--admin-header-preview-icon-size": `${(previewMobile ? 22 : 30) * publicHeaderScale / 100}px`,
+            "--admin-header-preview-gap": `${(previewMobile ? 5 : 9) * publicHeaderScale / 100}px`,
           } as CSSProperties & Record<`--admin-header-preview-${string}`, string>}
         >
           <div className="admin-public-header-preview-menu" aria-hidden="true"><Menu size={previewMobile ? 20 : 22} /></div>
           <div className="admin-public-header-preview-track">
             <div className="admin-public-header-preview-brand" style={{
-              left: `${draft.publicHeaderPosition}%`,
-              transform: `translate(-${draft.publicHeaderPosition}%, -50%)`,
+              left: `${publicHeaderPosition}%`,
+              transform: `translate(-${publicHeaderPosition}%, -50%)`,
             }}>
               <Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} />
               <span>madini<span className="wordmark-market">market</span></span>
@@ -390,14 +392,14 @@ export default function AdminWelcomeHeroEditor({
           </div>
         </div>
         <label className="field-label admin-welcome-hero-range">
-          Horizontal position: {draft.publicHeaderPosition === 0 ? "Current" : draft.publicHeaderPosition === 50 ? "Middle" : draft.publicHeaderPosition === 100 ? "Right" : `${draft.publicHeaderPosition}% right`}
-          <input aria-label="Public header horizontal position" type="range" min={0} max={100} step={1} value={draft.publicHeaderPosition} onChange={(event) => update("publicHeaderPosition", Number(event.target.value))} />
-          <span className="admin-welcome-hero-range-labels"><span>Current</span><span>Middle</span><span>Right</span></span>
+          Horizontal position ({previewMobile ? "phone" : "desktop"}): {publicHeaderPosition === 0 ? "Default" : publicHeaderPosition === 50 ? "Middle" : publicHeaderPosition === 100 ? "Right" : `${publicHeaderPosition}% right`}
+          <input aria-label={`Public header horizontal position (${previewMobile ? "phone" : "desktop"})`} type="range" min={0} max={100} step={1} value={publicHeaderPosition} onChange={(event) => update(previewMobile ? "publicHeaderMobilePosition" : "publicHeaderDesktopPosition", Number(event.target.value))} />
+          <span className="admin-welcome-hero-range-labels"><span>Default</span><span>Middle</span><span>Right</span></span>
         </label>
         <label className="field-label admin-welcome-hero-range">
-          Logo and text size: {Math.round(24 * draft.publicHeaderScale / 100)}px (maximum 72px on desktop)
-          <input aria-label="Public header logo and text size" type="range" min={70} max={300} step={1} value={draft.publicHeaderScale} onChange={(event) => update("publicHeaderScale", Number(event.target.value))} />
-          <span className="admin-welcome-hero-range-labels"><span>Smaller</span><span>Current</span><span>Larger</span></span>
+          Logo and text size ({previewMobile ? "phone" : "desktop"}): {publicHeaderScale}% of default size
+          <input aria-label={`Public header logo and text size (${previewMobile ? "phone" : "desktop"} percentage of default)`} type="range" min={70} max={300} step={1} value={publicHeaderScale} onChange={(event) => update(previewMobile ? "publicHeaderMobileScale" : "publicHeaderDesktopScale", Number(event.target.value))} />
+          <span className="admin-welcome-hero-range-labels"><span>70%</span><span>Default · 100%</span><span>300%</span></span>
         </label>
       </fieldset>
       <label className="field-label">Hero height

@@ -73,8 +73,10 @@ export type WelcomeHeroSettings = {
   desktopLinksVerticalPosition: number;
   mobileLinksHorizontalPosition: number;
   mobileLinksVerticalPosition: number;
-  publicHeaderPosition: number;
-  publicHeaderScale: number;
+  publicHeaderDesktopPosition: number;
+  publicHeaderMobilePosition: number;
+  publicHeaderDesktopScale: number;
+  publicHeaderMobileScale: number;
   slides: WelcomeHeroSlide[];
 };
 
@@ -108,13 +110,25 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const mobileLinksHorizontalPosition = settings.mobileLinksHorizontalPosition === undefined ? 0 : settings.mobileLinksHorizontalPosition;
   const mobileLinksVerticalPosition = settings.mobileLinksVerticalPosition === undefined ? 100 : settings.mobileLinksVerticalPosition;
   const legacyPublicHeaderPosition = settings.publicHeaderHorizontalPosition;
-  const publicHeaderPosition = settings.publicHeaderPosition === undefined
+  const sharedPublicHeaderPosition = settings.publicHeaderPosition === undefined
     ? typeof legacyPublicHeaderPosition === "number" && Number.isSafeInteger(legacyPublicHeaderPosition) &&
       legacyPublicHeaderPosition >= 50 && legacyPublicHeaderPosition <= 100
       ? (legacyPublicHeaderPosition - 50) * 2
       : 0
     : settings.publicHeaderPosition;
-  const publicHeaderScale = settings.publicHeaderScale === undefined ? 100 : settings.publicHeaderScale;
+  const sharedPublicHeaderScale = settings.publicHeaderScale === undefined ? 100 : settings.publicHeaderScale;
+  const publicHeaderDesktopPosition = settings.publicHeaderDesktopPosition === undefined
+    ? sharedPublicHeaderPosition
+    : settings.publicHeaderDesktopPosition;
+  const publicHeaderMobilePosition = settings.publicHeaderMobilePosition === undefined
+    ? sharedPublicHeaderPosition
+    : settings.publicHeaderMobilePosition;
+  const publicHeaderDesktopScale = settings.publicHeaderDesktopScale === undefined
+    ? sharedPublicHeaderScale
+    : settings.publicHeaderDesktopScale;
+  const publicHeaderMobileScale = settings.publicHeaderMobileScale === undefined
+    ? sharedPublicHeaderScale
+    : settings.publicHeaderMobileScale;
   const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
   const requestButtonTextColor = settings.requestButtonTextColor === undefined ? "#18382e" : settings.requestButtonTextColor;
   const exploreLinkLabel = settings.exploreLinkLabel === undefined ? "" : settings.exploreLinkLabel;
@@ -193,9 +207,11 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isIntegerValueInRange(desktopLinksVerticalPosition, 0, 100) ||
     !isIntegerValueInRange(mobileLinksHorizontalPosition, 0, 100) ||
     !isIntegerValueInRange(mobileLinksVerticalPosition, 0, 100) ||
-    !isIntegerValueInRange(publicHeaderPosition, 0, 100) ||
+    !isIntegerValueInRange(publicHeaderDesktopPosition, 0, 100) ||
+    !isIntegerValueInRange(publicHeaderMobilePosition, 0, 100) ||
     (legacyPublicHeaderPosition !== undefined && !isIntegerValueInRange(legacyPublicHeaderPosition, 0, 100)) ||
-    !isIntegerValueInRange(publicHeaderScale, 70, 300) ||
+    !isIntegerValueInRange(publicHeaderDesktopScale, 70, 300) ||
+    !isIntegerValueInRange(publicHeaderMobileScale, 70, 300) ||
     !isTransition(transition) ||
     !isSlideInterval(slideIntervalSeconds) ||
     !isTransitionDuration(transitionDurationMs) ||
@@ -286,8 +302,10 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     desktopLinksVerticalPosition: desktopLinksVerticalPosition as number,
     mobileLinksHorizontalPosition: mobileLinksHorizontalPosition as number,
     mobileLinksVerticalPosition: mobileLinksVerticalPosition as number,
-    publicHeaderPosition: publicHeaderPosition as number,
-    publicHeaderScale: publicHeaderScale as number,
+    publicHeaderDesktopPosition: publicHeaderDesktopPosition as number,
+    publicHeaderMobilePosition: publicHeaderMobilePosition as number,
+    publicHeaderDesktopScale: publicHeaderDesktopScale as number,
+    publicHeaderMobileScale: publicHeaderMobileScale as number,
     slides,
   };
 }
