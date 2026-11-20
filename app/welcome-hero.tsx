@@ -51,6 +51,7 @@ export default function WelcomeHero({
   const style = {
     "--welcome-background-color": settings.backgroundColor,
     "--welcome-text-shadow-color": getTextShadowColor(settings.overlayColor, settings.overlayOpacity),
+    "--welcome-text-shadow-highlight-color": getTextShadowColor("#ffffff", settings.overlayOpacity * 0.5),
     "--welcome-heading-color": settings.headingColor,
     "--welcome-body-color": settings.bodyColor,
     "--welcome-accent-color": settings.accentColor,

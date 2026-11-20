@@ -638,7 +638,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 }
 .market-welcome-copy { position: absolute; z-index: 1; inset: clamp(32px, 5vw, 68px); }
 .market-welcome-main-copy { position: absolute; left: var(--welcome-desktop-copy-x, 0%); top: var(--welcome-desktop-copy-y, 0%); width: max-content; max-width: 100%; min-width: 0; transform: translate(calc(0% - var(--welcome-desktop-copy-x, 0%)), calc(0% - var(--welcome-desktop-copy-y, 0%))); transition: left .2s ease, top .2s ease, transform .2s ease; }
-.market-welcome-phrase { position: relative; filter: drop-shadow(0 1px 5px var(--welcome-text-shadow-color, rgba(17, 46, 38, .92))); }
+.market-welcome-phrase, .market-welcome-secondary-links { filter: drop-shadow(0 1px 5px var(--welcome-text-shadow-color, rgba(17, 46, 38, .92))) drop-shadow(0 0 2px var(--welcome-text-shadow-highlight-color, rgba(255, 255, 255, .46))); }
 @keyframes welcome-phrase-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes welcome-phrase-slide { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes welcome-phrase-zoom { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
