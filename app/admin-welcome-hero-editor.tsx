@@ -50,6 +50,37 @@ function HeroPositionControls({
   </fieldset>;
 }
 
+function PublicHeaderPreview({ label, mobile, position, scale }: {
+  label: string;
+  mobile: boolean;
+  position: number;
+  scale: number;
+}) {
+  return <div className="admin-public-header-device-preview">
+    <strong>{label}</strong>
+    <div
+      className={`admin-public-header-preview${mobile ? " is-mobile" : ""}`}
+      aria-label={`${label} public marketplace header preview`}
+      style={{
+        "--admin-header-preview-font-size": `${(mobile ? 16 : 24) * scale / 100}px`,
+        "--admin-header-preview-icon-size": `${(mobile ? 22 : 30) * scale / 100}px`,
+        "--admin-header-preview-gap": `${(mobile ? 5 : 9) * scale / 100}px`,
+      } as CSSProperties & Record<`--admin-header-preview-${string}`, string>}
+    >
+      <div className="admin-public-header-preview-menu" aria-hidden="true"><Menu size={mobile ? 20 : 22} /></div>
+      <div className="admin-public-header-preview-track">
+        <div className="admin-public-header-preview-brand" style={{
+          left: `${position}%`,
+          transform: `translate(-${position}%, -50%)`,
+        }}>
+          <Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} />
+          <span>madini<span className="wordmark-market">market</span></span>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
 function optimizeImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/") || file.size > 20_000_000) {
     throw new Error("Choose image files smaller than 20 MB.");
@@ -322,8 +353,6 @@ export default function AdminWelcomeHeroEditor({
     ...draft,
     slides: draft.slides.map((slide) => ({ ...slide, url: slide.url })),
   };
-  const publicHeaderPosition = previewMobile ? draft.publicHeaderMobilePosition : draft.publicHeaderDesktopPosition;
-  const publicHeaderScale = previewMobile ? draft.publicHeaderMobileScale : draft.publicHeaderDesktopScale;
   const statusText = message || (hasDraftChanges ? "Unsaved changes" : "Changes are saved");
 
   return <section className="admin-welcome-hero-editor" aria-labelledby="admin-welcome-hero-heading">
@@ -366,41 +395,39 @@ export default function AdminWelcomeHeroEditor({
       <label className="field-label">Buyer browse link label<input className="text-input" maxLength={80} value={draft.buyerBrowseLinkLabel} onChange={(event) => update("buyerBrowseLinkLabel", event.target.value)} /></label>
       <fieldset className="admin-welcome-hero-position-control admin-welcome-header-control">
         <legend>Public marketplace header</legend>
-        <p>Changes the public logo only. Admin and staff headers stay the same.</p>
-        <div className="admin-public-header-preview-heading">
-          <strong>Live header preview</strong>
-          <span>Changes appear as you adjust position and size.</span>
+        <p>Desktop and phone header settings are independent. Admin and staff headers stay the same.</p>
+        <div className="admin-public-header-previews">
+          <PublicHeaderPreview label="Desktop preview" mobile={false} position={draft.publicHeaderDesktopPosition} scale={draft.publicHeaderDesktopScale} />
+          <PublicHeaderPreview label="Phone preview" mobile position={draft.publicHeaderMobilePosition} scale={draft.publicHeaderMobileScale} />
         </div>
-        <div
-          className={`admin-public-header-preview${previewMobile ? " is-mobile" : ""}`}
-          aria-label="Public marketplace header live preview"
-          style={{
-            "--admin-header-preview-font-size": `${(previewMobile ? 16 : 24) * publicHeaderScale / 100}px`,
-            "--admin-header-preview-icon-size": `${(previewMobile ? 22 : 30) * publicHeaderScale / 100}px`,
-            "--admin-header-preview-gap": `${(previewMobile ? 5 : 9) * publicHeaderScale / 100}px`,
-          } as CSSProperties & Record<`--admin-header-preview-${string}`, string>}
-        >
-          <div className="admin-public-header-preview-menu" aria-hidden="true"><Menu size={previewMobile ? 20 : 22} /></div>
-          <div className="admin-public-header-preview-track">
-            <div className="admin-public-header-preview-brand" style={{
-              left: `${publicHeaderPosition}%`,
-              transform: `translate(-${publicHeaderPosition}%, -50%)`,
-            }}>
-              <Image src="/madinimarket-logo.png" alt="" width={1254} height={1254} />
-              <span>madini<span className="wordmark-market">market</span></span>
-            </div>
-          </div>
+        <div className="admin-public-header-settings">
+          <fieldset className="admin-welcome-hero-position-control">
+            <legend>Desktop settings</legend>
+            <label className="field-label admin-welcome-hero-range">
+              Horizontal position: {draft.publicHeaderDesktopPosition === 0 ? "Default" : draft.publicHeaderDesktopPosition === 50 ? "Middle" : draft.publicHeaderDesktopPosition === 100 ? "Right" : `${draft.publicHeaderDesktopPosition}% right`}
+              <input aria-label="Desktop public header horizontal position" type="range" min={0} max={100} step={1} value={draft.publicHeaderDesktopPosition} onChange={(event) => update("publicHeaderDesktopPosition", Number(event.target.value))} />
+              <span className="admin-welcome-hero-range-labels"><span>Default</span><span>Middle</span><span>Right</span></span>
+            </label>
+            <label className="field-label admin-welcome-hero-range">
+              Logo and text size: {draft.publicHeaderDesktopScale}% of default size
+              <input aria-label="Desktop public header logo and text size" type="range" min={70} max={300} step={1} value={draft.publicHeaderDesktopScale} onChange={(event) => update("publicHeaderDesktopScale", Number(event.target.value))} />
+              <span className="admin-welcome-hero-range-labels"><span>70%</span><span>Default · 100%</span><span>300%</span></span>
+            </label>
+          </fieldset>
+          <fieldset className="admin-welcome-hero-position-control">
+            <legend>Phone settings</legend>
+            <label className="field-label admin-welcome-hero-range">
+              Horizontal position: {draft.publicHeaderMobilePosition === 0 ? "Default" : draft.publicHeaderMobilePosition === 50 ? "Middle" : draft.publicHeaderMobilePosition === 100 ? "Right" : `${draft.publicHeaderMobilePosition}% right`}
+              <input aria-label="Phone public header horizontal position" type="range" min={0} max={100} step={1} value={draft.publicHeaderMobilePosition} onChange={(event) => update("publicHeaderMobilePosition", Number(event.target.value))} />
+              <span className="admin-welcome-hero-range-labels"><span>Default</span><span>Middle</span><span>Right</span></span>
+            </label>
+            <label className="field-label admin-welcome-hero-range">
+              Logo and text size: {draft.publicHeaderMobileScale}% of default size
+              <input aria-label="Phone public header logo and text size" type="range" min={70} max={300} step={1} value={draft.publicHeaderMobileScale} onChange={(event) => update("publicHeaderMobileScale", Number(event.target.value))} />
+              <span className="admin-welcome-hero-range-labels"><span>70%</span><span>Default · 100%</span><span>300%</span></span>
+            </label>
+          </fieldset>
         </div>
-        <label className="field-label admin-welcome-hero-range">
-          Horizontal position ({previewMobile ? "phone" : "desktop"}): {publicHeaderPosition === 0 ? "Default" : publicHeaderPosition === 50 ? "Middle" : publicHeaderPosition === 100 ? "Right" : `${publicHeaderPosition}% right`}
-          <input aria-label={`Public header horizontal position (${previewMobile ? "phone" : "desktop"})`} type="range" min={0} max={100} step={1} value={publicHeaderPosition} onChange={(event) => update(previewMobile ? "publicHeaderMobilePosition" : "publicHeaderDesktopPosition", Number(event.target.value))} />
-          <span className="admin-welcome-hero-range-labels"><span>Default</span><span>Middle</span><span>Right</span></span>
-        </label>
-        <label className="field-label admin-welcome-hero-range">
-          Logo and text size ({previewMobile ? "phone" : "desktop"}): {publicHeaderScale}% of default size
-          <input aria-label={`Public header logo and text size (${previewMobile ? "phone" : "desktop"} percentage of default)`} type="range" min={70} max={300} step={1} value={publicHeaderScale} onChange={(event) => update(previewMobile ? "publicHeaderMobileScale" : "publicHeaderDesktopScale", Number(event.target.value))} />
-          <span className="admin-welcome-hero-range-labels"><span>70%</span><span>Default · 100%</span><span>300%</span></span>
-        </label>
       </fieldset>
       <label className="field-label">Hero height
         <select className="text-input" value={draft.heightMode} onChange={(event) => update("heightMode", event.target.value as WelcomeHeroSettings["heightMode"])}>

@@ -655,7 +655,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-copy h1 { max-width: min(100%, 580px); margin: 0; color: var(--welcome-heading-color, #fffdf6); font-family: var(--welcome-font-family, var(--font-display)), Georgia, serif; font-size: clamp(40px, 5.3vw, var(--welcome-desktop-font-size, 72px)); font-weight: var(--welcome-font-weight, 500); letter-spacing: -.035em; line-height: .99; overflow-wrap: anywhere; text-wrap: balance; }
 .market-welcome-copy .market-welcome-phrase > p { max-width: min(100%, 440px); margin: 21px 0 25px; color: var(--welcome-body-color, #d0ddd4); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.75; overflow-wrap: anywhere; }
 .market-welcome-actions { position: absolute; left: var(--welcome-desktop-actions-x, 0%); top: var(--welcome-desktop-actions-y, 85%); display: flex; width: max-content; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 10px; transform: translate(calc(0% - var(--welcome-desktop-actions-x, 0%)), calc(0% - var(--welcome-desktop-actions-y, 85%))); transition: left .2s ease, top .2s ease, transform .2s ease; }
-.market-welcome-actions .button { min-height: 23px; gap: 4px; padding: 0 8.5px; font-size: 12px; }
+.market-welcome-actions .button { min-height: 34.5px; gap: 6px; padding: 0 12.75px; font-size: 12px; }
 .market-welcome-actions .button-lime { border-color: var(--welcome-button-color, #d2ee77); background: var(--welcome-button-color, #d2ee77); color: var(--welcome-button-text-color, #18382e); }
 .market-welcome-post-button { border-color: var(--welcome-request-button-color, #f2ecdc); background: var(--welcome-request-button-color, #f2ecdc); color: var(--welcome-request-button-text-color, #18382e); }
 .market-welcome-post-button:hover { filter: brightness(.92); }
@@ -702,9 +702,9 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-welcome-hero-preview-heading button.is-active { background: #e8efe3; color: #355641; font-weight: 700; }
 .admin-welcome-hero-preview { width: 100%; }
 .admin-welcome-hero-preview.is-mobile { width: min(100%, 390px); justify-self: center; }
-.admin-public-header-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.admin-public-header-preview-heading strong { color: #405745; font-size: 11px; }
-.admin-public-header-preview-heading span { color: #778075; font-size: 9px; }
+.admin-public-header-previews, .admin-public-header-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.admin-public-header-device-preview { min-width: 0; display: grid; gap: 6px; }
+.admin-public-header-device-preview > strong { color: #405745; font-size: 10px; }
 .admin-public-header-preview { width: 100%; height: 76px; display: flex; align-items: center; gap: 20px; padding: 0 24px; overflow: hidden; border: 1px solid var(--line); background: #fcfcf9; }
 .admin-public-header-preview-menu { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: #27382f; }
 .admin-public-header-preview-track { position: relative; height: 100%; min-height: max(38px, var(--admin-header-preview-icon-size, 30px)); min-width: 0; flex: 1 1 auto; }
@@ -1520,10 +1520,10 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-homepage-panel .admin-welcome-hero-preview-heading {
     flex-wrap: wrap;
   }
-  .admin-public-header-preview-heading,
   .admin-marketplace-card-editor-heading,
   .admin-marketplace-card-preview-heading,
   .admin-marketplace-card-actions { align-items: flex-start; flex-direction: column; }
+  .admin-public-header-previews, .admin-public-header-settings { grid-template-columns: minmax(0, 1fr); }
   .admin-public-header-preview { gap: 8px; padding: 0 12px; }
   .admin-public-header-preview.is-mobile { padding: 0 10px; }
   .admin-marketplace-card-tabs { width: 100%; }
@@ -1561,7 +1561,7 @@ h1, h2, h3, p { margin-top: 0; }
   .market-welcome-copy .market-welcome-phrase > p { max-width: min(100%, 410px); margin: 14px 0 19px; font-size: 13px; line-height: 1.6; }
   .market-welcome-main-copy { left: var(--welcome-mobile-copy-x, 0%); top: var(--welcome-mobile-copy-y, 0%); transform: translate(calc(0% - var(--welcome-mobile-copy-x, 0%)), calc(0% - var(--welcome-mobile-copy-y, 0%))); }
   .market-welcome-actions { left: var(--welcome-mobile-actions-x, 0%); top: var(--welcome-mobile-actions-y, 85%); max-width: min(100%, 290px); align-items: stretch; flex-direction: column; gap: 8px; transform: translate(calc(0% - var(--welcome-mobile-actions-x, 0%)), calc(0% - var(--welcome-mobile-actions-y, 85%))); }
-  .market-welcome-actions .button { min-height: 21.5px; }
+  .market-welcome-actions .button { min-height: 32.25px; }
   .market-welcome-secondary-links { left: var(--welcome-mobile-links-x, 0%); top: var(--welcome-mobile-links-y, 100%); gap: 6px 12px; transform: translate(calc(0% - var(--welcome-mobile-links-x, 0%)), calc(0% - var(--welcome-mobile-links-y, 100%))); }
   .market-welcome-secondary-link { font-size: 10px; }
   .market-welcome-status { right: 12px; bottom: 12px; padding: 8px 10px; font-size: 9px; }
