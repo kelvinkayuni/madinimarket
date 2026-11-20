@@ -1,6 +1,36 @@
 export const WELCOME_HERO_BUCKET = "homepage-hero";
-export const WELCOME_HERO_MAX_IMAGE_BYTES = 1_200_000;
-export const WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES = 3_600_000;
+export const WELCOME_HERO_MAX_IMAGE_BYTES = 20_000_000;
+export const WELCOME_HERO_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"] as const;
+export type WelcomeHeroImageMimeType = typeof WELCOME_HERO_IMAGE_MIME_TYPES[number];
+export const WELCOME_HERO_IMAGE_EXTENSION_BY_MIME: Record<WelcomeHeroImageMimeType, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/avif": "avif",
+};
+export const WELCOME_HERO_IMAGE_PATH_PATTERN = /^homepage-hero\/(?:original\/)?[0-9a-f-]{36}\.(?:jpe?g|png|webp|avif)$/i;
+export const WELCOME_HERO_ORIGINAL_IMAGE_PATH_PATTERN = /^homepage-hero\/original\/[0-9a-f-]{36}\.(?:jpe?g|png|webp|avif)$/i;
+
+export function isWelcomeHeroImageMimeType(value: unknown): value is WelcomeHeroImageMimeType {
+  return typeof value === "string" && WELCOME_HERO_IMAGE_MIME_TYPES.some((mimeType) => mimeType === value);
+}
+
+export function getWelcomeHeroImageMimeType(path: string): WelcomeHeroImageMimeType | null {
+  const extension = path.match(/\.([^.]+)$/)?.[1]?.toLowerCase();
+  switch (extension) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    case "avif":
+      return "image/avif";
+    default:
+      return null;
+  }
+}
 
 export type WelcomeHeroFontFamily = "serif" | "sans";
 export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
@@ -235,7 +265,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     const description = slide.description === undefined ? settings.description : slide.description;
     const mobilePath = slide.mobilePath;
     if (typeof slide.path !== "string" ||
-      !/^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(slide.path) ||
+      !WELCOME_HERO_IMAGE_PATH_PATTERN.test(slide.path) ||
       typeof headline !== "string" || (!allowEmptyCopy && headline.trim().length === 0) || headline.length > 100 ||
       typeof description !== "string" || (!allowEmptyCopy && description.trim().length === 0) || description.length > 320 ||
       typeof slide.focusX !== "number" || !Number.isSafeInteger(slide.focusX) || slide.focusX < 0 || slide.focusX > 100 ||
@@ -244,7 +274,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
       typeof mobileFocusX !== "number" || !Number.isSafeInteger(mobileFocusX) || mobileFocusX < 0 || mobileFocusX > 100 ||
       typeof mobileFocusY !== "number" || !Number.isSafeInteger(mobileFocusY) || mobileFocusY < 0 || mobileFocusY > 100 ||
       typeof mobileScale !== "number" || !Number.isSafeInteger(mobileScale) || mobileScale < 70 || mobileScale > 160 ||
-      (mobilePath !== undefined && (typeof mobilePath !== "string" || !/^homepage-hero\/[0-9a-f-]{36}\.jpg$/i.test(mobilePath)))) {
+      (mobilePath !== undefined && (typeof mobilePath !== "string" || !WELCOME_HERO_IMAGE_PATH_PATTERN.test(mobilePath)))) {
       return null;
     }
     if (paths.has(slide.path) || (typeof mobilePath === "string" && paths.has(mobilePath))) return null;

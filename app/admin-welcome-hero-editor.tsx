@@ -6,8 +6,9 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import {
+  WELCOME_HERO_BUCKET,
   WELCOME_HERO_MAX_IMAGE_BYTES,
-  WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES,
+  isWelcomeHeroImageMimeType,
   type WelcomeHeroSettings,
   type WelcomeHeroSlide,
 } from "@/lib/welcome-hero";
@@ -81,38 +82,25 @@ function PublicHeaderPreview({ label, mobile, position, scale }: {
   </div>;
 }
 
-function optimizeImage(file: File): Promise<File> {
-  if (!file.type.startsWith("image/") || file.size > 20_000_000) {
-    throw new Error("Choose image files smaller than 20 MB.");
+function prepareImage(file: File): File {
+  if (!isWelcomeHeroImageMimeType(file.type) || file.size < 1 || file.size > WELCOME_HERO_MAX_IMAGE_BYTES) {
+    throw new Error("Choose a JPEG, PNG, WebP, or AVIF image up to 20 MB.");
   }
-  return createImageBitmap(file).then((bitmap) => {
-    const scale = Math.min(1, 2200 / bitmap.width, 2200 / bitmap.height);
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext("2d");
-    if (!context) {
-      bitmap.close();
-      throw new Error("Could not prepare that image for upload.");
-    }
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
+  return file;
+}
 
-    const encode = (quality: number) => new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not prepare that image for upload.")), "image/jpeg", quality);
-    });
-    const compress = async () => {
-      let quality = 0.88;
-      let blob = await encode(quality);
-      while (blob.size > WELCOME_HERO_MAX_IMAGE_BYTES && quality > 0.42) {
-        quality -= 0.1;
-        blob = await encode(quality);
-      }
-      if (blob.size > WELCOME_HERO_MAX_IMAGE_BYTES) throw new Error(`${file.name} is too large to optimize. Choose a smaller image.`);
-      return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "hero-image"}.jpg`, { type: "image/jpeg" });
-    };
-    return compress();
+async function removeUploadedHeroImages(paths: string[], accessToken: string) {
+  if (!paths.length) return;
+  const response = await fetch("/api/admin/welcome-hero/upload", {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ paths }),
   });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not remove unused hero image uploads.");
 }
 
 function copySettings(settings: WelcomeHeroSettings): WelcomeHeroSettings {
@@ -167,7 +155,7 @@ export default function AdminWelcomeHeroEditor({
     setIsPreparingImages(true);
     setMessage("");
     try {
-      const prepared = await Promise.all(Array.from(files).map(optimizeImage));
+      const prepared = Array.from(files).map(prepareImage);
       const slides: DraftSlide[] = prepared.map((file) => {
         const url = URL.createObjectURL(file);
         objectUrls.current.add(url);
@@ -201,7 +189,7 @@ export default function AdminWelcomeHeroEditor({
     setIsPreparingImages(true);
     setMessage("");
     try {
-      const prepared = await optimizeImage(file);
+      const prepared = prepareImage(file);
       const url = URL.createObjectURL(prepared);
       objectUrls.current.add(url);
       const current = draft.slides[index] as DraftSlide | undefined;
@@ -279,31 +267,56 @@ export default function AdminWelcomeHeroEditor({
       setMessage("Add a headline and description for each background image before saving.");
       return;
     }
-    const newImageBytes = draft.slides.reduce((total, slide) => {
-      const draftSlide = slide as DraftSlide;
-      return total + (draftSlide.file?.size ?? 0) + (draftSlide.mobileFile?.size ?? 0);
-    }, 0);
-    if (newImageBytes > WELCOME_HERO_MAX_TOTAL_IMAGE_BYTES) {
-      setMessage("New image uploads must total 3.6 MB or less. Save them in smaller batches.");
-      return;
-    }
     setIsSaving(true);
     setMessage("");
+    const uploadedPaths: string[] = [];
+    let accessToken: string | null = null;
+    let saveRequestStarted = false;
     try {
-      const form = new FormData();
-      const slides = draft.slides.map((slide, index) => {
+      const supabase = getSupabaseBrowserClient();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error("Admin session expired. Sign in again to save.");
+      accessToken = session.access_token;
+
+      const uploadImage = async (file: File) => {
+        const uploadResponse = await fetch("/api/admin/welcome-hero/upload", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ contentType: file.type, size: file.size }),
+        });
+        const ticket: unknown = await uploadResponse.json();
+        const ticketRecord = typeof ticket === "object" && ticket !== null && !Array.isArray(ticket)
+          ? ticket as Record<string, unknown>
+          : null;
+        const path = ticketRecord?.path;
+        const token = ticketRecord?.token;
+        if (!uploadResponse.ok || typeof path !== "string" || typeof token !== "string") {
+          const errorMessage = ticketRecord?.error;
+          throw new Error(typeof errorMessage === "string" ? errorMessage : "Could not prepare the original hero image for upload.");
+        }
+        uploadedPaths.push(path);
+        const { error } = await supabase.storage.from(WELCOME_HERO_BUCKET).uploadToSignedUrl(
+          path,
+          token,
+          file,
+          { cacheControl: "31536000", contentType: file.type },
+        );
+        if (error) throw error;
+        return path;
+      };
+
+      const slides: WelcomeHeroSlide[] = [];
+      for (const slide of draft.slides) {
         const draftSlide = slide as DraftSlide;
-        if (draftSlide.file) {
-          form.append(`image-${index}`, draftSlide.file);
-        }
-        if (draftSlide.mobileFile) {
-          form.append(`mobile-image-${index}`, draftSlide.mobileFile);
-        }
-        return {
-          ...(draftSlide.file ? { uploadIndex: index } : { path: slide.path }),
-          ...(draftSlide.mobileFile
-            ? { mobileUploadIndex: index }
-            : slide.mobilePath ? { mobilePath: slide.mobilePath } : {}),
+        const path = draftSlide.file ? await uploadImage(draftSlide.file) : slide.path;
+        const mobilePath = draftSlide.mobileFile ? await uploadImage(draftSlide.mobileFile) : slide.mobilePath;
+        slides.push({
+          path,
+          ...(mobilePath ? { mobilePath } : {}),
           headline: slide.headline,
           description: slide.description,
           focusX: slide.focusX,
@@ -312,28 +325,40 @@ export default function AdminWelcomeHeroEditor({
           mobileFocusX: slide.mobileFocusX,
           mobileFocusY: slide.mobileFocusY,
           mobileScale: slide.mobileScale,
-        };
-      });
+        });
+      }
       const firstSlide = draft.slides[0];
-      form.append("settings", JSON.stringify({
+      const settings = {
         ...draft,
         headline: firstSlide?.headline ?? draft.headline,
         description: firstSlide?.description ?? draft.description,
         slides,
-      }));
-      const { data: { session }, error: sessionError } = await getSupabaseBrowserClient().auth.getSession();
-      if (sessionError) throw sessionError;
-      if (!session) throw new Error("Admin session expired. Sign in again to save.");
+      };
+      saveRequestStarted = true;
       const response = await fetch("/api/admin/welcome-hero", {
         method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: form,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settings),
       });
       const result = await response.json();
       if (!response.ok || !result.settings) {
-        throw new Error(result.error ?? "Could not save the welcome hero.");
+        const errorMessage = result.error ?? "Could not save the welcome hero.";
+        if ((response.status < 500 || result.settingsCommitted === false) && accessToken && uploadedPaths.length) {
+          try {
+            await removeUploadedHeroImages(uploadedPaths, accessToken);
+            uploadedPaths.length = 0;
+          } catch (cleanupError) {
+            const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : "Temporary hero images could not be removed.";
+            throw new Error(`${errorMessage} ${cleanupMessage}`);
+          }
+        }
+        throw new Error(errorMessage);
       }
       const saved = result.settings as WelcomeHeroSettings;
+      uploadedPaths.length = 0;
       for (const url of objectUrls.current) URL.revokeObjectURL(url);
       objectUrls.current.clear();
       dirty.current = false;
@@ -344,7 +369,18 @@ export default function AdminWelcomeHeroEditor({
         ? "Hero saved, but one or more unused old images could not be removed."
         : "Welcome hero saved.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save the welcome hero.");
+      const errorMessage = error instanceof Error ? error.message : "Could not save the welcome hero.";
+      if (!saveRequestStarted && accessToken && uploadedPaths.length) {
+        try {
+          await removeUploadedHeroImages(uploadedPaths, accessToken);
+          uploadedPaths.length = 0;
+        } catch (cleanupError) {
+          const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : "Temporary hero images could not be removed.";
+          setMessage(`${errorMessage} ${cleanupMessage}`);
+          return;
+        }
+      }
+      setMessage(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -553,6 +589,7 @@ export default function AdminWelcomeHeroEditor({
 
     <div className="admin-welcome-hero-images">
       <div className="admin-queue-heading"><div><span>BACKGROUND IMAGES</span><h4>{draft.slides.length} of 3 desktop slides</h4></div></div>
+      <p className="admin-welcome-hero-image-note">Original quality is preserved. Use JPEG, PNG, WebP, or AVIF images up to 20 MB each.</p>
       {draft.slides.map((slide, index) => {
         const draftSlide = slide as DraftSlide;
         const hasMobileImage = Boolean(draftSlide.mobilePath || draftSlide.mobileFile);
@@ -592,7 +629,7 @@ export default function AdminWelcomeHeroEditor({
                   <FileUp size={14} aria-hidden="true" /> {hasMobileImage ? "Replace phone image" : "Add phone image"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
                     disabled={isPreparingImages}
                     onChange={(event) => {
                       const file = event.currentTarget.files?.[0] ?? null;
@@ -617,8 +654,8 @@ export default function AdminWelcomeHeroEditor({
         </article>;
       })}
       {draft.slides.length < 3 && <label className={`button button-outline admin-welcome-hero-upload${isPreparingImages ? " is-disabled" : ""}`}>
-        <FileUp size={15} aria-hidden="true" /> {isPreparingImages ? "Preparing images…" : "Add background images"}
-        <input ref={fileInput} type="file" accept="image/*" multiple disabled={isPreparingImages} onChange={(event) => void addImages(event.target.files)} />
+        <FileUp size={15} aria-hidden="true" /> {isPreparingImages ? "Checking images…" : "Add background images"}
+        <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple disabled={isPreparingImages} onChange={(event) => void addImages(event.target.files)} />
       </label>}
     </div>
 

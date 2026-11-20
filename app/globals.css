@@ -800,6 +800,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-welcome-hero-images { display: grid; gap: 10px; }
 .admin-welcome-hero-images > .admin-queue-heading { margin: 0; }
 .admin-welcome-hero-images .admin-queue-heading h4 { margin: 4px 0 0; color: #304b39; font-size: 14px; }
+.admin-welcome-hero-image-note { margin: -4px 0 0; color: #69766a; font-size: 9px; line-height: 1.5; }
 .admin-welcome-hero-image { display: grid; grid-template-columns: minmax(120px, 220px) minmax(0, 1fr); gap: 12px; padding: 10px; border: 1px solid #e1e8dd; background: #fff; }
 .admin-welcome-hero-image > img, .admin-welcome-hero-image-empty { width: 100%; height: 120px; object-fit: cover; background: #edf1e9; }
 .admin-welcome-hero-image-empty { display: grid; place-items: center; color: #7a8677; font-size: 10px; }

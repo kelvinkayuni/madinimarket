@@ -104,7 +104,7 @@ where welcome_hero_settings->>'exploreLinkLabel' is null
    or welcome_hero_settings->>'publicHeaderScale' is null;
 
 insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
-values ('homepage-hero', 'homepage-hero', true, array['image/jpeg'], 1258291)
+values ('homepage-hero', 'homepage-hero', true, array['image/jpeg', 'image/png', 'image/webp', 'image/avif'], 20000000)
 on conflict (id) do update
 set public = true, allowed_mime_types = excluded.allowed_mime_types, file_size_limit = excluded.file_size_limit;
 
