@@ -77,7 +77,7 @@ async function createHeroCrop(
         else reject(new Error("Could not export the hero image crop."));
       }, file.type, 0.98);
     });
-    const mimeType = getWelcomeHeroImageMimeType(blob.type);
+    const mimeType = isWelcomeHeroImageMimeType(blob.type) ? blob.type : null;
     if (!mimeType) throw new Error("Your browser could not export a supported hero image format.");
     if (blob.size < 1 || blob.size > WELCOME_HERO_MAX_IMAGE_BYTES) {
       throw new Error("The generated hero crop exceeds the 20 MB storage limit.");
