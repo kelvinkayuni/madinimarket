@@ -554,7 +554,7 @@ export default function AdminWelcomeHeroEditor({
     <div className="admin-welcome-hero-colors">
       {([
         ["Background", "backgroundColor"],
-        ["Overlay", "overlayColor"],
+        ["Text shadow", "overlayColor"],
         ["Headline", "headingColor"],
         ["Description", "bodyColor"],
         ["Accent", "accentColor"],
@@ -566,7 +566,7 @@ export default function AdminWelcomeHeroEditor({
         <span>{label}</span>
         <input aria-label={`${label} color`} type="color" value={draft[key]} onChange={(event) => update(key, event.target.value)} />
       </label>)}
-      <label className="field-label admin-welcome-hero-range">Overlay strength: {draft.overlayOpacity}%
+      <label className="field-label admin-welcome-hero-range">Text shadow strength: {draft.overlayOpacity}%
         <input type="range" min={0} max={100} step={1} value={draft.overlayOpacity} onChange={(event) => update("overlayOpacity", Number(event.target.value))} />
       </label>
       <label className="field-label">Font family

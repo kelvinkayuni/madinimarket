@@ -7,6 +7,14 @@ import type { WelcomeHeroSettings } from "@/lib/welcome-hero";
 
 const barStaggerOrder = [3, 0, 6, 2, 7, 1, 5, 4];
 
+function getTextShadowColor(color: string, opacity: number) {
+  if (!/^#[\da-f]{6}$/i.test(color)) {
+    throw new Error("Welcome hero text shadow color must be a six-digit hex color.");
+  }
+  const value = Number.parseInt(color.slice(1), 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${opacity / 100})`;
+}
+
 export default function WelcomeHero({
   settings,
   marketHoursLoaded,
@@ -42,8 +50,7 @@ export default function WelcomeHero({
     : "var(--font-body), Arial, sans-serif";
   const style = {
     "--welcome-background-color": settings.backgroundColor,
-    "--welcome-overlay-color": settings.overlayColor,
-    "--welcome-overlay-opacity": settings.overlayOpacity / 100,
+    "--welcome-text-shadow-color": getTextShadowColor(settings.overlayColor, settings.overlayOpacity),
     "--welcome-heading-color": settings.headingColor,
     "--welcome-body-color": settings.bodyColor,
     "--welcome-accent-color": settings.accentColor,
@@ -151,7 +158,6 @@ export default function WelcomeHero({
         />)}
       </div>)}
     </div>}
-    <div className="market-welcome-overlay" aria-hidden="true" />
     <div className="market-welcome-copy">
       <div className="market-welcome-main-copy">
         <span className="market-welcome-eyebrow"><span /> {settings.eyebrow}</span>
