@@ -395,8 +395,8 @@ export default function AdminWelcomeHeroEditor({
           <span className="admin-welcome-hero-range-labels"><span>Current</span><span>Middle</span><span>Right</span></span>
         </label>
         <label className="field-label admin-welcome-hero-range">
-          Logo and text size: {draft.publicHeaderScale}%
-          <input aria-label="Public header logo and text size" type="range" min={70} max={150} step={1} value={draft.publicHeaderScale} onChange={(event) => update("publicHeaderScale", Number(event.target.value))} />
+          Logo and text size: {Math.round(24 * draft.publicHeaderScale / 100)}px (maximum 72px on desktop)
+          <input aria-label="Public header logo and text size" type="range" min={70} max={300} step={1} value={draft.publicHeaderScale} onChange={(event) => update("publicHeaderScale", Number(event.target.value))} />
           <span className="admin-welcome-hero-range-labels"><span>Smaller</span><span>Current</span><span>Larger</span></span>
         </label>
       </fieldset>

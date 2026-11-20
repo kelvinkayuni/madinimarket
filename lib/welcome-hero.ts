@@ -195,7 +195,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isIntegerValueInRange(mobileLinksVerticalPosition, 0, 100) ||
     !isIntegerValueInRange(publicHeaderPosition, 0, 100) ||
     (legacyPublicHeaderPosition !== undefined && !isIntegerValueInRange(legacyPublicHeaderPosition, 0, 100)) ||
-    !isIntegerValueInRange(publicHeaderScale, 70, 150) ||
+    !isIntegerValueInRange(publicHeaderScale, 70, 300) ||
     !isTransition(transition) ||
     !isSlideInterval(slideIntervalSeconds) ||
     !isTransitionDuration(transitionDurationMs) ||
