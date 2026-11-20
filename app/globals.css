@@ -702,7 +702,6 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .admin-welcome-hero-preview-heading button.is-active { background: #e8efe3; color: #355641; font-weight: 700; }
 .admin-welcome-hero-preview { width: 100%; }
 .admin-welcome-hero-preview.is-mobile { width: min(100%, 390px); justify-self: center; }
-.admin-public-header-previews, .admin-public-header-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .admin-public-header-device-preview { min-width: 0; display: grid; gap: 6px; }
 .admin-public-header-device-preview > strong { color: #405745; font-size: 10px; }
 .admin-public-header-preview { width: 100%; height: 76px; display: flex; align-items: center; gap: 20px; padding: 0 24px; overflow: hidden; border: 1px solid var(--line); background: #fcfcf9; }
@@ -1523,7 +1522,6 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-marketplace-card-editor-heading,
   .admin-marketplace-card-preview-heading,
   .admin-marketplace-card-actions { align-items: flex-start; flex-direction: column; }
-  .admin-public-header-previews, .admin-public-header-settings { grid-template-columns: minmax(0, 1fr); }
   .admin-public-header-preview { gap: 8px; padding: 0 12px; }
   .admin-public-header-preview.is-mobile { padding: 0 10px; }
   .admin-marketplace-card-tabs { width: 100%; }
