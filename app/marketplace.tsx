@@ -4783,7 +4783,7 @@ export default function Marketplace() {
             <small>{marketHoursLoaded && !marketHoursError && marketHours.manuallyClosed
               ? "Closed manually; turning this off restores the saved schedule"
               : marketHoursLoaded && !marketHoursError && !marketIsOpen && nextMarketOpenAt
-                ? `Opens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time`
+                ? `Opens ${formatMarketOpening(nextMarketOpenAt)} East Africa time`
                 : marketHoursError || "Schedule time zone: Africa/Dar_es_Salaam"}</small>
           </div>
           <div className="admin-market-manual-control">
@@ -4833,7 +4833,7 @@ export default function Marketplace() {
                         </select>
                       </label>
                   </div>
-                  <small className="admin-market-time-preview">{value} Tanzania time (24-hour clock)</small>
+                  <small className="admin-market-time-preview">{value} East Africa time (24-hour clock)</small>
                 </fieldset>;
               })}
             </div>
@@ -4856,7 +4856,7 @@ export default function Marketplace() {
             </div>
             {marketHoursLoaded ? <>
               <strong className="admin-market-hours-summary">{marketWeekdays.filter(({ day }) => marketHours.openDays.includes(day)).map(({ label }) => label).join(", ")}</strong>
-              <small>{marketHours.openTime}–{marketHours.closeTime} Tanzania time (24-hour clock)</small>
+              <small>{marketHours.openTime}–{marketHours.closeTime} East Africa time (24-hour clock)</small>
               <small>{marketHours.updatedAt
                 ? `Updated on ${new Date(marketHours.updatedAt).toLocaleString()}`
                 : "Update date and time unavailable"}</small>
@@ -5162,7 +5162,7 @@ export default function Marketplace() {
                     <span>Bank Name: {account.bank_name}</span>
                     <span>Account Number: {account.bank_account_number}</span>
                     <span>Account Holder Name: {account.bank_account_holder_name}</span>
-                    <span>Date Added: {new Date(account.bank_info_added_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</span>
+                    <span>Date Added: {new Date(account.bank_info_added_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</span>
                   </> : <span>No bank information saved.</span>}
                   <div className="admin-account-control-row">
                     <div><strong>One-time bank edit</strong><span>{account.bank_info_edit_unlocked ? "Enabled; automatically locks after the user saves." : "Disabled; the six-month lock applies."}</span></div>
@@ -5420,9 +5420,9 @@ export default function Marketplace() {
         </> : <section className="market-closed-notice"><span>MARKET CLOSED</span><h2>{marketHoursError ? "Market status unavailable" : "The market is closed"}</h2><p>{marketHoursError
           ? "We can't verify the market schedule right now. Please try again shortly."
           : nextMarketOpenAt
-            ? `The market will reopen on ${formatMarketOpening(nextMarketOpenAt)} Tanzania time.`
+            ? `The market will reopen on ${formatMarketOpening(nextMarketOpenAt)} East Africa time.`
             : "No upcoming opening is currently scheduled."}</p></section>}
-      <footer className="site-footer"><div className="site-footer-brand"><span><Image src="/madinimarket-logo.png" alt="" width={906} height={672} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span></div><div className="site-footer-meta"><div className="site-footer-region"><span>TANZANIA &amp; BEYOND</span><span>EST. 2025</span></div><span>PREVIEW MARKET{currentYear ? ` · ${currentYear}` : ""}</span></div><div className={`market-status site-footer-market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`} role="status"><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "Tanzania time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} Tanzania time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} Tanzania time` : "No upcoming opening is scheduled."}</small></div></div></footer>
+      <footer className="site-footer"><div className="site-footer-brand"><span><Image src="/madinimarket-logo.png" alt="" width={906} height={672} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span></div><div className="site-footer-meta"><div className="site-footer-region"><span>TANZANIA &amp; BEYOND</span><span>EST. 2025</span></div><span>PREVIEW MARKET{currentYear ? ` · ${currentYear}` : ""}</span></div><div className={`market-status site-footer-market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`} role="status"><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "East Africa time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} East Africa time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} East Africa time` : "No upcoming opening is scheduled."}</small></div></div></footer>
     </div>
 
     {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}

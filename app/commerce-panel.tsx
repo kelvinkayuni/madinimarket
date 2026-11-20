@@ -689,7 +689,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         setActiveTab("buying");
         if (result.order.payment_status === "awaiting_payment" && result.order.payment_deadline) {
           const paymentDeadline = new Date(result.order.payment_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" });
-          onNotice(`Private order ${result.order.control_number} confirmed. The seller has confirmed availability; submit payment by ${paymentDeadline} Tanzania time.`);
+          onNotice(`Private order ${result.order.control_number} confirmed. The seller has confirmed availability; submit payment by ${paymentDeadline} East Africa time.`);
         } else {
           onNotice(`Private order ${result.order.control_number} confirmed. The seller response deadline is shown in My orders.`);
         }
@@ -698,7 +698,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           const checkoutDeadline = result.checkout_deadline
             ? new Date(result.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })
             : "the deadline shown in your private offer";
-          onNotice(`Offer accepted. Complete checkout by ${checkoutDeadline} Tanzania time. The mineral is reserved for you during this 30-minute window.`);
+          onNotice(`Offer accepted. Complete checkout by ${checkoutDeadline} East Africa time. The mineral is reserved for you during this 30-minute window.`);
         } else {
           onNotice("Offer declined. The seller may send a revised offer if attempts remain.");
         }
@@ -733,7 +733,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
       const deadline = result.order.seller_response_deadline
         ? new Date(result.order.seller_response_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })
         : "the deadline shown in My orders";
-      onNotice(`Order ${result.order.control_number} confirmed. Sellers have until ${deadline} Tanzania time to confirm availability.`);
+      onNotice(`Order ${result.order.control_number} confirmed. Sellers have until ${deadline} East Africa time to confirm availability.`);
     }
   };
 
@@ -970,7 +970,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
           <span>Bank Name: {item.payout_bank_name}</span>
           <span>Account Number: {item.payout_bank_account_number}</span>
           <span>Account Holder Name: {item.payout_bank_account_holder_name}</span>
-          {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+          {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</small>}
         </> : <span>No bank account details were recorded for this payout.</span>}
       </div>}
       {item.payout_receipt_url && !item.payout_group_key && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a></small>}
@@ -983,7 +983,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
     {item.status === "awaiting_seller" && <div className="commerce-item-actions">
       <button className="button button-dark" type="button" disabled={busy === `available-${item.id}` || busy === `unavailable-${item.id}`} onClick={() => void perform(`available-${item.id}`, "seller_availability", { itemId: item.id, available: true })}>{busy === `available-${item.id}` ? "Confirming availability…" : "Available"}</button>
       <button className="button button-outline" type="button" disabled={busy === `available-${item.id}` || busy === `unavailable-${item.id}`} onClick={() => void perform(`unavailable-${item.id}`, "seller_availability", { itemId: item.id, available: false })}>{busy === `unavailable-${item.id}` ? "Updating availability…" : "Unavailable"}</button>
-      <small>Respond by {new Date(item.seller_response_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>
+      <small>Respond by {new Date(item.seller_response_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</small>
     </div>}
     {["unavailable", "refunded"].includes(item.status) && item.listing_id && <div className="commerce-item-actions">
       <p className="commerce-warning">This mineral is hidden from the public market. Confirm that it is in stock before relisting it.</p>
@@ -1032,7 +1032,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {visibleBuyerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
               <span className="commerce-private-card-main"><span className="commerce-private-card-role">Buyer · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span className="commerce-private-card-description">Seller @{thread.seller_username}</span><span className="commerce-private-card-action">View request vs. offer comparison →</span></span>
-              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "buyer", thread.close_reason, thread.state)}</span>{latest?.status === "awaiting_buyer_checkout" && latest.checkout_deadline && <span className="commerce-private-card-meta">Complete by {new Date(latest.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</span>}<span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "buyer", thread.close_reason, thread.state)}</span>{latest?.status === "awaiting_buyer_checkout" && latest.checkout_deadline && <span className="commerce-private-card-meta">Complete by {new Date(latest.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</span>}<span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span></span>
             </button>; })}
           </div>
           {!visibleBuyerPrivateThreads.length && <p className="commerce-note">No offers received as a buyer match the current filter.</p>}
@@ -1043,7 +1043,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {visibleSellerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; const remaining = Math.max(0, 3 - thread.attempt_count); return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
               <span className="commerce-private-card-main"><span className="commerce-private-card-role">Seller · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span className="commerce-private-card-description">Buyer request</span><span className="commerce-private-card-action">View request vs. offer comparison →</span></span>
-              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "seller", thread.close_reason, thread.state)}</span>{latest?.status === "awaiting_buyer_checkout" && latest.checkout_deadline && <span className="commerce-private-card-meta">Checkout deadline: {new Date(latest.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</span>}<span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "seller", thread.close_reason, thread.state)}</span>{latest?.status === "awaiting_buyer_checkout" && latest.checkout_deadline && <span className="commerce-private-card-meta">Checkout deadline: {new Date(latest.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</span>}<span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3 · {remaining} remaining</span></span>
             </button>; })}
           </div>
           {!visibleSellerPrivateThreads.length && <p className="commerce-note">No offers sent as a seller match the current filter.</p>}
@@ -1228,7 +1228,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
                 <span>Bank Name: {firstItem.payout_bank_name}</span>
                 <span>Account Number: {firstItem.payout_bank_account_number}</span>
                 <span>Account Holder Name: {firstItem.payout_bank_account_holder_name}</span>
-                {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+                {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</small>}
               </> : <span>No bank account details were recorded for this payout.</span>}
               {firstItem.payout_reference && <span>Transaction reference: {firstItem.payout_reference}</span>}
               {firstItem.payout_receipt_url && <a className="certificate-file-link" href={firstItem.payout_receipt_url} target="_blank" rel="noreferrer">View payout receipt</a>}
@@ -1248,7 +1248,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <h2 id="private-thread-title">{selectedPrivateThread.request?.mineral_name ?? "Private mineral offer"} · Request #{selectedPrivateThread.request_id}</h2>
         {selectedPrivateThread.offers.map((offer) => <PrivateOfferScrollPanel key={offer.id}>
           <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{privateOfferStatusLabel(offer.status, selectedPrivateThread.side, selectedPrivateThread.close_reason)}</span></div>
-          {offer.status === "awaiting_buyer_checkout" && offer.checkout_deadline && <p className="commerce-note">Checkout must be completed by {new Date(offer.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time. If the deadline passes, the acceptance is cancelled, the request reopens, and other eligible offers become available again.</p>}
+          {offer.status === "awaiting_buyer_checkout" && offer.checkout_deadline && <p className="commerce-note">Checkout must be completed by {new Date(offer.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time. If the deadline passes, the acceptance is cancelled, the request reopens, and other eligible offers become available again.</p>}
           {offer.status === "closed" && selectedPrivateThread.close_reason === "buyer_checkout_expired" && <p className="commerce-note">The checkout deadline passed before an order was created. No payment was taken; the buyer request and eligible competing offers are available again.</p>}
           {offer.status === "ordered" && <p className="commerce-note">The order has been created. Continue with payment, shipping, delivery confirmation, and dispute handling in My orders.</p>}
           {offer.signed_image_url && <div className="commerce-private-image"><Image src={offer.signed_image_url} alt={`${offer.mineral_name} private offer`} width={800} height={800} unoptimized /></div>}

@@ -24,7 +24,7 @@ function formatBankDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "Africa/Dar_es_Salaam",
-  }) + " Tanzania time";
+  }) + " East Africa time";
 }
 
 export default function BankInformationPanel({ onNotice }: { onNotice: (message: string) => void }) {

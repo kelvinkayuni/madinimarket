@@ -130,7 +130,7 @@ export async function GET(request: Request) {
         await sendGmailEmail({
           to: item.seller_email,
           subject: `Availability request expired for order ${order.control_number}`,
-          text: `The availability response deadline (${responseDeadline} Tanzania time) passed for ${item.mineral_name} in order ${order.control_number}. This order item was cancelled for the buyer, and the listing has been released back to the public market for other buyers.\n\nMadinimarket`,
+          text: `The availability response deadline (${responseDeadline} East Africa time) passed for ${item.mineral_name} in order ${order.control_number}. This order item was cancelled for the buyer, and the listing has been released back to the public market for other buyers.\n\nMadinimarket`,
         });
         const { error } = await admin.from("marketplace_order_items")
           .update({ seller_availability_timeout_email_sent_at: new Date().toISOString() })
@@ -231,7 +231,7 @@ export async function GET(request: Request) {
         await sendGmailEmail({
           to: order.buyer_email,
           subject: `Your order ${order.control_number} is ready for payment`,
-          text: `Hello ${order.buyer_name},\n\nOrder ${order.control_number} is ready for payment. Its items are reserved until ${paymentDeadline} Tanzania time. Sign in to My orders and submit your payment reference before then.\n\nMadinimarket`,
+          text: `Hello ${order.buyer_name},\n\nOrder ${order.control_number} is ready for payment. Its items are reserved until ${paymentDeadline} East Africa time. Sign in to My orders and submit your payment reference before then.\n\nMadinimarket`,
         });
         const { error } = await admin.from("marketplace_orders")
           .update({ payment_ready_email_sent_at: new Date().toISOString() }).eq("id", order.id).is("payment_ready_email_sent_at", null);

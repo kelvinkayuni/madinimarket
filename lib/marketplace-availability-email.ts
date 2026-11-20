@@ -96,8 +96,8 @@ export async function sendPendingSellerAvailabilityEmails(orderId?: string) {
       await sendGmailEmail({
         to: firstItem.seller_email,
         subject: `Please confirm availability for order ${order?.control_number ?? ""}`,
-        text: `Please sign in to confirm the availability of the following mineral${claimedSellerItems.length === 1 ? "" : "s"} by ${responseDeadline} Tanzania time.\n\nOrder: ${order?.control_number ?? "New order"}\n${orderItemsText}\n\nSign in to Madinimarket: ${signInUrl}\n\nAfter signing in, your Orders dashboard will open to the seller requests.`,
-        html: `<p>Please sign in to confirm the availability of the following mineral${claimedSellerItems.length === 1 ? "" : "s"} by ${escapeHtml(responseDeadline)} Tanzania time.</p><p><strong>Order:</strong> ${escapeHtml(order?.control_number ?? "New order")}</p><ul>${orderItemsHtml}</ul><p><a href="${escapeHtml(signInUrl)}">Sign in to Madinimarket and open your Orders dashboard</a></p>`,
+        text: `Please sign in to confirm the availability of the following mineral${claimedSellerItems.length === 1 ? "" : "s"} by ${responseDeadline} East Africa time.\n\nOrder: ${order?.control_number ?? "New order"}\n${orderItemsText}\n\nSign in to Madinimarket: ${signInUrl}\n\nAfter signing in, your Orders dashboard will open to the seller requests.`,
+        html: `<p>Please sign in to confirm the availability of the following mineral${claimedSellerItems.length === 1 ? "" : "s"} by ${escapeHtml(responseDeadline)} East Africa time.</p><p><strong>Order:</strong> ${escapeHtml(order?.control_number ?? "New order")}</p><ul>${orderItemsHtml}</ul><p><a href="${escapeHtml(signInUrl)}">Sign in to Madinimarket and open your Orders dashboard</a></p>`,
       });
 
       const { error: sentUpdateError } = await admin.from("marketplace_order_items")

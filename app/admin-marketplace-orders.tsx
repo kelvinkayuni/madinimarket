@@ -403,7 +403,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                     <span>Bank Name: {firstItem.payout_bank_name}</span>
                     <span>Account Number: {firstItem.payout_bank_account_number}</span>
                     <span>Account Holder Name: {firstItem.payout_bank_account_holder_name}</span>
-                    {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+                    {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</small>}
                   </> : <span className="commerce-warning">No bank detail snapshot is available. Verify the seller’s bank details before transferring.</span>}
                 </div>
                 {claimTask("marketplace_payout", firstItem.id, (canAct) => <form className="admin-reference-form" onSubmit={(event) => {
@@ -446,7 +446,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                     <span>Bank Name: {firstItem.payout_bank_name}</span>
                     <span>Account Number: {firstItem.payout_bank_account_number}</span>
                     <span>Account Holder Name: {firstItem.payout_bank_account_holder_name}</span>
-                    {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+                    {firstItem.payout_bank_snapshot_at && <small>Details captured {new Date(firstItem.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</small>}
                   </> : <span className="commerce-warning">No bank account details were recorded for this payout.</span>}
                 </div>
                 {firstItem.payout_reference && <span>Transaction reference: {firstItem.payout_reference}</span>}
@@ -469,7 +469,7 @@ export default function AdminMarketplaceOrders({ onNotice, marketplaceOrdersNeed
                 <span>Bank Name: {item.payout_bank_name}</span>
                 <span>Account Number: {item.payout_bank_account_number}</span>
                 <span>Account Holder Name: {item.payout_bank_account_holder_name}</span>
-                {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} Tanzania time</small>}
+                {item.payout_bank_snapshot_at && <small>Details captured {new Date(item.payout_bank_snapshot_at).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</small>}
               </> : <span className="commerce-warning">No bank account details were recorded for this payout.</span>}
             </div>}
             {canProcessOrders && item.payout_receipt_url && !item.payout_group_key && <small><a className="certificate-file-link" href={item.payout_receipt_url} target="_blank" rel="noreferrer">Open seller payout receipt</a></small>}
