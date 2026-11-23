@@ -412,6 +412,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-homepage-font-size { display: flex; align-items: end; gap: 12px; margin: 20px 0 24px; padding: 14px; border: 1px solid #e1e5dd; background: #fff; }
 .admin-homepage-font-size label { width: min(100%, 240px); }
 .admin-homepage-font-size .button { min-height: 40px; }
+.admin-homepage-headline-speed > span { max-width: 260px; color: #778075; font-size: 10px; line-height: 1.5; }
 .admin-card-columns-settings { margin: 0 0 24px; padding: 10px; border: 1px solid #e1e5dd; background: #fbfcf9; }
 .admin-card-columns-settings .admin-queue-heading { margin-bottom: 6px; }
 .admin-card-columns-settings .admin-queue-heading h3 { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: 17px; font-weight: 500; }
@@ -837,7 +838,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-intro-heading-track { display: flex; width: max-content; align-items: center; }
 .market-intro-heading-group { display: flex; width: max-content; flex: 0 0 auto; align-items: center; }
 .market-intro-heading-item { width: max-content; flex: 0 0 auto; padding-right: 32px; white-space: nowrap; }
-.market-intro-heading.is-overflowing .market-intro-heading-track { animation: homepage-headline-marquee 18s linear infinite; }
+.market-intro-heading.is-overflowing .market-intro-heading-track { animation: homepage-headline-marquee var(--homepage-headline-duration, 36s) linear infinite; }
 @keyframes homepage-headline-marquee { to { transform: translateX(var(--homepage-headline-cycle)); } }
 .market-intro-tools { order: 1; display: flex; align-items: flex-start; gap: 8px; width: auto; flex: 0 0 auto; }
 .mobile-market-search { display: flex; flex: 0 0 105px; width: 105px; min-width: 0; height: 40px; gap: 7px; padding: 0 9px; }

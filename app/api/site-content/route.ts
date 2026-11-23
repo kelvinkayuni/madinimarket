@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const [{ data: settings, error: settingsError }, { data: headlines, error: headlinesError }] = await Promise.all([
-      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, marketplace_card_appearance, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden, welcome_hero_settings").eq("id", true).single(),
+      admin.from("marketplace_settings").select("swahili_enabled, homepage_headline_font_size, homepage_headline_speed_seconds, seller_cards_per_column, buyer_cards_per_column, marketplace_card_appearance, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden, welcome_hero_settings").eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase").order("created_at", { ascending: true }).order("id", { ascending: true }),
     ]);
     if (settingsError) throw settingsError;
@@ -32,6 +32,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       swahiliEnabled: settings.swahili_enabled,
       headlineFontSize: settings.homepage_headline_font_size,
+      headlineSpeedSeconds: settings.homepage_headline_speed_seconds,
       sellerCardsPerColumn: settings.seller_cards_per_column,
       buyerCardsPerColumn: settings.buyer_cards_per_column,
       marketplaceCardAppearance,

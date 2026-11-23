@@ -776,6 +776,7 @@ async function fetchAdminSiteContent(accessToken: string, scope?: "homepage"): P
 
 type HomepageSettingsContent = {
   headlineFontSize: number;
+  headlineSpeedSeconds: number;
   sellerCardsPerColumn: number;
   buyerCardsPerColumn: number;
   marketplaceCardAppearance: MarketplaceCardAppearanceSettings;
@@ -798,6 +799,8 @@ function hasHomepageSettings(value: Record<string, unknown>): value is Record<st
     parsePublicWelcomeHeroSettings(value.welcomeHero) !== null &&
     typeof value.headlineFontSize === "number" && Number.isInteger(value.headlineFontSize) &&
     value.headlineFontSize >= 24 && value.headlineFontSize <= 72 &&
+    typeof value.headlineSpeedSeconds === "number" && Number.isInteger(value.headlineSpeedSeconds) &&
+    value.headlineSpeedSeconds >= 10 && value.headlineSpeedSeconds <= 120 &&
     typeof value.sellerCardsPerColumn === "number" && Number.isSafeInteger(value.sellerCardsPerColumn) &&
     value.sellerCardsPerColumn >= 1 &&
     typeof value.buyerCardsPerColumn === "number" && Number.isSafeInteger(value.buyerCardsPerColumn) &&
@@ -806,7 +809,7 @@ function hasHomepageSettings(value: Record<string, unknown>): value is Record<st
     Array.isArray(value.headlines) && value.headlines.every(isHomepageHeadline);
 }
 
-async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; marketplaceCardAppearance: MarketplaceCardAppearanceSettings; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; welcomeHeroHidden: boolean; welcomeHero: WelcomeHeroSettings; headlines: HomepageHeadline[] }> {
+async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabled: boolean; headlineFontSize: number; headlineSpeedSeconds: number; sellerCardsPerColumn: number; buyerCardsPerColumn: number; marketplaceCardAppearance: MarketplaceCardAppearanceSettings; accountCreationDisabled: boolean; nonAdminSignInDisabled: boolean; homepageAnnouncement: string; welcomeHeroHidden: boolean; welcomeHero: WelcomeHeroSettings; headlines: HomepageHeadline[] }> {
   const result = await fetchAdminSiteContent(accessToken);
   if (typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" ||
     typeof result.nonAdminSignInDisabled !== "boolean" || !hasHomepageSettings(result)) {
@@ -815,6 +818,7 @@ async function loadAdminSiteContent(accessToken: string): Promise<{ swahiliEnabl
   return {
     swahiliEnabled: result.swahiliEnabled,
     headlineFontSize: result.headlineFontSize,
+    headlineSpeedSeconds: result.headlineSpeedSeconds,
     sellerCardsPerColumn: result.sellerCardsPerColumn,
     buyerCardsPerColumn: result.buyerCardsPerColumn,
     marketplaceCardAppearance: parseMarketplaceCardAppearanceSettings(result.marketplaceCardAppearance)!,
@@ -834,6 +838,7 @@ async function loadAdminHomepageContent(accessToken: string): Promise<HomepageSe
   }
   return {
     headlineFontSize: result.headlineFontSize,
+    headlineSpeedSeconds: result.headlineSpeedSeconds,
     sellerCardsPerColumn: result.sellerCardsPerColumn,
     buyerCardsPerColumn: result.buyerCardsPerColumn,
     marketplaceCardAppearance: parseMarketplaceCardAppearanceSettings(result.marketplaceCardAppearance)!,
@@ -915,6 +920,8 @@ export default function Marketplace() {
   const [welcomeHeroSettings, setWelcomeHeroSettings] = useState<WelcomeHeroSettings | null>(null);
   const [homepageHeadlineFontSize, setHomepageHeadlineFontSize] = useState(49);
   const [homepageHeadlineFontSizeInput, setHomepageHeadlineFontSizeInput] = useState("49");
+  const [homepageHeadlineSpeedSeconds, setHomepageHeadlineSpeedSeconds] = useState(36);
+  const [homepageHeadlineSpeedSecondsInput, setHomepageHeadlineSpeedSecondsInput] = useState("36");
   const [sellerCardsPerColumnInput, setSellerCardsPerColumnInput] = useState("4");
   const [buyerCardsPerColumnInput, setBuyerCardsPerColumnInput] = useState("4");
   const homepageHeadlineWindowRef = useRef<HTMLDivElement>(null);
@@ -1847,7 +1854,7 @@ export default function Marketplace() {
         const welcomeHero = parsePublicWelcomeHeroSettings(result.welcomeHero);
         const cardAppearance = parseMarketplaceCardAppearanceSettings(result.marketplaceCardAppearance);
         if (!response.ok || typeof result.swahiliEnabled !== "boolean" || typeof result.accountCreationDisabled !== "boolean" || typeof result.nonAdminSignInDisabled !== "boolean" || typeof result.homepageAnnouncement !== "string" || typeof result.welcomeHeroHidden !== "boolean" || !welcomeHero || !Number.isInteger(result.headlineFontSize) ||
-          result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Number.isSafeInteger(result.sellerCardsPerColumn) || result.sellerCardsPerColumn < 1 ||
+          result.headlineFontSize < 24 || result.headlineFontSize > 72 || !Number.isInteger(result.headlineSpeedSeconds) || result.headlineSpeedSeconds < 10 || result.headlineSpeedSeconds > 120 || !Number.isSafeInteger(result.sellerCardsPerColumn) || result.sellerCardsPerColumn < 1 ||
           !Number.isSafeInteger(result.buyerCardsPerColumn) || result.buyerCardsPerColumn < 1 || !cardAppearance || !Array.isArray(result.headlines)) {
           throw new Error(result.error ?? "Could not load homepage and language settings.");
         }
@@ -1860,6 +1867,8 @@ export default function Marketplace() {
         setWelcomeHeroSettings(welcomeHero);
         setHomepageHeadlineFontSize(result.headlineFontSize);
         setHomepageHeadlineFontSizeInput(String(result.headlineFontSize));
+        setHomepageHeadlineSpeedSeconds(result.headlineSpeedSeconds);
+        setHomepageHeadlineSpeedSecondsInput(String(result.headlineSpeedSeconds));
         setSellerCardsPerColumn(result.sellerCardsPerColumn);
         setSellerCardsPerColumnInput(String(result.sellerCardsPerColumn));
         setBuyerCardsPerColumn(result.buyerCardsPerColumn);
@@ -2224,6 +2233,8 @@ export default function Marketplace() {
               setWelcomeHeroSettings(siteContent.welcomeHero);
               setHomepageHeadlineFontSize(siteContent.headlineFontSize);
               setHomepageHeadlineFontSizeInput(String(siteContent.headlineFontSize));
+              setHomepageHeadlineSpeedSeconds(siteContent.headlineSpeedSeconds);
+              setHomepageHeadlineSpeedSecondsInput(String(siteContent.headlineSpeedSeconds));
               setSellerCardsPerColumn(siteContent.sellerCardsPerColumn);
               setSellerCardsPerColumnInput(String(siteContent.sellerCardsPerColumn));
               setBuyerCardsPerColumn(siteContent.buyerCardsPerColumn);
@@ -3194,6 +3205,8 @@ export default function Marketplace() {
     setWelcomeHeroSettings(content.welcomeHero);
     setHomepageHeadlineFontSize(content.headlineFontSize);
     setHomepageHeadlineFontSizeInput(String(content.headlineFontSize));
+    setHomepageHeadlineSpeedSeconds(content.headlineSpeedSeconds);
+    setHomepageHeadlineSpeedSecondsInput(String(content.headlineSpeedSeconds));
     setSellerCardsPerColumn(content.sellerCardsPerColumn);
     setSellerCardsPerColumnInput(String(content.sellerCardsPerColumn));
     setBuyerCardsPerColumn(content.buyerCardsPerColumn);
@@ -3250,6 +3263,35 @@ export default function Marketplace() {
         setNotice("Homepage headline font size saved.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not save the headline font size.");
+      }
+    });
+  };
+  const saveHomepageHeadlineSpeed = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const speedSeconds = Number(homepageHeadlineSpeedSecondsInput);
+    if (!Number.isInteger(speedSeconds) || speedSeconds < 10 || speedSeconds > 120) {
+      setNotice("Choose a phrase scroll duration between 10 and 120 seconds.");
+      return;
+    }
+    await withProgress("homepage-headline-speed", async () => {
+      try {
+        const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
+        if (error) throw error;
+        if (!session) throw new Error("Admin session expired.");
+        const response = await fetch("/api/admin/site-content", {
+          method: "PATCH",
+          headers: { Authorization: ["Bearer", session.access_token].join(" "), "Content-Type": "application/json" },
+          body: JSON.stringify({ headlineSpeedSeconds: speedSeconds }),
+        });
+        const result = await response.json();
+        if (!response.ok || !Number.isInteger(result.headlineSpeedSeconds) || result.headlineSpeedSeconds < 10 || result.headlineSpeedSeconds > 120) {
+          throw new Error(result.error ?? "Could not save the phrase scroll duration.");
+        }
+        setHomepageHeadlineSpeedSeconds(result.headlineSpeedSeconds);
+        setHomepageHeadlineSpeedSecondsInput(String(result.headlineSpeedSeconds));
+        setNotice("Homepage phrase scroll duration saved.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save the phrase scroll duration.");
       }
     });
   };
@@ -5046,6 +5088,13 @@ export default function Marketplace() {
             </label>
             <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-headline-font-size") || Number(homepageHeadlineFontSizeInput) === homepageHeadlineFontSize}>{busyActions.has("homepage-headline-font-size") ? "Saving…" : "Save font size"}</button>
           </form>
+          <form className="admin-homepage-font-size admin-homepage-headline-speed" onSubmit={(event) => void saveHomepageHeadlineSpeed(event)}>
+            <label className="field-label" htmlFor="admin-homepage-headline-speed">Phrase scroll duration (seconds)
+              <input className="text-input" id="admin-homepage-headline-speed" type="number" min={10} max={120} step={1} required value={homepageHeadlineSpeedSecondsInput} onChange={(event) => setHomepageHeadlineSpeedSecondsInput(event.target.value)} />
+            </label>
+            <button className="button button-dark" type="submit" disabled={!canAct || !siteContentLoaded || busyActions.has("homepage-headline-speed") || Number(homepageHeadlineSpeedSecondsInput) === homepageHeadlineSpeedSeconds}>{busyActions.has("homepage-headline-speed") ? "Saving…" : "Save scroll duration"}</button>
+            <span>One full loop takes this many seconds. Higher values move more slowly.</span>
+          </form>
           {role === "admin" && (siteContentLoaded && welcomeHeroSettings
             ? <AdminWelcomeHeroEditor
                 savedSettings={welcomeHeroSettings}
@@ -5340,7 +5389,10 @@ export default function Marketplace() {
         <div className={`market-intro-heading${homepageHeadlineOverflowing ? " is-overflowing" : ""}`} ref={homepageHeadlineWindowRef}>
           <div
             className="market-intro-heading-track"
-            style={{ "--homepage-headline-cycle": `${-100 / homepageHeadlineRepeatCount}%` } as CSSProperties & { "--homepage-headline-cycle": string }}
+            style={{
+              "--homepage-headline-cycle": `${-100 / homepageHeadlineRepeatCount}%`,
+              "--homepage-headline-duration": `${homepageHeadlineSpeedSeconds}s`,
+            } as CSSProperties & { "--homepage-headline-cycle": string; "--homepage-headline-duration": string }}
           >
             {homepageHeadlineOverflowing && Array.from({ length: homepageHeadlineRepeatCount }, (_, copyIndex) => (
               <div className="market-intro-heading-group" key={`homepage-headlines-${copyIndex}`} ref={copyIndex === 0 ? homepageHeadlineGroupRef : undefined} aria-hidden={copyIndex > 0}>

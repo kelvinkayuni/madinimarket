@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     if (scope === "homepage") {
       const [settingsResult, headlinesResult] = await Promise.all([
         admin.from("marketplace_settings")
-          .select("homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, marketplace_card_appearance, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
+          .select("homepage_headline_font_size, homepage_headline_speed_seconds, seller_cards_per_column, buyer_cards_per_column, marketplace_card_appearance, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
           .eq("id", true).single(),
         admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
           .order("created_at", { ascending: true }).order("id", { ascending: true }),
@@ -70,6 +70,7 @@ export async function GET(request: Request) {
       if (!marketplaceCardAppearance) throw new Error("Saved marketplace card settings are invalid.");
       return NextResponse.json({
         headlineFontSize: settingsResult.data.homepage_headline_font_size,
+        headlineSpeedSeconds: settingsResult.data.homepage_headline_speed_seconds,
         sellerCardsPerColumn: settingsResult.data.seller_cards_per_column,
         buyerCardsPerColumn: settingsResult.data.buyer_cards_per_column,
         marketplaceCardAppearance,
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
     }
     const [settingsResult, headlinesResult] = await Promise.all([
       admin.from("marketplace_settings")
-        .select("swahili_enabled, homepage_headline_font_size, seller_cards_per_column, buyer_cards_per_column, marketplace_card_appearance, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
+        .select("swahili_enabled, homepage_headline_font_size, homepage_headline_speed_seconds, seller_cards_per_column, buyer_cards_per_column, marketplace_card_appearance, account_creation_disabled, non_admin_sign_in_disabled, homepage_announcement, welcome_hero_hidden, welcome_hero_settings")
         .eq("id", true).single(),
       admin.from("homepage_headlines").select("id, main_phrase, accent_phrase")
         .order("created_at", { ascending: true }).order("id", { ascending: true }),
@@ -98,6 +99,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       swahiliEnabled: settingsResult.data.swahili_enabled,
       headlineFontSize: settingsResult.data.homepage_headline_font_size,
+      headlineSpeedSeconds: settingsResult.data.homepage_headline_speed_seconds,
       sellerCardsPerColumn: settingsResult.data.seller_cards_per_column,
       buyerCardsPerColumn: settingsResult.data.buyer_cards_per_column,
       marketplaceCardAppearance,
@@ -120,7 +122,7 @@ export async function PATCH(request: Request) {
   try {
     const values = await readBody(request);
     const accountSettingKeys = new Set(["accountCreationDisabled", "nonAdminSignInDisabled", "signOutAllUsers"]);
-    const homepageSettingKeys = new Set(["headlineFontSize", "sellerCardsPerColumn", "buyerCardsPerColumn", "homepageAnnouncement"]);
+    const homepageSettingKeys = new Set(["headlineFontSize", "headlineSpeedSeconds", "sellerCardsPerColumn", "buyerCardsPerColumn", "homepageAnnouncement"]);
     const accountSettingsRequested = values !== null && Object.keys(values).some((key) => accountSettingKeys.has(key));
     const marketplaceLayoutRequested = values !== null &&
       Object.keys(values).some((key) => key === "sellerCardsPerColumn" || key === "buyerCardsPerColumn");
@@ -240,6 +242,23 @@ export async function PATCH(request: Request) {
     }
     if (values && "headlineFontSize" in values) {
       return NextResponse.json({ error: "Choose a font size between 24 and 72 pixels." }, { status: 400 });
+    }
+    if (values &&
+      Number.isInteger(values.headlineSpeedSeconds) &&
+      typeof values.headlineSpeedSeconds === "number" &&
+      values.headlineSpeedSeconds >= 10 &&
+      values.headlineSpeedSeconds <= 120) {
+      const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
+        .update({ homepage_headline_speed_seconds: values.headlineSpeedSeconds })
+        .eq("id", true)
+        .select("homepage_headline_speed_seconds")
+        .single();
+      if (error) throw error;
+      await recordStaffTaskCompletion(authorized, staff, taskType, "homepage", "update_headline_speed");
+      return NextResponse.json({ headlineSpeedSeconds: data.homepage_headline_speed_seconds }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (values && "headlineSpeedSeconds" in values) {
+      return NextResponse.json({ error: "Choose a phrase scroll duration between 10 and 120 seconds." }, { status: 400 });
     }
     if (values && Number.isSafeInteger(values.sellerCardsPerColumn) && typeof values.sellerCardsPerColumn === "number" && values.sellerCardsPerColumn >= 1) {
       const { data, error } = await createSupabaseAdminClient().from("marketplace_settings")
