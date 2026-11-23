@@ -65,10 +65,14 @@ export default function WelcomeHero({
     "--welcome-desktop-copy-y": `${settings.desktopCopyVerticalPosition}%`,
     "--welcome-mobile-copy-x": `${settings.mobileCopyHorizontalPosition}%`,
     "--welcome-mobile-copy-y": `${settings.mobileCopyVerticalPosition}%`,
-    "--welcome-desktop-actions-x": `${settings.desktopActionsHorizontalPosition}%`,
-    "--welcome-desktop-actions-y": `${settings.desktopActionsVerticalPosition}%`,
-    "--welcome-mobile-actions-x": `${settings.mobileActionsHorizontalPosition}%`,
-    "--welcome-mobile-actions-y": `${settings.mobileActionsVerticalPosition}%`,
+    "--welcome-desktop-sell-x": `${settings.desktopSellButtonHorizontalPosition}%`,
+    "--welcome-desktop-sell-y": `${settings.desktopSellButtonVerticalPosition}%`,
+    "--welcome-mobile-sell-x": `${settings.mobileSellButtonHorizontalPosition}%`,
+    "--welcome-mobile-sell-y": `${settings.mobileSellButtonVerticalPosition}%`,
+    "--welcome-desktop-request-x": `${settings.desktopRequestButtonHorizontalPosition}%`,
+    "--welcome-desktop-request-y": `${settings.desktopRequestButtonVerticalPosition}%`,
+    "--welcome-mobile-request-x": `${settings.mobileRequestButtonHorizontalPosition}%`,
+    "--welcome-mobile-request-y": `${settings.mobileRequestButtonVerticalPosition}%`,
     "--welcome-desktop-links-x": `${settings.desktopLinksHorizontalPosition}%`,
     "--welcome-desktop-links-y": `${settings.desktopLinksVerticalPosition}%`,
     "--welcome-mobile-links-x": `${settings.mobileLinksHorizontalPosition}%`,
@@ -171,12 +175,14 @@ export default function WelcomeHero({
           <p>{description}</p>
         </div>
       </div>
-      <div className="market-welcome-actions">
+      <div className="market-welcome-action market-welcome-sell-action">
         {preview
           ? <span className="button button-lime">{settings.sellLabel} <ArrowRight size={16} aria-hidden="true" /></span>
           : <button className="button button-lime" type="button" disabled={sellBusy} onClick={onSellMineral}>
             {sellBusy ? "Opening…" : <>{settings.sellLabel} <ArrowRight size={16} aria-hidden="true" /></>}
           </button>}
+      </div>
+      <div className="market-welcome-action market-welcome-request-action">
         <button className="button market-welcome-post-button" type="button" disabled={preview || postRequestBusy} onClick={onPostRequest}>
           {postRequestBusy ? "Opening…" : <><Plus size={16} aria-hidden="true" /> {settings.requestLabel}</>}
         </button>

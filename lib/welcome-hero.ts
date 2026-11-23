@@ -38,6 +38,11 @@ export function getWelcomeHeroImageMimeType(path: string): WelcomeHeroImageMimeT
   }
 }
 
+function offsetLegacyPosition(value: unknown, multiplier: number, offset = 0) {
+  if (typeof value !== "number") return value;
+  return Math.max(0, Math.min(100, Math.round(value * multiplier + offset)));
+}
+
 export type WelcomeHeroFontFamily = "serif" | "sans";
 export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
 export type WelcomeHeroHeightMode = "default" | "fit-screen" | "full-screen";
@@ -110,6 +115,14 @@ export type WelcomeHeroSettings = {
   desktopActionsVerticalPosition: number;
   mobileActionsHorizontalPosition: number;
   mobileActionsVerticalPosition: number;
+  desktopSellButtonHorizontalPosition: number;
+  desktopSellButtonVerticalPosition: number;
+  mobileSellButtonHorizontalPosition: number;
+  mobileSellButtonVerticalPosition: number;
+  desktopRequestButtonHorizontalPosition: number;
+  desktopRequestButtonVerticalPosition: number;
+  mobileRequestButtonHorizontalPosition: number;
+  mobileRequestButtonVerticalPosition: number;
   desktopLinksHorizontalPosition: number;
   desktopLinksVerticalPosition: number;
   mobileLinksHorizontalPosition: number;
@@ -146,6 +159,31 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const mobileActionsVerticalPosition = settings.mobileActionsVerticalPosition === undefined
     ? mobileActionsPosition === "middle" ? 75 : mobileActionsPosition === "bottom" ? 100 : 85
     : settings.mobileActionsVerticalPosition;
+  // Split legacy shared positions into separate anchors to avoid overlapping buttons.
+  const desktopSellButtonHorizontalPosition = settings.desktopSellButtonHorizontalPosition === undefined
+    ? offsetLegacyPosition(desktopActionsHorizontalPosition, 0.8)
+    : settings.desktopSellButtonHorizontalPosition;
+  const desktopSellButtonVerticalPosition = settings.desktopSellButtonVerticalPosition === undefined
+    ? desktopActionsVerticalPosition
+    : settings.desktopSellButtonVerticalPosition;
+  const mobileSellButtonHorizontalPosition = settings.mobileSellButtonHorizontalPosition === undefined
+    ? mobileActionsHorizontalPosition
+    : settings.mobileSellButtonHorizontalPosition;
+  const mobileSellButtonVerticalPosition = settings.mobileSellButtonVerticalPosition === undefined
+    ? offsetLegacyPosition(mobileActionsVerticalPosition, 0.875)
+    : settings.mobileSellButtonVerticalPosition;
+  const desktopRequestButtonHorizontalPosition = settings.desktopRequestButtonHorizontalPosition === undefined
+    ? offsetLegacyPosition(desktopActionsHorizontalPosition, 0.8, 20)
+    : settings.desktopRequestButtonHorizontalPosition;
+  const desktopRequestButtonVerticalPosition = settings.desktopRequestButtonVerticalPosition === undefined
+    ? desktopActionsVerticalPosition
+    : settings.desktopRequestButtonVerticalPosition;
+  const mobileRequestButtonHorizontalPosition = settings.mobileRequestButtonHorizontalPosition === undefined
+    ? mobileActionsHorizontalPosition
+    : settings.mobileRequestButtonHorizontalPosition;
+  const mobileRequestButtonVerticalPosition = settings.mobileRequestButtonVerticalPosition === undefined
+    ? mobileActionsVerticalPosition
+    : settings.mobileRequestButtonVerticalPosition;
   const desktopLinksHorizontalPosition = settings.desktopLinksHorizontalPosition === undefined ? 0 : settings.desktopLinksHorizontalPosition;
   const desktopLinksVerticalPosition = settings.desktopLinksVerticalPosition === undefined ? 100 : settings.desktopLinksVerticalPosition;
   const mobileLinksHorizontalPosition = settings.mobileLinksHorizontalPosition === undefined ? 0 : settings.mobileLinksHorizontalPosition;
@@ -252,6 +290,14 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isIntegerValueInRange(desktopActionsVerticalPosition, 0, 100) ||
     !isIntegerValueInRange(mobileActionsHorizontalPosition, 0, 100) ||
     !isIntegerValueInRange(mobileActionsVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopSellButtonHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopSellButtonVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileSellButtonHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileSellButtonVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopRequestButtonHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(desktopRequestButtonVerticalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileRequestButtonHorizontalPosition, 0, 100) ||
+    !isIntegerValueInRange(mobileRequestButtonVerticalPosition, 0, 100) ||
     !isIntegerValueInRange(desktopLinksHorizontalPosition, 0, 100) ||
     !isIntegerValueInRange(desktopLinksVerticalPosition, 0, 100) ||
     !isIntegerValueInRange(mobileLinksHorizontalPosition, 0, 100) ||
@@ -355,6 +401,14 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     desktopActionsVerticalPosition: desktopActionsVerticalPosition as number,
     mobileActionsHorizontalPosition: mobileActionsHorizontalPosition as number,
     mobileActionsVerticalPosition: mobileActionsVerticalPosition as number,
+    desktopSellButtonHorizontalPosition: desktopSellButtonHorizontalPosition as number,
+    desktopSellButtonVerticalPosition: desktopSellButtonVerticalPosition as number,
+    mobileSellButtonHorizontalPosition: mobileSellButtonHorizontalPosition as number,
+    mobileSellButtonVerticalPosition: mobileSellButtonVerticalPosition as number,
+    desktopRequestButtonHorizontalPosition: desktopRequestButtonHorizontalPosition as number,
+    desktopRequestButtonVerticalPosition: desktopRequestButtonVerticalPosition as number,
+    mobileRequestButtonHorizontalPosition: mobileRequestButtonHorizontalPosition as number,
+    mobileRequestButtonVerticalPosition: mobileRequestButtonVerticalPosition as number,
     desktopLinksHorizontalPosition: desktopLinksHorizontalPosition as number,
     desktopLinksVerticalPosition: desktopLinksVerticalPosition as number,
     mobileLinksHorizontalPosition: mobileLinksHorizontalPosition as number,

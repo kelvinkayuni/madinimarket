@@ -547,11 +547,18 @@ export default function AdminWelcomeHeroEditor({
               onVerticalPositionChange={(position) => update("desktopCopyVerticalPosition", position)}
             />
             <HeroPositionControls
-              title="Sell and request buttons"
-              horizontalPosition={draft.desktopActionsHorizontalPosition}
-              verticalPosition={draft.desktopActionsVerticalPosition}
-              onHorizontalPositionChange={(position) => update("desktopActionsHorizontalPosition", position)}
-              onVerticalPositionChange={(position) => update("desktopActionsVerticalPosition", position)}
+              title="Sell a mineral button"
+              horizontalPosition={draft.desktopSellButtonHorizontalPosition}
+              verticalPosition={draft.desktopSellButtonVerticalPosition}
+              onHorizontalPositionChange={(position) => update("desktopSellButtonHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("desktopSellButtonVerticalPosition", position)}
+            />
+            <HeroPositionControls
+              title="Request button"
+              horizontalPosition={draft.desktopRequestButtonHorizontalPosition}
+              verticalPosition={draft.desktopRequestButtonVerticalPosition}
+              onHorizontalPositionChange={(position) => update("desktopRequestButtonHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("desktopRequestButtonVerticalPosition", position)}
             />
             <HeroPositionControls
               title="Explore and browse links"
@@ -571,11 +578,18 @@ export default function AdminWelcomeHeroEditor({
               onVerticalPositionChange={(position) => update("mobileCopyVerticalPosition", position)}
             />
             <HeroPositionControls
-              title="Sell and request buttons"
-              horizontalPosition={draft.mobileActionsHorizontalPosition}
-              verticalPosition={draft.mobileActionsVerticalPosition}
-              onHorizontalPositionChange={(position) => update("mobileActionsHorizontalPosition", position)}
-              onVerticalPositionChange={(position) => update("mobileActionsVerticalPosition", position)}
+              title="Sell a mineral button"
+              horizontalPosition={draft.mobileSellButtonHorizontalPosition}
+              verticalPosition={draft.mobileSellButtonVerticalPosition}
+              onHorizontalPositionChange={(position) => update("mobileSellButtonHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("mobileSellButtonVerticalPosition", position)}
+            />
+            <HeroPositionControls
+              title="Request button"
+              horizontalPosition={draft.mobileRequestButtonHorizontalPosition}
+              verticalPosition={draft.mobileRequestButtonVerticalPosition}
+              onHorizontalPositionChange={(position) => update("mobileRequestButtonHorizontalPosition", position)}
+              onVerticalPositionChange={(position) => update("mobileRequestButtonVerticalPosition", position)}
             />
             <HeroPositionControls
               title="Explore and browse links"
