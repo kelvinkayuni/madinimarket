@@ -674,8 +674,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-carousel-controls button:focus-visible { outline: 2px solid #d2ee77; outline-offset: 2px; }
 .market-welcome-carousel-controls .market-welcome-carousel-dot { width: 8px; height: 8px; border: 0; background: #fff9; }
 .market-welcome-carousel-controls .market-welcome-carousel-dot.is-active { background: #d2ee77; }
-.market-welcome-hero.is-preview { min-height: clamp(360px, 39vw, 470px); margin: 0; padding: 32px; border: 1px solid #264a3b; border-radius: 4px; }
-.market-welcome-hero.is-preview .market-welcome-copy { inset: 32px; }
+.market-welcome-hero.is-preview { min-height: clamp(360px, 39vw, 470px); margin: 0; padding: clamp(32px, 5vw, 68px); border: 1px solid #264a3b; border-radius: 4px; }
+.market-welcome-hero.is-preview .market-welcome-copy { inset: clamp(32px, 5vw, 68px); }
 .market-welcome-hero.is-preview-mobile { --welcome-stable-viewport-height: 844px; min-height: 464px; align-items: stretch; padding: 22px 18px 58px; background-size: min(145vw, 680px) auto; }
 .market-welcome-hero.is-preview-mobile .market-welcome-copy { inset: 22px 18px 58px; }
 .market-welcome-hero.is-preview[data-height-mode="fit-screen"] { min-height: max(360px, calc(var(--welcome-stable-viewport-height) - 118px)); }
