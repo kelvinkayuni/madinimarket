@@ -89,6 +89,7 @@ export default function WelcomeHero({
     "--welcome-mobile-links-y": `${settings.mobileLinksVerticalPosition}%`,
     "--welcome-font-family": fontFamily,
     "--welcome-font-weight": settings.fontWeight,
+    "--welcome-eyebrow-font-weight": settings.eyebrowFontWeight,
     "--welcome-description-font-weight": settings.descriptionFontWeight,
     "--welcome-secondary-links-font-weight": settings.secondaryLinksFontWeight,
     "--welcome-desktop-font-size": `${settings.desktopFontSize}px`,

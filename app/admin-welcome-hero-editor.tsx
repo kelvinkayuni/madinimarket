@@ -641,7 +641,7 @@ export default function AdminWelcomeHeroEditor({
         ["Text shadow", "overlayColor"],
         ["Headline", "headingColor"],
         ["Description", "bodyColor"],
-        ["Accent", "accentColor"],
+        ["Eyebrow text color", "accentColor"],
         ["Sell a mineral button", "buttonColor"],
         ["Sell a mineral button text", "buttonTextColor"],
         ["Sell a mineral button border", "buttonBorderColor"],
@@ -690,6 +690,11 @@ export default function AdminWelcomeHeroEditor({
       </label>
       <label className="field-label">Font weight
         <select className="text-input" value={draft.fontWeight} onChange={(event) => update("fontWeight", Number(event.target.value) as WelcomeHeroSettings["fontWeight"])}>
+          <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={700}>Bold</option>
+        </select>
+      </label>
+      <label className="field-label">Eyebrow font weight
+        <select className="text-input" value={draft.eyebrowFontWeight} onChange={(event) => update("eyebrowFontWeight", Number(event.target.value) as WelcomeHeroSettings["eyebrowFontWeight"])}>
           <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={700}>Bold</option>
         </select>
       </label>

@@ -110,6 +110,7 @@ export type WelcomeHeroSettings = {
   requestButtonFontWeight: WelcomeHeroButtonFontWeight;
   fontFamily: WelcomeHeroFontFamily;
   fontWeight: WelcomeHeroFontWeight;
+  eyebrowFontWeight: WelcomeHeroFontWeight;
   descriptionFontWeight: WelcomeHeroFontWeight;
   secondaryLinksFontWeight: WelcomeHeroFontWeight;
   desktopFontSize: number;
@@ -238,6 +239,9 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const descriptionFontWeight = settings.descriptionFontWeight === undefined
     ? 400
     : settings.descriptionFontWeight;
+  const eyebrowFontWeight = settings.eyebrowFontWeight === undefined
+    ? settings.fontWeight
+    : settings.eyebrowFontWeight;
   const secondaryLinksFontWeight = settings.secondaryLinksFontWeight === undefined
     ? settings.fontWeight
     : settings.secondaryLinksFontWeight;
@@ -309,6 +313,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     ![400, 500, 600, 650, 700].includes(requestButtonFontWeight as number) ||
     (settings.fontFamily !== "serif" && settings.fontFamily !== "sans") ||
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
+    ![400, 500, 600, 700].includes(eyebrowFontWeight as number) ||
     ![400, 500, 600, 700].includes(descriptionFontWeight as number) ||
     ![400, 500, 600, 700].includes(secondaryLinksFontWeight as number) ||
     !isIntegerInRange("desktopFontSize", 40, 78) ||
@@ -426,6 +431,7 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     requestButtonFontWeight: requestButtonFontWeight as WelcomeHeroButtonFontWeight,
     fontFamily: settings.fontFamily,
     fontWeight: settings.fontWeight as WelcomeHeroFontWeight,
+    eyebrowFontWeight: eyebrowFontWeight as WelcomeHeroFontWeight,
     descriptionFontWeight: descriptionFontWeight as WelcomeHeroFontWeight,
     secondaryLinksFontWeight: secondaryLinksFontWeight as WelcomeHeroFontWeight,
     desktopFontSize: settings.desktopFontSize as number,
