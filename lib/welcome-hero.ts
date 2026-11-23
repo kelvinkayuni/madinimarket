@@ -95,8 +95,16 @@ export type WelcomeHeroSettings = {
   accentColor: string;
   buttonColor: string;
   buttonTextColor: string;
+  buttonBackgroundOpacity: number;
+  buttonBorderColor: string;
+  buttonBorderWidth: number;
+  buttonShadowStrength: number;
   requestButtonColor: string;
   requestButtonTextColor: string;
+  requestButtonBackgroundOpacity: number;
+  requestButtonBorderColor: string;
+  requestButtonBorderWidth: number;
+  requestButtonShadowStrength: number;
   fontFamily: WelcomeHeroFontFamily;
   fontWeight: WelcomeHeroFontWeight;
   descriptionFontWeight: WelcomeHeroFontWeight;
@@ -210,6 +218,14 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     : settings.publicHeaderMobileScale;
   const requestButtonColor = settings.requestButtonColor === undefined ? "#f2ecdc" : settings.requestButtonColor;
   const requestButtonTextColor = settings.requestButtonTextColor === undefined ? "#18382e" : settings.requestButtonTextColor;
+  const buttonBorderColor = settings.buttonBorderColor === undefined ? settings.buttonColor : settings.buttonBorderColor;
+  const requestButtonBorderColor = settings.requestButtonBorderColor === undefined ? requestButtonColor : settings.requestButtonBorderColor;
+  const buttonBackgroundOpacity = settings.buttonBackgroundOpacity === undefined ? 75 : settings.buttonBackgroundOpacity;
+  const requestButtonBackgroundOpacity = settings.requestButtonBackgroundOpacity === undefined ? 42 : settings.requestButtonBackgroundOpacity;
+  const buttonBorderWidth = settings.buttonBorderWidth === undefined ? 1 : settings.buttonBorderWidth;
+  const requestButtonBorderWidth = settings.requestButtonBorderWidth === undefined ? 1 : settings.requestButtonBorderWidth;
+  const buttonShadowStrength = settings.buttonShadowStrength === undefined ? 20 : settings.buttonShadowStrength;
+  const requestButtonShadowStrength = settings.requestButtonShadowStrength === undefined ? 20 : settings.requestButtonShadowStrength;
   const exploreLinkLabel = settings.exploreLinkLabel === undefined ? "" : settings.exploreLinkLabel;
   const buyerBrowseLinkLabel = settings.buyerBrowseLinkLabel === undefined
     ? ""
@@ -274,8 +290,16 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isColor("accentColor") ||
     !isColor("buttonColor") ||
     !isColor("buttonTextColor") ||
+    !isColorValue(buttonBorderColor) ||
+    !isIntegerValueInRange(buttonBackgroundOpacity, 0, 100) ||
+    !isIntegerValueInRange(buttonBorderWidth, 0, 4) ||
+    !isIntegerValueInRange(buttonShadowStrength, 0, 100) ||
     !isColorValue(requestButtonColor) ||
     !isColorValue(requestButtonTextColor) ||
+    !isColorValue(requestButtonBorderColor) ||
+    !isIntegerValueInRange(requestButtonBackgroundOpacity, 0, 100) ||
+    !isIntegerValueInRange(requestButtonBorderWidth, 0, 4) ||
+    !isIntegerValueInRange(requestButtonShadowStrength, 0, 100) ||
     (settings.fontFamily !== "serif" && settings.fontFamily !== "sans") ||
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
     ![400, 500, 600, 700].includes(descriptionFontWeight as number) ||
@@ -381,8 +405,16 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     accentColor: settings.accentColor as string,
     buttonColor: settings.buttonColor as string,
     buttonTextColor: settings.buttonTextColor as string,
+    buttonBackgroundOpacity: buttonBackgroundOpacity as number,
+    buttonBorderColor: buttonBorderColor as string,
+    buttonBorderWidth: buttonBorderWidth as number,
+    buttonShadowStrength: buttonShadowStrength as number,
     requestButtonColor: requestButtonColor as string,
     requestButtonTextColor: requestButtonTextColor as string,
+    requestButtonBackgroundOpacity: requestButtonBackgroundOpacity as number,
+    requestButtonBorderColor: requestButtonBorderColor as string,
+    requestButtonBorderWidth: requestButtonBorderWidth as number,
+    requestButtonShadowStrength: requestButtonShadowStrength as number,
     fontFamily: settings.fontFamily,
     fontWeight: settings.fontWeight as WelcomeHeroFontWeight,
     descriptionFontWeight: descriptionFontWeight as WelcomeHeroFontWeight,

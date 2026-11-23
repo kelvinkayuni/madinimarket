@@ -7,9 +7,9 @@ import type { WelcomeHeroSettings } from "@/lib/welcome-hero";
 
 const barStaggerOrder = [3, 0, 6, 2, 7, 1, 5, 4];
 
-function getTextShadowColor(color: string, opacity: number) {
+function getColorWithOpacity(color: string, opacity: number) {
   if (!/^#[\da-f]{6}$/i.test(color)) {
-    throw new Error("Welcome hero text shadow color must be a six-digit hex color.");
+    throw new Error("Welcome hero colors must be six-digit hex values.");
   }
   const value = Number.parseInt(color.slice(1), 16);
   return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${opacity / 100})`;
@@ -50,8 +50,8 @@ export default function WelcomeHero({
     : "var(--font-body), Arial, sans-serif";
   const style = {
     "--welcome-background-color": settings.backgroundColor,
-    "--welcome-text-shadow-color": getTextShadowColor(settings.overlayColor, settings.overlayOpacity),
-    "--welcome-text-shadow-highlight-color": getTextShadowColor("#ffffff", settings.overlayOpacity * 0.5),
+    "--welcome-text-shadow-color": getColorWithOpacity(settings.overlayColor, settings.overlayOpacity),
+    "--welcome-text-shadow-highlight-color": getColorWithOpacity("#ffffff", settings.overlayOpacity * 0.5),
     "--welcome-text-shadow-blur": `${5 + settings.overlayOpacity * 0.09}px`,
     "--welcome-text-shadow-glow": `${2 + settings.overlayOpacity * 0.04}px`,
     "--welcome-heading-color": settings.headingColor,
@@ -59,8 +59,16 @@ export default function WelcomeHero({
     "--welcome-accent-color": settings.accentColor,
     "--welcome-button-color": settings.buttonColor,
     "--welcome-button-text-color": settings.buttonTextColor,
+    "--welcome-button-background": getColorWithOpacity(settings.buttonColor, settings.buttonBackgroundOpacity),
+    "--welcome-button-border-color": settings.buttonBorderColor,
+    "--welcome-button-border-width": `${settings.buttonBorderWidth}px`,
+    "--welcome-button-shadow": getColorWithOpacity("#000000", settings.buttonShadowStrength),
     "--welcome-request-button-color": settings.requestButtonColor,
     "--welcome-request-button-text-color": settings.requestButtonTextColor,
+    "--welcome-request-button-background": getColorWithOpacity(settings.requestButtonColor, settings.requestButtonBackgroundOpacity),
+    "--welcome-request-button-border-color": settings.requestButtonBorderColor,
+    "--welcome-request-button-border-width": `${settings.requestButtonBorderWidth}px`,
+    "--welcome-request-button-shadow": getColorWithOpacity("#000000", settings.requestButtonShadowStrength),
     "--welcome-desktop-copy-x": `${settings.desktopCopyHorizontalPosition}%`,
     "--welcome-desktop-copy-y": `${settings.desktopCopyVerticalPosition}%`,
     "--welcome-mobile-copy-x": `${settings.mobileCopyHorizontalPosition}%`,

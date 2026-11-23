@@ -644,14 +644,34 @@ export default function AdminWelcomeHeroEditor({
         ["Accent", "accentColor"],
         ["Sell a mineral button", "buttonColor"],
         ["Sell a mineral button text", "buttonTextColor"],
+        ["Sell a mineral button border", "buttonBorderColor"],
         ["Request button", "requestButtonColor"],
         ["Request button text", "requestButtonTextColor"],
+        ["Request button border", "requestButtonBorderColor"],
       ] as const).map(([label, key]) => <label className="admin-welcome-hero-color" key={key}>
         <span>{label}</span>
         <input aria-label={`${label} color`} type="color" value={draft[key]} onChange={(event) => update(key, event.target.value)} />
       </label>)}
       <label className="field-label admin-welcome-hero-range">Text shadow strength: {draft.overlayOpacity}%
         <input type="range" min={0} max={100} step={1} value={draft.overlayOpacity} onChange={(event) => update("overlayOpacity", Number(event.target.value))} />
+      </label>
+      <label className="field-label admin-welcome-hero-range">Sell button background opacity: {draft.buttonBackgroundOpacity}%
+        <input aria-label="Sell a mineral button background opacity" type="range" min={0} max={100} step={1} value={draft.buttonBackgroundOpacity} onChange={(event) => update("buttonBackgroundOpacity", Number(event.target.value))} />
+      </label>
+      <label className="field-label admin-welcome-hero-range">Sell button border width: {draft.buttonBorderWidth}px
+        <input aria-label="Sell a mineral button border width" type="range" min={0} max={4} step={1} value={draft.buttonBorderWidth} onChange={(event) => update("buttonBorderWidth", Number(event.target.value))} />
+      </label>
+      <label className="field-label admin-welcome-hero-range">Sell button shadow strength: {draft.buttonShadowStrength}%
+        <input aria-label="Sell a mineral button shadow strength" type="range" min={0} max={100} step={1} value={draft.buttonShadowStrength} onChange={(event) => update("buttonShadowStrength", Number(event.target.value))} />
+      </label>
+      <label className="field-label admin-welcome-hero-range">Request button background opacity: {draft.requestButtonBackgroundOpacity}%
+        <input aria-label="Request button background opacity" type="range" min={0} max={100} step={1} value={draft.requestButtonBackgroundOpacity} onChange={(event) => update("requestButtonBackgroundOpacity", Number(event.target.value))} />
+      </label>
+      <label className="field-label admin-welcome-hero-range">Request button border width: {draft.requestButtonBorderWidth}px
+        <input aria-label="Request button border width" type="range" min={0} max={4} step={1} value={draft.requestButtonBorderWidth} onChange={(event) => update("requestButtonBorderWidth", Number(event.target.value))} />
+      </label>
+      <label className="field-label admin-welcome-hero-range">Request button shadow strength: {draft.requestButtonShadowStrength}%
+        <input aria-label="Request button shadow strength" type="range" min={0} max={100} step={1} value={draft.requestButtonShadowStrength} onChange={(event) => update("requestButtonShadowStrength", Number(event.target.value))} />
       </label>
       <label className="field-label">Font family
         <select className="text-input" value={draft.fontFamily} onChange={(event) => update("fontFamily", event.target.value as WelcomeHeroSettings["fontFamily"])}>
