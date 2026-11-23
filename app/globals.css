@@ -659,7 +659,7 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-action { position: absolute; display: flex; width: max-content; max-width: 100%; flex-wrap: wrap; align-items: center; transition: left .2s ease, top .2s ease, transform .2s ease; }
 .market-welcome-sell-action { left: var(--welcome-desktop-sell-x, 0%); top: var(--welcome-desktop-sell-y, 85%); transform: translate(calc(0% - var(--welcome-desktop-sell-x, 0%)), calc(0% - var(--welcome-desktop-sell-y, 85%))); }
 .market-welcome-request-action { left: var(--welcome-desktop-request-x, 0%); top: var(--welcome-desktop-request-y, 85%); transform: translate(calc(0% - var(--welcome-desktop-request-x, 0%)), calc(0% - var(--welcome-desktop-request-y, 85%))); }
-.market-welcome-action .button { min-height: 34.5px; gap: 6px; padding: 0 12.75px; font-size: 12px; }
+.market-welcome-action .button { min-height: 28px; gap: 6px; padding: 4px 6px; font-size: 12px; }
 .market-welcome-action .button-lime { border: var(--welcome-button-border-width, 1px) solid var(--welcome-button-border-color, var(--welcome-button-color, #d2ee77)); background: var(--welcome-button-background, var(--welcome-button-color, #d2ee77)); color: var(--welcome-button-text-color, #18382e); font-weight: var(--welcome-button-font-weight, 650); box-shadow: 0 3px 12px var(--welcome-button-shadow, rgba(0, 0, 0, .2)); }
 .market-welcome-post-button { border: var(--welcome-request-button-border-width, 1px) solid var(--welcome-request-button-border-color, var(--welcome-request-button-color, #f2ecdc)); background: var(--welcome-request-button-background, var(--welcome-request-button-color, #f2ecdc)); color: var(--welcome-request-button-text-color, #18382e); font-weight: var(--welcome-request-button-font-weight, 650); box-shadow: 0 3px 12px var(--welcome-request-button-shadow, rgba(0, 0, 0, .2)); }
 .market-welcome-post-button:hover { filter: brightness(.92); }
@@ -1569,7 +1569,7 @@ h1, h2, h3, p { margin-top: 0; }
   .market-welcome-sell-action { left: var(--welcome-mobile-sell-x, 0%); top: var(--welcome-mobile-sell-y, 85%); transform: translate(calc(0% - var(--welcome-mobile-sell-x, 0%)), calc(0% - var(--welcome-mobile-sell-y, 85%))); }
   .market-welcome-request-action { left: var(--welcome-mobile-request-x, 0%); top: var(--welcome-mobile-request-y, 85%); transform: translate(calc(0% - var(--welcome-mobile-request-x, 0%)), calc(0% - var(--welcome-mobile-request-y, 85%))); }
   .market-welcome-action { max-width: min(100%, 290px); }
-  .market-welcome-action .button { min-height: 32.25px; }
+  .market-welcome-action .button { min-height: 28px; }
   .market-welcome-secondary-links { left: var(--welcome-mobile-links-x, 0%); top: var(--welcome-mobile-links-y, 100%); gap: 6px 12px; transform: translate(calc(0% - var(--welcome-mobile-links-x, 0%)), calc(0% - var(--welcome-mobile-links-y, 100%))); }
   .market-welcome-secondary-link { font-size: 10px; }
   .market-welcome-status { right: 12px; bottom: 12px; padding: 8px 10px; font-size: 9px; }
