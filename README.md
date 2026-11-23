@@ -5,7 +5,7 @@ Madinimarket is a full-stack marketplace for buying and selling minerals in Tanz
 ## Current website features
 
 - **Public marketplace:** Browse approved mineral listings and buyer requests, search by mineral or location, and view market content when the admin-configured weekly schedule is open. The welcome hero appears after an admin adds its headline and copy, links visitors directly to mineral listings and buyer requests, and can display up to three rotating background images. Only admins can hide or show the hero or edit its copy and design; staff Homepage Display permissions do not include hero visibility. The admin controls whether USD is available alongside TSh.
-- **Buyer and seller accounts:** Website accounts use generated `MM-####` usernames. Sellers manage their listings and buyer requests, submit dealer/broker licence documents, and manage subscriptions. Buyers can shop from listings, manage their orders, and receive or respond to private offers.
+- **Buyer and seller accounts:** New website accounts must provide a 20-digit Tanzania NIDA NIN. Existing users are prompted to add one after signing in and cannot use account features until they do. NINs are stored privately and visible only to admins, not staff or public pages. Website accounts use generated `MM-####` usernames. Sellers manage their listings and buyer requests, submit dealer/broker licence documents, and manage subscriptions. Buyers can shop from listings, manage their orders, and receive or respond to private offers.
 - **Submissions and subscriptions:** Seller listings and buyer requests are reviewed before appearing publicly. Seller/buyer subscriptions are managed through payment instructions, payment-reference and receipt submission, and admin or authorized staff review.
 - **Orders and Cart:** Signed-in users can manage their cart, private offers, active buying and selling orders, and order history. The purchase workflow supports seller availability checks, manual payment verification, shipping details, delivery confirmation, buyer receipt, disputes, refunds, and seller payouts.
 - **Private offers:** Eligible sellers can make offers on buyer requests. Accepted offers continue through the standard order workflow without publishing the private mineral as a public listing.
@@ -33,6 +33,7 @@ Configure the Supabase project and run these scripts in order in the Supabase SQ
 2. Add your Supabase project URL and keys.
 3. Run `supabase/schema.sql`.
 4. Run `supabase/approval-workflow.sql`.
+   Before deploying required NIN registration and the existing-account sign-in gate, run `supabase/national-identification-number.sql`. Validation checks the 20-digit format only and does not verify the number with NIDA.
 5. Run `supabase/currency-control.sql` to add or upgrade the marketplace currency setting.
 6. Run `supabase/platform-pricing.sql` to enable the admin-managed mineral listing fee.
 7. Run `supabase/subscription-control.sql` to add account subscription plans and marketplace visibility controls.

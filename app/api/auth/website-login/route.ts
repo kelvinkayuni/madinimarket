@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   try {
     const admin = createSupabaseAdminClient();
     const { data: account, error } = await admin.from("website_accounts")
-      .select("id, username, display_name, password_hash, is_active, session_version")
+      .select("id, username, display_name, password_hash, is_active, session_version, nin")
       .eq("username", username)
       .maybeSingle();
     if (error || !account || !account.is_active || !(await verifyWebsitePassword(password, account.password_hash))) {
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
       id: account.id,
       username: account.username,
       displayName: account.display_name,
+      ninRequired: !account.nin,
       accessToken: createWebsiteSessionToken(account.id, account.session_version),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {

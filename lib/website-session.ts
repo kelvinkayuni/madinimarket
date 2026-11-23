@@ -33,7 +33,7 @@ export function createWebsiteSessionToken(accountId: string, sessionVersion: num
   return `${payload}.${signature}`;
 }
 
-export async function getWebsiteAccountId(request: Request) {
+export async function getWebsiteAccountId(request: Request, allowMissingNin = false) {
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return null;
   const [payload, signature] = token.split(".");
@@ -61,10 +61,11 @@ export async function getWebsiteAccountId(request: Request) {
   const expiresAt = Number(parts.length === 2 ? parts[1] : parts[2]);
   if (!accountId || !Number.isSafeInteger(sessionVersion) || sessionVersion < 0 || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
   try {
-    const { data } = await createSupabaseAdminClient().from("website_accounts")
+    let accountQuery = createSupabaseAdminClient().from("website_accounts")
       .select("is_active, session_version")
-      .eq("id", accountId)
-      .maybeSingle();
+      .eq("id", accountId);
+    if (!allowMissingNin) accountQuery = accountQuery.not("nin", "is", null);
+    const { data } = await accountQuery.maybeSingle();
     return data?.is_active && data.session_version === sessionVersion ? accountId : null;
   } catch {
     return null;

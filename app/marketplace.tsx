@@ -95,7 +95,7 @@ type AccountWantedRequest = {
   can_manage: boolean;
   manage_block_reason?: string | null;
 };
-type WebsiteAccount = { id: string; display_name: string; username: string; email?: string; phone?: string | null; is_active: boolean; created_at: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder_name: string | null; bank_info_added_at: string | null; bank_info_edit_unlocked: boolean; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
+type WebsiteAccount = { id: string; display_name: string; username: string; email?: string; phone?: string | null; nin?: string | null; is_active: boolean; created_at: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder_name: string | null; bank_info_added_at: string | null; bank_info_edit_unlocked: boolean; listings: SubmissionCounts; buying_requests: SubmissionCounts; subscription: { months: number; starts_at: string; expires_at: string } | null };
 type SubmissionCounts = { total: number; pending: number; approved: number; rejected: number };
 type WebsiteDraft = { kind: "seller" | "buyer"; payload: Record<string, string | number>; image_path: string | null; image_url?: string; image_gallery_paths?: string[]; image_gallery_urls?: string[]; updated_at: string };
 type SalesLedgerTotals = Record<Currency, { transactions: number; grossSales: number; sellerAmount: number; marketplaceFee: number }>;
@@ -107,7 +107,7 @@ type SubscriptionPlan = { id: string; months: number; price_tzs: string; price_u
 type SubscriptionPaymentMethod = { method: string; accountNumber: string };
 type AccountSubscription = { id: string; website_user_id?: string; plan_id: string | null; months: number; currency: Currency; amount: string; status: "pending" | "active" | "expired" | "rejected"; requested_at: string; starts_at: string | null; expires_at: string | null; paid_at: string | null; payment_reference?: string | null; payment_receipt_url?: string | null; review_note?: string | null; account?: { display_name: string; username: string; email?: string } | null };
 type EditingSubmission = { kind: "seller"; item: Seller } | { kind: "buyer"; item: Buyer } | null;
-type Dialog = "create" | "signin" | "forgot-password" | "sell" | "buy" | "review" | "submissions" | "subscription" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "commerce" | "bank-information" | "private-offer" | "certificate-ready" | "support" | "signout" | null;
+type Dialog = "create" | "signin" | "forgot-password" | "sell" | "buy" | "review" | "submissions" | "subscription" | "my-market-minerals" | "my-wanted-minerals" | "my-licenses" | "commerce" | "bank-information" | "private-offer" | "certificate-ready" | "support" | "signout" | "nin-required" | null;
 
 const SELLERS_STORAGE_KEY = "madinimarket:sellers:v1";
 const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
@@ -1056,6 +1056,7 @@ export default function Marketplace() {
   const [user, setUser] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [userId, setUserId] = useState("");
+  const [websiteNinRequired, setWebsiteNinRequired] = useState(false);
   const [accountOrderStatusChannel, setAccountOrderStatusChannel] = useState("");
   const [marketplaceOrdersNeedingAction, setMarketplaceOrdersNeedingAction] = useState(0);
   const [staffMarketplaceQueueCounts, setStaffMarketplaceQueueCounts] = useState<{
@@ -1802,11 +1803,24 @@ export default function Marketplace() {
       try {
         const response = await fetchWithWebsiteSession("/api/auth/website-session", { cache: "no-store" });
         const result = response.ok ? await response.json() : null;
-        if (!active || result?.account) return;
+        if (!active) return;
+        if (result?.account) {
+          const ninRequired = result.ninRequired === true;
+          setWebsiteNinRequired(ninRequired);
+          if (ninRequired) {
+            setRole(null);
+            setDialog("nin-required");
+          } else {
+            setRole((current) => current ?? "user");
+            setDialog((current) => current === "nin-required" ? null : current);
+          }
+          return;
+        }
         clearWebsiteSessionToken();
         setUser("");
         setDisplayName("");
         setUserId("");
+        setWebsiteNinRequired(false);
         setRole(null);
         setStaffPermissions([]);
         setStaffRoles([]);
@@ -2178,19 +2192,22 @@ export default function Marketplace() {
             staffAccessCache.current = null;
             const response = await fetchWithWebsiteSession("/api/auth/website-session", { cache: "no-store" });
             const result = response.ok ? await response.json() : null;
-            hasWebsiteAccount = Boolean(result?.account);
+            const ninRequired = Boolean(result?.account && result.ninRequired);
+            hasWebsiteAccount = Boolean(result?.account && !ninRequired);
             if (!result?.account) clearWebsiteSessionToken();
             if (active) {
               setUser(result?.account?.username ?? "");
               setDisplayName(result?.account?.display_name ?? "");
               setUserId(result?.account?.id ?? "");
-              setRole(result?.account ? "user" : null);
+              setWebsiteNinRequired(ninRequired);
+              setRole(result?.account && !ninRequired ? "user" : null);
+              if (ninRequired) setDialog("nin-required");
               setStaffAccessStatus("idle");
               setStaffPermissions([]);
               setStaffRoles([]);
               if (!result?.account) setCertificates({});
             }
-            if (result?.account) {
+            if (result?.account && !ninRequired) {
               const certificateResponse = await fetchWithWebsiteSession("/api/website-certificates", { cache: "no-store" });
               if (certificateResponse.ok) {
                 const certificateResult = await certificateResponse.json();
@@ -4116,7 +4133,7 @@ export default function Marketplace() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             firstName: form.get("firstName"), surname: form.get("surname"), email: form.get("email"),
-            phone: form.get("phone"), password: form.get("password"),
+            phone: form.get("phone"), nin: form.get("nin"), password: form.get("password"),
             country: form.get("deliveryCountry"), region: form.get("deliveryRegion"),
             district: form.get("deliveryDistrict"), address: form.get("deliveryAddress"),
           }),
@@ -4139,6 +4156,44 @@ export default function Marketplace() {
       setNotice("Signed in, but some marketplace data could not be loaded. Please refresh to try again.");
     });
   };
+  const completeWebsiteNin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const nin = String(form.get("nin") ?? "").trim();
+    if (!/^[0-9]{20}$/.test(nin)) {
+      setNotice("Enter your 20-digit Tanzania NIDA NIN.");
+      return;
+    }
+    await withProgress("website-nin-save", async () => {
+      try {
+        const response = await fetchWithWebsiteSession("/api/auth/website-account/nin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nin }),
+        });
+        const result = await response.json();
+        if (!response.ok || result.saved !== true) {
+          throw new Error(result.error ?? "Could not save your NIN.");
+        }
+        setWebsiteNinRequired(false);
+        setRole("user");
+        setNotice("NIN saved. Your account is ready.");
+        refreshUserDataInBackground();
+        const certificateListingId = returnToCertificateAfterSignIn.current;
+        if (certificateListingId !== null) {
+          returnToCertificateAfterSignIn.current = null;
+          setCertificateReadyListingId(certificateListingId);
+          setDialog("certificate-ready");
+          return;
+        }
+        const shouldOpenOrders = returnToOrdersAfterSignIn.current;
+        returnToOrdersAfterSignIn.current = false;
+        setDialog(shouldOpenOrders ? "commerce" : null);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not save your NIN.");
+      }
+    });
+  };
   const signIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -4154,7 +4209,7 @@ export default function Marketplace() {
       let sessionAccessToken: string | undefined;
       if (isSupabaseConfigured) {
         try {
-          let websiteAccount: { id: string; username: string; displayName: string; accessToken: string } | null = null;
+          let websiteAccount: { id: string; username: string; displayName: string; accessToken: string; ninRequired: boolean } | null = null;
           if (/^MM-\d{4}$/i.test(username)) {
             const websiteResponse = await measureMarketplacePerformance("website-authentication", () => fetch("/api/auth/website-login", {
               method: "POST",
@@ -4169,12 +4224,18 @@ export default function Marketplace() {
             setUser(websiteAccount.username);
             setDisplayName(websiteAccount.displayName);
             setUserId(websiteAccount.id);
-            setRole("user");
+            setWebsiteNinRequired(websiteAccount.ninRequired);
+            setRole(websiteAccount.ninRequired ? null : "user");
             setStaffAccessStatus("idle");
             setStaffPermissions([]);
             setStaffRoles([]);
-            setNotice("Signed in successfully.");
             formElement.reset();
+            if (websiteAccount.ninRequired) {
+              setDialog("nin-required");
+              setNotice("Add your NIDA NIN to continue.");
+              return;
+            }
+            setNotice("Signed in successfully.");
             refreshUserDataInBackground();
             const certificateListingId = returnToCertificateAfterSignIn.current;
             if (certificateListingId !== null) {
@@ -4300,6 +4361,7 @@ export default function Marketplace() {
     setUser("");
     setDisplayName("");
     setUserId("");
+    setWebsiteNinRequired(false);
     setRole(null);
     setStaffChatUnreadCount(0);
     staffAccessCache.current = null;
@@ -5200,7 +5262,7 @@ export default function Marketplace() {
                 <ChevronDown className="admin-account-disclosure-chevron" size={16} aria-hidden="true" />
               </summary>
               <StaffTaskClaim type="website_account" taskId={account.id} enabled={role === "staff"} onNotice={setNotice}>{({ canAct }) => <article className="admin-account-row">
-              <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username}{role === "admin" ? ` · ${account.email ?? ""}` : ""}</span>{role === "admin" && <small>{account.phone || "No phone number"}</small>}</div>
+              <div className="admin-account-identity"><strong>{account.display_name}</strong><span>{account.username}{role === "admin" ? ` · ${account.email ?? ""}` : ""}</span>{role === "admin" && <><small>{account.phone || "No phone number"}</small><small>NIDA NIN: {account.nin || "Not recorded"}</small></>}</div>
               <div className="admin-account-counts">
                 <span><strong>{totalPosts}</strong> total posted</span>
                 <span>Selling: <strong>{account.listings.total}</strong> ({account.listings.pending} pending · {account.listings.approved} approved · {account.listings.rejected} rejected)</span>
@@ -5478,9 +5540,10 @@ export default function Marketplace() {
     </div>
 
     {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
-    {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" id={dialog === "commerce" ? "commerce-dialog-scroll-region" : undefined} role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button><div className="dialog-brand"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /><span>MADINIMARKET</span></div>
+    {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (!websiteNinRequired && event.target === event.currentTarget) { setDialog(null); setEditingSubmission(null); } }}><section className="dialog-panel" id={dialog === "commerce" ? "commerce-dialog-scroll-region" : undefined} role="dialog" aria-modal="true" aria-labelledby="dialog-title">{!websiteNinRequired && <button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => { setDialog(null); setEditingSubmission(null); }}><X size={19} /></button>}<div className="dialog-brand"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /><span>MADINIMARKET</span></div>
       {dialog === "signout" && <><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" disabled={busyActions.has("account-signout")} onClick={() => void withProgress("account-signout", signOut)}>{busyActions.has("account-signout") ? "Signing out…" : "Sign out"}</button></div></>}
-      {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2>{accountCreationDisabled ? <p className="dialog-copy">Account creation is suspended for now. Please try again later.</p> : <><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack form-scroll" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><div className="field-row"><Field label="Country" name="deliveryCountry" required autoComplete="country-name" /><Field label="Region" name="deliveryRegion" required autoComplete="address-level1" /></div><div className="field-row"><Field label="District" name="deliveryDistrict" required autoComplete="address-level2" /><Field label="Street" name="deliveryAddress" required autoComplete="street-address" /></div><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={accountCreationDisabled || busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username to the address you provide.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>      Already registered? <strong>Sign in</strong></button></>}</>}
+      {dialog === "nin-required" && <><div className="dialog-kicker">ACCOUNT VERIFICATION</div><h2 id="dialog-title">Add your NIN to continue.</h2><p className="dialog-copy">Your account needs a Tanzania NIDA NIN before you can continue using Madinimarket.</p><form className="form-stack" onSubmit={completeWebsiteNin}><label className="field-label">Tanzania National Identification Number (NIN)<input className="text-input" name="nin" type="text" required autoComplete="off" inputMode="numeric" pattern="[0-9]{20}" maxLength={20} title="Enter your 20-digit Tanzania NIDA NIN." placeholder="20 digits" /></label><p className="form-footnote">We check the 20-digit format only; the number is not verified with NIDA. Only admins can view it.</p><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("website-nin-save")}>{busyActions.has("website-nin-save") ? "Saving…" : "Save NIN and continue"}</button></form><button className="switch-dialog" type="button" onClick={() => void signOut()}>Sign out instead</button></>}
+      {dialog === "create" && <><div className="dialog-kicker">ONE ACCOUNT, BOTH SIDES</div><h2 id="dialog-title">Join the market.</h2>{accountCreationDisabled ? <p className="dialog-copy">Account creation is suspended for now. Please try again later.</p> : <><p className="dialog-copy">Create your account to buy, sell, or both.</p><form className="form-stack form-scroll" onSubmit={createAccount}><div className="field-row"><Field label="First name" name="firstName" required autoComplete="given-name" /><Field label="Surname" name="surname" required autoComplete="family-name" /></div><Field label="Email address" name="email" type="email" required autoComplete="email" /><Field label="Phone number" name="phone" type="tel" required autoComplete="tel" /><label className="field-label">Tanzania National Identification Number (NIN)<input className="text-input" name="nin" type="text" required autoComplete="off" inputMode="numeric" pattern="[0-9]{20}" maxLength={20} title="Enter your 20-digit Tanzania NIDA NIN." placeholder="20 digits" /></label><div className="field-row"><Field label="Country" name="deliveryCountry" required autoComplete="country-name" /><Field label="Region" name="deliveryRegion" required autoComplete="address-level1" /></div><div className="field-row"><Field label="District" name="deliveryDistrict" required autoComplete="address-level2" /><Field label="Street" name="deliveryAddress" required autoComplete="street-address" /></div><Field label="Password" name="password" type="password" required minLength={8} autoComplete="new-password" /><button className="button button-dark form-submit" type="submit" disabled={accountCreationDisabled || busyActions.has("account-create")}>{busyActions.has("account-create") ? "Creating account…" : <>Create account <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">We’ll email your username. Your NIN is stored privately and shown only to admins.</p><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>      Already registered? <strong>Sign in</strong></button></>}</>}
       {dialog === "signin" && <><div className="dialog-kicker">WELCOME BACK</div><h2 id="dialog-title">Good to see you.</h2><p className="dialog-copy">Sign in with your Madinimarket username. Email addresses cannot be used to sign in.</p><form className="form-stack" onSubmit={signIn}><Field label="Username" name="username" required autoComplete="username" /><Field label="Password" name="password" type="password" required autoComplete="current-password" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("account-signin")}>{busyActions.has("account-signin") ? "Signing in…" : <>Sign in <ArrowUpRight size={16} /></>}</button></form><p className="form-footnote">{isSupabaseConfigured ? "Use your account username and password to continue." : "Supabase is not configured. This local sign-in is for interface preview only."}</p><button className="switch-dialog" type="button" onClick={() => setDialog("forgot-password")}>Forgot your password?</button><button className="switch-dialog" type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>{accountCreationDisabled ? "Account creation is currently suspended" : <>New to the market? <strong>Create account</strong></>}</button></>}
       {dialog === "forgot-password" && <><div className="dialog-kicker">ACCOUNT RECOVERY</div><h2 id="dialog-title">Reset your password.</h2><p className="dialog-copy">Enter your username and registered email. If both match an eligible account, we’ll email a secure reset link. We never email passwords.</p><form className="form-stack" onSubmit={requestPasswordReset}><Field label="Username" name="username" required autoComplete="username" /><Field label="Registered email address" name="email" type="email" required autoComplete="email" /><button className="button button-dark form-submit" type="submit" disabled={busyActions.has("password-reset-request")}>{busyActions.has("password-reset-request") ? "Sending link…" : <>Email reset link <ArrowUpRight size={16} /></>}</button></form><button className="switch-dialog" type="button" onClick={() => setDialog("signin")}>Remembered your password? <strong>Sign in</strong></button></>}
       {dialog === "certificate-ready" && <><div className="dialog-kicker">SIGN-IN COMPLETE</div><h2 id="dialog-title">Your certificate is ready.</h2><p className="dialog-copy">The certificate will open in a new tab. Your marketplace dashboard will stay open here.</p><button className="button button-dark form-submit" type="button" onClick={() => { if (certificateReadyListingId !== null) { const certificateTab = window.open("about:blank", "_blank"); if (!certificateTab) setNotice("Allow pop-ups to open this certificate."); else void fetchWithWebsiteSession(`/api/listing-certificate?id=${certificateReadyListingId}`).then(async (response) => { if (!response.ok) throw new Error("Could not open this certificate."); const url = URL.createObjectURL(await response.blob()); certificateTab.location.href = url; window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }).catch((error: unknown) => { certificateTab.close(); setNotice(error instanceof Error ? error.message : "Could not open this certificate."); }); } setCertificateReadyListingId(null); setDialog(null); }}>Open certificate <ArrowUpRight size={16} /></button></>}

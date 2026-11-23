@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { sendGmailEmail } from "@/lib/gmail";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { isTanzaniaNinFormat } from "@/lib/tanzania-nin";
 import { hashWebsitePassword } from "@/lib/website-session";
 
 export async function POST(request: Request) {
@@ -18,11 +19,15 @@ export async function POST(request: Request) {
   const surname = typeof values.surname === "string" ? values.surname.trim() : "";
   const email = typeof values.email === "string" ? values.email.trim().toLowerCase() : "";
   const phone = typeof values.phone === "string" ? values.phone.trim() : "";
+  const nin = typeof values.nin === "string" ? values.nin.trim() : "";
   const deliveryCountry = typeof values.country === "string" ? values.country.trim() : "";
   const deliveryRegion = typeof values.region === "string" ? values.region.trim() : "";
   const deliveryDistrict = typeof values.district === "string" ? values.district.trim() : "";
   const deliveryAddress = typeof values.address === "string" ? values.address.trim() : "";
   const password = typeof values.password === "string" ? values.password : "";
+  if (!isTanzaniaNinFormat(nin)) {
+    return NextResponse.json({ error: "Enter your 20-digit Tanzania NIDA NIN." }, { status: 400 });
+  }
   if (!firstName || !surname || firstName.length > 100 || surname.length > 100 || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254 || !phone || phone.length > 40 ||
     !deliveryCountry || deliveryCountry.length > 100 || !deliveryRegion || deliveryRegion.length > 100 ||
     !deliveryDistrict || deliveryDistrict.length > 100 || !deliveryAddress || deliveryAddress.length > 300 ||
@@ -46,6 +51,7 @@ export async function POST(request: Request) {
         username,
         email,
         phone,
+        nin,
         delivery_country: deliveryCountry,
         delivery_region: deliveryRegion,
         delivery_district: deliveryDistrict,
