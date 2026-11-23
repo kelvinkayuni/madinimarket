@@ -649,6 +649,16 @@ export default function AdminWelcomeHeroEditor({
           <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={700}>Bold</option>
         </select>
       </label>
+      <label className="field-label">Description font weight
+        <select className="text-input" value={draft.descriptionFontWeight} onChange={(event) => update("descriptionFontWeight", Number(event.target.value) as WelcomeHeroSettings["descriptionFontWeight"])}>
+          <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={700}>Bold</option>
+        </select>
+      </label>
+      <label className="field-label">Explore and buyer browse links font weight
+        <select className="text-input" value={draft.secondaryLinksFontWeight} onChange={(event) => update("secondaryLinksFontWeight", Number(event.target.value) as WelcomeHeroSettings["secondaryLinksFontWeight"])}>
+          <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={700}>Bold</option>
+        </select>
+      </label>
       <label className="field-label admin-welcome-hero-range">Desktop heading: {draft.desktopFontSize}px
         <input type="range" min={40} max={78} step={1} value={draft.desktopFontSize} onChange={(event) => update("desktopFontSize", Number(event.target.value))} />
       </label>

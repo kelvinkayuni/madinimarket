@@ -94,6 +94,8 @@ export type WelcomeHeroSettings = {
   requestButtonTextColor: string;
   fontFamily: WelcomeHeroFontFamily;
   fontWeight: WelcomeHeroFontWeight;
+  descriptionFontWeight: WelcomeHeroFontWeight;
+  secondaryLinksFontWeight: WelcomeHeroFontWeight;
   desktopFontSize: number;
   mobileFontSize: number;
   transition: WelcomeHeroTransition;
@@ -174,6 +176,12 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const buyerBrowseLinkLabel = settings.buyerBrowseLinkLabel === undefined
     ? ""
     : settings.buyerBrowseLinkLabel;
+  const descriptionFontWeight = settings.descriptionFontWeight === undefined
+    ? 400
+    : settings.descriptionFontWeight;
+  const secondaryLinksFontWeight = settings.secondaryLinksFontWeight === undefined
+    ? settings.fontWeight
+    : settings.secondaryLinksFontWeight;
   const sellLabel = settings.sellLabel === undefined
     ? settings.exploreLabel === "Explore minerals" ? "Sell a mineral" : settings.exploreLabel
     : settings.sellLabel;
@@ -232,6 +240,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isColorValue(requestButtonTextColor) ||
     (settings.fontFamily !== "serif" && settings.fontFamily !== "sans") ||
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
+    ![400, 500, 600, 700].includes(descriptionFontWeight as number) ||
+    ![400, 500, 600, 700].includes(secondaryLinksFontWeight as number) ||
     !isIntegerInRange("desktopFontSize", 40, 78) ||
     !isIntegerInRange("mobileFontSize", 32, 56) ||
     !isIntegerValueInRange(desktopCopyHorizontalPosition, 0, 100) ||
@@ -329,6 +339,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     requestButtonTextColor: requestButtonTextColor as string,
     fontFamily: settings.fontFamily,
     fontWeight: settings.fontWeight as WelcomeHeroFontWeight,
+    descriptionFontWeight: descriptionFontWeight as WelcomeHeroFontWeight,
+    secondaryLinksFontWeight: secondaryLinksFontWeight as WelcomeHeroFontWeight,
     desktopFontSize: settings.desktopFontSize as number,
     mobileFontSize: settings.mobileFontSize as number,
     transition,
