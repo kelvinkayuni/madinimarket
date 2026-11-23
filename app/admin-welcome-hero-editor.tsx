@@ -664,6 +664,11 @@ export default function AdminWelcomeHeroEditor({
       <label className="field-label admin-welcome-hero-range">Sell button shadow strength: {draft.buttonShadowStrength}%
         <input aria-label="Sell a mineral button shadow strength" type="range" min={0} max={100} step={1} value={draft.buttonShadowStrength} onChange={(event) => update("buttonShadowStrength", Number(event.target.value))} />
       </label>
+      <label className="field-label">Sell a mineral button font weight
+        <select className="text-input" value={draft.buttonFontWeight} onChange={(event) => update("buttonFontWeight", Number(event.target.value) as WelcomeHeroSettings["buttonFontWeight"])}>
+          <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={650}>Current (650)</option><option value={700}>Bold</option>
+        </select>
+      </label>
       <label className="field-label admin-welcome-hero-range">Request button background opacity: {draft.requestButtonBackgroundOpacity}%
         <input aria-label="Request button background opacity" type="range" min={0} max={100} step={1} value={draft.requestButtonBackgroundOpacity} onChange={(event) => update("requestButtonBackgroundOpacity", Number(event.target.value))} />
       </label>
@@ -672,6 +677,11 @@ export default function AdminWelcomeHeroEditor({
       </label>
       <label className="field-label admin-welcome-hero-range">Request button shadow strength: {draft.requestButtonShadowStrength}%
         <input aria-label="Request button shadow strength" type="range" min={0} max={100} step={1} value={draft.requestButtonShadowStrength} onChange={(event) => update("requestButtonShadowStrength", Number(event.target.value))} />
+      </label>
+      <label className="field-label">Post a request button font weight
+        <select className="text-input" value={draft.requestButtonFontWeight} onChange={(event) => update("requestButtonFontWeight", Number(event.target.value) as WelcomeHeroSettings["requestButtonFontWeight"])}>
+          <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={650}>Current (650)</option><option value={700}>Bold</option>
+        </select>
       </label>
       <label className="field-label">Font family
         <select className="text-input" value={draft.fontFamily} onChange={(event) => update("fontFamily", event.target.value as WelcomeHeroSettings["fontFamily"])}>

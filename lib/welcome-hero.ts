@@ -45,6 +45,7 @@ function offsetLegacyPosition(value: unknown, multiplier: number, offset = 0) {
 
 export type WelcomeHeroFontFamily = "serif" | "sans";
 export type WelcomeHeroFontWeight = 400 | 500 | 600 | 700;
+export type WelcomeHeroButtonFontWeight = 400 | 500 | 600 | 650 | 700;
 export type WelcomeHeroHeightMode = "default" | "fit-screen" | "full-screen";
 export type WelcomeHeroMobileActionsPosition = "top" | "middle" | "bottom";
 export type WelcomeHeroTransition =
@@ -99,12 +100,14 @@ export type WelcomeHeroSettings = {
   buttonBorderColor: string;
   buttonBorderWidth: number;
   buttonShadowStrength: number;
+  buttonFontWeight: WelcomeHeroButtonFontWeight;
   requestButtonColor: string;
   requestButtonTextColor: string;
   requestButtonBackgroundOpacity: number;
   requestButtonBorderColor: string;
   requestButtonBorderWidth: number;
   requestButtonShadowStrength: number;
+  requestButtonFontWeight: WelcomeHeroButtonFontWeight;
   fontFamily: WelcomeHeroFontFamily;
   fontWeight: WelcomeHeroFontWeight;
   descriptionFontWeight: WelcomeHeroFontWeight;
@@ -226,6 +229,8 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
   const requestButtonBorderWidth = settings.requestButtonBorderWidth === undefined ? 1 : settings.requestButtonBorderWidth;
   const buttonShadowStrength = settings.buttonShadowStrength === undefined ? 20 : settings.buttonShadowStrength;
   const requestButtonShadowStrength = settings.requestButtonShadowStrength === undefined ? 20 : settings.requestButtonShadowStrength;
+  const buttonFontWeight = settings.buttonFontWeight === undefined ? 650 : settings.buttonFontWeight;
+  const requestButtonFontWeight = settings.requestButtonFontWeight === undefined ? 650 : settings.requestButtonFontWeight;
   const exploreLinkLabel = settings.exploreLinkLabel === undefined ? "" : settings.exploreLinkLabel;
   const buyerBrowseLinkLabel = settings.buyerBrowseLinkLabel === undefined
     ? ""
@@ -294,12 +299,14 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     !isIntegerValueInRange(buttonBackgroundOpacity, 0, 100) ||
     !isIntegerValueInRange(buttonBorderWidth, 0, 4) ||
     !isIntegerValueInRange(buttonShadowStrength, 0, 100) ||
+    ![400, 500, 600, 650, 700].includes(buttonFontWeight as number) ||
     !isColorValue(requestButtonColor) ||
     !isColorValue(requestButtonTextColor) ||
     !isColorValue(requestButtonBorderColor) ||
     !isIntegerValueInRange(requestButtonBackgroundOpacity, 0, 100) ||
     !isIntegerValueInRange(requestButtonBorderWidth, 0, 4) ||
     !isIntegerValueInRange(requestButtonShadowStrength, 0, 100) ||
+    ![400, 500, 600, 650, 700].includes(requestButtonFontWeight as number) ||
     (settings.fontFamily !== "serif" && settings.fontFamily !== "sans") ||
     ![400, 500, 600, 700].includes(settings.fontWeight as number) ||
     ![400, 500, 600, 700].includes(descriptionFontWeight as number) ||
@@ -409,12 +416,14 @@ export function parseWelcomeHeroSettings(value: unknown, allowEmptyCopy = false)
     buttonBorderColor: buttonBorderColor as string,
     buttonBorderWidth: buttonBorderWidth as number,
     buttonShadowStrength: buttonShadowStrength as number,
+    buttonFontWeight: buttonFontWeight as WelcomeHeroButtonFontWeight,
     requestButtonColor: requestButtonColor as string,
     requestButtonTextColor: requestButtonTextColor as string,
     requestButtonBackgroundOpacity: requestButtonBackgroundOpacity as number,
     requestButtonBorderColor: requestButtonBorderColor as string,
     requestButtonBorderWidth: requestButtonBorderWidth as number,
     requestButtonShadowStrength: requestButtonShadowStrength as number,
+    requestButtonFontWeight: requestButtonFontWeight as WelcomeHeroButtonFontWeight,
     fontFamily: settings.fontFamily,
     fontWeight: settings.fontWeight as WelcomeHeroFontWeight,
     descriptionFontWeight: descriptionFontWeight as WelcomeHeroFontWeight,
