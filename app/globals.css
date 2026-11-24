@@ -411,6 +411,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-translation-row > div span { color: #526451; }
 .admin-translation-pending-row > div:first-child { overflow-wrap: anywhere; }
 .admin-translation-pending-row .admin-translation-claim { justify-content: flex-end; }
+.admin-translation-pending-row.is-selected { padding-left: 9px; border-left: 3px solid #6b8c5e; background: #f7faf5; }
+.admin-translation-inline-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; padding: 12px; border: 1px solid #dfe7da; background: #fff; }
+.admin-translation-inline-heading { display: grid; gap: 5px; min-width: 0; }
+.admin-translation-inline-heading strong { color: #405745; font-size: 10px; }
+.admin-translation-inline-heading span { color: #778075; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.admin-translation-inline-form textarea { min-height: 58px; resize: vertical; }
 .admin-translation-row .button { min-height: 32px; font-size: 9px; }
 .admin-translation-load-more { margin-top: 12px; }
 .admin-homepage-panel { padding: 25px 0 24px; border-bottom: 1px solid var(--line); }
@@ -1440,6 +1446,8 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-translation-pending-row > div:first-child { grid-column: 1 / -1; }
   .admin-translation-pending-row .admin-translation-claim { grid-column: 1; }
   .admin-translation-pending-row > .button { grid-column: 2; }
+  .admin-translation-inline-form { grid-template-columns: 1fr; }
+  .admin-translation-inline-form .admin-translation-form-actions { justify-content: flex-start; }
   .admin-homepage-headline-form { grid-template-columns: 1fr; }
   .admin-homepage-font-size { align-items: flex-start; flex-direction: column; }
   .admin-homepage-font-size label { width: 100%; }

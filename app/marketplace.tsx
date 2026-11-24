@@ -5179,25 +5179,38 @@ export default function Marketplace() {
               <div className="admin-translation-list">
                 {visiblePendingTranslationPhrases.length ? visiblePendingTranslationPhrases.map((phrase) => (
                   <StaffTaskClaim type="translation_pair" taskId={phrase.taskId} enabled={role === "staff"} controlInChildren onNotice={setNotice} key={phrase.taskId}>
-                    {({ canAct, control }) => <article className="admin-translation-row admin-translation-pending-row">
+                    {({ canAct, control }) => {
+                      const isSelected = selectedTranslationPhrase?.taskId === phrase.taskId;
+                      return <article className={`admin-translation-row admin-translation-pending-row${isSelected ? " is-selected" : ""}`}>
                       <div><strong>{phrase.english_phrase}</strong></div>
                       <div className="admin-translation-claim">{control}</div>
-                      <button className="button button-dark" type="button" disabled={!canAct} onClick={() => {
+                      <button className="button button-dark" type="button" disabled={!canAct || isSelected} onClick={() => {
                         setEditingTranslationId(null);
                         setSelectedTranslationPhrase(phrase);
                         setTranslationForm({ english_phrase: phrase.english_phrase, swahili_phrase: "" });
-                      }}>Translate</button>
-                    </article>}
+                      }}>{isSelected ? <><Check size={14} /> Selected</> : "Translate"}</button>
+                      {isSelected && <form className="admin-translation-inline-form" onSubmit={(event) => void saveTranslation(event)}>
+                        <div className="admin-translation-inline-heading"><strong>Swahili translation for this phrase</strong><span>{phrase.english_phrase}</span></div>
+                        <label className="field-label">Swahili translation
+                          <textarea className="text-input" rows={2} maxLength={1000} required autoFocus value={translationForm.swahili_phrase} onChange={(event) => setTranslationForm((current) => ({ ...current, swahili_phrase: event.target.value }))} />
+                        </label>
+                        <div className="admin-translation-form-actions">
+                          <button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : "Save translation"}</button>
+                          <button className="button button-outline" type="button" onClick={() => { setSelectedTranslationPhrase(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>
+                        </div>
+                      </form>}
+                    </article>;
+                    }}
                   </StaffTaskClaim>
                 )) : <p className="admin-empty">No pending phrases match your search.</p>}
                 {visiblePendingTranslationPhrases.length < filteredPendingTranslationPhrases.length && <button className="button button-outline admin-translation-load-more" type="button" onClick={() => setTranslationPendingPage((current) => current + 1)}>Load more phrases</button>}
               </div>
             </> : <p className="admin-empty">All collected interface phrases have Swahili translations.</p>}
           </div>
-          {(role !== "staff" || selectedTranslationPhrase || editingTranslationId) && <form className="admin-translation-form" onSubmit={(event) => void saveTranslation(event)}>
-            <label className="field-label">Complete English interface phrase<input className="text-input" value={translationForm.english_phrase} maxLength={1000} required readOnly={role === "staff" && selectedTranslationPhrase !== null} onChange={(event) => setTranslationForm((current) => ({ ...current, english_phrase: event.target.value }))} /></label>
+          {!selectedTranslationPhrase && (role !== "staff" || editingTranslationId) && <form className="admin-translation-form" onSubmit={(event) => void saveTranslation(event)}>
+            <label className="field-label">Complete English interface phrase<input className="text-input" value={translationForm.english_phrase} maxLength={1000} required onChange={(event) => setTranslationForm((current) => ({ ...current, english_phrase: event.target.value }))} /></label>
             <label className="field-label">Swahili translation<input className="text-input" value={translationForm.swahili_phrase} maxLength={1000} required onChange={(event) => setTranslationForm((current) => ({ ...current, swahili_phrase: event.target.value }))} /></label>
-            <div className="admin-translation-form-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : editingTranslationId ? "Update pair" : "Add pair"}</button>{(editingTranslationId || selectedTranslationPhrase) && <button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(null); setSelectedTranslationPhrase(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>}</div>
+            <div className="admin-translation-form-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : editingTranslationId ? "Update pair" : "Add pair"}</button>{editingTranslationId && <button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(null); setSelectedTranslationPhrase(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>}</div>
           </form>}
           {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <StaffTaskClaim type="translation_pair" taskId={pair.id} enabled={role === "staff"} onNotice={setNotice} key={pair.id}>{({ canAct }) => <article className="admin-translation-row"><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" disabled={!canAct} onClick={() => { setSelectedTranslationPhrase(null); setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={!canAct || busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>}</StaffTaskClaim>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
         </section>}
