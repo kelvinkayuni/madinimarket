@@ -34,6 +34,8 @@ type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
 type AdminPanel = "review" | "seller-reviews" | "buyer-reviews" | "ledger" | "translations" | "homepage" | "marketplace-cards" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-disputes" | "buyer-refunds" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff" | "staff-chat";
+type PendingTranslationPhrase = { english_phrase: string; taskId: string };
+type AdminTranslationCatalog = { translations: TranslationPair[]; pendingPhrases: PendingTranslationPhrase[] };
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
 type SubmissionStatus = "pending" | "approved" | "rejected";
 type CertificateKind = "dealer" | "broker";
@@ -751,14 +753,20 @@ async function loadAdminCertificates(accessToken: string): Promise<AdminCertific
   return result.certificates as AdminCertificate[];
 }
 
-async function loadAdminTranslations(accessToken: string): Promise<TranslationPair[]> {
+async function loadAdminTranslations(accessToken: string): Promise<AdminTranslationCatalog> {
   const response = await fetch("/api/admin/translations", {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "Could not load translation pairs.");
-  return result.translations as TranslationPair[];
+  if (!Array.isArray(result.translations) || !Array.isArray(result.pendingPhrases)) {
+    throw new Error("Translation catalog data is invalid.");
+  }
+  return {
+    translations: result.translations as TranslationPair[],
+    pendingPhrases: result.pendingPhrases as PendingTranslationPhrase[],
+  };
 }
 
 async function fetchAdminSiteContent(accessToken: string, scope?: "homepage"): Promise<Record<string, unknown>> {
@@ -903,8 +911,12 @@ export default function Marketplace() {
   const [salesLedgerPeriod, setSalesLedgerPeriod] = useState<SalesLedgerPeriodFilter>("all");
   const [salesLedgerPage, setSalesLedgerPage] = useState(1);
   const [translationPairs, setTranslationPairs] = useState<TranslationPair[]>([]);
+  const [pendingTranslationPhrases, setPendingTranslationPhrases] = useState<PendingTranslationPhrase[]>([]);
   const [translationForm, setTranslationForm] = useState({ english_phrase: "", swahili_phrase: "" });
   const [editingTranslationId, setEditingTranslationId] = useState<string | null>(null);
+  const [selectedTranslationPhrase, setSelectedTranslationPhrase] = useState<PendingTranslationPhrase | null>(null);
+  const [translationPendingSearch, setTranslationPendingSearch] = useState("");
+  const [translationPendingPage, setTranslationPendingPage] = useState(1);
   const [swahiliEnabled, setSwahiliEnabled] = useState(true);
   const [accountCreationDisabled, setAccountCreationDisabled] = useState(false);
   const [nonAdminSignInDisabled, setNonAdminSignInDisabled] = useState(false);
@@ -965,6 +977,12 @@ export default function Marketplace() {
     (activeSalesLedgerPage - 1) * SALES_LEDGER_PAGE_SIZE,
     activeSalesLedgerPage * SALES_LEDGER_PAGE_SIZE,
   );
+  const filteredPendingTranslationPhrases = useMemo(() => {
+    const search = translationPendingSearch.trim().toLocaleLowerCase();
+    return pendingTranslationPhrases.filter((phrase) =>
+      !search || phrase.english_phrase.toLocaleLowerCase().includes(search));
+  }, [pendingTranslationPhrases, translationPendingSearch]);
+  const visiblePendingTranslationPhrases = filteredPendingTranslationPhrases.slice(0, translationPendingPage * 50);
   const homepageHeadlineStyle = {
     "--homepage-headline-font-size": `${homepageHeadlineFontSize}px`,
   } as CSSProperties & { "--homepage-headline-font-size": string };
@@ -2279,7 +2297,13 @@ export default function Marketplace() {
               adminLoads.push({ label: "licences", load: loadAdminCertificates(session.access_token).then(setAdminCertificates) });
             }
             if (can("translations")) {
-              adminLoads.push({ label: "translations", load: loadAdminTranslations(session.access_token).then(setTranslationPairs) });
+              adminLoads.push({
+                label: "translations",
+                load: loadAdminTranslations(session.access_token).then((catalog) => {
+                  setTranslationPairs(catalog.translations);
+                  setPendingTranslationPhrases(catalog.pendingPhrases);
+                }),
+              });
             }
             if (can("homepage_headlines")) {
               adminLoads.push(isAdmin
@@ -3205,7 +3229,9 @@ export default function Marketplace() {
   const refreshAdminTranslations = async () => {
     const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
     if (!session) throw new Error("Admin session expired.");
-    setTranslationPairs(await loadAdminTranslations(session.access_token));
+    const catalog = await loadAdminTranslations(session.access_token);
+    setTranslationPairs(catalog.translations);
+    setPendingTranslationPhrases(catalog.pendingPhrases);
   };
   const refreshAdminSiteContent = async () => {
     const { data: { session }, error } = await getSupabaseBrowserClient().auth.getSession();
@@ -3730,18 +3756,27 @@ export default function Marketplace() {
         const response = await fetch("/api/admin/translations", {
           method: editingTranslationId ? "PATCH" : "POST",
           headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ ...translationForm, ...(editingTranslationId ? { id: editingTranslationId } : {}) }),
+          body: JSON.stringify({
+            ...translationForm,
+            ...(editingTranslationId ? { id: editingTranslationId } : {}),
+            ...(!editingTranslationId && selectedTranslationPhrase ? { catalogTaskId: selectedTranslationPhrase.taskId } : {}),
+          }),
         });
         const result = await response.json();
         if (response.status === 409) {
           await refreshAdminTranslations();
-          setNotice(result.error ?? "This translation is being handled by another staff member. The list has been refreshed.");
+          if (!editingTranslationId && selectedTranslationPhrase) {
+            setSelectedTranslationPhrase(null);
+            setTranslationForm({ english_phrase: "", swahili_phrase: "" });
+          }
+          setNotice(result.error ?? "This translation task changed or is being handled by another staff member. The list has been refreshed.");
           return;
         }
         if (!response.ok) throw new Error(result.error ?? "Could not save the translation pair.");
         await refreshAdminTranslations();
         setTranslationForm({ english_phrase: "", swahili_phrase: "" });
         setEditingTranslationId(null);
+        setSelectedTranslationPhrase(null);
         setNotice(editingTranslationId ? "Translation pair updated." : "Translation pair added.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not save the translation pair.");
@@ -3765,10 +3800,11 @@ export default function Marketplace() {
           return;
         }
         if (!response.ok) throw new Error(result.error ?? "Could not delete the translation pair.");
-        setTranslationPairs((current) => current.filter((item) => item.id !== pair.id));
+        await refreshAdminTranslations();
         if (editingTranslationId === pair.id) {
           setEditingTranslationId(null);
           setTranslationForm({ english_phrase: "", swahili_phrase: "" });
+          setSelectedTranslationPhrase(null);
         }
         setNotice("Translation pair deleted.");
       } catch (error) {
@@ -5128,18 +5164,42 @@ export default function Marketplace() {
           </section>
         </section>}
         {activeAdminPanel === "translations" && (role === "admin" || staffCan("translations")) && <section className="admin-translations" aria-labelledby="admin-translations-heading">
-          <div className="admin-queue-heading"><div><span>LANGUAGE SETTINGS</span><h2 id="admin-translations-heading">English–Swahili translations</h2></div><strong>{translationPairs.length}</strong></div>
+          <div className="admin-queue-heading"><div><span>LANGUAGE SETTINGS</span><h2 id="admin-translations-heading">English–Swahili translations</h2></div><strong aria-label={`${pendingTranslationPhrases.length} phrases awaiting translation`}>{pendingTranslationPhrases.length}</strong></div>
           {role === "admin" && <div className="admin-site-setting">
             <div><strong>Allow visitors to switch to Swahili</strong><span>{siteContentLoaded ? swahiliEnabled ? "The language switch is visible in the visitor menu." : "The language switch is hidden; visitors use English." : "Loading language settings…"}</span></div>
             <button className={`admin-currency-switch${swahiliEnabled ? " is-on" : ""}`} type="button" role="switch" aria-checked={swahiliEnabled} aria-label="Allow visitors to switch to Swahili" disabled={!siteContentLoaded || busyActions.has("swahili-setting")} onClick={() => void updateSwahiliAvailability(!swahiliEnabled)}><span /></button>
           </div>}
-          <p className="admin-translation-help">Add a complete English interface phrase and its Swahili equivalent. The phrase must exist in the public interface. A translation applies only when the entire text block or placeholder matches it, so it will not change the same word inside a longer phrase. Matching ignores letter case and extra spaces, and preserves capitalization. Submitted mineral names and descriptions stay unchanged.</p>
-          <form className="admin-translation-form" onSubmit={(event) => void saveTranslation(event)}>
-            <label className="field-label">Complete English interface phrase<input className="text-input" value={translationForm.english_phrase} maxLength={120} required onChange={(event) => setTranslationForm((current) => ({ ...current, english_phrase: event.target.value }))} /></label>
-            <label className="field-label">Swahili translation<input className="text-input" value={translationForm.swahili_phrase} maxLength={120} required onChange={(event) => setTranslationForm((current) => ({ ...current, swahili_phrase: event.target.value }))} /></label>
-            <div className="admin-translation-form-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : editingTranslationId ? "Update pair" : "Add pair"}</button>{editingTranslationId && <button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>}</div>
-          </form>
-          {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <StaffTaskClaim type="translation_pair" taskId={pair.id} enabled={role === "staff"} onNotice={setNotice} key={pair.id}>{({ canAct }) => <article className="admin-translation-row"><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" disabled={!canAct} onClick={() => { setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={!canAct || busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>}</StaffTaskClaim>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
+          <p className="admin-translation-help">Fixed interface phrases across public, staff, and admin screens are collected during build and appear below until translated. Error messages and accessibility labels are included. User-submitted names and descriptions are not collected. Keep any {"{{valueN}}"} placeholders unchanged in the Swahili phrase.</p>
+          <div className="admin-translation-pending">
+            <div className="admin-queue-heading"><div><span>WAITING FOR SWAHILI</span><h3>English phrases awaiting translation</h3></div><strong>{pendingTranslationPhrases.length}</strong></div>
+            {pendingTranslationPhrases.length ? <>
+              <label className="field-label">Search pending phrases
+                <input className="text-input" type="search" value={translationPendingSearch} onChange={(event) => { setTranslationPendingSearch(event.target.value); setTranslationPendingPage(1); }} />
+              </label>
+              <div className="admin-translation-list">
+                {visiblePendingTranslationPhrases.length ? visiblePendingTranslationPhrases.map((phrase) => (
+                  <StaffTaskClaim type="translation_pair" taskId={phrase.taskId} enabled={role === "staff"} controlInChildren onNotice={setNotice} key={phrase.taskId}>
+                    {({ canAct, control }) => <article className="admin-translation-row admin-translation-pending-row">
+                      <div><strong>{phrase.english_phrase}</strong></div>
+                      <div className="admin-translation-claim">{control}</div>
+                      <button className="button button-dark" type="button" disabled={!canAct} onClick={() => {
+                        setEditingTranslationId(null);
+                        setSelectedTranslationPhrase(phrase);
+                        setTranslationForm({ english_phrase: phrase.english_phrase, swahili_phrase: "" });
+                      }}>Translate</button>
+                    </article>}
+                  </StaffTaskClaim>
+                )) : <p className="admin-empty">No pending phrases match your search.</p>}
+                {visiblePendingTranslationPhrases.length < filteredPendingTranslationPhrases.length && <button className="button button-outline admin-translation-load-more" type="button" onClick={() => setTranslationPendingPage((current) => current + 1)}>Load more phrases</button>}
+              </div>
+            </> : <p className="admin-empty">All collected interface phrases have Swahili translations.</p>}
+          </div>
+          {(role !== "staff" || selectedTranslationPhrase || editingTranslationId) && <form className="admin-translation-form" onSubmit={(event) => void saveTranslation(event)}>
+            <label className="field-label">Complete English interface phrase<input className="text-input" value={translationForm.english_phrase} maxLength={1000} required readOnly={role === "staff" && selectedTranslationPhrase !== null} onChange={(event) => setTranslationForm((current) => ({ ...current, english_phrase: event.target.value }))} /></label>
+            <label className="field-label">Swahili translation<input className="text-input" value={translationForm.swahili_phrase} maxLength={1000} required onChange={(event) => setTranslationForm((current) => ({ ...current, swahili_phrase: event.target.value }))} /></label>
+            <div className="admin-translation-form-actions"><button className="button button-dark" type="submit" disabled={busyActions.has("translation-save")}>{busyActions.has("translation-save") ? "Saving…" : editingTranslationId ? "Update pair" : "Add pair"}</button>{(editingTranslationId || selectedTranslationPhrase) && <button className="button button-outline" type="button" onClick={() => { setEditingTranslationId(null); setSelectedTranslationPhrase(null); setTranslationForm({ english_phrase: "", swahili_phrase: "" }); }}>Cancel</button>}</div>
+          </form>}
+          {translationPairs.length ? <div className="admin-translation-list">{translationPairs.map((pair) => <StaffTaskClaim type="translation_pair" taskId={pair.id} enabled={role === "staff"} onNotice={setNotice} key={pair.id}>{({ canAct }) => <article className="admin-translation-row"><div><strong>{pair.english_phrase}</strong><span>{pair.swahili_phrase}</span></div><button className="button button-outline" type="button" disabled={!canAct} onClick={() => { setSelectedTranslationPhrase(null); setEditingTranslationId(pair.id); setTranslationForm({ english_phrase: pair.english_phrase, swahili_phrase: pair.swahili_phrase }); }}>Edit</button><button className="button button-danger" type="button" disabled={!canAct || busyActions.has(`translation-delete-${pair.id}`)} onClick={() => void deleteTranslation(pair)}>{busyActions.has(`translation-delete-${pair.id}`) ? "Deleting…" : "Delete"}</button></article>}</StaffTaskClaim>)}</div> : <p className="admin-empty">No translation pairs have been added.</p>}
         </section>}
         {activeAdminPanel === "homepage" && (role === "admin" || staffCan("homepage_headlines")) && <section className="admin-homepage-panel" aria-labelledby="admin-homepage-headlines-heading">
           <div className="admin-queue-heading"><div><span>HOMEPAGE DISPLAY</span><h2 id="admin-homepage-headlines-heading">Rotating headline phrases</h2></div><strong>{homepageHeadlines.length}</strong></div>

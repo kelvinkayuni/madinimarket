@@ -400,13 +400,19 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-site-setting strong { color: #3d493e; font-size: 11px; }
 .admin-site-setting span { color: #778075; font-size: 9px; line-height: 1.5; }
 .admin-translation-help { max-width: 760px; margin: 0 0 16px; color: #778075; font-size: 10px; line-height: 1.6; }
+.admin-translation-pending { margin: 18px 0 24px; padding: 14px; border: 1px solid #e1e5dd; background: #fff; }
+.admin-translation-pending .admin-queue-heading h3 { margin: 4px 0 0; font-family: var(--font-display), Georgia, serif; font-size: 18px; font-weight: 500; }
+.admin-translation-pending > .field-label { max-width: 480px; }
 .admin-translation-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
 .admin-translation-form-actions { display: flex; gap: 8px; }
 .admin-translation-list { margin-top: 18px; border-top: 1px solid #e1e5dd; }
 .admin-translation-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #e8ebe5; }
 .admin-translation-row > div { display: flex; flex-wrap: wrap; gap: 6px 18px; min-width: 0; font-size: 11px; }
 .admin-translation-row > div span { color: #526451; }
+.admin-translation-pending-row > div:first-child { overflow-wrap: anywhere; }
+.admin-translation-pending-row .admin-translation-claim { justify-content: flex-end; }
 .admin-translation-row .button { min-height: 32px; font-size: 9px; }
+.admin-translation-load-more { margin-top: 12px; }
 .admin-homepage-panel { padding: 25px 0 24px; border-bottom: 1px solid var(--line); }
 .admin-marketplace-cards-panel { padding: 25px 0 24px; border-bottom: 1px solid var(--line); }
 .admin-homepage-font-size { display: flex; align-items: end; gap: 12px; margin: 20px 0 24px; padding: 14px; border: 1px solid #e1e5dd; background: #fff; }
@@ -1430,6 +1436,10 @@ h1, h2, h3, p { margin-top: 0; }
   .admin-market-days > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-market-time-fields { grid-template-columns: 1fr; }
   .admin-translation-form { grid-template-columns: 1fr; }
+  .admin-translation-pending-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .admin-translation-pending-row > div:first-child { grid-column: 1 / -1; }
+  .admin-translation-pending-row .admin-translation-claim { grid-column: 1; }
+  .admin-translation-pending-row > .button { grid-column: 2; }
   .admin-homepage-headline-form { grid-template-columns: 1fr; }
   .admin-homepage-font-size { align-items: flex-start; flex-direction: column; }
   .admin-homepage-font-size label { width: 100%; }
