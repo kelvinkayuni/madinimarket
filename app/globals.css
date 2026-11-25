@@ -2165,11 +2165,12 @@ h1, h2, h3, p { margin-top: 0; }
   .section-head { flex: 0 0 auto; align-items: center; flex-wrap: nowrap; gap: 5px; margin-bottom: 4px; }
   .section-head h2 { gap: 5px; font-size: 17px; }
   .section-title-wrap { gap: 6px; }
-  .listing-section .section-head { flex-wrap: wrap; }
-  .listing-section .section-title-wrap { flex: 0 0 100%; }
+  .listing-section .section-head { align-items: flex-start; flex-wrap: nowrap; gap: 4px; }
+  .listing-section .section-title-wrap { min-width: 0; flex: 1 1 0; }
   .listing-section .section-title-wrap > div { min-width: 0; flex: 1; }
-  .listing-section .section-controls { width: 100%; }
-  .listing-section .section-heading-line { gap: 10px; }
+  .listing-section .section-controls { width: auto; flex: 0 0 auto; }
+  .listing-section .section-heading-line { min-width: 0; flex-wrap: wrap; gap: 4px 6px; }
+  .listing-section .section-head h2 { gap: 3px; font-size: clamp(15px, 4.7vw, 17px); white-space: nowrap; }
   .section-index { padding-top: 2px; font-size: 11px; }
   .section-kicker { margin-bottom: 2px; font-size: 7px; }
   .section-controls { width: auto; flex: 0 0 auto; gap: 3px; }
