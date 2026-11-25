@@ -4812,7 +4812,7 @@ export default function Marketplace() {
               {role === "admin" ? <>
                 <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Accounts</span>{adminMenuRoleBadge(["accounts"])}<span>{pendingLicenceAccountCount}</span></button>
                 <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
-                <button className={activeAdminPanel === "user-guide" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("user-guide"); setAdminMenuOpen(false); }}>Guide &amp; FAQ</button>
+                <button className={activeAdminPanel === "user-guide" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("user-guide"); setAdminMenuOpen(false); }}>User Guide &amp; FAQ</button>
                 <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">English–Swahili translations</span>{adminMenuRoleBadge(["translations"])}</button>
                 <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Homepage headlines</span>{adminMenuRoleBadge(["homepage_headlines"])}</button>
                 <button className={activeAdminPanel === "marketplace-cards" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("marketplace-cards"); setAdminMenuOpen(false); }}>Marketplace cards</button>
@@ -5502,8 +5502,13 @@ export default function Marketplace() {
               </>}
               <button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button>
             </> : <>
-              <Link className="menu-guide-link" href="/user-guide">Buyer &amp; Seller Guide <ArrowUpRight size={15} /></Link>
-              <Link className="menu-guide-link" href="/faq">FAQ <ArrowUpRight size={15} /></Link>
+              <details className="menu-guide-group">
+                <summary>User Guide &amp; FAQ</summary>
+                <div className="menu-guide-submenu">
+                  <Link href="/user-guide">Buyer &amp; Seller Guide <ArrowUpRight size={14} /></Link>
+                  <Link href="/faq">Frequently Asked Questions <ArrowUpRight size={14} /></Link>
+                </div>
+              </details>
               <button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>
                 {accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}
               </button>

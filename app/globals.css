@@ -605,6 +605,15 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .menu-kicker, .section-kicker, .dialog-kicker { display: block; color: #859084; font-size: 9px; font-weight: 700; }
 .menu-popover > button, .menu-popover > a { width: 100%; padding: 13px 0; display: flex; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid #edf0eb; background: transparent; color: inherit; font: inherit; font-size: 13px; text-align: left; text-decoration: none; cursor: pointer; }
 .menu-popover > button:hover, .menu-popover > a:hover { color: #577962; }
+.menu-guide-group { border-bottom: 1px solid #edf0eb; }
+.menu-guide-group > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 0; color: inherit; font-size: 13px; list-style: none; cursor: pointer; }
+.menu-guide-group > summary::-webkit-details-marker { display: none; }
+.menu-guide-group > summary::after { color: #718071; content: "+"; font-size: 16px; }
+.menu-guide-group[open] > summary::after { content: "-"; }
+.menu-guide-group > summary:hover { color: #577962; }
+.menu-guide-submenu { display: grid; padding: 0 0 8px 10px; }
+.menu-guide-submenu > a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0; color: #667366; font-size: 11px; text-decoration: none; }
+.menu-guide-submenu > a:hover { color: #355340; }
 .menu-language { display: grid; gap: 8px; padding: 14px 0 0; border-top: 1px solid #edf0eb; }
 .menu-language > span { color: #859084; font-size: 9px; font-weight: 700; }
 .language-switch { position: relative; width: 100%; height: 36px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; padding: 3px; border: 1px solid #dfe3db; border-radius: 18px; background: #f0f2ed; cursor: pointer; }
