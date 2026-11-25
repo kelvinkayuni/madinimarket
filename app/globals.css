@@ -695,6 +695,8 @@ button.admin-account-status.is-license-unavailable { border: 0; font: inherit; c
 .market-welcome-post-button:hover { filter: brightness(.92); }
 .market-welcome-secondary-links { position: absolute; left: var(--welcome-desktop-links-x, 0%); top: var(--welcome-desktop-links-y, 100%); display: flex; width: max-content; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0; transform: translate(calc(0% - var(--welcome-desktop-links-x, 0%)), calc(0% - var(--welcome-desktop-links-y, 100%))); transition: left .2s ease, top .2s ease, transform .2s ease; }
 .market-welcome-secondary-link { display: inline-flex; align-items: center; gap: 6px; color: var(--welcome-body-color, #cbd9ce); font-size: 11px; font-weight: var(--welcome-secondary-links-font-weight, var(--welcome-font-weight, 500)); text-decoration: none; }
+.market-welcome-secondary-links button.market-welcome-secondary-link { padding: 0; border: 0; background: transparent; font-family: inherit; text-align: left; cursor: pointer; }
+.market-welcome-secondary-links button.market-welcome-secondary-link:disabled { cursor: default; opacity: .7; }
 .market-welcome-secondary-link:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
 .market-welcome-status { position: absolute; right: 20px; bottom: 18px; z-index: 1; display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid #e4edda38; border-radius: 999px; background: #112e26b8; color: #f1f3e8; font-size: 10px; font-weight: 650; backdrop-filter: blur(8px); }
 .market-welcome-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #a7d86d; box-shadow: 0 0 0 3px #a7d86d24; }
@@ -888,7 +890,7 @@ h1, h2, h3, p { margin-top: 0; }
 .seller-section { flex: 0 0 auto; padding-bottom: 16px; }
 .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
 .section-title-wrap { display: flex; align-items: flex-start; gap: 15px; }
-.section-heading-line { display: flex; align-items: center; gap: 12px; }
+.section-heading-line { display: flex; align-items: center; gap: 16px; }
 .section-index { padding-top: 4px; color: var(--red); font-family: var(--font-display), Georgia, serif; font-size: 13px; }
 .section-kicker { margin: 0 0 5px; }
 .section-head h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-family: var(--font-display), Georgia, serif; font-size: 26px; line-height: 1.08; font-weight: 500; }
@@ -1767,7 +1769,7 @@ h1, h2, h3, p { margin-top: 0; }
   .listing-section { padding-top: 15px; }
   .section-head { align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
   .section-title-wrap { gap: 9px; }
-  .section-heading-line { flex-wrap: wrap; gap: 6px 9px; }
+  .section-heading-line { flex-wrap: wrap; gap: 6px 12px; }
   .section-kicker { font-size: 8px; }
   .section-head h2 { gap: 7px; font-size: 21px; }
   .count-badge { min-width: 19px; height: 18px; font-size: 8px; }
@@ -2167,7 +2169,7 @@ h1, h2, h3, p { margin-top: 0; }
   .listing-section .section-title-wrap { flex: 0 0 100%; }
   .listing-section .section-title-wrap > div { min-width: 0; flex: 1; }
   .listing-section .section-controls { width: 100%; }
-  .listing-section .section-heading-line { gap: 6px; }
+  .listing-section .section-heading-line { gap: 10px; }
   .section-index { padding-top: 2px; font-size: 11px; }
   .section-kicker { margin-bottom: 2px; font-size: 7px; }
   .section-controls { width: auto; flex: 0 0 auto; gap: 3px; }

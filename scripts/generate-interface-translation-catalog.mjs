@@ -12,6 +12,7 @@ const customerUiFiles = new Set([
   "app/marketplace.tsx",
   "app/private-offer-form.tsx",
   "app/reset-password/reset-password-form.tsx",
+  "app/welcome-hero.tsx",
 ]);
 const customerApiFiles = new Set([
   "app/api/auth/website-account/nin/route.ts",

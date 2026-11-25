@@ -5758,7 +5758,7 @@ export default function Marketplace() {
 
     <div className="market-content" id="top">
       {homepageAnnouncement.trim() && <div className="market-announcement" role="status"><span>{homepageAnnouncement.trim()}</span></div>}
-      {siteContentLoaded && welcomeHeroSettings?.headline.trim() && !welcomeHeroHidden && <WelcomeHero settings={welcomeHeroSettings} marketHoursLoaded={marketHoursLoaded} marketHoursError={marketHoursError} marketIsOpen={marketIsOpen} sellBusy={busyActions.has("open-sell")} postRequestBusy={busyActions.has("open-buy")} onSellMineral={() => void openListing("sell")} onPostRequest={() => void openListing("buy")} />}
+      {siteContentLoaded && welcomeHeroSettings?.headline.trim() && !welcomeHeroHidden && <WelcomeHero settings={welcomeHeroSettings} marketHoursLoaded={marketHoursLoaded} marketHoursError={marketHoursError} marketIsOpen={marketIsOpen} sellBusy={busyActions.has("open-sell")} postRequestBusy={busyActions.has("open-buy")} onSellMineral={() => void openListing("sell")} onPostRequest={() => void openListing("buy")} onViewSellerStats={(trigger) => openMineralStats("sellerListings", trigger)} onViewBuyerStats={(trigger) => openMineralStats("buyerRequests", trigger)} />}
       <section className="market-intro" id="marketplace">
         <div className={`market-intro-heading${homepageHeadlineOverflowing ? " is-overflowing" : ""}`} ref={homepageHeadlineWindowRef}>
           <div
@@ -5801,7 +5801,7 @@ export default function Marketplace() {
               <div className="section-kicker">LISTED MINERALS</div>
               <div className="section-heading-line">
                 <h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2>
-                <button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("sellerListings", event.currentTarget)}>View most listed minerals</button>
+                <button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("sellerListings", event.currentTarget)}>Top listed minerals</button>
               </div>
             </div>
           </div>
@@ -5850,7 +5850,7 @@ export default function Marketplace() {
               <div className="section-kicker">MARKET DEMAND</div>
               <div className="section-heading-line">
                 <h2 id="buyer-heading">Buyer requests <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2>
-                <button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("buyerRequests", event.currentTarget)}>View most requested minerals</button>
+                <button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("buyerRequests", event.currentTarget)}>Most requested minerals</button>
               </div>
             </div>
           </div>

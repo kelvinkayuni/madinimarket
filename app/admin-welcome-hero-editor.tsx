@@ -561,7 +561,7 @@ export default function AdminWelcomeHeroEditor({
               onVerticalPositionChange={(position) => update("desktopRequestButtonVerticalPosition", position)}
             />
             <HeroPositionControls
-              title="Explore and browse links"
+              title="Explore, browse, and chart links"
               horizontalPosition={draft.desktopLinksHorizontalPosition}
               verticalPosition={draft.desktopLinksVerticalPosition}
               onHorizontalPositionChange={(position) => update("desktopLinksHorizontalPosition", position)}
@@ -592,7 +592,7 @@ export default function AdminWelcomeHeroEditor({
               onVerticalPositionChange={(position) => update("mobileRequestButtonVerticalPosition", position)}
             />
             <HeroPositionControls
-              title="Explore and browse links"
+              title="Explore, browse, and chart links"
               horizontalPosition={draft.mobileLinksHorizontalPosition}
               verticalPosition={draft.mobileLinksVerticalPosition}
               onHorizontalPositionChange={(position) => update("mobileLinksHorizontalPosition", position)}
@@ -703,7 +703,7 @@ export default function AdminWelcomeHeroEditor({
           <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={700}>Bold</option>
         </select>
       </label>
-      <label className="field-label">Explore and buyer browse links font weight
+      <label className="field-label">Explore, browse, and chart links font weight
         <select className="text-input" value={draft.secondaryLinksFontWeight} onChange={(event) => update("secondaryLinksFontWeight", Number(event.target.value) as WelcomeHeroSettings["secondaryLinksFontWeight"])}>
           <option value={400}>Regular</option><option value={500}>Medium</option><option value={600}>Semibold</option><option value={700}>Bold</option>
         </select>
