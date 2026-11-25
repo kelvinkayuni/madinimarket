@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoots = [path.join(root, "app"), path.join(root, "lib")];
 const outputPath = path.join(root, "lib", "interface-translation-catalog.ts");
 const translatableAttributes = new Set(["alt", "aria-description", "aria-label", "placeholder", "title"]);
+const inlineJsxTags = new Set(["a", "abbr", "b", "br", "code", "em", "i", "kbd", "mark", "q", "s", "small", "span", "strong", "sub", "sup", "u", "var"]);
 const messageCallNames = new Set(["onError", "onMessage", "onNotice", "setError", "setMessage", "setNotice"]);
 const maxPhraseLength = 1000;
 const phrases = new Set();
@@ -108,10 +109,116 @@ function visitJsxAttributeExpressions(element) {
   }
 }
 
+function containsJsxNode(node) {
+  if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) return true;
+  let containsJsx = false;
+  ts.forEachChild(node, (child) => {
+    if (containsJsxNode(child)) containsJsx = true;
+  });
+  return containsJsx;
+}
+
+function getInlineJsxPhrase(node, sequence = { value: 0 }) {
+  function getExpressionText(expression) {
+    if (!expression) return "";
+    if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) return expression.text;
+    if (ts.isTemplateExpression(expression)) {
+      let phrase = expression.head.text;
+      for (const span of expression.templateSpans) {
+        sequence.value += 1;
+        phrase += `{{value${sequence.value}}}${span.literal.text}`;
+      }
+      return phrase;
+    }
+    if (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression) || ts.isNonNullExpression(expression)) {
+      return getExpressionText(expression.expression);
+    }
+    if (ts.isJsxElement(expression) || ts.isJsxSelfClosingElement(expression) || ts.isJsxFragment(expression)) {
+      const phrase = getInlineJsxPhrase(expression, sequence);
+      if (phrase !== null) return phrase;
+    }
+    if (containsJsxNode(expression)) return null;
+    sequence.value += 1;
+    return `{{value${sequence.value}}}`;
+  }
+
+  function getChildText(child) {
+    if (ts.isJsxText(child)) return child.text;
+    if (ts.isJsxExpression(child)) return getExpressionText(child.expression);
+    if (ts.isJsxFragment(child)) return getChildrenText(child.children);
+    if (ts.isJsxElement(child)) {
+      if (isNoTranslate(child.openingElement)) return "";
+      const tagName = child.openingElement.tagName.getText(sourceFile);
+      if (!inlineJsxTags.has(tagName)) return null;
+      return getChildrenText(child.children);
+    }
+    if (ts.isJsxSelfClosingElement(child)) {
+      const tagName = child.tagName.getText(sourceFile);
+      return tagName === "br" ? "" : null;
+    }
+    return null;
+  }
+
+  function getChildrenText(children) {
+    let text = "";
+    for (const child of children) {
+      const childText = getChildText(child);
+      if (childText === null) return null;
+      text += childText;
+    }
+    return text;
+  }
+
+  if (ts.isJsxElement(node)) {
+    if (isNoTranslate(node.openingElement)) return "";
+    return getChildrenText(node.children);
+  }
+  if (ts.isJsxFragment(node)) return getChildrenText(node.children);
+  return null;
+}
+
+function visitNestedJsxAttributes(node) {
+  if (ts.isJsxElement(node)) {
+    if (isNoTranslate(node.openingElement)) return;
+    visitTranslatableAttributes(node.openingElement);
+    visitJsxAttributeExpressions(node.openingElement);
+    for (const child of node.children) visitNestedJsxAttributes(child);
+    return;
+  }
+  if (ts.isJsxSelfClosingElement(node)) {
+    if (!isNoTranslate(node)) {
+      visitTranslatableAttributes(node);
+      visitJsxAttributeExpressions(node);
+    }
+    return;
+  }
+  if (ts.isJsxFragment(node)) {
+    for (const child of node.children) visitNestedJsxAttributes(child);
+    return;
+  }
+  if (ts.isJsxExpression(node) && node.expression) {
+    visitEmbeddedJsxAttributes(node.expression);
+  }
+}
+
+function visitEmbeddedJsxAttributes(node) {
+  if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) {
+    visitNestedJsxAttributes(node);
+    return;
+  }
+  ts.forEachChild(node, visitEmbeddedJsxAttributes);
+}
+
 function visitJsx(node) {
   if (ts.isJsxElement(node)) {
     if (isNoTranslate(node.openingElement)) return;
     visitTranslatableAttributes(node.openingElement);
+    const completePhrase = getInlineJsxPhrase(node);
+    if (completePhrase !== null) {
+      addPhrase(completePhrase);
+      visitNestedJsxAttributes(node);
+      return;
+    }
     for (const child of node.children) {
       if (ts.isJsxText(child)) addPhrase(child.text);
       else if (ts.isJsxExpression(child)) visitExpression(child.expression);
@@ -124,6 +231,12 @@ function visitJsx(node) {
     return;
   }
   if (ts.isJsxFragment(node)) {
+    const completePhrase = getInlineJsxPhrase(node);
+    if (completePhrase !== null) {
+      addPhrase(completePhrase);
+      visitNestedJsxAttributes(node);
+      return;
+    }
     for (const child of node.children) {
       if (ts.isJsxText(child)) addPhrase(child.text);
       else if (ts.isJsxExpression(child)) visitExpression(child.expression);
