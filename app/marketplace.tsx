@@ -106,6 +106,11 @@ type SalesLedgerTotals = Record<Currency, { transactions: number; grossSales: nu
 type SalesLedgerPeriod = { today: SalesLedgerTotals; thisWeek: SalesLedgerTotals; thisMonth: SalesLedgerTotals; thisYear: SalesLedgerTotals };
 type SalesLedgerTransaction = { itemId: string; orderId: string; controlNumber: string; verifiedAt: string; mineralName: string; status: string; currency: Currency; grossSales: number; sellerAmount: number; marketplaceFee: number; feeRate: number };
 type SalesLedgerData = { periods: SalesLedgerPeriod; transactions: SalesLedgerTransaction[]; timeZone: string };
+type MineralCount = { name: string; count: number };
+type MineralDistribution = { total: number; minerals: MineralCount[] };
+type MarketplaceMineralStats = { buyerRequests: MineralDistribution; sellerListings: MineralDistribution };
+type MineralStatsView = "buyerRequests" | "sellerListings";
+type MineralChartSegment = MineralCount & { share: number; color: string };
 type SalesLedgerPeriodFilter = "all" | "today" | "thisWeek" | "thisMonth" | "thisYear";
 type SubscriptionPlan = { id: string; months: number; price_tzs: string; price_usd: string; is_active: boolean; updated_at?: string };
 type SubscriptionPaymentMethod = { method: string; accountNumber: string };
@@ -118,7 +123,67 @@ const BUYERS_STORAGE_KEY = "madinimarket:buyers:v1";
 const USER_STORAGE_KEY = "madinimarket:user:v1";
 const SALES_LEDGER_PAGE_SIZE = 25;
 const MARKETPLACE_PAGE_SIZE = 24;
+const MINERAL_CHART_COLORS = ["#2f5944", "#b6ca7a", "#ba634e", "#8298ad", "#d0a858", "#735d89", "#528e87", "#ba8297", "#7d8760", "#aa7150"];
 const signedMineralImageUrls = new Map<string, { url: string; expiresAt: number }>();
+
+function parseMineralDistribution(value: unknown): MineralDistribution | null {
+  if (typeof value !== "object" || value === null || !("total" in value) || !("minerals" in value)) return null;
+  const total = value.total;
+  const rows = value.minerals;
+  if (typeof total !== "number" || !Number.isSafeInteger(total) || total < 0 || !Array.isArray(rows)) return null;
+
+  const minerals: MineralCount[] = [];
+  for (const entry of rows) {
+    if (typeof entry !== "object" || entry === null || !("name" in entry) || !("count" in entry)
+      || typeof entry.name !== "string" || !entry.name.trim()
+      || typeof entry.count !== "number" || !Number.isSafeInteger(entry.count) || entry.count < 1) return null;
+    minerals.push({ name: entry.name, count: entry.count });
+  }
+
+  if (minerals.reduce((sum, mineral) => sum + mineral.count, 0) !== total) return null;
+  return { total, minerals };
+}
+
+function parseMarketplaceMineralStats(value: unknown): MarketplaceMineralStats | null {
+  if (typeof value !== "object" || value === null || !("buyerRequests" in value) || !("sellerListings" in value)) return null;
+  const buyerRequests = parseMineralDistribution(value.buyerRequests);
+  const sellerListings = parseMineralDistribution(value.sellerListings);
+  return buyerRequests && sellerListings ? { buyerRequests, sellerListings } : null;
+}
+
+function getMineralChartSegments(distribution: MineralDistribution): MineralChartSegment[] {
+  if (!distribution.total) return [];
+
+  const visible: MineralCount[] = [];
+  let otherCount = 0;
+  for (const mineral of distribution.minerals) {
+    if (mineral.count / distribution.total >= 0.1) visible.push(mineral);
+    else otherCount += mineral.count;
+  }
+  if (otherCount) visible.push({ name: "Other", count: otherCount });
+  visible.sort((left, right) =>
+    right.count - left.count || left.name.localeCompare(right.name, "en", { sensitivity: "base" }));
+
+  return visible.map((mineral, index) => ({
+    ...mineral,
+    share: mineral.count / distribution.total * 100,
+    color: MINERAL_CHART_COLORS[index % MINERAL_CHART_COLORS.length],
+  }));
+}
+
+function getMineralChartGradient(segments: MineralChartSegment[]) {
+  let position = 0;
+  const stops = segments.map((segment, index) => {
+    const start = position;
+    position = index === segments.length - 1 ? 100 : position + segment.share;
+    return `${segment.color} ${start}% ${position}%`;
+  });
+  return `conic-gradient(${stops.join(", ")})`;
+}
+
+function formatMineralShare(share: number) {
+  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 }).format(share)}%`;
+}
 
 type MarketplacePageOptions = {
   sellerOffset?: number | null;
@@ -1125,6 +1190,25 @@ export default function Marketplace() {
   const galleryTouchStartX = useRef<number | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [rejectionMessages, setRejectionMessages] = useState<Record<string, string>>({});
+  const [mineralStatsView, setMineralStatsView] = useState<MineralStatsView | null>(null);
+  const [mineralStats, setMineralStats] = useState<MarketplaceMineralStats | null>(null);
+  const [mineralStatsLoading, setMineralStatsLoading] = useState(false);
+  const [mineralStatsError, setMineralStatsError] = useState("");
+  const [mineralStatsRefreshVersion, setMineralStatsRefreshVersion] = useState(0);
+  const mineralStatsTrigger = useRef<HTMLButtonElement | null>(null);
+  const mineralStatsCloseButton = useRef<HTMLButtonElement | null>(null);
+  const closeMineralStats = useCallback(() => {
+    setMineralStatsView(null);
+    setMineralStatsLoading(false);
+    window.requestAnimationFrame(() => mineralStatsTrigger.current?.focus());
+  }, []);
+  const openMineralStats = (view: MineralStatsView, trigger: HTMLButtonElement) => {
+    mineralStatsTrigger.current = trigger;
+    setMineralStats(null);
+    setMineralStatsError("");
+    setMineralStatsLoading(true);
+    setMineralStatsView(view);
+  };
   const marketplaceSearchRequest = useRef(0);
   const lastMarketplaceSearch = useRef("");
   const loadStaffAccess = async (userId: string, accessToken: string) => {
@@ -1784,6 +1868,46 @@ export default function Marketplace() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [galleryViewer]);
   useEffect(() => {
+    if (!mineralStatsView) return;
+    const controller = new AbortController();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMineralStats();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    mineralStatsCloseButton.current?.focus();
+
+    const loadStatistics = async () => {
+      try {
+        const response = await fetch("/api/marketplace-mineral-stats", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const result: unknown = await response.json();
+        if (!response.ok) {
+          const message = typeof result === "object" && result !== null && "error" in result && typeof result.error === "string"
+            ? result.error
+            : "Could not load market mineral statistics.";
+          throw new Error(message);
+        }
+        const statistics = parseMarketplaceMineralStats(result);
+        if (!statistics) throw new Error("Could not load market mineral statistics.");
+        setMineralStats(statistics);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setMineralStatsError(error instanceof Error ? error.message : "Could not load market mineral statistics.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setMineralStatsLoading(false);
+      }
+    };
+
+    void loadStatistics();
+    return () => {
+      controller.abort();
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeMineralStats, mineralStatsRefreshVersion, mineralStatsView]);
+  useEffect(() => {
     const updateTime = () => setLastUpdated(new Date());
     updateTime();
     const interval = window.setInterval(updateTime, 60_000);
@@ -2169,6 +2293,11 @@ export default function Marketplace() {
     observer.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["placeholder"] });
     return () => observer.disconnect();
   }, [language, translationPairs, role]);
+  useEffect(() => {
+    if (!mineralStatsView) return;
+    const root = document.querySelector<HTMLElement>(".mineral-stats-modal");
+    if (root) applyVisibleTranslations(root, language, translationPairs);
+  }, [language, mineralStats, mineralStatsError, mineralStatsLoading, mineralStatsView, translationPairs]);
   useEffect(() => {
     if (isSupabaseConfigured) {
       let active = true;
@@ -2773,8 +2902,16 @@ export default function Marketplace() {
     if (!response.ok) throw new Error(result.error ?? "Could not refresh your approved buying requests.");
     setOwnedWantedMinerals(result.marketBuyers ?? []);
   });
-  const refreshListingsFromRealtime = useEffectEvent(async () => {
+  const refreshListingsFromRealtime = useEffectEvent(async (changedTables: ReadonlySet<"listings" | "buy_requests">) => {
     if (document.visibilityState !== "visible") return;
+    const mineralStatsChanged = mineralStatsView === "buyerRequests"
+      ? changedTables.has("buy_requests")
+      : mineralStatsView === "sellerListings" && changedTables.has("listings");
+    if (mineralStatsChanged) {
+      setMineralStatsLoading(true);
+      setMineralStatsError("");
+      setMineralStatsRefreshVersion((version) => version + 1);
+    }
     try {
       await refreshRemoteListings(role === "user", true);
       await refreshOwnedWantedMinerals();
@@ -2786,21 +2923,33 @@ export default function Marketplace() {
     if (!isSupabaseConfigured) return;
     const supabase = getSupabaseBrowserClient();
     let refreshTimer: number | undefined;
-    const scheduleRefresh = () => {
-      if (document.visibilityState !== "visible" || refreshTimer !== undefined) return;
+    const changedTables = new Set<"listings" | "buy_requests">();
+    const flushScheduledRefresh = () => {
+      if (document.visibilityState !== "visible" || refreshTimer !== undefined || changedTables.size === 0) return;
       refreshTimer = window.setTimeout(() => {
         refreshTimer = undefined;
-        refreshListingsFromRealtime();
+        if (document.visibilityState !== "visible") return;
+        const pendingChanges = new Set(changedTables);
+        changedTables.clear();
+        refreshListingsFromRealtime(pendingChanges);
       }, 250);
     };
+    const scheduleRefresh = (table: "listings" | "buy_requests") => {
+      changedTables.add(table);
+      flushScheduledRefresh();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") flushScheduledRefresh();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     const channel = supabase
       .channel("marketplace-live-updates")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "listings" }, scheduleRefresh)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "listings" }, scheduleRefresh)
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "listings" }, scheduleRefresh)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "buy_requests" }, scheduleRefresh)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "buy_requests" }, scheduleRefresh)
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "buy_requests" }, scheduleRefresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "listings" }, () => scheduleRefresh("listings"))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "listings" }, () => scheduleRefresh("listings"))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "listings" }, () => scheduleRefresh("listings"))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "buy_requests" }, () => scheduleRefresh("buy_requests"))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "buy_requests" }, () => scheduleRefresh("buy_requests"))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "buy_requests" }, () => scheduleRefresh("buy_requests"))
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           console.warn(`Supabase Realtime subscription status: ${status}. Polling remains enabled.`);
@@ -2808,6 +2957,7 @@ export default function Marketplace() {
       });
     return () => {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       void supabase.removeChannel(channel);
     };
   }, []);
@@ -4681,6 +4831,85 @@ export default function Marketplace() {
     });
     if (images.length > 1) setGalleryViewer({ images, mineral: seller.mineral, index: 0 });
   };
+  const selectedMineralDistribution = mineralStatsView === "buyerRequests"
+    ? mineralStats?.buyerRequests
+    : mineralStats?.sellerListings;
+  const mineralChartSegments = selectedMineralDistribution
+    ? getMineralChartSegments(selectedMineralDistribution)
+    : [];
+  const mineralChartGradient = getMineralChartGradient(mineralChartSegments);
+  const isBuyerMineralStats = mineralStatsView === "buyerRequests";
+  const mineralStatsTitle = isBuyerMineralStats ? "Most requested minerals" : "Most listed minerals on the market";
+  const mineralStatsDescription = isBuyerMineralStats
+    ? "Share of active, approved buyer requests currently visible on the market. Each request counts once."
+    : "Share of active, approved listings currently visible on the market. Temporary reservations are included; this counts listings, not completed sales.";
+  const mineralStatsOverlay = mineralStatsView && typeof document !== "undefined"
+    ? createPortal(
+      <div className="mineral-stats-backdrop" role="presentation" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) closeMineralStats();
+      }}>
+        <section className="mineral-stats-modal" role="dialog" aria-modal="true" aria-labelledby="mineral-stats-title" aria-describedby="mineral-stats-description">
+          <button ref={mineralStatsCloseButton} className="mineral-stats-close" type="button" aria-label="Close mineral chart" onClick={closeMineralStats}><X size={20} /></button>
+          <div className="dialog-kicker">{isBuyerMineralStats ? "BUYER DEMAND" : "MARKET SUPPLY"}</div>
+          <h2 id="mineral-stats-title">{mineralStatsTitle}</h2>
+          <p id="mineral-stats-description" className="dialog-copy">{mineralStatsDescription}</p>
+          {mineralStatsLoading && <p className="mineral-stats-message" role="status">Loading current market data…</p>}
+          {!mineralStatsLoading && mineralStatsError && <p className="mineral-stats-message is-error" role="alert">{mineralStatsError}</p>}
+          {!mineralStatsLoading && !mineralStatsError && selectedMineralDistribution?.total === 0 && (
+            <p className="mineral-stats-message">There are no active {isBuyerMineralStats ? "buyer requests" : "mineral listings"} right now.</p>
+          )}
+          {!mineralStatsLoading && !mineralStatsError && selectedMineralDistribution && selectedMineralDistribution.total > 0 && (
+            <div className="mineral-stats-chart-grid">
+              <section className="mineral-stats-chart-card" aria-labelledby="mineral-stats-pie-title">
+                <h3 id="mineral-stats-pie-title">Share by mineral</h3>
+                <div className="mineral-stats-pie-layout">
+                  <div className="mineral-stats-pie" style={{ background: mineralChartGradient }} aria-hidden="true">
+                    <div className="mineral-stats-pie-center">
+                      <strong>{selectedMineralDistribution.total}</strong>
+                      <span>{isBuyerMineralStats ? "requests" : "listings"}</span>
+                    </div>
+                  </div>
+                  <ul className="mineral-stats-legend">
+                    {mineralChartSegments.map((segment) => (
+                      <li key={segment.name}>
+                        <span className="mineral-stats-key" style={{ backgroundColor: segment.color }} aria-hidden="true" />
+                        {segment.name === "Other"
+                          ? <span className="mineral-stats-name">Other</span>
+                          : <span className="mineral-stats-name" data-no-translate>{segment.name}</span>}
+                        <strong>{segment.count} · {formatMineralShare(segment.share)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+              <section className="mineral-stats-chart-card" aria-labelledby="mineral-stats-bar-title">
+                <h3 id="mineral-stats-bar-title">{isBuyerMineralStats ? "Requests by mineral" : "Listings by mineral"}</h3>
+                <ol className="mineral-stats-bars">
+                  {mineralChartSegments.map((segment) => (
+                    <li key={segment.name}>
+                      <div className="mineral-stats-bar-label">
+                        {segment.name === "Other"
+                          ? <span>Other</span>
+                          : <span data-no-translate>{segment.name}</span>}
+                        <strong>{segment.count} · {formatMineralShare(segment.share)}</strong>
+                      </div>
+                      <div className="mineral-stats-bar-track" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Number(segment.share.toFixed(1))} aria-valuetext={`${segment.name}: ${segment.count}, ${formatMineralShare(segment.share)}`}>
+                        <span style={{ width: `${segment.share}%`, backgroundColor: segment.color }} />
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </div>
+          )}
+          {!mineralStatsLoading && !mineralStatsError && selectedMineralDistribution?.total ? (
+            <p className="mineral-stats-footnote">Minerals below 10% are grouped as Other.</p>
+          ) : null}
+        </section>
+      </div>,
+      document.body,
+    )
+    : null;
   const galleryViewerOverlay = galleryViewer && typeof document !== "undefined"
     ? createPortal(
       <div className="gallery-viewer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGalleryViewer(null); }}>
@@ -5446,6 +5675,7 @@ export default function Marketplace() {
         </section>}
       </div>
       {galleryViewerOverlay}
+      {mineralStatsOverlay}
       {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
       {dialog === "signout" && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><section className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" aria-label="Close dialog" onClick={() => setDialog(null)}><X size={19} /></button><div className="dialog-brand"><Image src="/madinimarket-designer-logo.png" alt="" width={42} height={42} /><span>MADINIMARKET</span></div><div className="dialog-kicker">ACCOUNT</div><h2 id="dialog-title">Sign out?</h2><p className="dialog-copy">Are you sure you want to sign out?</p><div className="signout-actions"><button className="button button-outline" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-dark" type="button" onClick={() => void signOut()}>Sign out</button></div></section></div>}
     </main>;
@@ -5567,7 +5797,7 @@ export default function Marketplace() {
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>
-      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">LISTED MINERALS</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
+      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">LISTED MINERALS</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("sellerListings", event.currentTarget)}>View most listed minerals</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
         {query && !visibleSellers.length ? <div className="empty-search">{marketplaceSearchLoading ? "Searching minerals…" : `No minerals match “${query}”.`}</div> : <div className="seller-rail" ref={sellerRail} style={{ gridTemplateRows: `repeat(${sellerCardsPerColumn}, max-content)` }}>{visibleSellers.map((listing) => {
           const isReserved = Boolean(listing.reservation_status) || listing.marketplace_state === "reserved";
           const isCheckoutUnavailable = (listing.marketplace_state != null && listing.marketplace_state !== "available") || listing.is_active === false || listing.status !== "approved";
@@ -5599,7 +5829,7 @@ export default function Marketplace() {
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
-      <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">MARKET DEMAND</div><h2 id="buyer-heading">Buyer requests <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
+      <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">MARKET DEMAND</div><h2 id="buyer-heading">Buyer requests <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("buyerRequests", event.currentTarget)}>View most requested minerals</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
         {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{marketplaceSearchLoading ? "Searching requests…" : `No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail} style={{ gridTemplateRows: `repeat(${buyerCardsPerColumn}, max-content)` }}>{visibleBuyers.map((request) => {
           const isOwnRequest = role === "user" && (request.is_own || request.user_id === userId);
           return <article className="buyer-card" key={request.id} style={getMarketplaceCardStyleProperties(marketplaceCardAppearance.buyer)}>
@@ -5888,6 +6118,7 @@ export default function Marketplace() {
       {(dialog === "create" || dialog === "signin") && <Link className="switch-dialog" href="/user-guide">Read the Buyer &amp; Seller Guide</Link>}
     </section></div>}
     {galleryViewerOverlay}
+    {mineralStatsOverlay}
   </main>;
 }
 

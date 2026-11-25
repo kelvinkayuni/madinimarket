@@ -23,6 +23,7 @@ const customerApiFiles = new Set([
   "app/api/commerce/payment-proof/route.ts",
   "app/api/commerce/route.ts",
   "app/api/listing-certificate/route.ts",
+  "app/api/marketplace-mineral-stats/route.ts",
   "app/api/marketplace-offers/route.ts",
   "app/api/subscriptions/route.ts",
   "app/api/website-bank-information/route.ts",
@@ -342,6 +343,26 @@ function findPublicMarketplaceRoot(node) {
   return match;
 }
 
+function findVariableInitializer(node, variableName) {
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === variableName) {
+    return node.initializer ?? null;
+  }
+  let initializer = null;
+  ts.forEachChild(node, (child) => {
+    if (!initializer) initializer = findVariableInitializer(child, variableName);
+  });
+  return initializer;
+}
+
+function visitJsxExpressions(node) {
+  if (ts.isJsxElement(node)) {
+    for (const child of node.children) {
+      if (ts.isJsxExpression(child) && child.expression) visitExpression(child.expression);
+    }
+  }
+  ts.forEachChild(node, visitJsxExpressions);
+}
+
 for (const sourcePath of sourcePaths) {
   const source = fs.readFileSync(sourcePath, "utf8");
   const isJsx = /\.(?:tsx|jsx)$/i.test(sourcePath);
@@ -356,6 +377,14 @@ for (const sourcePath of sourcePaths) {
     const publicRoot = findPublicMarketplaceRoot(sourceFile);
     if (!publicRoot) throw new Error("Could not find the public marketplace translation root.");
     visitJsx(publicRoot);
+    const mineralStatsOverlay = findVariableInitializer(sourceFile, "mineralStatsOverlay");
+    if (!mineralStatsOverlay) throw new Error("Could not find the marketplace mineral statistics overlay.");
+    visitSourceNode(mineralStatsOverlay);
+    visitJsxExpressions(mineralStatsOverlay);
+    for (const variableName of ["mineralStatsTitle", "mineralStatsDescription"]) {
+      const initializer = findVariableInitializer(sourceFile, variableName);
+      if (initializer) visitExpression(initializer);
+    }
   } else {
     visitSourceNode(sourceFile);
   }
