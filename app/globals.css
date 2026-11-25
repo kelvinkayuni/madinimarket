@@ -96,8 +96,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-payment-instructions-textarea:disabled { opacity: .6; cursor: not-allowed; }
 .admin-user-guide-panel { max-width: 1040px; }
 .admin-user-guide-panel > .admin-page-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.admin-user-guide-previews { display: flex; flex-wrap: wrap; gap: 8px; }
 .admin-user-guide-editor { max-width: none; }
 .admin-user-guide-textarea { min-height: 360px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.admin-user-guide-faq-textarea { min-height: 260px; }
 .admin-user-guide-textarea:focus-visible { outline: 2px solid #58805e; outline-offset: 2px; }
 .admin-user-guide-load-state { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: #8d5546; font-size: 11px; }
 .admin-payment-instructions-preview { padding: 12px; border: 1px solid #e1e5dd; background: #fff; color: #465148; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -1320,7 +1322,7 @@ h1, h2, h3, p { margin-top: 0; }
 .faq-item summary::-webkit-details-marker { display: none; }
 .faq-item summary::after { flex: 0 0 auto; color: #58765e; content: "+"; font-size: 18px; font-weight: 400; line-height: 1; }
 .faq-item[open] summary::after { content: "-"; }
-.faq-item > p { margin: 0; padding: 0 15px 15px; color: #5f6b60; font-size: 13px; line-height: 1.7; }
+.faq-item > p { margin: 0; padding: 0 15px 15px; color: #5f6b60; font-size: 13px; line-height: 1.7; white-space: pre-line; }
 .faq-guide-prompt { margin: 20px 0 0; color: #687368; font-size: 12px; line-height: 1.6; }
 .user-guide-markdown { color: #3d473e; font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
 .user-guide-markdown h2, .user-guide-markdown h3, .user-guide-markdown h4 { color: var(--forest); font-family: var(--font-display), Georgia, serif; font-weight: 500; line-height: 1.25; scroll-margin-top: 20px; }
