@@ -6,7 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import { parseFaqContent } from "@/lib/faq-content";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 
-const MAX_GUIDE_LENGTH = 30000;
+const MAX_CONTENT_LENGTH = 30000;
+type ContentSection = "guide" | "faq";
 
 type UserGuide = {
   englishContent: string;
@@ -26,7 +27,7 @@ function isUserGuide(value: unknown): value is UserGuide {
     typeof result.updatedAt === "string";
 }
 
-export default function AdminUserGuide({ onNotice }: { onNotice: (message: string) => void }) {
+export default function AdminUserGuide({ onNotice, section }: { onNotice: (message: string) => void; section: ContentSection }) {
   const [saved, setSaved] = useState<UserGuide | null>(null);
   const [englishDraft, setEnglishDraft] = useState("");
   const [swahiliDraft, setSwahiliDraft] = useState("");
@@ -79,30 +80,36 @@ export default function AdminUserGuide({ onNotice }: { onNotice: (message: strin
   }, [load, onNotice]);
 
   const save = async () => {
-    if (!englishDraft.trim() || !swahiliDraft.trim()) {
-      onNotice("Enter the English and Kiswahili guide before saving.");
-      return;
-    }
-    if (!englishFaqDraft.trim() || !swahiliFaqDraft.trim()) {
-      onNotice("Enter the English and Kiswahili FAQ before saving.");
-      return;
-    }
-    if (englishDraft.length > MAX_GUIDE_LENGTH || swahiliDraft.length > MAX_GUIDE_LENGTH ||
-      englishFaqDraft.length > MAX_GUIDE_LENGTH || swahiliFaqDraft.length > MAX_GUIDE_LENGTH) {
-      onNotice(`Each guide and FAQ version must be ${MAX_GUIDE_LENGTH.toLocaleString()} characters or fewer.`);
-      return;
-    }
-    try {
-      parseFaqContent(englishFaqDraft);
-    } catch (error) {
-      onNotice(`English FAQ: ${error instanceof Error ? error.message : "Check the FAQ format."}`);
-      return;
-    }
-    try {
-      parseFaqContent(swahiliFaqDraft);
-    } catch (error) {
-      onNotice(`Kiswahili FAQ: ${error instanceof Error ? error.message : "Check the FAQ format."}`);
-      return;
+    if (section === "guide") {
+      if (!englishDraft.trim() || !swahiliDraft.trim()) {
+        onNotice("Enter both the English and Kiswahili guide before saving.");
+        return;
+      }
+      if (englishDraft.length > MAX_CONTENT_LENGTH || swahiliDraft.length > MAX_CONTENT_LENGTH) {
+        onNotice(`Each guide version must be ${MAX_CONTENT_LENGTH.toLocaleString()} characters or fewer.`);
+        return;
+      }
+    } else {
+      if (!englishFaqDraft.trim() || !swahiliFaqDraft.trim()) {
+        onNotice("Enter both the English and Kiswahili FAQ before saving.");
+        return;
+      }
+      if (englishFaqDraft.length > MAX_CONTENT_LENGTH || swahiliFaqDraft.length > MAX_CONTENT_LENGTH) {
+        onNotice(`Each FAQ version must be ${MAX_CONTENT_LENGTH.toLocaleString()} characters or fewer.`);
+        return;
+      }
+      try {
+        parseFaqContent(englishFaqDraft);
+      } catch (error) {
+        onNotice(`English FAQ: ${error instanceof Error ? error.message : "Check the FAQ format."}`);
+        return;
+      }
+      try {
+        parseFaqContent(swahiliFaqDraft);
+      } catch (error) {
+        onNotice(`Kiswahili FAQ: ${error instanceof Error ? error.message : "Check the FAQ format."}`);
+        return;
+      }
     }
 
     setBusy(true);
@@ -117,12 +124,9 @@ export default function AdminUserGuide({ onNotice }: { onNotice: (message: strin
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          englishContent: englishDraft,
-          swahiliContent: swahiliDraft,
-          englishFaqContent: englishFaqDraft,
-          swahiliFaqContent: swahiliFaqDraft,
-        }),
+        body: JSON.stringify(section === "guide"
+          ? { englishContent: englishDraft, swahiliContent: swahiliDraft }
+          : { englishFaqContent: englishFaqDraft, swahiliFaqContent: swahiliFaqDraft }),
       });
       const result: unknown = await response.json();
       if (!response.ok) {
@@ -132,11 +136,15 @@ export default function AdminUserGuide({ onNotice }: { onNotice: (message: strin
       }
       if (!isUserGuide(result)) throw new Error("The saved guide and FAQ content is invalid.");
       setSaved(result);
-      setEnglishDraft(result.englishContent);
-      setSwahiliDraft(result.swahiliContent);
-      setEnglishFaqDraft(result.englishFaqContent);
-      setSwahiliFaqDraft(result.swahiliFaqContent);
-      onNotice("Guide and FAQ saved. Readers will see the updates automatically.");
+      if (section === "guide") {
+        setEnglishDraft(result.englishContent);
+        setSwahiliDraft(result.swahiliContent);
+        onNotice("User guide saved. Readers will see the update automatically.");
+      } else {
+        setEnglishFaqDraft(result.englishFaqContent);
+        setSwahiliFaqDraft(result.swahiliFaqContent);
+        onNotice("FAQ saved. Readers will see the updates automatically.");
+      }
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not save the guide and FAQ.");
     } finally {
@@ -144,58 +152,65 @@ export default function AdminUserGuide({ onNotice }: { onNotice: (message: strin
     }
   };
 
-  const changed = Boolean(saved) &&
-    (englishDraft !== saved?.englishContent || swahiliDraft !== saved?.swahiliContent ||
-      englishFaqDraft !== saved?.englishFaqContent || swahiliFaqDraft !== saved?.swahiliFaqContent);
+  const changed = Boolean(saved) && (section === "guide"
+    ? englishDraft !== saved?.englishContent || swahiliDraft !== saved?.swahiliContent
+    : englishFaqDraft !== saved?.englishFaqContent || swahiliFaqDraft !== saved?.swahiliFaqContent);
 
   return <section className="admin-listing-fee-panel admin-user-guide-panel" aria-labelledby="admin-user-guide-heading">
     <div className="admin-page-heading">
       <div>
         <div className="dialog-kicker">PUBLIC WEBSITE CONTENT</div>
-        <h1 id="admin-user-guide-heading">Buyer &amp; Seller Guide and FAQ</h1>
-        <p>Edit both language versions here. Saving updates the public guide and FAQ without a redeploy.</p>
+        <h1 id="admin-user-guide-heading">{section === "guide" ? "User Guide" : "Frequently Asked Questions"}</h1>
+        <p>Edit the English and Kiswahili versions here. Saving updates the public {section === "guide" ? "guide" : "FAQ"} without a redeploy.</p>
       </div>
       <div className="admin-user-guide-previews">
-        <Link className="button button-outline" href="/user-guide" target="_blank" rel="noreferrer">Preview guide</Link>
-        <Link className="button button-outline" href="/faq" target="_blank" rel="noreferrer">Preview FAQ</Link>
+        <Link className="button button-outline" href={section === "guide" ? "/user-guide" : "/faq"} target="_blank" rel="noreferrer">
+          Preview {section === "guide" ? "guide" : "FAQ"}
+        </Link>
       </div>
     </div>
     <div className="admin-listing-fee-editor admin-user-guide-editor">
-      <p>Use Markdown headings with #, ##, or ###, paragraphs, and - bullets. Use **text** for bold. English appears first and Kiswahili follows it.</p>
-      <label className="field-label" htmlFor="admin-guide-english">English version</label>
-      <textarea id="admin-guide-english" className="admin-payment-instructions-textarea admin-user-guide-textarea"
-        value={englishDraft} maxLength={MAX_GUIDE_LENGTH} disabled={!loaded || busy}
-        onChange={(event) => setEnglishDraft(event.target.value)} />
-      <p>{englishDraft.length.toLocaleString()} / {MAX_GUIDE_LENGTH.toLocaleString()} characters</p>
-      <label className="field-label" htmlFor="admin-guide-swahili">Kiswahili version</label>
-      <textarea id="admin-guide-swahili" className="admin-payment-instructions-textarea admin-user-guide-textarea"
-        value={swahiliDraft} maxLength={MAX_GUIDE_LENGTH} disabled={!loaded || busy}
-        onChange={(event) => setSwahiliDraft(event.target.value)} />
-      <p>{swahiliDraft.length.toLocaleString()} / {MAX_GUIDE_LENGTH.toLocaleString()} characters</p>
-      <p>For FAQs, use <code>##</code> for a section, <code>###</code> for each question, then put its plain-text answer on the following line. Keep each question under a section and include an answer.</p>
-      <label className="field-label" htmlFor="admin-guide-faq-english">English FAQ</label>
-      <textarea id="admin-guide-faq-english" className="admin-payment-instructions-textarea admin-user-guide-textarea admin-user-guide-faq-textarea"
-        value={englishFaqDraft} maxLength={MAX_GUIDE_LENGTH} disabled={!loaded || busy}
-        onChange={(event) => setEnglishFaqDraft(event.target.value)} />
-      <p>{englishFaqDraft.length.toLocaleString()} / {MAX_GUIDE_LENGTH.toLocaleString()} characters</p>
-      <label className="field-label" htmlFor="admin-guide-faq-swahili">Kiswahili FAQ</label>
-      <textarea id="admin-guide-faq-swahili" className="admin-payment-instructions-textarea admin-user-guide-textarea admin-user-guide-faq-textarea"
-        value={swahiliFaqDraft} maxLength={MAX_GUIDE_LENGTH} disabled={!loaded || busy}
-        onChange={(event) => setSwahiliFaqDraft(event.target.value)} />
-      <p>{swahiliFaqDraft.length.toLocaleString()} / {MAX_GUIDE_LENGTH.toLocaleString()} characters</p>
+      {section === "guide" ? <>
+        <p>Use Markdown headings with #, ##, or ###, paragraphs, and - bullets. Use **text** for bold. English appears first and Kiswahili follows it.</p>
+        <label className="field-label" htmlFor="admin-guide-english">English version</label>
+        <textarea id="admin-guide-english" className="admin-payment-instructions-textarea admin-user-guide-textarea"
+          value={englishDraft} maxLength={MAX_CONTENT_LENGTH} disabled={!loaded || busy}
+          onChange={(event) => setEnglishDraft(event.target.value)} />
+        <p>{englishDraft.length.toLocaleString()} / {MAX_CONTENT_LENGTH.toLocaleString()} characters</p>
+        <label className="field-label" htmlFor="admin-guide-swahili">Kiswahili version</label>
+        <textarea id="admin-guide-swahili" className="admin-payment-instructions-textarea admin-user-guide-textarea"
+          value={swahiliDraft} maxLength={MAX_CONTENT_LENGTH} disabled={!loaded || busy}
+          onChange={(event) => setSwahiliDraft(event.target.value)} />
+        <p>{swahiliDraft.length.toLocaleString()} / {MAX_CONTENT_LENGTH.toLocaleString()} characters</p>
+      </> : <>
+        <p>Use <code>##</code> for a section, <code>###</code> for each question, then put its plain-text answer below. Keep each question under a section and include an answer.</p>
+        <label className="field-label" htmlFor="admin-guide-faq-english">English FAQ</label>
+        <textarea id="admin-guide-faq-english" className="admin-payment-instructions-textarea admin-user-guide-textarea admin-user-guide-faq-textarea"
+          value={englishFaqDraft} maxLength={MAX_CONTENT_LENGTH} disabled={!loaded || busy}
+          onChange={(event) => setEnglishFaqDraft(event.target.value)} />
+        <p>{englishFaqDraft.length.toLocaleString()} / {MAX_CONTENT_LENGTH.toLocaleString()} characters</p>
+        <label className="field-label" htmlFor="admin-guide-faq-swahili">Kiswahili FAQ</label>
+        <textarea id="admin-guide-faq-swahili" className="admin-payment-instructions-textarea admin-user-guide-textarea admin-user-guide-faq-textarea"
+          value={swahiliFaqDraft} maxLength={MAX_CONTENT_LENGTH} disabled={!loaded || busy}
+          onChange={(event) => setSwahiliFaqDraft(event.target.value)} />
+        <p>{swahiliFaqDraft.length.toLocaleString()} / {MAX_CONTENT_LENGTH.toLocaleString()} characters</p>
+      </>}
       <div className="admin-listing-fee-actions">
         <button className="button button-dark" type="button" disabled={!loaded || busy || !changed} onClick={() => void save()}>
-          {busy ? "Saving…" : "Save guide and FAQ"}
+          {busy ? "Saving…" : section === "guide" ? "Save user guide" : "Save FAQs"}
         </button>
         <button className="button button-outline" type="button" disabled={!loaded || busy || !changed}
           onClick={() => {
-            setEnglishDraft(saved?.englishContent ?? "");
-            setSwahiliDraft(saved?.swahiliContent ?? "");
-            setEnglishFaqDraft(saved?.englishFaqContent ?? "");
-            setSwahiliFaqDraft(saved?.swahiliFaqContent ?? "");
+            if (section === "guide") {
+              setEnglishDraft(saved?.englishContent ?? "");
+              setSwahiliDraft(saved?.swahiliContent ?? "");
+            } else {
+              setEnglishFaqDraft(saved?.englishFaqContent ?? "");
+              setSwahiliFaqDraft(saved?.swahiliFaqContent ?? "");
+            }
           }}>Discard changes</button>
       </div>
-      {saved && <small>Last saved {new Date(saved.updatedAt).toLocaleString()}. Open guide and FAQ pages refresh automatically within 30 seconds.</small>}
+      {saved && <small>Last saved {new Date(saved.updatedAt).toLocaleString()}. The public page refreshes automatically within 30 seconds.</small>}
       {!loaded && <div className="admin-user-guide-load-state" role={loadError ? "alert" : "status"}>
         <span>{loadError || "Loading saved guide and FAQ…"}</span>
         {loadError && <button className="button button-outline" type="button" onClick={() => void load().catch((error: unknown) => {

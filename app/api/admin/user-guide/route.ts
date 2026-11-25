@@ -48,13 +48,21 @@ export async function PATCH(request: Request) {
   }
 
   const body = values as Record<string, unknown>;
+  const hasGuideContent = body.englishContent !== undefined || body.swahiliContent !== undefined;
   const hasFaqContent = body.englishFaqContent !== undefined || body.swahiliFaqContent !== undefined;
-  if (typeof body.englishContent !== "string" || typeof body.swahiliContent !== "string" ||
-    !body.englishContent.trim() || !body.swahiliContent.trim() ||
-    body.englishContent.length > MAX_CONTENT_LENGTH || body.swahiliContent.length > MAX_CONTENT_LENGTH) {
-    return NextResponse.json({
-      error: `Enter both guide language versions. Each version must be ${MAX_CONTENT_LENGTH.toLocaleString()} characters or fewer.`,
-    }, { status: 400 });
+  if (!hasGuideContent && !hasFaqContent) {
+    return NextResponse.json({ error: "Enter guide or FAQ content to save." }, { status: 400 });
+  }
+  let guideContent: { english: string; swahili: string } | null = null;
+  if (hasGuideContent) {
+    if (typeof body.englishContent !== "string" || typeof body.swahiliContent !== "string" ||
+      !body.englishContent.trim() || !body.swahiliContent.trim() ||
+      body.englishContent.length > MAX_CONTENT_LENGTH || body.swahiliContent.length > MAX_CONTENT_LENGTH) {
+      return NextResponse.json({
+        error: `Enter both guide language versions. Each version must be ${MAX_CONTENT_LENGTH.toLocaleString()} characters or fewer.`,
+      }, { status: 400 });
+    }
+    guideContent = { english: body.englishContent, swahili: body.swahiliContent };
   }
   let faqContent: { english: string; swahili: string } | null = null;
   if (hasFaqContent) {
@@ -85,8 +93,10 @@ export async function PATCH(request: Request) {
     const { data, error } = await createSupabaseAdminClient()
       .from("user_guide_content")
       .update({
-        english_content: body.englishContent,
-        swahili_content: body.swahiliContent,
+        ...(guideContent ? {
+          english_content: guideContent.english,
+          swahili_content: guideContent.swahili,
+        } : {}),
         ...(faqContent ? {
           english_faq_content: faqContent.english,
           swahili_faq_content: faqContent.swahili,
