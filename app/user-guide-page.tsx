@@ -62,6 +62,7 @@ export default function UserGuidePage() {
         <a href="#english-guide">English guide</a>
         <a href="#swahili-guide">Mwongozo wa Kiswahili</a>
       </nav>
+      <p className="user-guide-faq-prompt">Looking for a quick answer? <Link href="/faq">Browse the FAQs</Link>.</p>
     </header>
 
     {guide ? <>
