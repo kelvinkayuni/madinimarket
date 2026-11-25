@@ -4,8 +4,32 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourceRoots = [path.join(root, "app"), path.join(root, "lib")];
+const sourceRoots = [path.join(root, "app")];
 const outputPath = path.join(root, "lib", "interface-translation-catalog.ts");
+const customerUiFiles = new Set([
+  "app/bank-information-panel.tsx",
+  "app/commerce-panel.tsx",
+  "app/marketplace.tsx",
+  "app/private-offer-form.tsx",
+  "app/reset-password/reset-password-form.tsx",
+]);
+const customerApiFiles = new Set([
+  "app/api/auth/website-account/nin/route.ts",
+  "app/api/auth/website-account/route.ts",
+  "app/api/auth/website-login/route.ts",
+  "app/api/auth/website-password-reset/complete/route.ts",
+  "app/api/auth/website-password-reset/route.ts",
+  "app/api/auth/website-session/route.ts",
+  "app/api/commerce/payment-proof/route.ts",
+  "app/api/commerce/route.ts",
+  "app/api/listing-certificate/route.ts",
+  "app/api/marketplace-offers/route.ts",
+  "app/api/subscriptions/route.ts",
+  "app/api/website-bank-information/route.ts",
+  "app/api/website-certificates/route.ts",
+  "app/api/website-drafts/route.ts",
+  "app/api/website-submissions/route.ts",
+]);
 const translatableAttributes = new Set(["alt", "aria-description", "aria-label", "placeholder", "title"]);
 const inlineJsxTags = new Set(["a", "abbr", "b", "br", "code", "em", "i", "kbd", "mark", "q", "s", "small", "span", "strong", "sub", "sup", "u", "var"]);
 const messageCallNames = new Set(["onError", "onMessage", "onNotice", "setError", "setMessage", "setNotice"]);
@@ -23,9 +47,14 @@ function listSourceFiles(directory) {
       }
       if (!entry.isFile() || !/\.(?:[cm]?[jt]sx?)$/i.test(entry.name) ||
         /\.d\.[cm]?ts$/i.test(entry.name) || /\.(?:test|spec)\.[cm]?[jt]sx?$/i.test(entry.name) ||
-        currentPath === outputPath) return [];
+        currentPath === outputPath || !isCustomerTranslationSource(currentPath)) return [];
       return [currentPath];
     });
+}
+
+function isCustomerTranslationSource(sourcePath) {
+  const relativePath = path.relative(root, sourcePath).split(path.sep).join("/");
+  return customerUiFiles.has(relativePath) || customerApiFiles.has(relativePath);
 }
 
 function addPhrase(value) {
@@ -103,7 +132,9 @@ function visitTranslatableAttributes(element) {
 
 function visitJsxAttributeExpressions(element) {
   for (const attribute of element.attributes.properties) {
-    if (ts.isJsxAttribute(attribute) && attribute.initializer && ts.isJsxExpression(attribute.initializer)) {
+    if (ts.isJsxAttribute(attribute) &&
+      /^on[A-Z]/.test(attribute.name.getText(sourceFile)) &&
+      attribute.initializer && ts.isJsxExpression(attribute.initializer)) {
       visitSourceNode(attribute.initializer.expression);
     }
   }
@@ -213,10 +244,11 @@ function visitJsx(node) {
   if (ts.isJsxElement(node)) {
     if (isNoTranslate(node.openingElement)) return;
     visitTranslatableAttributes(node.openingElement);
+    visitJsxAttributeExpressions(node.openingElement);
     const completePhrase = getInlineJsxPhrase(node);
     if (completePhrase !== null) {
       addPhrase(completePhrase);
-      visitNestedJsxAttributes(node);
+      for (const child of node.children) visitNestedJsxAttributes(child);
       return;
     }
     for (const child of node.children) {
@@ -227,14 +259,17 @@ function visitJsx(node) {
     return;
   }
   if (ts.isJsxSelfClosingElement(node)) {
-    if (!isNoTranslate(node)) visitTranslatableAttributes(node);
+    if (!isNoTranslate(node)) {
+      visitTranslatableAttributes(node);
+      visitJsxAttributeExpressions(node);
+    }
     return;
   }
   if (ts.isJsxFragment(node)) {
     const completePhrase = getInlineJsxPhrase(node);
     if (completePhrase !== null) {
       addPhrase(completePhrase);
-      visitNestedJsxAttributes(node);
+      for (const child of node.children) visitNestedJsxAttributes(child);
       return;
     }
     for (const child of node.children) {
@@ -261,15 +296,11 @@ function visitApiResponseMessages(node) {
 function visitSourceNode(node) {
   if (!node) return;
   if (ts.isJsxElement(node)) {
-    const excluded = isNoTranslate(node.openingElement);
     visitJsx(node);
-    if (!excluded) visitJsxAttributeExpressions(node.openingElement);
     return;
   }
   if (ts.isJsxSelfClosingElement(node)) {
-    const excluded = isNoTranslate(node);
     visitJsx(node);
-    if (!excluded) visitJsxAttributeExpressions(node);
     return;
   }
   if (ts.isJsxFragment(node)) {
@@ -294,6 +325,23 @@ function visitSourceNode(node) {
 }
 
 const sourcePaths = sourceRoots.flatMap((sourceRoot) => listSourceFiles(sourceRoot));
+const marketplaceSourcePath = path.join(root, "app", "marketplace.tsx");
+function findPublicMarketplaceRoot(node) {
+  if (ts.isJsxElement(node) &&
+    node.openingElement.tagName.getText(sourceFile) === "main" &&
+    node.openingElement.attributes.properties.some((attribute) =>
+      ts.isJsxAttribute(attribute) &&
+      attribute.name.getText(sourceFile) === "className" &&
+      attribute.initializer?.getText(sourceFile).includes("market-shell"))) {
+    return node;
+  }
+  let match = null;
+  ts.forEachChild(node, (child) => {
+    if (!match) match = findPublicMarketplaceRoot(child);
+  });
+  return match;
+}
+
 for (const sourcePath of sourcePaths) {
   const source = fs.readFileSync(sourcePath, "utf8");
   const isJsx = /\.(?:tsx|jsx)$/i.test(sourcePath);
@@ -304,7 +352,13 @@ for (const sourcePath of sourcePaths) {
     true,
     isJsx ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
-  visitSourceNode(sourceFile);
+  if (sourcePath === marketplaceSourcePath) {
+    const publicRoot = findPublicMarketplaceRoot(sourceFile);
+    if (!publicRoot) throw new Error("Could not find the public marketplace translation root.");
+    visitJsx(publicRoot);
+  } else {
+    visitSourceNode(sourceFile);
+  }
 }
 
 const output = `export const interfaceTranslationPhrases = ${JSON.stringify([...phrases].sort(), null, 2)} as const;\n`;
