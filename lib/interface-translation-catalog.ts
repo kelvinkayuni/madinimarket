@@ -485,8 +485,6 @@ export const interfaceTranslationPhrases = [
   "Set a new password for your account. Passwords must be at least 8 characters.",
   "Shape",
   "Share by mineral",
-  "Share of active, approved buyer requests currently visible on the market. Each request counts once.",
-  "Share of active, approved listings currently visible on the market. Temporary reservations are included; this counts listings, not completed sales.",
   "Shipment · {{value1}} {{value2}}",
   "Shipment: {{value1}} · Tracking {{value2}}",
   "Showing {{value1}} {{value2}}",

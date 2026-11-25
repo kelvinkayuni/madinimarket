@@ -381,10 +381,8 @@ for (const sourcePath of sourcePaths) {
     if (!mineralStatsOverlay) throw new Error("Could not find the marketplace mineral statistics overlay.");
     visitSourceNode(mineralStatsOverlay);
     visitJsxExpressions(mineralStatsOverlay);
-    for (const variableName of ["mineralStatsTitle", "mineralStatsDescription"]) {
-      const initializer = findVariableInitializer(sourceFile, variableName);
-      if (initializer) visitExpression(initializer);
-    }
+    const mineralStatsTitle = findVariableInitializer(sourceFile, "mineralStatsTitle");
+    if (mineralStatsTitle) visitExpression(mineralStatsTitle);
   } else {
     visitSourceNode(sourceFile);
   }

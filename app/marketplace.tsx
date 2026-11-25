@@ -4840,19 +4840,15 @@ export default function Marketplace() {
   const mineralChartGradient = getMineralChartGradient(mineralChartSegments);
   const isBuyerMineralStats = mineralStatsView === "buyerRequests";
   const mineralStatsTitle = isBuyerMineralStats ? "Most requested minerals" : "Most listed minerals on the market";
-  const mineralStatsDescription = isBuyerMineralStats
-    ? "Share of active, approved buyer requests currently visible on the market. Each request counts once."
-    : "Share of active, approved listings currently visible on the market. Temporary reservations are included; this counts listings, not completed sales.";
   const mineralStatsOverlay = mineralStatsView && typeof document !== "undefined"
     ? createPortal(
       <div className="mineral-stats-backdrop" role="presentation" onMouseDown={(event) => {
         if (event.target === event.currentTarget) closeMineralStats();
       }}>
-        <section className="mineral-stats-modal" role="dialog" aria-modal="true" aria-labelledby="mineral-stats-title" aria-describedby="mineral-stats-description">
+        <section className="mineral-stats-modal" role="dialog" aria-modal="true" aria-labelledby="mineral-stats-title">
           <button ref={mineralStatsCloseButton} className="mineral-stats-close" type="button" aria-label="Close mineral chart" onClick={closeMineralStats}><X size={20} /></button>
           <div className="dialog-kicker">{isBuyerMineralStats ? "BUYER DEMAND" : "MARKET SUPPLY"}</div>
           <h2 id="mineral-stats-title">{mineralStatsTitle}</h2>
-          <p id="mineral-stats-description" className="dialog-copy">{mineralStatsDescription}</p>
           {mineralStatsLoading && <p className="mineral-stats-message" role="status">Loading current market data…</p>}
           {!mineralStatsLoading && mineralStatsError && <p className="mineral-stats-message is-error" role="alert">{mineralStatsError}</p>}
           {!mineralStatsLoading && !mineralStatsError && selectedMineralDistribution?.total === 0 && (
@@ -5797,7 +5793,24 @@ export default function Marketplace() {
 
       {!marketHoursLoaded ? <section className="market-closed-notice"><span>MARKET STATUS</span><h2>Checking market hours</h2><p>Listings will appear once the current market schedule is verified.</p></section>
         : marketIsOpen ? <>
-      <section className="listing-section seller-section" aria-labelledby="seller-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index">01</span><div><div className="section-kicker">LISTED MINERALS</div><h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2></div></div><div className="section-controls"><button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button><button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("sellerListings", event.currentTarget)}>View most listed minerals</button><button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
+      <section className="listing-section seller-section" aria-labelledby="seller-heading">
+        <div className="section-head">
+          <div className="section-title-wrap">
+            <span className="section-index">01</span>
+            <div>
+              <div className="section-kicker">LISTED MINERALS</div>
+              <div className="section-heading-line">
+                <h2 id="seller-heading">On the market <span className="count-badge">{visibleSellers.length}</span></h2>
+                <button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("sellerListings", event.currentTarget)}>View most listed minerals</button>
+              </div>
+            </div>
+          </div>
+          <div className="section-controls">
+            <button className="button button-outline section-post" type="button" disabled={busyActions.has("open-sell")} onClick={() => void openListing("sell")}>{busyActions.has("open-sell") ? "Opening…" : <><Plus size={15} /> Sell a mineral</>}</button>
+            <button className="round-control" type="button" aria-label="Scroll seller listings left" onClick={() => scrollRail(sellerRail.current, -1)}><ArrowLeft size={17} /></button>
+            <button className="round-control" type="button" aria-label="Scroll seller listings right" onClick={() => scrollRail(sellerRail.current, 1)}><ArrowRight size={17} /></button>
+          </div>
+        </div>
         {query && !visibleSellers.length ? <div className="empty-search">{marketplaceSearchLoading ? "Searching minerals…" : `No minerals match “${query}”.`}</div> : <div className="seller-rail" ref={sellerRail} style={{ gridTemplateRows: `repeat(${sellerCardsPerColumn}, max-content)` }}>{visibleSellers.map((listing) => {
           const isReserved = Boolean(listing.reservation_status) || listing.marketplace_state === "reserved";
           const isCheckoutUnavailable = (listing.marketplace_state != null && listing.marketplace_state !== "available") || listing.is_active === false || listing.status !== "approved";
@@ -5829,7 +5842,24 @@ export default function Marketplace() {
         <div className="rail-hint"><span>SCROLL TO EXPLORE</span><span className="rail-line" /><ArrowRight size={14} /></div>
       </section>
 
-      <section className="listing-section buyer-section" aria-labelledby="buyer-heading"><div className="section-head"><div className="section-title-wrap"><span className="section-index buyer-index">02</span><div><div className="section-kicker">MARKET DEMAND</div><h2 id="buyer-heading">Buyer requests <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2></div></div><div className="section-controls"><button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button><button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("buyerRequests", event.currentTarget)}>View most requested minerals</button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button><button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button></div></div>
+      <section className="listing-section buyer-section" aria-labelledby="buyer-heading">
+        <div className="section-head">
+          <div className="section-title-wrap">
+            <span className="section-index buyer-index">02</span>
+            <div>
+              <div className="section-kicker">MARKET DEMAND</div>
+              <div className="section-heading-line">
+                <h2 id="buyer-heading">Buyer requests <span className="count-badge count-badge-light">{visibleBuyers.length}</span></h2>
+                <button className="mineral-stats-trigger" type="button" aria-haspopup="dialog" onClick={(event) => openMineralStats("buyerRequests", event.currentTarget)}>View most requested minerals</button>
+              </div>
+            </div>
+          </div>
+          <div className="section-controls">
+            <button className="button button-lime section-post" type="button" disabled={busyActions.has("open-buy")} onClick={() => void openListing("buy")}>{busyActions.has("open-buy") ? "Opening…" : <><Plus size={15} /> Post a request</>}</button>
+            <button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests left" onClick={() => scrollRail(buyerRail.current, -1)}><ArrowLeft size={17} /></button>
+            <button className="round-control round-control-light" type="button" aria-label="Scroll buyer requests right" onClick={() => scrollRail(buyerRail.current, 1)}><ArrowRight size={17} /></button>
+          </div>
+        </div>
         {query && !visibleBuyers.length ? <div className="empty-search empty-search-dark">{marketplaceSearchLoading ? "Searching requests…" : `No requests match “${query}”.`}</div> : <div className="buyer-rail" ref={buyerRail} style={{ gridTemplateRows: `repeat(${buyerCardsPerColumn}, max-content)` }}>{visibleBuyers.map((request) => {
           const isOwnRequest = role === "user" && (request.is_own || request.user_id === userId);
           return <article className="buyer-card" key={request.id} style={getMarketplaceCardStyleProperties(marketplaceCardAppearance.buyer)}>
