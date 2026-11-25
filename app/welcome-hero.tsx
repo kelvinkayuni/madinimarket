@@ -22,8 +22,6 @@ export default function WelcomeHero({
   marketIsOpen,
   onSellMineral,
   onPostRequest,
-  onViewSellerStats,
-  onViewBuyerStats,
   sellBusy = false,
   postRequestBusy = false,
   preview = false,
@@ -35,8 +33,6 @@ export default function WelcomeHero({
   marketIsOpen: boolean;
   onSellMineral?: () => void;
   onPostRequest?: () => void;
-  onViewSellerStats?: (trigger: HTMLButtonElement) => void;
-  onViewBuyerStats?: (trigger: HTMLButtonElement) => void;
   sellBusy?: boolean;
   postRequestBusy?: boolean;
   preview?: boolean;
@@ -211,16 +207,6 @@ export default function WelcomeHero({
           : <a className="market-welcome-secondary-link" href={marketHoursLoaded && !marketHoursError && marketIsOpen ? "#buyer-heading" : "#marketplace"}>
             {settings.buyerBrowseLinkLabel} <ArrowRight size={14} aria-hidden="true" />
           </a>)}
-        {preview
-          ? <span className="market-welcome-secondary-link">Top listed minerals <ArrowRight size={14} aria-hidden="true" /></span>
-          : <button className="market-welcome-secondary-link" type="button" aria-haspopup="dialog" disabled={!onViewSellerStats} onClick={(event) => onViewSellerStats?.(event.currentTarget)}>
-            Top listed minerals <ArrowRight size={14} aria-hidden="true" />
-          </button>}
-        {preview
-          ? <span className="market-welcome-secondary-link">Most requested minerals <ArrowRight size={14} aria-hidden="true" /></span>
-          : <button className="market-welcome-secondary-link" type="button" aria-haspopup="dialog" disabled={!onViewBuyerStats} onClick={(event) => onViewBuyerStats?.(event.currentTarget)}>
-            Most requested minerals <ArrowRight size={14} aria-hidden="true" />
-          </button>}
       </div>
     </div>
     <div className={`market-welcome-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`} role={preview ? undefined : "status"}>

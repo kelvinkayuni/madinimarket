@@ -5758,7 +5758,7 @@ export default function Marketplace() {
 
     <div className="market-content" id="top">
       {homepageAnnouncement.trim() && <div className="market-announcement" role="status"><span>{homepageAnnouncement.trim()}</span></div>}
-      {siteContentLoaded && welcomeHeroSettings?.headline.trim() && !welcomeHeroHidden && <WelcomeHero settings={welcomeHeroSettings} marketHoursLoaded={marketHoursLoaded} marketHoursError={marketHoursError} marketIsOpen={marketIsOpen} sellBusy={busyActions.has("open-sell")} postRequestBusy={busyActions.has("open-buy")} onSellMineral={() => void openListing("sell")} onPostRequest={() => void openListing("buy")} onViewSellerStats={(trigger) => openMineralStats("sellerListings", trigger)} onViewBuyerStats={(trigger) => openMineralStats("buyerRequests", trigger)} />}
+      {siteContentLoaded && welcomeHeroSettings?.headline.trim() && !welcomeHeroHidden && <WelcomeHero settings={welcomeHeroSettings} marketHoursLoaded={marketHoursLoaded} marketHoursError={marketHoursError} marketIsOpen={marketIsOpen} sellBusy={busyActions.has("open-sell")} postRequestBusy={busyActions.has("open-buy")} onSellMineral={() => void openListing("sell")} onPostRequest={() => void openListing("buy")} />}
       <section className="market-intro" id="marketplace">
         <div className={`market-intro-heading${homepageHeadlineOverflowing ? " is-overflowing" : ""}`} ref={homepageHeadlineWindowRef}>
           <div
