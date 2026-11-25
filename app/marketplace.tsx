@@ -5502,6 +5502,7 @@ export default function Marketplace() {
               </>}
               <button type="button" onClick={() => openDialog("signout")}>Sign out <ArrowUpRight size={15} /></button>
             </> : <>
+              <Link className="menu-guide-link" href="/user-guide">Buyer &amp; Seller Guide <ArrowUpRight size={15} /></Link>
               <button type="button" disabled={accountCreationDisabled} onClick={openAccountCreation}>
                 {accountCreationDisabled ? "Account creation suspended" : <>Create account <ArrowUpRight size={15} /></>}
               </button>
