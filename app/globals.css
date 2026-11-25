@@ -94,6 +94,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .admin-payment-instructions-editor { max-width: 720px; }
 .admin-payment-instructions-textarea { width: 100%; min-height: 190px; padding: 11px; resize: vertical; border: 1px solid #d8ded5; border-radius: 2px; background: #fff; color: #263128; font: inherit; font-size: 12px; line-height: 1.6; }
 .admin-payment-instructions-textarea:disabled { opacity: .6; cursor: not-allowed; }
+.admin-user-guide-panel { max-width: 1040px; }
+.admin-user-guide-panel > .admin-page-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.admin-user-guide-editor { max-width: none; }
+.admin-user-guide-textarea { min-height: 360px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.admin-user-guide-textarea:focus-visible { outline: 2px solid #58805e; outline-offset: 2px; }
+.admin-user-guide-load-state { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: #8d5546; font-size: 11px; }
 .admin-payment-instructions-preview { padding: 12px; border: 1px solid #e1e5dd; background: #fff; color: #465148; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .admin-payment-methods-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .admin-payment-methods-heading > div { display: grid; gap: 4px; color: #354b39; font-size: 12px; }
@@ -1284,8 +1290,38 @@ h1, h2, h3, p { margin-top: 0; }
 .site-footer-brand > span:nth-child(2) { color: #929990; }
 .site-footer-meta { gap: 8px; }
 .site-footer-region { gap: 6px; color: #667267; font-size: 7px; font-weight: 700; white-space: nowrap; }
+.site-footer-guide { color: #43584a; font-size: 8px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.site-footer-guide:hover { color: var(--forest); }
 .site-footer-market-status { flex: 0 0 auto; align-items: flex-start; margin: 0; }
 .site-footer-market-status strong, .site-footer-market-status small { white-space: nowrap; }
+
+.user-guide-page { width: min(100% - 32px, 920px); margin: 0 auto; padding: 24px 0 56px; }
+.user-guide-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 15px; border-bottom: 1px solid var(--line); color: #7b817a; font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+.user-guide-back { color: var(--forest); font-size: 11px; letter-spacing: 0; text-decoration: none; }
+.user-guide-back:hover { text-decoration: underline; }
+.user-guide-header { padding: clamp(24px, 5vw, 48px) 0 28px; }
+.user-guide-header .dialog-kicker { margin: 0 0 8px; color: #738371; font-size: 9px; font-weight: 750; letter-spacing: .15em; }
+.user-guide-header h1 { margin: 0; color: var(--forest); font-family: var(--font-display), Georgia, serif; font-size: clamp(32px, 6vw, 52px); font-weight: 500; line-height: 1.08; }
+.user-guide-header > p:not(.dialog-kicker) { max-width: 620px; margin: 12px 0 20px; color: #687368; font-size: 14px; line-height: 1.65; }
+.user-guide-contents { display: flex; flex-wrap: wrap; gap: 9px; }
+.user-guide-contents a { padding: 8px 11px; border: 1px solid #d5ded2; background: #fbfcf9; color: #355340; font-size: 10px; font-weight: 700; text-decoration: none; }
+.user-guide-contents a:hover { background: #edf3e9; }
+.user-guide-language { padding: clamp(18px, 4vw, 32px); border: 1px solid #e0e5dc; background: #fff; }
+.user-guide-swahili { margin-top: 20px; }
+.user-guide-markdown { color: #3d473e; font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
+.user-guide-markdown h2, .user-guide-markdown h3, .user-guide-markdown h4 { color: var(--forest); font-family: var(--font-display), Georgia, serif; font-weight: 500; line-height: 1.25; scroll-margin-top: 20px; }
+.user-guide-markdown h2 { margin: 0 0 20px; font-size: clamp(25px, 4vw, 34px); }
+.user-guide-markdown h3 { margin: 28px 0 10px; font-size: clamp(20px, 3vw, 25px); }
+.user-guide-markdown h4 { margin: 20px 0 8px; font-size: 17px; }
+.user-guide-markdown p { margin: 0 0 14px; }
+.user-guide-markdown p:last-child { margin-bottom: 0; }
+.user-guide-markdown ul { display: grid; gap: 7px; margin: 0 0 16px; padding-left: 21px; }
+.user-guide-markdown li { padding-left: 3px; }
+.user-guide-markdown strong { color: #273e30; font-weight: 700; }
+.user-guide-updated, .user-guide-refresh-note { margin: 12px 0 0; color: #798176; font-size: 10px; }
+.user-guide-refresh-note { color: #8d5546; }
+.user-guide-loading, .user-guide-load-error { padding: 20px; border: 1px solid #e0e5dc; background: #fff; color: #5d695e; font-size: 12px; }
+.user-guide-load-error p { margin: 0 0 12px; }
 
 .username-banner { position: relative; z-index: 3; max-width: 1256px; margin: 12px auto 0; padding: 12px 15px; display: flex; align-items: center; gap: 13px; border: 1px solid #d7e2cf; background: #edf4e6; animation: rise-in .35s both; }
 .username-copy { display: flex; align-items: center; gap: 10px; margin-right: auto; }

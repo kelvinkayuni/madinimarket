@@ -2,6 +2,7 @@
 
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, FileUp, Gem, Menu, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { Session } from "@supabase/supabase-js";
@@ -11,6 +12,7 @@ import AdminStaffManagement from "./admin-staff-management";
 import BankInformationPanel from "./bank-information-panel";
 import AdminPaymentInstructions from "./admin-payment-instructions";
 import AdminOrderTimeLimits from "./admin-order-time-limits";
+import AdminUserGuide from "./admin-user-guide";
 import SupportInbox from "./support-inbox";
 import StaffOrderQueue from "./staff-order-queue";
 import StaffTaskClaim from "./staff-task-claim";
@@ -33,7 +35,7 @@ type Unit = "g" | "kg" | "tons" | "carats";
 type StoneWeightUnit = Exclude<Unit, "tons">;
 type ListingType = "single" | "batch";
 type Currency = "TZS" | "USD";
-type AdminPanel = "review" | "seller-reviews" | "buyer-reviews" | "ledger" | "translations" | "homepage" | "marketplace-cards" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-disputes" | "buyer-refunds" | "delivery" | "order-time-limits" | "payment-instructions" | "support" | "staff" | "staff-chat";
+type AdminPanel = "review" | "seller-reviews" | "buyer-reviews" | "ledger" | "translations" | "homepage" | "marketplace-cards" | "accounts" | "subscriptions" | "listing-fee" | "market-hours" | "orders" | "order-disputes" | "buyer-refunds" | "delivery" | "order-time-limits" | "payment-instructions" | "user-guide" | "support" | "staff" | "staff-chat";
 type PendingTranslationPhrase = { english_phrase: string; taskId: string };
 type AdminTranslationCatalog = { translations: TranslationPair[]; pendingPhrases: PendingTranslationPhrase[] };
 type HomepageHeadline = { id: string; main_phrase: string; accent_phrase: string };
@@ -4810,6 +4812,7 @@ export default function Marketplace() {
               {role === "admin" ? <>
                 <button className={activeAdminPanel === "accounts" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("accounts"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Accounts</span>{adminMenuRoleBadge(["accounts"])}<span>{pendingLicenceAccountCount}</span></button>
                 <button className={activeAdminPanel === "payment-instructions" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("payment-instructions"); setAdminMenuOpen(false); }}>Buyer payment instructions</button>
+                <button className={activeAdminPanel === "user-guide" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("user-guide"); setAdminMenuOpen(false); }}>Buyer &amp; Seller Guide</button>
                 <button className={activeAdminPanel === "translations" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("translations"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">English–Swahili translations</span>{adminMenuRoleBadge(["translations"])}</button>
                 <button className={activeAdminPanel === "homepage" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("homepage"); setAdminMenuOpen(false); }}><span className="admin-menu-item-name">Homepage headlines</span>{adminMenuRoleBadge(["homepage_headlines"])}</button>
                 <button className={activeAdminPanel === "marketplace-cards" ? "is-active" : ""} type="button" onClick={() => { setActiveAdminPanel("marketplace-cards"); setAdminMenuOpen(false); }}>Marketplace cards</button>
@@ -5403,6 +5406,7 @@ export default function Marketplace() {
         {activeAdminPanel === "staff" && role === "admin" && <AdminStaffManagement onNotice={setNotice} />}
         {activeAdminPanel === "order-time-limits" && role === "admin" && <AdminOrderTimeLimits onNotice={setNotice} />}
         {activeAdminPanel === "payment-instructions" && role === "admin" && <AdminPaymentInstructions onNotice={setNotice} />}
+        {activeAdminPanel === "user-guide" && role === "admin" && <AdminUserGuide onNotice={setNotice} />}
         {activeAdminPanel === "subscriptions" && (role === "admin" || staffCan("subscription_payment_confirmations")) && <section className="admin-subscriptions" aria-labelledby="admin-subscriptions-heading">
           <div className="admin-queue-heading"><div><span>SELLER AND BUYER ACCESS</span><h2 id="admin-subscriptions-heading">Seller/buyer subscription</h2></div><button className="button button-outline" type="button" disabled={busyActions.has("subscription-refresh")} onClick={() => void withProgress("subscription-refresh", async () => { try { await refreshAdminSubscriptions(); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not refresh subscriptions."); } })}><RefreshCw size={14} /> Refresh</button></div>
           {role === "admin" && <>
@@ -5609,7 +5613,7 @@ export default function Marketplace() {
           : nextMarketOpenAt
             ? `The market will reopen on ${formatMarketOpening(nextMarketOpenAt)} East Africa time.`
             : "No upcoming opening is currently scheduled."}</p></section>}
-      <footer className="site-footer"><div className="site-footer-brand"><span><Image src="/madinimarket-logo.png" alt="" width={906} height={672} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span></div><div className="site-footer-meta"><div className="site-footer-region"><span>TANZANIA &amp; BEYOND</span><span>EST. 2025</span></div><span>PREVIEW MARKET{currentYear ? ` · ${currentYear}` : ""}</span></div><div className={`market-status site-footer-market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`} role="status"><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "East Africa time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} East Africa time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} East Africa time` : "No upcoming opening is scheduled."}</small></div></div></footer>
+      <footer className="site-footer"><div className="site-footer-brand"><span><Image src="/madinimarket-logo.png" alt="" width={906} height={672} /> MADINIMARKET</span><span>Built for a fairer mineral trade.</span></div><div className="site-footer-meta"><Link className="site-footer-guide" href="/user-guide">Buyer &amp; Seller Guide</Link><div className="site-footer-region"><span>TANZANIA &amp; BEYOND</span><span>EST. 2025</span></div><span>PREVIEW MARKET{currentYear ? ` · ${currentYear}` : ""}</span></div><div className={`market-status site-footer-market-status${marketHoursLoaded && !marketIsOpen ? " is-closed" : ""}`} role="status"><div><strong>{!marketHoursLoaded ? "Checking market hours…" : marketHoursError ? "Market status unavailable" : marketIsOpen ? "Market open" : "Market closed"}</strong><small>{!marketHoursLoaded ? "East Africa time" : marketHoursError ? "Please try again shortly." : marketIsOpen ? currentMarketHours ? `Hours: ${currentMarketHours} East Africa time` : "Today's hours are unavailable." : nextMarketOpenAt ? `Reopens ${formatMarketOpening(nextMarketOpenAt)} East Africa time` : "No upcoming opening is scheduled."}</small></div></div></footer>
     </div>
 
     {notice && <div className="toast" role="status"><span className="toast-mark"><Check size={15} /></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={15} /></button></div>}
@@ -5872,6 +5876,7 @@ export default function Marketplace() {
         {pendingSellers.map((item) => <StaffTaskClaim type="listing_review" taskId={String(item.id)} enabled={false} onNotice={setNotice} key={`review-seller-${item.id}`}>{({ canAct }) => <article className="submission-item review-item"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Seller listing</span></div><p>{item.listing_type === "batch" ? "Batch total: " : ""}{item.weight} {item.unit} · {money(item.price, item.currency)} · {item.seller}</p>{item.listing_type === "batch" && <p>Stone weights: {item.smallest_stone_weight}–{item.largest_stone_weight} {item.stone_weight_unit}</p>}<p>{item.location} · {item.phone} · {item.email}</p>{(item.image_gallery?.some(Boolean) || item.image_gallery_paths?.length) && <button className="admin-review-gallery-button" type="button" onClick={() => void showSellerGallery(item)}>View all photos</button>}<textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to seller (required to reject)" value={rejectionMessages[`seller-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`seller-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct} onClick={() => void reviewSubmission("seller", item.id, true)}>Approve</button><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void reviewSubmission("seller", item.id, false)}>Reject</button></div></article>}</StaffTaskClaim>)}
         {pendingBuyers.map((item) => <StaffTaskClaim type="buyer_request_review" taskId={String(item.id)} enabled={false} onNotice={setNotice} key={`review-buyer-${item.id}`}>{({ canAct }) => <article className="submission-item review-item"><div className="submission-title"><h3>{item.mineral}</h3><span className="submission-status status-pending">Buyer request</span></div><p>{item.weight} {item.unit} · {item.color} · {item.shape} · {item.quality}</p><p>{money(item.offer, item.currency)} · {item.buyer} · {item.phone} · {item.email}</p><textarea className="review-message" aria-label={`Rejection message for ${item.mineral}`} placeholder="Message to buyer (required to reject)" value={rejectionMessages[`buyer-${item.id}`] ?? ""} disabled={!canAct} onChange={(event) => updateReviewMessage(`buyer-${item.id}`, event.target.value)} /><div className="submission-actions"><button className="button button-dark" type="button" disabled={!canAct} onClick={() => void reviewSubmission("buyer", item.id, true)}>Approve</button><button className="button button-outline" type="button" disabled={!canAct} onClick={() => void reviewSubmission("buyer", item.id, false)}>Reject</button></div></article>}</StaffTaskClaim>)}
         {!pendingSellers.length && !pendingBuyers.length && <div className="empty-search">The review queue is clear.</div>}</div></>}
+      {(dialog === "create" || dialog === "signin") && <Link className="switch-dialog" href="/user-guide">Read the Buyer &amp; Seller Guide</Link>}
     </section></div>}
     {galleryViewerOverlay}
   </main>;
