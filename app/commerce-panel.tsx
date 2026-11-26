@@ -503,7 +503,6 @@ export default function CommercePanel({ onNotice, onCounters }: {
   const [acceptRequestDetails, setAcceptRequestDetails] = useState<PrivateOfferThread["request"]>(null);
   const [declineOffer, setDeclineOffer] = useState<PrivateOffer | null>(null);
   const [declineReason, setDeclineReason] = useState("");
-  const [declineExplanation, setDeclineExplanation] = useState("");
   const refreshSequence = useRef(0);
   const knownSellerPrivateOfferOrderIds = useRef<Set<string> | null>(null);
 
@@ -1308,7 +1307,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             : selectedPrivateThread.side === "buyer"
               ? <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>
               : <p className="commerce-note"><strong>No mineral certificate was uploaded with this offer.</strong></p>}
-          {selectedPrivateThread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions"><button className="button button-dark" type="button" onClick={() => { setAcceptOffer(offer); setAcceptRequestOffer(selectedPrivateThread.request?.offer ?? null); setAcceptRequestCurrency(selectedPrivateThread.request?.currency ?? offer.currency); setAcceptRequestDetails(selectedPrivateThread.request); }}>Accept to buy</button><button className="button button-outline" type="button" onClick={() => { setDeclineOffer(offer); setDeclineReason(""); setDeclineExplanation(""); }}>Decline offer</button></div>}
+          {selectedPrivateThread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions"><button className="button button-dark" type="button" onClick={() => { setAcceptOffer(offer); setAcceptRequestOffer(selectedPrivateThread.request?.offer ?? null); setAcceptRequestCurrency(selectedPrivateThread.request?.currency ?? offer.currency); setAcceptRequestDetails(selectedPrivateThread.request); }}>Accept to buy</button><button className="button button-outline" type="button" onClick={() => { setDeclineOffer(offer); setDeclineReason(""); }}>Decline offer</button></div>}
           {selectedPrivateThread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}<br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</p>}
           {selectedPrivateThread.side === "seller" && (offer.status === "accepted" || offer.status === "awaiting_buyer_checkout") && <p className="commerce-note"><strong>Buyer accepted your offer.</strong> The buyer can now enter delivery details.</p>}
         </PrivateOfferScrollPanel>)}
@@ -1359,12 +1358,11 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <p className="commerce-warning">By clicking Accept to Buy, you agree to purchase this mineral at the seller’s offered total price of {amount(acceptOffer.total_price, acceptOffer.currency)}.</p>
         <div className="dialog-actions"><button type="button" className="button button-outline" disabled={busy !== ""} onClick={() => setAcceptOffer(null)}>Cancel</button><button type="button" className="button button-dark" disabled={busy !== ""} aria-busy={acceptOfferBusy} onClick={async () => { const offer = acceptOffer; if (!offer || busy !== "") return; const succeeded = await performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: true }); if (succeeded) setAcceptOffer(null); }}>{acceptOfferBusy ? "Processing…" : "Accept to Buy"}</button></div>
       </div>}
-      {declineOffer && <form className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="decline-offer-title" onSubmit={(event) => { event.preventDefault(); const offer = declineOffer; if (!declineReason) return; setDeclineOffer(null); void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: false, declineReason, declineExplanation }); }}>
+      {declineOffer && <form className="dialog-card commerce-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="decline-offer-title" onSubmit={(event) => { event.preventDefault(); const offer = declineOffer; if (!declineReason) return; setDeclineOffer(null); void performPrivateOffer(`offer-${offer.id}`, { action: "decide_offer", offerId: offer.id, agree: false, declineReason }); }}>
         <div className="dialog-kicker">DECLINE OFFER</div>
         <h2 id="decline-offer-title">Decline this offer?</h2>
         <p className="commerce-note">The seller will see your reason. <strong>This action cannot be undone.</strong></p>
         <label className="field-label">Reason<select className="text-input" required value={declineReason} onChange={(event) => setDeclineReason(event.target.value)}><option value="">Choose a reason</option><option>Price is too high</option><option>Mineral details do not match</option><option>Certificate is missing or unsuitable</option><option>Photo is unclear</option><option>Changed my mind</option><option>Other reason</option></select></label>
-        <label className="field-label">Additional explanation<textarea className="text-input" maxLength={500} value={declineExplanation} onChange={(event) => setDeclineExplanation(event.target.value)} /></label>
         <div className="dialog-actions"><button type="button" className="button button-outline" onClick={() => setDeclineOffer(null)}>Cancel</button><button type="submit" className="button button-dark" disabled={busy !== "" || !declineReason}>Yes, decline offer</button></div>
       </form>}
     </div>}

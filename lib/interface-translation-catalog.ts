@@ -24,7 +24,6 @@ export const interfaceTranslationPhrases = [
   "Active orders and unresolved disputes cannot be hidden.",
   "Active orders {{value1}}",
   "Add your NIN to continue.",
-  "Additional explanation",
   "Additional instructions",
   "Additional mineral photo {{value1}}",
   "Additional mineral photos (optional)",
