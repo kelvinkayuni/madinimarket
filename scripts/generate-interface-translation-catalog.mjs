@@ -389,6 +389,18 @@ for (const sourcePath of sourcePaths) {
   }
 }
 
+[
+  "You withdrew the offer · closed",
+  "Seller withdrew the offer · closed",
+  "You closed the offer",
+  "Buyer closed the offer",
+  "Checkout expired · offer closed · request reopened",
+  "Checkout cancelled · offer closed · request reopened",
+  "Buyer accepted another offer · closed",
+  "Order failed · offer closed",
+  "Offer closed",
+].forEach(addPhrase);
+
 const output = `export const interfaceTranslationPhrases = ${JSON.stringify([...phrases].sort(), null, 2)} as const;\n`;
 fs.writeFileSync(outputPath, output);
 console.log(`Generated ${phrases.size} interface phrases from ${sourcePaths.length} source files.`);

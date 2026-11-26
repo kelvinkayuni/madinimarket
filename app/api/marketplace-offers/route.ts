@@ -276,7 +276,13 @@ export async function POST(request: Request) {
       }
       const now = new Date().toISOString();
       const { error: closeError } = await admin.from("marketplace_private_offer_threads")
-        .update({ state: "closed", closed_at: now, closed_by: accountId, updated_at: now })
+        .update({
+          state: "closed",
+          closed_at: now,
+          closed_by: accountId,
+          close_reason: thread.seller_id === accountId ? "seller_withdrew_offer" : "buyer_closed_offer",
+          updated_at: now,
+        })
         .eq("id", threadId);
       if (closeError) throw closeError;
       const { error: offerCloseError } = await admin.from("marketplace_private_offers")

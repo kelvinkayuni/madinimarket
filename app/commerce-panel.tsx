@@ -384,14 +384,21 @@ function buyerOrderStatusLabel(order: BuyerOrder) {
 }
 
 function privateOfferStatusLabel(status: string, side: "buyer" | "seller", closeReason?: string | null, threadState?: string) {
+  if (threadState === "closed") {
+    if (closeReason === "seller_withdrew_offer") return side === "seller" ? "You withdrew the offer · closed" : "Seller withdrew the offer · closed";
+    if (closeReason === "buyer_closed_offer") return side === "buyer" ? "You closed the offer" : "Buyer closed the offer";
+    if (closeReason === "buyer_checkout_expired") return "Checkout expired · offer closed · request reopened";
+    if (closeReason === "buyer_cancelled_checkout") return "Checkout cancelled · offer closed · request reopened";
+    if (closeReason === "buyer_accepted_another_offer") return "Buyer accepted another offer · closed";
+    if (closeReason === "private_order_failed") return "Order failed · offer closed";
+    return "Offer closed";
+  }
   if (status === "pending") return side === "buyer" ? "New offer · review needed" : "Waiting for buyer response";
   if (status === "accepted") return side === "buyer" ? "Seller finalizing mineral details" : "Your confirmation is needed";
   if (status === "declined") return side === "buyer" ? "You declined this offer" : "Buyer declined your offer";
   if (status === "awaiting_buyer_checkout") return side === "buyer" ? "Accepted · checkout required" : "Buyer accepted · checkout pending";
   if (status === "ordered") return "Order placed · see My orders";
   if (status === "closed" && threadState === "open") return "Checkout cancelled · request reopened";
-  if (status === "closed" && closeReason === "buyer_checkout_expired") return "Checkout expired · request reopened";
-  if (status === "closed" && closeReason === "buyer_cancelled_checkout") return "Checkout cancelled · request reopened";
   if (status === "closed") return "Offer closed";
   return statusLabel(status);
 }
@@ -1031,7 +1038,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
             {visibleBuyerPrivateThreads.map((thread) => { const latest = thread.offers[thread.offers.length - 1]; return <button type="button" className="commerce-private-card" key={thread.id} onClick={() => setSelectedPrivateThreadId(thread.id)}>
               {latest?.signed_image_url ? <Image className="commerce-private-card-image" src={latest.signed_image_url} alt={`${latest.mineral_name} private offer`} width={90} height={90} unoptimized /> : <span className="commerce-private-card-image-placeholder" aria-hidden="true">M</span>}
               <span className="commerce-private-card-main"><span className="commerce-private-card-role">Buyer · Request #{thread.request_id}</span><strong>{latest?.mineral_name ?? thread.request?.mineral_name ?? "Private offer"}</strong><span className="commerce-private-card-description">Seller @{thread.seller_username}</span><span className="commerce-private-card-action">View request vs. offer comparison →</span></span>
-              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "buyer", thread.close_reason, thread.state)}</span>{latest?.status === "awaiting_buyer_checkout" && latest.checkout_deadline && <span className="commerce-private-card-meta">Complete by {new Date(latest.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</span>}<span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span></span>
+              <span className="commerce-private-card-side">{latest && <span className="commerce-private-card-price">{amount(latest.total_price, latest.currency)}</span>}<span className="commerce-private-card-status">{privateOfferStatusLabel(latest?.status ?? thread.state, "buyer", thread.close_reason, thread.state)}</span>{latest?.status === "awaiting_buyer_checkout" && latest.checkout_deadline && <span className="commerce-private-card-meta">Complete by {new Date(latest.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time</span>}{thread.state === "open" && <span className="commerce-private-card-meta">Attempt {thread.attempt_count}/3</span>}</span>
             </button>; })}
           </div>
           {!visibleBuyerPrivateThreads.length && <p className="commerce-note">No offers received as a buyer match the current filter.</p>}
@@ -1246,7 +1253,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <div className="dialog-kicker">{selectedPrivateThread.side === "buyer" ? "OFFERS AS BUYER" : "OFFERS AS SELLER"}</div>
         <h2 id="private-thread-title">{selectedPrivateThread.request?.mineral_name ?? "Private mineral offer"} · Request #{selectedPrivateThread.request_id}</h2>
         {selectedPrivateThread.offers.map((offer) => <PrivateOfferScrollPanel key={offer.id}>
-          <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{privateOfferStatusLabel(offer.status, selectedPrivateThread.side, selectedPrivateThread.close_reason)}</span></div>
+          <div className="commerce-order-heading"><strong>Offer {offer.attempt_number} · {offer.mineral_name}</strong><span>{privateOfferStatusLabel(offer.status, selectedPrivateThread.side, selectedPrivateThread.close_reason, selectedPrivateThread.state)}</span></div>
           {offer.status === "awaiting_buyer_checkout" && offer.checkout_deadline && <p className="commerce-note">Checkout must be completed by {new Date(offer.checkout_deadline).toLocaleString("en-GB", { timeZone: "Africa/Dar_es_Salaam" })} East Africa time. If the deadline passes, the acceptance is cancelled, the request reopens, and other eligible offers become available again.</p>}
           {offer.status === "closed" && selectedPrivateThread.close_reason === "buyer_checkout_expired" && <p className="commerce-note">The checkout deadline passed before an order was created. No payment was taken; the buyer request and eligible competing offers are available again.</p>}
           {offer.status === "ordered" && <p className="commerce-note">The order has been created. Continue with payment, shipping, delivery confirmation, and dispute handling in My orders.</p>}
@@ -1308,7 +1315,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
               ? <p className="commerce-warning"><strong>No mineral certificate uploaded. Accept this offer at your own risk.</strong></p>
               : <p className="commerce-note"><strong>No mineral certificate was uploaded with this offer.</strong></p>}
           {selectedPrivateThread.side === "buyer" && offer.status === "pending" && <div className="commerce-private-actions"><button className="button button-dark" type="button" onClick={() => { setAcceptOffer(offer); setAcceptRequestOffer(selectedPrivateThread.request?.offer ?? null); setAcceptRequestCurrency(selectedPrivateThread.request?.currency ?? offer.currency); setAcceptRequestDetails(selectedPrivateThread.request); }}>Accept to buy</button><button className="button button-outline" type="button" onClick={() => { setDeclineOffer(offer); setDeclineReason(""); }}>Decline offer</button></div>}
-          {selectedPrivateThread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}<br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</p>}
+          {selectedPrivateThread.side === "seller" && offer.status === "declined" && <p className="commerce-warning"><strong>Buyer declined:</strong> {offer.decline_reason}{offer.decline_explanation ? ` — ${offer.decline_explanation}` : ""}{selectedPrivateThread.state === "open" && <><br />Remaining offer attempts: {Math.max(0, 3 - offer.attempt_number)}.</>}</p>}
           {selectedPrivateThread.side === "seller" && (offer.status === "accepted" || offer.status === "awaiting_buyer_checkout") && <p className="commerce-note"><strong>Buyer accepted your offer.</strong> The buyer can now enter delivery details.</p>}
         </PrivateOfferScrollPanel>)}
         {selectedPrivateThread.side === "buyer" && selectedCheckoutOffer?.status === "awaiting_buyer_checkout" && <form className="commerce-checkout" onSubmit={(event) => { event.preventDefault(); if (busy !== "") return; void performPrivateOffer(checkoutOfferKey, { action: "checkout_offer", offerId: selectedCheckoutOffer.id, buyerName, buyerPhone, country, region, district, address }); }}>
