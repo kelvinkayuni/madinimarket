@@ -1363,7 +1363,7 @@ export default function CommercePanel({ onNotice, onCounters }: {
         <h2 id="decline-offer-title">Decline this offer?</h2>
         <p className="commerce-note">The seller will see your reason. <strong>This action cannot be undone.</strong></p>
         <label className="field-label">Reason<select className="text-input" required value={declineReason} onChange={(event) => setDeclineReason(event.target.value)}><option value="">Choose a reason</option><option>Price is too high</option><option>Mineral details do not match</option><option>Certificate is missing or unsuitable</option><option>Photo is unclear</option><option>Changed my mind</option><option>Other reason</option></select></label>
-        <div className="dialog-actions"><button type="button" className="button button-outline" onClick={() => setDeclineOffer(null)}>Cancel</button><button type="submit" className="button button-dark" disabled={busy !== "" || !declineReason}>Yes, decline offer</button></div>
+        <div className="dialog-actions"><button type="button" className="button button-outline" onClick={() => setDeclineOffer(null)}>Cancel</button><button type="submit" className="button button-dark" disabled={busy !== "" || !declineReason}>Decline and send reason</button></div>
       </form>}
     </div>}
   </div>;
