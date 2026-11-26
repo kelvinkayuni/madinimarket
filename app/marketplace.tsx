@@ -4872,7 +4872,7 @@ export default function Marketplace() {
                         {segment.name === "Other"
                           ? <span className="mineral-stats-name">Other</span>
                           : <span className="mineral-stats-name" data-no-translate>{segment.name}</span>}
-                        <strong>{segment.count} · {formatMineralShare(segment.share)}</strong>
+                        <strong>{formatMineralShare(segment.share)}</strong>
                       </li>
                     ))}
                   </ul>
@@ -4887,9 +4887,9 @@ export default function Marketplace() {
                         {segment.name === "Other"
                           ? <span>Other</span>
                           : <span data-no-translate>{segment.name}</span>}
-                        <strong>{segment.count} · {formatMineralShare(segment.share)}</strong>
+                        <strong>{formatMineralShare(segment.share)}</strong>
                       </div>
-                      <div className="mineral-stats-bar-track" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Number(segment.share.toFixed(1))} aria-valuetext={`${segment.name}: ${segment.count}, ${formatMineralShare(segment.share)}`}>
+                      <div className="mineral-stats-bar-track" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Number(segment.share.toFixed(1))} aria-valuetext={`${segment.name}: ${formatMineralShare(segment.share)}`}>
                         <span style={{ width: `${segment.share}%`, backgroundColor: segment.color }} />
                       </div>
                     </li>
